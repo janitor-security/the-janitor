@@ -1,0 +1,66 @@
+{
+  "critique": {
+    "depth_analysis": "shallow",
+    "verdict": "The current dataset represents a basic lexical scanner (grep-level), not a semantic code analysis engine. As a JetBrains Architect, I would flag this as high-risk for a $49 product. It relies entirely on string token matching without understanding the Abstract Syntax Tree (AST), class inheritance hierarchies (MRO), or import resolution. This will lead to catastrophic 'False Positives' (deleting code that appears unused but is vital) and 'False Negatives' (keeping dead code just because it shares a name with a framework method).",
+    "major_flaws": [
+      "Scope Blindness: Matches 'execute' globally rather than checking if the class actually inherits from 'BaseOperator'.",
+      "Reflection Ignorance: Fails to detect usage via string references (common in Django/Celery configurations).",
+      "Configuration Isolation: Does not check external files (YAML/JSON) where serverless functions or Airflow DAGs are often defined."
+    ]
+  },
+  "missing_high_value_rules": [
+    {
+      "framework": "SQLAlchemy",
+      "edge_case": "Abstract Base Classes & Mixins",
+      "description": "Enterprise codebases use deep inheritance. A class with '__abstract__ = True' is never instantiated but holds shared schema logic. Deleting it breaks all child tables.",
+      "missing_marker": "__abstract__",
+      "required_logic": "Prevent deletion if class contains '__abstract__ = True' OR if it is a Mixin inherited by other models."
+    },
+    {
+      "framework": "Pydantic v2",
+      "edge_case": "Dynamic Aliases & ConfigDict",
+      "description": "Fields often look unused because the incoming JSON uses camelCase while the Python model uses snake_case, mediated by an 'alias_generator'.",
+      "missing_marker": "alias_generator",
+      "required_logic": "Check model_config for alias generators; if present, mark all fields as implicitly used by external serialization."
+    },
+    {
+      "framework": "Celery",
+      "edge_case": "Canvas Primitives (Signatures)",
+      "description": "Tasks used inside 'chord', 'chain', or 'group' are often passed as signatures (.s()) and not called directly. Simple usage checks miss these structure definitions.",
+      "missing_marker": "celery.canvas",
+      "required_logic": "Identify functions passed as arguments to celery.chain() or .signature() even if not called."
+    },
+    {
+      "framework": "Django",
+      "edge_case": "Reverse Relationships & String References",
+      "description": "Models are often kept alive solely by 'related_name' arguments in other models, or referenced by string in 'settings.INSTALLED_APPS' or 'middleware'.",
+      "missing_marker": "related_name",
+      "required_logic": "Scan all strings in settings.py and all 'ForeignKey' definitions globally before marking a Model as unused."
+    },
+    {
+      "framework": "FastAPI",
+      "edge_case": "Dependency Injection Overrides",
+      "description": "Functions defined solely for use in 'app.dependency_overrides' (common in testing patterns) appear unused in the main application flow.",
+      "missing_marker": "dependency_overrides",
+      "required_logic": "Trace assignments to app.dependency_overrides dictionary keys/values."
+    }
+  ],
+  "justification_for_price": {
+    "strategy": "Transform from 'Regex Matching' to 'Heuristic Safeguards'",
+    "value_proposition": "For $49, you are selling 'Safety', not 'Cleanup'. Developers pay to avoid breaking production, not just to save disk space.",
+    "contextual_safeguard_implementation": [
+      {
+        "name": "Inheritance Awareness",
+        "action": "Do not flag 'execute' unless the containing class inherits from 'airflow.BaseOperator'. This dramatically reduces false positives."
+      },
+      {
+        "name": "Cross-Language Reference Check",
+        "action": "For AWS/Serverless, parse 'serverless.yml' or 'template.yaml'. If a Python function name matches a handler defined in YAML, it is essentially 'public' and immutable."
+      },
+      {
+        "name": "Metaprogramming Detection",
+        "action": "Flag code as 'Unsafe to Delete' if it resides in a file using 'importlib', 'getattr', or 'exec', acknowledging that static analysis cannot see dynamic runtime calls."
+      }
+    ]
+  }
+}

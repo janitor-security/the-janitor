@@ -1,0 +1,57 @@
+{
+  "product_critique": {
+    "product": "The Janitor v3.4.0",
+    "reviewer_persona": "Principal Architect, JetBrains",
+    "price_point": "$49/year",
+    "technical_rating": 4.5,
+    "enterprise_readiness_score": "Low (Startups/Hobbyist only)",
+    "gap_analysis": {
+      "js_heuristics_module": {
+        "status": "Improved but Dangerous",
+        "assessment": "The move to Tree-sitter is the correct architectural choice, finally abandoning regex. However, the implementation of 'App Mode' tree shaking is terrifyingly naive for an enterprise context.",
+        "critical_flaws": [
+          {
+            "heuristic": "ReactHookProtection",
+            "severity": "Catastrophic",
+            "details": "The `_find_react_hooks` method scans the dependency array (argument 1) but completely ignores the effect callback body (argument 0). Any variable used inside `useEffect` but missing from the dependency array (a common linting error, but valid runtime code) will be marked as unused and deleted. This will cause runtime crashes in production."
+          },
+          {
+            "heuristic": "ExportProtection",
+            "severity": "High",
+            "details": "The distinction between Library and App mode relies entirely on the assumption that the `ReferenceTracker` has perfect visibility. In App Mode, named exports are deleted if zero references are found. Since the tracker lacks a true Module Resolution implementation (handling webpack aliases, tsconfig paths, or node_modules resolution), it will inevitably fail to link imports to exports in complex monorepos, leading to the deletion of active code."
+          }
+        ]
+      },
+      "python_core_module": {
+        "status": "Legacy Architecture",
+        "assessment": "The `ReferenceTracker` attempts to simulate a symbol table but lacks scope awareness. It flattens symbols into `file_path::name`, ignoring Python's complex scoping rules (nested functions, closures, shadowing).",
+        "critical_flaws": [
+          {
+            "component": "InheritanceMap",
+            "issue": "Over-Protection",
+            "details": "The `get_method_family` logic is too aggressive. By protecting *all* overrides in a hierarchy when the base method is called, it negates the benefits of dead code elimination in large polymorphic systems. It prioritizes safety over efficacy to a fault, rendering the tool useless for cleaning up bloated class hierarchies."
+          },
+          {
+            "component": "VariableTypeMap",
+            "issue": "Illusion of Type Inference",
+            "details": "The `add_assignment` method tracks `x = ClassName`, but fails to handle factory patterns, dependency injection containers, or return type inference. In an enterprise codebase, direct instantiation is rare. This map will be empty 90% of the time, causing the tool to fall back to string-matching heuristics."
+          }
+        ]
+      }
+    },
+    "architectural_verdict": {
+      "q1_beyond_grep": {
+        "answer": "Partially.",
+        "reasoning": "It has graduated from 'Glorified Grep' to 'Context-Free AST Traversal'. While it understands syntax (Tree-sitter), it lacks semantic understanding (Symbol Resolution). It knows *what* a node is, but not *where* it comes from or *who* owns it. It is a syntactic linter masquerading as a static analyzer."
+      },
+      "q2_transactional_safety": {
+        "answer": "No.",
+        "reasoning": "Relying on a 'Sandbox' (runtime verification) to catch static analysis errors is an admission of defeat. A compiler guarantees correctness via the type system and symbol table. A sandbox only guarantees that the specific test paths executed didn't crash. For $49/year, you cannot afford the compute density required to sandbox a monolithic application's state space. This is a marketing gimmick, not a safety guarantee."
+      },
+      "q3_biggest_liability": {
+        "liability": "Lack of Scope-Aware Symbol Resolution",
+        "impact": "The tool relies on string matching (`if entity.name == symbol_name`) as a fallback when context fails. In a monolithic enterprise codebase, the symbol `User`, `Config`, or `id` appears thousands of times. Without resolving imports to specific file paths (the 'Linker' step of a compiler), the tool will cross-wire references. It will either keep dead code alive (false negatives) because a similarly named variable exists elsewhere, or delete live code (false positives) because it failed to resolve a complex import path. In a 5-million-line repo, this non-deterministic behavior is unacceptable."
+      }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "critique": {
+    "summary": "The current dataset relies heavily on lexical probability (string matching) rather than semantic analysis (AST/Type hierarchy). In a JetBrains context, we classify these as 'Textual Heuristics' rather than 'Reference Injection'.",
+    "weaknesses": [
+      {
+        "issue": "Scope Pollution",
+        "description": "Rules like 'exact_matches': ['save', 'clean'] are disastrously broad. A utility class with a 'save' method that is NOT a Django model should be eligible for deletion, but your rule protects it. You are charging for false negatives.",
+        "impact": "Low cleanup efficiency."
+      },
+      {
+        "issue": "Lack of Inheritance Awareness",
+        "description": "Your markers look for strings like 'BaseOperator', but fail to check if the class actually *inherits* from these bases. Enterprise code often uses multi-level inheritance (e.g., `MyCompanyBase` -> `BaseOperator`). Your rules miss the intermediate layer.",
+        "impact": "Unsafe deletions in mature codebases."
+      },
+      {
+        "issue": "Missing External Configuration Linkage",
+        "description": "Frameworks like Airflow and AWS Lambda often reference Python entry points via YAML, JSON, or Terraform files. Code that looks dead in the .py file is alive in the infrastructure.",
+        "impact": "Catastrophic production failures."
+      }
+    ]
+  },
+  "missing_high_value_rules": [
+    {
+      "framework": "SQLAlchemy",
+      "edge_case": "Polymorphic Identities and Abstract Bases",
+      "rationale": "Enterprise apps use Single Table Inheritance. A subclass might define `__mapper_args__ = {'polymorphic_identity': 'x'}`. It is never instantiated directly in Python code (only via DB query results), making it look like dead code to static analysis.",
+      "missing_pattern": "Classes defining `__mapper_args__` or `__abstract__ = True` must be protected as implicit schema definitions."
+    },
+    {
+      "framework": "Celery / Airflow",
+      "edge_case": "Dynamic Task Generation (Factory Patterns)",
+      "rationale": "Senior engineers rarely write static DAGs. They write loop-generated tasks or factories. A function might return a DAG object without assigning it to a top-level variable named 'dag'.",
+      "missing_pattern": "Detection of globals() mutation or dictionary-based DAG registration patterns where the variable name is dynamic."
+    },
+    {
+      "framework": "Pydantic v2",
+      "edge_case": "Recursive Models & Forward References",
+      "rationale": "Pydantic models with string-based forward references (e.g., `foo: List['Bar']`) or calls to `model_rebuild()`. The class `Bar` appears unused because it is referenced only inside a string literal type annotation.",
+      "missing_pattern": "String-literal type evaluation resolution for Pydantic models."
+    },
+    {
+      "framework": "FastAPI / Starlette",
+      "edge_case": "Lifecycle State Injection",
+      "rationale": "The `lifespan` context manager yields a state dictionary (e.g., database pools). These are accessed via `request.state.db`. The cleanup functions inside the yield block appear unreachable after the yield.",
+      "missing_pattern": "Async generator teardown blocks inside `@asynccontextmanager` decorated lifespan functions."
+    },
+    {
+      "framework": "Django",
+      "edge_case": "Generic Foreign Keys & Content Types",
+      "rationale": "Enterprise Django apps use the ContentType framework. Logic often references models via string app_labels in the database or config, specifically in permission systems (`auth_permission`).",
+      "missing_pattern": "Implicit usage based on `Meta.verbose_name` or `app_label` string matching in fixtures or migration files."
+    }
+  ],
+  "justification_for_price": {
+    "value_proposition": "Contextual Safeguards vs. Grep",
+    "pitch": "You cannot sell a list of strings for $49; developers have grep. To justify the premium price, you must sell 'Safety Guarantees'. The product must transition from matching names to understanding intent.",
+    "transformation_strategy": [
+      {
+        "feature": "Heirarchy Verification",
+        "detail": "Do not just check if a method is named `validate`; check if it overrides a parent method in a detected `Marshmallow.Schema` subclass."
+      },
+      {
+        "feature": "Annotation Intelligence",
+        "detail": "For FastAPI, protect functions not just by name, but if they are passed as arguments to `Depends(...)` even if not called directly."
+      },
+      {
+        "feature": "String-Literal Resolution",
+        "detail": "Scan variable annotations for string-forward-references to classes (common in Pydantic and SQLAlchemy) to prevent deleting types that resolve at runtime."
+      }
+    ]
+  }
+}

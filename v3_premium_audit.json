@@ -1,0 +1,33 @@
+[
+  {
+    "product": "The Janitor v3.3.0 (Premium Tier)",
+    "technical_rating": 7.8,
+    "verdict": "Buy for Python-heavy shops; Wait for v4.0 for TypeScript/React ecosystems.",
+    "analysis": {
+      "semantic_depth": {
+        "score": "8/10",
+        "assessment": "The transition to Tree-sitter for AST parsing is the defining feature that justifies the price tag. The 'LifespanTeardownHeuristic' for FastAPI is particularly impressive; standard linters (flake8, pylint) consistently fail to recognize variables used strictly in the 'yield' teardown phase of async context managers. However, the JSON pattern matching for frameworks like Airflow remains brittle; relying on string exact_matches for 'ui_color' or 'template_fields' is a regex-based approach that lacks the control-flow analysis found in IntelliJ's PSI (Program Structure Interface).",
+        "highlight": "The 'PolymorphicORMHeuristic' is a standout. Detecting usage via SQLAlchemy's '__mapper_args__' is a sophisticated edge case that saves significant debugging time for enterprise monoliths."
+      },
+      "false_positive_resilience": {
+        "score": "7/10",
+        "assessment": "The 'ExportProtection' heuristic in the JS module is a double-edged sword. Marking every exported symbol as 'IMMORTAL' effectively turns the tool into 'Library Mode' by default. While this prevents breaking changes in shared packages, it renders the tool useless for tree-shaking analysis within standalone Next.js or Express applications where unused exports *should* be flagged. The Python logic is far more surgical.",
+        "critical_gaps": [
+          "No support for Dependency Injection containers (e.g., Python's 'dependency-injector' or TS 'Inversify') where usage is defined in configuration files.",
+          "The JS 'ReactHookProtection' is redundant; ESLint's 'plugin:react-hooks/recommended' already covers dependency array correctness for free.",
+          "JSON patterns for AWS Lambda are too rigid; they assume standard handler naming conventions and miss dynamic dispatch patterns common in larger serverless architectures."
+        ]
+      },
+      "polyglot_parity": {
+        "status": "Imbalanced",
+        "details": "The Python brain is significantly more mature. It handles complex deferred type evaluation (Pydantic ForwardRefs) and ORM magic. The JS/TS brain is currently a glorified grep for 'exports' and 'routes'. It lacks understanding of TypeScript interfaces used solely for type narrowing, which often leads to false positives in dead code detection."
+      }
+    },
+    "market_positioning": "The Janitor fills the 'Linter Gap'—the space between syntax checkers (ESLint/Ruff) and full-blown SAST tools (SonarQube). It is effectively an 'Insurance Policy' against refactoring-induced regressions in framework-heavy codebases.",
+    "roi_estimation": {
+      "annual_cost": 49.0,
+      "break_even_point": "0.5 developer hours",
+      "calculation": "At an average developer rate of $100/hr, preventing a single 'ImportError' or 'SQLAlchemy Mapper Error' in production (which typically takes 2-4 hours to diagnose and hotfix) yields a 400% - 800% ROI immediately. For a team of 50, the 'Avoided Regressions' value is estimated at ~$25,000/year, assuming a 1% reduction in post-deployment hotfixes."
+    }
+  }
+]
