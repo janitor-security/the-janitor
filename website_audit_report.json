@@ -1,0 +1,124 @@
+[
+  {
+    "design_system": {
+      "critique": "The current 'Material Default' (Blue-Grey/Teal) is too passive and generic. It signals 'documentation site' rather than 'surgical engineering tool'. For a tool named 'The Janitor' that deletes code, the aesthetic should be 'Clinical Industrial'—high contrast, sharp edges, and warning colors.",
+      "proposed_theme": "Clinical Industrial",
+      "color_palette": {
+        "primary_background": "#0a0a0a",
+        "surface_card": "#111111",
+        "text_primary": "#ededed",
+        "text_secondary": "#a1a1aa",
+        "accent_primary": "#FF3300",
+        "accent_secondary": "#00E5FF",
+        "border_color": "#333333"
+      },
+      "typography": {
+        "headings": "Space Grotesk",
+        "body": "Inter",
+        "code": "JetBrains Mono"
+      },
+      "css_overrides": ":root { --md-primary-fg-color: #000000; --md-primary-bg-color: #ffffff; --md-accent-fg-color: #FF3300; } .md-typeset h1, .md-typeset h2 { text-transform: uppercase; letter-spacing: -0.05em; font-weight: 800; } .md-content { border-left: 1px solid #333; } .md-sidebar { border-right: 1px solid #333; } .md-typeset pre { border: 1px solid #333; border-radius: 0px; } .md-button { border-radius: 0px; font-weight: bold; text-transform: uppercase; border: 1px solid currentColor; }"
+    },
+    "config_overrides": {
+      "mkdocs_yaml_snippet": {
+        "theme": {
+          "name": "material",
+          "custom_dir": "overrides",
+          "features": [
+            "navigation.instant",
+            "navigation.tracking",
+            "navigation.tabs",
+            "navigation.sections",
+            "toc.follow",
+            "navigation.top",
+            "search.suggest",
+            "search.highlight",
+            "content.code.copy",
+            "content.action.edit",
+            "header.autohide"
+          ],
+          "palette": [
+            {
+              "scheme": "slate",
+              "primary": "black",
+              "accent": "deep-orange",
+              "toggle": {
+                "icon": "material/toggle-switch",
+                "name": "Switch to light mode"
+              }
+            },
+            {
+              "scheme": "default",
+              "primary": "white",
+              "accent": "deep-orange",
+              "toggle": {
+                "icon": "material/toggle-switch-off-outline",
+                "name": "Switch to dark mode"
+              }
+            }
+          ],
+          "font": {
+            "text": "Inter",
+            "code": "JetBrains Mono"
+          }
+        },
+        "plugins": [
+          {
+            "social": {
+              "cards_layout_options": {
+                "background_color": "#000000",
+                "font_family": "Space Grotesk"
+              }
+            }
+          },
+          "search",
+          "minify",
+          "git-revision-date-localized"
+        ],
+        "extra_css": [
+          "stylesheets/industrial.css"
+        ]
+      }
+    },
+    "marketing_logic": {
+      "functional_gaps": [
+        {
+          "element": "The Bloat Calculator",
+          "description": "An interactive slider where users input their codebase size (LOC) and team size. It calculates 'Estimated Dead Code' (typically 15-30%) and 'Annual Wasted Engineering Hours'.",
+          "location": "Homepage, above the fold"
+        },
+        {
+          "element": "Interactive Diff Viewer",
+          "description": "Replace static code blocks with a 'Before/After' toggle switch that visually highlights the deleted lines in red and the preserved logic in green, mimicking a GitHub Pull Request UI.",
+          "location": "The Solution section"
+        },
+        {
+          "element": "The Safety Sandbox Simulator",
+          "description": "A micro-interaction showing a terminal window animation where a file is deleted, a test fails, and the system auto-rolls back in real-time. This builds trust in the 'Zero-Fear' claim.",
+          "location": "The Guarantee section"
+        }
+      ],
+      "conversion_optimization": {
+        "pricing_strategy": "Reframe from 'Buying a Zip File' to 'Insuring the Codebase'.",
+        "display_changes": [
+          {
+            "tactic": "Anchor Pricing",
+            "implementation": "Introduce a third tier: 'Enterprise' (Contact Sales). This makes the $49 Premium tier look like the rational, high-value choice compared to the 'Free' tier."
+          },
+          {
+            "tactic": "Rename the Product",
+            "implementation": "Change 'Premium Wisdom Packs' to 'The Janitor: Pro License'. 'Wisdom Pack' sounds like a video game DLC. 'Pro License' sounds like a tool requirement."
+          },
+          {
+            "tactic": "Visual Hierarchy",
+            "implementation": "Use a 3-column pricing table. The Pro column should be slightly elevated, have a 'Most Popular' badge in the accent color, and the CTA button should say 'Secure My Codebase' instead of 'Buy Now'."
+          },
+          {
+            "tactic": "Trust Signals",
+            "implementation": "Add logos of the frameworks supported (Django, Next.js, AWS) directly inside the pricing card to visually validate the value."
+          }
+        ]
+      }
+    }
+  }
+]

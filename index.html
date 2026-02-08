@@ -27,7 +27,7 @@
     
     
       
-        <title>The Janitor (v4.0.0-alpha)</title>
+        <title>The Janitor (v4.2.0)</title>
       
     
     
@@ -48,10 +48,12 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CFira+Code:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Fira Code"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Space+Grotesk:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Space Grotesk";--md-code-font:"JetBrains Mono"}</style>
       
     
+    
+      <link rel="stylesheet" href="stylesheets/clinical.css">
     
     <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -69,7 +71,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="teal">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -96,7 +98,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="The Janitor (v4.0.0-alpha)" class="md-header__button md-logo" aria-label="The Janitor (v4.0.0-alpha)" data-md-component="logo">
+    <a href="." title="The Janitor (v4.2.0)" class="md-header__button md-logo" aria-label="The Janitor (v4.2.0)" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -110,7 +112,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            The Janitor (v4.0.0-alpha)
+            The Janitor (v4.2.0)
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -129,7 +131,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7M9 21v-1h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1m3-17a5 5 0 0 0-5 5c0 2.05 1.23 3.81 3 4.58V16h4v-2.42c1.77-.77 3-2.53 3-4.58a5 5 0 0 0-5-5"/></svg>
@@ -139,7 +141,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z"/></svg>
@@ -294,7 +296,7 @@
   
     
   
-  Premium Features
+  Pro License
 
       </a>
     </li>
@@ -323,13 +325,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="The Janitor (v4.0.0-alpha)" class="md-nav__button md-logo" aria-label="The Janitor (v4.0.0-alpha)" data-md-component="logo">
+    <a href="." title="The Janitor (v4.2.0)" class="md-nav__button md-logo" aria-label="The Janitor (v4.2.0)" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    The Janitor (v4.0.0-alpha)
+    The Janitor (v4.2.0)
   </label>
   
     <div class="md-nav__source">
@@ -471,16 +473,50 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-business-case" class="md-nav__link">
+    <nav class="md-nav" aria-label="The Guarantee: Zero-Fear Deletion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#surgical-safety-the-safe-proxy-pattern-v420" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Business Case
+        Surgical Safety: The Safe Proxy Pattern (v4.2.0)
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codebase-roi-calculator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codebase ROI Calculator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codebase ROI Calculator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engineering-time-savings-annual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engineering Time Savings (Annual)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -571,7 +607,7 @@
   <span class="md-ellipsis">
     
   
-    Premium Features
+    Pro License
   
 
     
@@ -669,16 +705,50 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-business-case" class="md-nav__link">
+    <nav class="md-nav" aria-label="The Guarantee: Zero-Fear Deletion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#surgical-safety-the-safe-proxy-pattern-v420" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Business Case
+        Surgical Safety: The Safe Proxy Pattern (v4.2.0)
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codebase-roi-calculator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codebase ROI Calculator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codebase ROI Calculator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engineering-time-savings-annual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engineering Time Savings (Annual)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -786,27 +856,109 @@
 <li><strong>Verification</strong>: Your tests (<code>pytest</code>, <code>npm test</code>) are executed in a sandbox</li>
 <li><strong>Auto-Rollback</strong>: If tests fail, everything is instantly restored</li>
 </ol>
-<h2 id="the-business-case">The Business Case</h2>
-<p>At <strong>$100/hr</strong>, preventing a single production hotfix yields an <strong>800% ROI</strong>:</p>
-<ul>
-<li><strong>Production Hotfix</strong>: $800 (8 hours debugging) → $100 (1 hour automated cleanup) = <strong>$700 saved</strong></li>
-<li><strong>Onboarding Delay</strong>: $400 (4 hours navigating zombie code) → $50 (30 min clean codebase) = <strong>$350 saved</strong></li>
-<li><strong>Security Audit</strong>: $1,200 (12 hours auditing unused attack surface) → $200 (2 hours) = <strong>$1,000 saved</strong></li>
-</ul>
-<h2 id="get-started">Get Started</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Install</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pip<span class="w"> </span>install<span class="w"> </span>the-janitor
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Audit your codebase</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>janitor<span class="w"> </span>audit<span class="w"> </span>.
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Clean dead code (with safety checks)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>janitor<span class="w"> </span>clean<span class="w"> </span>--mode<span class="w"> </span>symbols<span class="w"> </span>.
+<hr />
+<div class="surgical-safety">
+<h3 id="surgical-safety-the-safe-proxy-pattern-v420">Surgical Safety: The Safe Proxy Pattern (v4.2.0)</h3>
+<p>When merging duplicate functions, The Janitor uses the <strong>Safe Proxy Pattern</strong> to ensure zero breaking changes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># BEFORE: Two duplicate functions</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_price</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>  <span class="c1"># Add tax</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_total</span><span class="p">(</span><span class="n">products</span><span class="p">):</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">products</span><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>  <span class="c1"># Add tax</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Find duplicates</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>.<span class="w"> </span>--threshold<span class="w"> </span><span class="m">0</span>.9
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># AFTER: Safe Proxy Pattern (Original signatures preserved)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">_merged_logic</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Internal helper with shared logic&quot;&quot;&quot;</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_price</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Original function → thin wrapper&quot;&quot;&quot;</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="k">return</span> <span class="n">_merged_logic</span><span class="p">(</span><span class="n">items</span><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_total</span><span class="p">(</span><span class="n">products</span><span class="p">):</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Original function → thin wrapper&quot;&quot;&quot;</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="k">return</span> <span class="n">_merged_logic</span><span class="p">(</span><span class="n">products</span><span class="p">)</span>
 </code></pre></div>
-<p><strong>Ready to stop the slop?</strong> <a href="architecture/">View the documentation</a> or <a href="premium/">upgrade to Premium</a>.</p>
+<p><strong>Why This Matters</strong>:
+- ✅ <strong>Zero call-site changes</strong>: All existing code continues to work
+- ✅ <strong>Decorator preservation</strong>: @property, @staticmethod, @lru_cache retained
+- ✅ <strong>Private member safety</strong>: Avoids Python name mangling crashes
+- ✅ <strong>Global state guard</strong>: Static analysis rejects unsafe variable captures</p>
+<p><strong>The Result</strong>: You get DRY code without the risk of breaking production.</p>
+</div>
+<hr />
+<h2 id="codebase-roi-calculator">Codebase ROI Calculator</h2>
+<div class="roi-calculator">
+<h3 id="engineering-time-savings-annual">Engineering Time Savings (Annual)</h3>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Without Janitor</th>
+<th>With Janitor</th>
+<th><strong>Savings</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Production Hotfixes</strong> (3/yr × 8 hrs)</td>
+<td>$2,400</td>
+<td>$300</td>
+<td><strong>$2,100</strong></td>
+</tr>
+<tr>
+<td><strong>Onboarding Delays</strong> (4 devs × 4 hrs)</td>
+<td>$1,600</td>
+<td>$200</td>
+<td><strong>$1,400</strong></td>
+</tr>
+<tr>
+<td><strong>Security Audits</strong> (2/yr × 12 hrs)</td>
+<td>$2,400</td>
+<td>$400</td>
+<td><strong>$2,000</strong></td>
+</tr>
+<tr>
+<td><strong>CI/CD Pipeline Waste</strong> (unused tests)</td>
+<td>$800</td>
+<td>$100</td>
+<td><strong>$700</strong></td>
+</tr>
+<tr>
+<td><strong>Code Review Overhead</strong> (zombie code)</td>
+<td>$1,200</td>
+<td>$300</td>
+<td><strong>$900</strong></td>
+</tr>
+<tr>
+<td><strong>Total Annual Savings</strong></td>
+<td>$8,400</td>
+<td>$1,300</td>
+<td><strong>$7,100</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>ROI</strong>: For every 1,000 LOC removed, you save <strong>~$400</strong> in maintenance costs annually.</p>
+<p><em>Calculated at $100/hr engineering rate. Your actual ROI may vary based on team size and codebase complexity.</em></p>
+</div>
+<h2 id="get-started">Get Started</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pip<span class="w"> </span>install<span class="w"> </span>the-janitor
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Audit your codebase</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>janitor<span class="w"> </span>audit<span class="w"> </span>.
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Clean dead code (with safety checks)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>janitor<span class="w"> </span>clean<span class="w"> </span>--mode<span class="w"> </span>symbols<span class="w"> </span>.
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Find duplicates</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>.<span class="w"> </span>--threshold<span class="w"> </span><span class="m">0</span>.9
+</code></pre></div>
+<p><strong>Ready to stop the slop?</strong> <a href="architecture/">View the documentation</a> or <a href="premium/">upgrade to Pro License</a>.</p>
 
 
 
@@ -879,7 +1031,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "v4.0.0-alpha"}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "v4.2.0"}</script>
     
     
       <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
