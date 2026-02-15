@@ -1,4 +1,8 @@
-//! Tree-sitter based Python parser with entity extraction and heuristic protection detection.
+//! Tree-sitter based polyglot parser with entity extraction and heuristic protection detection.
+//!
+//! Supports Python (primary), Rust, JavaScript, and TypeScript. File extension determines
+//! which grammar is used. Python entities receive full heuristic classification; other
+//! languages receive name + location extraction only.
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -6,7 +10,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use memmap2::MmapOptions;
-use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::path_util::normalize_path;
 use crate::{AnatomistError, Entity, EntityType, Heuristic};
@@ -18,11 +22,126 @@ const PATTERN_CLASS: usize = 1; // Standalone class_definition
 const PATTERN_DECORATED: usize = 2; // decorated_definition wrapping function or class
 const PATTERN_ASSIGNMENT: usize = 3; // Module-level assignments
 
-/// Static cache for the tree-sitter query.
-///
-/// The query is compiled once on first use and reused for all subsequent parses.
-/// This is safe because tree-sitter queries are immutable once compiled.
+/// Static cache for the Python entity extraction query.
 static ENTITY_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the Rust entity extraction query.
+static RUST_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the JavaScript entity extraction query.
+static JS_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the TypeScript (.ts) entity extraction query.
+static TS_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the TypeScript JSX (.tsx) entity extraction query.
+static TSX_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the C++ entity extraction query.
+static CPP_QUERY: OnceLock<Query> = OnceLock::new();
+
+/// S-expression shared by JS, TS, and TSX grammars (all extend the JS grammar node shapes).
+const JS_ENTITY_S_EXPR: &str = r#"
+    (function_declaration
+      name: (identifier) @fn.name) @fn.def
+
+    (class_declaration
+      name: (identifier) @class.name) @class.def
+
+    (method_definition
+      name: (property_identifier) @method.name) @method.def
+"#;
+
+/// S-expression for Rust grammar entity extraction.
+const RUST_ENTITY_S_EXPR: &str = r#"
+    (function_item
+      name: (identifier) @fn.name) @fn.def
+
+    (struct_item
+      name: (type_identifier) @struct.name) @struct.def
+
+    (enum_item
+      name: (type_identifier) @enum.name) @enum.def
+
+    (trait_item
+      name: (type_identifier) @trait.name) @trait.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Rust grammar.
+const RUST_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("struct.def", "struct.name", EntityType::ClassDefinition),
+    ("enum.def", "enum.name", EntityType::ClassDefinition),
+    ("trait.def", "trait.name", EntityType::ClassDefinition),
+];
+
+/// S-expression for C++ grammar entity extraction.
+///
+/// Captures simple (non-template, non-pointer) function definitions and class/struct specifiers.
+const CPP_ENTITY_S_EXPR: &str = r#"
+    (function_definition
+      declarator: (function_declarator
+        declarator: (identifier) @fn.name)) @fn.def
+
+    (class_specifier
+      name: (type_identifier) @class.name) @class.def
+
+    (struct_specifier
+      name: (type_identifier) @struct.name) @struct.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for C++ grammar.
+const CPP_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition),
+    ("struct.def", "struct.name", EntityType::ClassDefinition),
+];
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for JS/TS grammars.
+const JS_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition),
+    ("method.def", "method.name", EntityType::MethodDefinition),
+];
+
+fn get_rust_query() -> &'static Query {
+    RUST_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_rust::LANGUAGE.into(), RUST_ENTITY_S_EXPR).expect(
+            "Rust entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_js_query() -> &'static Query {
+    JS_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_javascript::LANGUAGE.into(), JS_ENTITY_S_EXPR).expect(
+            "JS entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_ts_query() -> &'static Query {
+    TS_QUERY.get_or_init(|| {
+        Query::new(
+            &tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            JS_ENTITY_S_EXPR,
+        )
+        .expect("TS entity query compilation failed — this is a bug in the hardcoded S-expression")
+    })
+}
+
+fn get_tsx_query() -> &'static Query {
+    TSX_QUERY.get_or_init(|| {
+        Query::new(
+            &tree_sitter_typescript::LANGUAGE_TSX.into(),
+            JS_ENTITY_S_EXPR,
+        )
+        .expect("TSX entity query compilation failed — this is a bug in the hardcoded S-expression")
+    })
+}
+
+fn get_cpp_query() -> &'static Query {
+    CPP_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_cpp::LANGUAGE.into(), CPP_ENTITY_S_EXPR).expect(
+            "C++ entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
 
 /// Returns the compiled entity extraction query, initializing it on first call.
 ///
@@ -130,31 +249,20 @@ impl ParserHost {
         self.heuristics.push(heuristic);
     }
 
-    /// Extracts entities from a Python source file using memory-mapped I/O.
+    /// Extracts entities from a source file using memory-mapped I/O.
     ///
-    /// # Process
-    /// 1. Opens file and validates size (must fit in u32 for tree-sitter byte ranges)
-    /// 2. Memory-maps file for zero-copy parsing
-    /// 3. Parses source into CST (Concrete Syntax Tree)
-    /// 4. Executes entity extraction query
-    /// 5. Performs two-pass deduplication for decorated entities
-    /// 6. Applies registered heuristics for protection classification
+    /// Dispatches to the appropriate grammar based on file extension:
+    /// - `.py` (default): Full Python extraction with heuristic classification.
+    /// - `.rs`: Rust functions, structs, enums, and traits.
+    /// - `.js` / `.jsx`: JavaScript functions, classes, and methods.
+    /// - `.ts` / `.tsx`: TypeScript functions, classes, and methods.
+    /// - `.cpp` / `.cxx` / `.cc` / `.h` / `.hpp`: C++ functions, classes, and structs.
     ///
     /// # Errors
     /// - `IoError`: File not found, permission denied, mmap failure
     /// - `ByteRangeOverflow`: File larger than 4GB (tree-sitter u32 limit)
     /// - `ParseFailure`: Tree-sitter parse returned `None` (severe syntax errors)
-    ///
-    /// # Example
-    /// ```no_run
-    /// use anatomist::ParserHost;
-    /// use std::path::Path;
-    ///
-    /// let mut host = ParserHost::new().unwrap();
-    /// let entities = host.dissect(Path::new("main.py")).unwrap();
-    /// ```
     pub fn dissect(&mut self, path: &Path) -> Result<Vec<Entity>, AnatomistError> {
-        // Open and validate file size
         let file = File::open(path)?;
         let metadata = file.metadata()?;
         let file_len = metadata.len();
@@ -162,22 +270,90 @@ impl ParserHost {
         if file_len > u32::MAX as u64 {
             return Err(AnatomistError::ByteRangeOverflow);
         }
-
-        // Handle empty files
         if file_len == 0 {
             return Ok(Vec::new());
         }
 
-        // Memory-map the file for zero-copy parsing
         // SAFETY: The file handle is held for the duration of the mmap lifetime.
-        // We validate the file length above to ensure it fits in addressable memory.
         let mmap = unsafe { MmapOptions::new().map(&file)? };
         let source = &mmap[..];
-
-        // Normalize path once for all entities
         let normalized_path = normalize_path(path)?;
 
-        self.dissect_impl(source, &normalized_path)
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        match ext {
+            "rs" => Self::extract_rust_entities(source, &normalized_path),
+            "js" | "jsx" => Self::extract_js_entities(source, &normalized_path),
+            "ts" => extract_named_entities(
+                source,
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+                get_ts_query(),
+                &normalized_path,
+                JS_PATTERNS,
+            ),
+            "tsx" => extract_named_entities(
+                source,
+                tree_sitter_typescript::LANGUAGE_TSX.into(),
+                get_tsx_query(),
+                &normalized_path,
+                JS_PATTERNS,
+            ),
+            "cpp" | "cxx" | "cc" | "h" | "hpp" => {
+                Self::extract_cpp_entities(source, &normalized_path)
+            }
+            _ => self.dissect_impl(source, &normalized_path), // Python + unknown → Python pass
+        }
+    }
+
+    /// Extracts `fn`, `struct`, `enum`, and `trait` entities from a Rust source buffer.
+    ///
+    /// Does not apply Python-specific heuristics. `protected_by` is `None` for all
+    /// returned entities; protection is assigned by later pipeline stages.
+    pub fn extract_rust_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_rust::LANGUAGE.into(),
+            get_rust_query(),
+            file_path,
+            RUST_PATTERNS,
+        )
+    }
+
+    /// Extracts `function`, `class`, and `method` entities from a JavaScript source buffer.
+    ///
+    /// Uses the JavaScript grammar. For TypeScript files use `dissect()` which dispatches
+    /// automatically. `protected_by` is `None` for all returned entities.
+    pub fn extract_js_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_javascript::LANGUAGE.into(),
+            get_js_query(),
+            file_path,
+            JS_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_definition`, `class_specifier`, and `struct_specifier` entities
+    /// from a C++ source buffer.
+    ///
+    /// Only captures simple (non-template, non-pointer-returning) functions. `protected_by`
+    /// is `None` for all returned entities; protection is assigned by later pipeline stages.
+    pub fn extract_cpp_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_cpp::LANGUAGE.into(),
+            get_cpp_query(),
+            file_path,
+            CPP_PATTERNS,
+        )
     }
 
     /// Internal implementation shared by `dissect()` and `dissect_bytes()`.
@@ -459,6 +635,81 @@ impl ParserHost {
     }
 }
 
+/// Generic entity extractor for non-Python languages.
+///
+/// Parses `source` with `language`, runs `query`, and maps pattern indices to entity
+/// metadata via `patterns: &[(def_cap, name_cap, entity_type)]`.
+///
+/// Creates a local `Parser` per call — avoids mutating the host's Python parser state.
+fn extract_named_entities(
+    source: &[u8],
+    language: Language,
+    query: &Query,
+    file_path: &str,
+    patterns: &[(&str, &str, EntityType)],
+) -> Result<Vec<Entity>, AnatomistError> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&language)
+        .map_err(|e| AnatomistError::ParseFailure(format!("Grammar load failed: {e}")))?;
+
+    let tree = parser
+        .parse(source, None)
+        .ok_or_else(|| AnatomistError::ParseFailure("Parse returned None".to_string()))?;
+
+    let root = tree.root_node();
+    let capture_names = query.capture_names();
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(query, root, source);
+    let mut entities = Vec::new();
+
+    while let Some(m) = matches.next() {
+        let idx = m.pattern_index;
+        if idx >= patterns.len() {
+            continue;
+        }
+        let (def_cap_name, name_cap_name, entity_type) = patterns[idx];
+
+        let def_node = m
+            .captures
+            .iter()
+            .find(|c| capture_names[c.index as usize] == def_cap_name)
+            .map(|c| c.node);
+        let name_node = m
+            .captures
+            .iter()
+            .find(|c| capture_names[c.index as usize] == name_cap_name)
+            .map(|c| c.node);
+
+        let (Some(def_node), Some(name_node)) = (def_node, name_node) else {
+            continue;
+        };
+
+        let name = match name_node.utf8_text(source) {
+            Ok(n) => n.to_string(),
+            Err(_) => continue,
+        };
+
+        entities.push(Entity {
+            name: name.clone(),
+            qualified_name: name,
+            entity_type,
+            file_path: file_path.to_string(),
+            start_byte: def_node.start_byte() as u32,
+            end_byte: def_node.end_byte() as u32,
+            start_line: (def_node.start_position().row + 1) as u32,
+            end_line: (def_node.end_position().row + 1) as u32,
+            parent_class: None,
+            base_classes: vec![],
+            decorators: vec![],
+            protected_by: None,
+            structural_hash: None,
+        });
+    }
+
+    Ok(entities)
+}
+
 /// Finds the enclosing class name for a given node by walking up the tree.
 ///
 /// # Returns
@@ -595,5 +846,54 @@ mod tests {
         assert_eq!(entities.len(), 1);
         // All functions in conftest.py should be protected
         assert_eq!(entities[0].protected_by, Some(Protection::PytestFixture));
+    }
+
+    #[test]
+    fn test_rust_entity_extraction() {
+        let source = b"fn hello() {}\nstruct Foo {}\nenum Bar { A, B }\ntrait Baz {}";
+        let entities = ParserHost::extract_rust_entities(source, "src/lib.rs").unwrap();
+
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"hello"), "should extract function 'hello'");
+        assert!(names.contains(&"Foo"), "should extract struct 'Foo'");
+        assert!(names.contains(&"Bar"), "should extract enum 'Bar'");
+        assert!(names.contains(&"Baz"), "should extract trait 'Baz'");
+
+        let fn_entity = entities.iter().find(|e| e.name == "hello").unwrap();
+        assert_eq!(fn_entity.entity_type, EntityType::FunctionDefinition);
+        assert_eq!(fn_entity.file_path, "src/lib.rs");
+        assert!(fn_entity.protected_by.is_none());
+    }
+
+    #[test]
+    fn test_js_entity_extraction() {
+        let source = b"function greet(name) {}\nclass Animal {}\n";
+        let entities = ParserHost::extract_js_entities(source, "src/app.js").unwrap();
+
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"greet"), "should extract function 'greet'");
+        assert!(names.contains(&"Animal"), "should extract class 'Animal'");
+
+        let fn_entity = entities.iter().find(|e| e.name == "greet").unwrap();
+        assert_eq!(fn_entity.entity_type, EntityType::FunctionDefinition);
+        assert!(fn_entity.protected_by.is_none());
+    }
+
+    #[test]
+    fn test_cpp_entity_extraction() {
+        let source = b"int add(int a, int b) { return a + b; }\nclass Foo {};\nstruct Bar {};\n";
+        let entities = ParserHost::extract_cpp_entities(source, "src/math.cpp").unwrap();
+
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"add"), "should extract function 'add'");
+        assert!(names.contains(&"Foo"), "should extract class 'Foo'");
+        assert!(names.contains(&"Bar"), "should extract struct 'Bar'");
+
+        let fn_entity = entities.iter().find(|e| e.name == "add").unwrap();
+        assert_eq!(fn_entity.entity_type, EntityType::FunctionDefinition);
+        assert_eq!(fn_entity.file_path, "src/math.cpp");
+        assert!(fn_entity.protected_by.is_none());
+        // u32 byte ranges must fit without overflow
+        assert!(fn_entity.end_byte > fn_entity.start_byte);
     }
 }

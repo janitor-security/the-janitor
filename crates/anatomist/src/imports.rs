@@ -19,6 +19,15 @@ pub struct ImportInfo {
     pub line: u32,
 }
 
+/// A local `#include` directive extracted from C++ source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CppInclude {
+    /// The included path as written (e.g., `"utils/helper.h"`).
+    pub path: String,
+    /// Line number (1-indexed).
+    pub line: u32,
+}
+
 static IMPORT_QUERY: OnceLock<Query> = OnceLock::new();
 
 /// Extracts import statements from Python source code.
@@ -242,6 +251,71 @@ fn resolve_module_path(base: &Path, dotted: &str) -> Option<PathBuf> {
     None
 }
 
+/// Extracts local `#include "..."` directives from C++ source bytes.
+///
+/// Only captures double-quoted (local) includes. Angle-bracket system includes
+/// (`#include <stdio.h>`) are ignored — they cannot be resolved to project files.
+///
+/// # Examples
+/// ```
+/// use anatomist::imports::extract_cpp_includes;
+/// let source = b"#include \"utils.h\"\n#include <stdio.h>\n";
+/// let includes = extract_cpp_includes(source);
+/// assert_eq!(includes.len(), 1);
+/// assert_eq!(includes[0].path, "utils.h");
+/// ```
+pub fn extract_cpp_includes(source: &[u8]) -> Vec<CppInclude> {
+    let mut includes = Vec::new();
+    let mut line: u32 = 1;
+    let mut i = 0usize;
+
+    while i < source.len() {
+        if source[i] == b'\n' {
+            line += 1;
+            i += 1;
+            continue;
+        }
+
+        if source[i] == b'#' {
+            // Skip optional whitespace after '#'
+            let mut j = i + 1;
+            while j < source.len() && (source[j] == b' ' || source[j] == b'\t') {
+                j += 1;
+            }
+            // Match "include"
+            if source[j..].starts_with(b"include") {
+                let mut k = j + b"include".len();
+                // Skip whitespace before opening quote
+                while k < source.len() && (source[k] == b' ' || source[k] == b'\t') {
+                    k += 1;
+                }
+                // Double-quoted include only
+                if k < source.len() && source[k] == b'"' {
+                    let start = k + 1;
+                    let mut end = start;
+                    while end < source.len() && source[end] != b'"' && source[end] != b'\n' {
+                        end += 1;
+                    }
+                    if end < source.len() && source[end] == b'"' {
+                        if let Ok(path) = std::str::from_utf8(&source[start..end]) {
+                            if !path.is_empty() {
+                                includes.push(CppInclude {
+                                    path: path.to_string(),
+                                    line,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        i += 1;
+    }
+
+    includes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,6 +429,24 @@ mod tests {
         assert!(result.unwrap().ends_with("core.py"));
 
         fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_cpp_local_include() {
+        let source = b"#include \"utils/helper.h\"\n#include <stdio.h>\n#include \"core.hpp\"\n";
+        let includes = extract_cpp_includes(source);
+        assert_eq!(includes.len(), 2);
+        assert_eq!(includes[0].path, "utils/helper.h");
+        assert_eq!(includes[0].line, 1);
+        assert_eq!(includes[1].path, "core.hpp");
+        assert_eq!(includes[1].line, 3);
+    }
+
+    #[test]
+    fn test_cpp_no_includes() {
+        let source = b"int main() { return 0; }\n";
+        let includes = extract_cpp_includes(source);
+        assert!(includes.is_empty());
     }
 
     #[test]

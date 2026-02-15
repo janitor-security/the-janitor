@@ -17,7 +17,6 @@ init:
 	cargo new --lib crates/oracle
 	cargo new --lib crates/vault
 	cargo new --lib crates/common
-	cargo new --lib crates/supervisor
 	cargo new --bin crates/cli
 	@echo "✅ Workspace initialized. Tabs enforced."
 
@@ -57,3 +56,9 @@ release version: audit (bump-version version)
 	git tag v{{version}}
 	git push origin main --force --tags
 	@echo "💀 Release v{{version}} deployed."
+
+# 5. DOCUMENTATION
+deploy-docs:
+	@command -v mkdocs >/dev/null 2>&1 || { echo "❌ mkdocs not found. Install: pip install mkdocs-material"; exit 1; }
+	mkdocs build
+	@echo "✅ Docs built. Run 'mkdocs gh-deploy --force' to push to GitHub Pages."

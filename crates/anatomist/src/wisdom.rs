@@ -12,6 +12,18 @@
 use crate::{Entity, Protection};
 use std::collections::HashSet;
 
+// --- Directory-level protection ---
+
+/// Directories whose files are implicitly entry points via dynamic/plugin loading.
+///
+/// Files in these directories are discovered and executed by frameworks (Scrapy, Django,
+/// Celery, etc.) without being explicitly imported, so all their public symbols must be
+/// treated as entry points.
+///
+/// `migrations/` is intentionally omitted here — it is already caught by Stage 0
+/// (`PROTECTED_DIRS` in `pipeline.rs`) which marks the entire directory as `Directory`.
+static PLUGIN_DIRS: &[&str] = &["spiders", "plugins", "commands", "handlers", "tasks"];
+
 // --- Byte pattern tables (compile-time constants) ---
 
 /// FastAPI/Flask/Starlette route decorator patterns (without leading `@`).
@@ -119,6 +131,11 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
     let has_metaprog = any_in(source, METAPROG);
     let is_init = file_path.ends_with("__init__.py");
 
+    // Plugin directory flag: file lives in a framework-managed directory.
+    let is_plugin_dir = PLUGIN_DIRS
+        .iter()
+        .any(|d| file_path.split('/').any(|seg| seg == *d));
+
     // Stage 4: extract __all__ exports (single scan, result is &str slices into `source`).
     let all_exports = extract_all_exports(source);
 
@@ -129,6 +146,14 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         }
 
         // --- Stage 2: WisdomRegistry ---
+
+        // 2a-pre. Plugin directory: public symbols are implicit framework entry points.
+        // Spiders, task handlers, command modules, etc. are discovered dynamically —
+        // they are never explicitly imported, so the reference graph has no edges to them.
+        if is_plugin_dir && !entity.is_private() {
+            entity.protected_by = Some(Protection::EntryPoint);
+            continue;
+        }
 
         // 2a. Dunder methods: always lifecycle-critical.
         if entity.is_dunder() {
@@ -436,5 +461,33 @@ mod tests {
         let source = b"def foo(): pass";
         let exports = extract_all_exports(source);
         assert!(exports.is_empty());
+    }
+
+    #[test]
+    fn test_plugin_dir_protects_public_symbols() {
+        let mut entities = vec![
+            make_entity("MySpider", vec![], None),
+            make_entity("_helper", vec![], None),
+        ];
+        classify(&mut entities, b"", "myproject/spiders/my_spider.py");
+        // Public class in spiders/ → EntryPoint
+        assert_eq!(entities[0].protected_by, Some(Protection::EntryPoint));
+        // Private helper in spiders/ → NOT protected by plugin rule
+        assert_eq!(entities[1].protected_by, None);
+    }
+
+    #[test]
+    fn test_handlers_dir_protects_public() {
+        let mut entities = vec![make_entity("handle_event", vec![], None)];
+        classify(&mut entities, b"", "app/handlers/webhook.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::EntryPoint));
+    }
+
+    #[test]
+    fn test_non_plugin_dir_not_affected() {
+        let mut entities = vec![make_entity("some_func", vec![], None)];
+        classify(&mut entities, b"", "app/utils/helpers.py");
+        // Regular file — no plugin protection
+        assert_eq!(entities[1 - 1].protected_by, None);
     }
 }

@@ -4,12 +4,14 @@
 //! 1. **Index Pass**: Walk all `.py` files, extract entities, build `SymbolRegistry`, add nodes to graph.
 //! 2. **Link Pass**: Re-parse each file for imports + call sites, add symbol-to-symbol edges.
 
-use crate::imports::{extract_imports, resolve_import};
+use crate::imports::{extract_cpp_includes, extract_imports, resolve_import};
 use crate::{AnatomistError, Entity, ParserHost};
 use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
 use memmap2::Mmap;
 use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::HashMap;
+use petgraph::visit::EdgeRef;
+use petgraph::Direction;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -33,6 +35,99 @@ pub struct ReferenceGraph {
     /// All entities extracted across the project (populated in Pass 1).
     pub entities: Vec<Entity>,
     pub stats: GraphStats,
+}
+
+/// Known Django / WSGI / ASGI / script entry-point filenames that should never
+/// be flagged as orphans even when no other file imports them.
+const ENTRY_POINT_FILENAMES: &[&str] = &["wsgi.py", "asgi.py", "manage.py", "main.py", "app.py"];
+
+/// Directory segments whose files are discovered dynamically by frameworks (Scrapy, Celery, etc.)
+/// and therefore are never imported by other Python files. Files inside these directories
+/// are implicitly entry points and must not be flagged as orphans.
+const PLUGIN_ORPHAN_EXEMPT_DIRS: &[&str] = &["spiders", "plugins", "commands", "handlers", "tasks"];
+
+impl ReferenceGraph {
+    /// Returns the paths of **orphan files** — Python source files with zero
+    /// incoming file-level dependencies that are not known entry points.
+    ///
+    /// A file is an orphan when:
+    /// 1. None of its symbols has an incoming edge from a symbol in a **different** file.
+    /// 2. Its filename is not in [`ENTRY_POINT_FILENAMES`].
+    /// 3. Its filename is not `__init__.py` (package init files are always exempt).
+    /// 4. It does not reside in a plugin directory (see [`PLUGIN_ORPHAN_EXEMPT_DIRS`]).
+    ///
+    /// Results are sorted for deterministic output.
+    pub fn find_orphan_files(&self) -> Vec<String> {
+        // Build id → NodeIndex reverse map (O(n) graph walk).
+        let id_to_node: HashMap<u64, NodeIndex> = self
+            .graph
+            .node_indices()
+            .filter_map(|n| self.graph.node_weight(n).map(|&w| (w, n)))
+            .collect();
+
+        // Build id → file_path from the registry.
+        let id_to_file: HashMap<u64, &str> = self
+            .registry
+            .entries
+            .iter()
+            .map(|e| (e.id, e.file_path.as_str()))
+            .collect();
+
+        let mut orphans = Vec::new();
+
+        for (file_path, symbol_ids) in &self.file_symbols {
+            let filename = file_path.split('/').next_back().unwrap_or_default();
+
+            // __init__.py is too risky to flag — always exempt.
+            if filename == "__init__.py" {
+                continue;
+            }
+
+            // Known entry points are never orphans.
+            if ENTRY_POINT_FILENAMES.contains(&filename) {
+                continue;
+            }
+
+            // Plugin/framework-managed directories: files here are discovered dynamically,
+            // so they have no incoming import edges by design — not a true orphan.
+            if file_path
+                .split('/')
+                .any(|seg| PLUGIN_ORPHAN_EXEMPT_DIRS.contains(&seg))
+            {
+                continue;
+            }
+
+            // Set of this file's own symbol IDs for quick cross-file check.
+            let my_ids: HashSet<u64> = symbol_ids.iter().copied().collect();
+
+            // A file has an incoming dependency if any of its symbols is
+            // referenced (incoming edge) by a symbol from a different file.
+            let has_incoming = symbol_ids.iter().any(|&sym_id| {
+                let node = match id_to_node.get(&sym_id) {
+                    Some(&n) => n,
+                    None => return false,
+                };
+                self.graph
+                    .edges_directed(node, Direction::Incoming)
+                    .any(|edge| {
+                        let src_weight = match self.graph.node_weight(edge.source()) {
+                            Some(&w) => w,
+                            None => return false,
+                        };
+                        // The caller must live in a different file.
+                        let src_file = id_to_file.get(&src_weight).copied().unwrap_or_default();
+                        src_file != file_path.as_str() && !my_ids.contains(&src_weight)
+                    })
+            });
+
+            if !has_incoming {
+                orphans.push(file_path.clone());
+            }
+        }
+
+        orphans.sort();
+        orphans
+    }
 }
 
 static CALL_QUERY: OnceLock<Query> = OnceLock::new();
@@ -96,13 +191,14 @@ fn find_containing_entity(byte_offset: u32, entries: &[(u64, u32, u32)]) -> Opti
         .map(|(id, _, _)| *id)
 }
 
-/// Builds a reference graph from a Python project directory.
+/// Builds a reference graph from a polyglot project directory.
 ///
 /// # Algorithm
-/// 1. Walk directory for `.py` files (skips `__pycache__`, `.git`, etc.)
-/// 2. **Pass 1**: Extract entities from each file, populate registry, add graph nodes.
-///    Also inserts a `__MODULE__` sentinel node per file for module-level call attribution.
-/// 3. **Pass 2**: Re-parse for imports + call sites, resolve paths, add symbol-to-symbol edges.
+/// 1. Walk directory for `.py` and C++ (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`) files.
+/// 2. **Pass 1**: Extract Python entities, populate registry, add graph nodes.
+/// 3. **Pass 1b**: Extract C++ entities, register symbols and `__MODULE__` sentinels.
+/// 4. **Pass 2**: Re-parse Python files for imports + call sites; add symbol-to-symbol edges.
+/// 5. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
 ///
 /// # Memory
 /// - Registry stores all symbols (~80 bytes per symbol)
@@ -114,6 +210,7 @@ pub fn build_reference_graph(
 ) -> Result<ReferenceGraph, AnatomistError> {
     let root = dunce::canonicalize(project_root)?;
     let py_files = walk_py_files(&root)?;
+    let cpp_files = walk_cpp_files(&root)?;
 
     let mut registry = SymbolRegistry::new();
     let mut graph = DiGraph::new();
@@ -121,7 +218,7 @@ pub fn build_reference_graph(
     let mut id_to_node: HashMap<u64, NodeIndex> = HashMap::new();
     let mut all_entities: Vec<Entity> = Vec::new();
     let mut stats = GraphStats {
-        file_count: py_files.len(),
+        file_count: py_files.len() + cpp_files.len(),
         ..Default::default()
     };
 
@@ -291,6 +388,142 @@ pub fn build_reference_graph(
         }
     }
 
+    // PASS 1b: Index C++ symbols
+    for path in &cpp_files {
+        let file = match File::open(path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let mmap = match unsafe { Mmap::map(&file) } {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let source = &mmap[..];
+        let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let file_key = normalize_path(&canonical);
+        let file_size = source.len().min(u32::MAX as usize) as u32;
+
+        // __MODULE__ sentinel for file-level include edges
+        let module_sym_id = format!("{}::__MODULE__", file_key);
+        let module_hash = symbol_hash(&module_sym_id);
+        registry.insert(SymbolEntry {
+            id: module_hash,
+            name: "__MODULE__".to_string(),
+            qualified_name: "__MODULE__".to_string(),
+            file_path: file_key.clone(),
+            entity_type: 0,
+            start_line: 1,
+            end_line: 0,
+            start_byte: 0,
+            end_byte: file_size,
+            structural_hash: 0,
+            protected_by: None,
+        });
+        let module_node = graph.add_node(module_hash);
+        id_to_node.insert(module_hash, module_node);
+        file_symbols
+            .entry(file_key.clone())
+            .or_default()
+            .push(module_hash);
+
+        match ParserHost::extract_cpp_entities(source, &file_key) {
+            Ok(entities) => {
+                for entity in entities {
+                    let symbol_id = entity.symbol_id();
+                    let hash = symbol_hash(&symbol_id);
+
+                    let entry = SymbolEntry {
+                        id: hash,
+                        name: entity.name.clone(),
+                        qualified_name: entity.qualified_name.clone(),
+                        file_path: entity.file_path.clone(),
+                        entity_type: entity.entity_type as u8,
+                        start_line: entity.start_line,
+                        end_line: entity.end_line,
+                        start_byte: entity.start_byte,
+                        end_byte: entity.end_byte,
+                        structural_hash: entity.structural_hash.unwrap_or(0),
+                        protected_by: entity.protected_by,
+                    };
+                    registry.insert(entry);
+
+                    let node_idx = graph.add_node(hash);
+                    id_to_node.insert(hash, node_idx);
+                    file_symbols
+                        .entry(entity.file_path.clone())
+                        .or_default()
+                        .push(hash);
+
+                    all_entities.push(entity);
+                    stats.symbol_count += 1;
+                }
+            }
+            Err(_) => {
+                stats.parse_errors += 1;
+            }
+        }
+    }
+
+    // Build C++ file-key index for include resolution
+    let cpp_file_keys: HashSet<String> = cpp_files
+        .iter()
+        .filter_map(|p| dunce::canonicalize(p).ok())
+        .map(|p| normalize_path(&p))
+        .collect();
+
+    // PASS 2b: Wire #include edges as __MODULE__ → __MODULE__ file-level links
+    for source_path in &cpp_files {
+        let file = match File::open(source_path) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let mmap = match unsafe { Mmap::map(&file) } {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let source = &mmap[..];
+        let includes = extract_cpp_includes(source);
+        if includes.is_empty() {
+            continue;
+        }
+
+        let source_canonical = match dunce::canonicalize(source_path) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let source_file_key = normalize_path(&source_canonical);
+        let src_module_id = symbol_hash(&format!("{}::__MODULE__", source_file_key));
+        let src_node = match id_to_node.get(&src_module_id) {
+            Some(&n) => n,
+            None => continue,
+        };
+        let source_dir = source_canonical
+            .parent()
+            .unwrap_or(root.as_path())
+            .to_path_buf();
+
+        for include in &includes {
+            // Try relative-to-source-dir first, then relative-to-project-root
+            let target_abs = [source_dir.join(&include.path), root.join(&include.path)]
+                .into_iter()
+                .find(|p| p.exists())
+                .and_then(|p| dunce::canonicalize(p).ok());
+
+            let Some(target_abs) = target_abs else {
+                continue;
+            };
+            let target_file_key = normalize_path(&target_abs);
+            if !cpp_file_keys.contains(&target_file_key) {
+                continue;
+            }
+            let tgt_module_id = symbol_hash(&format!("{}::__MODULE__", target_file_key));
+            if let Some(&tgt_node) = id_to_node.get(&tgt_module_id) {
+                graph.add_edge(src_node, tgt_node, ());
+                stats.edge_count += 1;
+            }
+        }
+    }
+
     Ok(ReferenceGraph {
         registry,
         graph,
@@ -312,6 +545,29 @@ fn walk_py_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
         let path = entry.path();
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("py") {
             files.push(path.to_path_buf());
+        }
+    }
+
+    Ok(files)
+}
+
+/// Walks a directory for C++ source files (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`),
+/// skipping the same excluded directories as [`walk_py_files`].
+fn walk_cpp_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
+    let mut files = Vec::new();
+
+    for entry in WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|e| !is_excluded(e.path()))
+    {
+        let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some("cpp" | "cxx" | "cc" | "h" | "hpp") =
+                path.extension().and_then(|s| s.to_str())
+            {
+                files.push(path.to_path_buf());
+            }
         }
     }
 
@@ -508,6 +764,69 @@ mod tests {
         assert!(result.is_ok());
         let graph = result.unwrap();
         assert_eq!(graph.stats.file_count, 1); // Only test.py, not .pyc
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_orphan_file_detected() {
+        let tmp = std::env::temp_dir().join("test_graph_orphan");
+        fs::create_dir_all(&tmp).ok();
+
+        // utils.py is never imported by anyone → orphan
+        fs::write(tmp.join("utils.py"), "def dead():\n    pass\n").ok();
+        // main.py is an entry point → exempt from orphan detection
+        fs::write(tmp.join("main.py"), "def run():\n    pass\n").ok();
+
+        let mut host = ParserHost::new().unwrap();
+        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let orphans = result.find_orphan_files();
+
+        assert!(orphans.iter().any(|p| p.ends_with("utils.py")));
+        assert!(!orphans.iter().any(|p| p.ends_with("main.py")));
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_referenced_file_not_orphan() {
+        let tmp = std::env::temp_dir().join("test_graph_ref_orphan");
+        fs::create_dir_all(&tmp).ok();
+
+        fs::write(tmp.join("helpers.py"), "def util():\n    pass\n").ok();
+        // app.py calls util() → helpers.py gets an incoming cross-file edge
+        fs::write(
+            tmp.join("app.py"),
+            "from helpers import util\ndef run():\n    util()\n",
+        )
+        .ok();
+
+        let mut host = ParserHost::new().unwrap();
+        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let orphans = result.find_orphan_files();
+
+        // helpers.py is referenced by app.py — not an orphan.
+        assert!(!orphans.iter().any(|p| p.ends_with("helpers.py")));
+        // app.py is a known entry point — exempt.
+        assert!(!orphans.iter().any(|p| p.ends_with("app.py")));
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_init_py_never_orphan() {
+        let tmp = std::env::temp_dir().join("test_graph_init_orphan");
+        fs::create_dir_all(tmp.join("pkg")).ok();
+
+        // __init__.py with no imports should still NOT be flagged
+        fs::write(tmp.join("pkg/__init__.py"), "").ok();
+        fs::write(tmp.join("pkg/util.py"), "def fn():\n    pass\n").ok();
+
+        let mut host = ParserHost::new().unwrap();
+        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let orphans = result.find_orphan_files();
+
+        assert!(!orphans.iter().any(|p| p.ends_with("__init__.py")));
 
         fs::remove_dir_all(tmp).ok();
     }

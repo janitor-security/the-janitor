@@ -1,5 +1,5 @@
 # The Janitor: Sovereign Governance for the AI Era
-**Current Version:** v5.4.0
+**Current Version:** v5.5.0
 *"Code is Liability. Sovereignty is Metabolic."*
 [Sovereign Portal: Purchase PQC Tokens](https://thejanitor.app)
 
@@ -39,7 +39,7 @@ The Audit is Free. The Purge is Paid.
 
 ## V. LEGACY DEPRECATION
 **Python v4.0** and all dynamic runtimes are classified as **High-Entropy Waste**. Support is permanently revoked.
-**v5.4.0 (Python)** is officially designated as **Legacy Slop**. No migration path is provided. Purge your Python v4.2 source and re-materialize in Rust v5.2.
+**v5.5.0 (Python)** is officially designated as **Legacy Slop**. No migration path is provided. Purge your Python v4.2 source and re-materialize in Rust v5.2.
 **Rust** and **C++23** are the only recognized Sovereign Languages.
 
 ## VI. WARNING

@@ -109,6 +109,7 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
     println!("| Total entities : {:>22} |", result.total);
     println!("| Dead           : {:>22} |", result.dead.len());
     println!("| Protected      : {:>22} |", result.protected.len());
+    println!("| Orphan files   : {:>22} |", result.orphan_files.len());
     println!("+------------------------------------------+");
 
     if result.dead.is_empty() {
@@ -120,6 +121,19 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
                 "  {}:{} - {}",
                 entity.file_path, entity.start_line, entity.qualified_name
             );
+        }
+    }
+
+    println!("\n+------------------------------------------+");
+    println!("| DEAD FILES (ORPHANS)                     |");
+    println!("+------------------------------------------+");
+    println!("| Count          : {:>22} |", result.orphan_files.len());
+    println!("+------------------------------------------+");
+    if result.orphan_files.is_empty() {
+        println!("No orphan files detected.");
+    } else {
+        for path in &result.orphan_files {
+            println!("  {path}");
         }
     }
 

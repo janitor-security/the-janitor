@@ -1,0 +1,36 @@
+site_name: The Janitor
+site_description: "Sovereign Governance for the AI Era. Rust-Native. Zero-Copy. Link-Time Excision."
+site_url: https://thejanitor.app
+repo_url: https://github.com/GhrammR/the-janitor
+repo_name: GhrammR/the-janitor
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: black
+      accent: red
+  font:
+    text: Roboto Mono
+    code: Roboto Mono
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Overview: index.md
+  - Sovereignty:
+    - Token Gate: sovereignty/tokens.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
+
+# No Python-specific documentation plugins (mkdocstrings, etc.).
+# This site documents a Rust binary; generated API docs are not applicable.

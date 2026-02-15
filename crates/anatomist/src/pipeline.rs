@@ -30,6 +30,9 @@ pub struct ScanResult {
     /// Per-stage survivor counts: `stage_counts[n]` = entities protected at stage n.
     /// Index 0 = directory, 1 = reference, 2 = wisdom/pkg-export, 3 = library, 5 = grep.
     pub stage_counts: [usize; 6],
+    /// Python files with zero incoming file-level dependencies (orphan files).
+    /// Entry points (`main.py`, `wsgi.py`, etc.) and `__init__.py` are excluded.
+    pub orphan_files: Vec<String>,
 }
 
 /// Directory name segments that indicate protected/test/example code (Stage 0).
@@ -70,6 +73,12 @@ pub fn run(
 
     // Build cross-file reference graph (Pass 1: index, Pass 2: link edges).
     let ref_graph = build_reference_graph(&root, host)?;
+
+    // Pre-compute raw orphan candidates (files with zero cross-file incoming edges).
+    // These are refined post-pipeline: a file is only a TRUE orphan when none of its
+    // entities survived any protection stage. Files in test dirs, library-mode modules,
+    // and framework-managed dirs all acquire protection and drop out of the final list.
+    let raw_orphan_set: HashSet<String> = ref_graph.find_orphan_files().into_iter().collect();
 
     let mut result = ScanResult {
         total: ref_graph.entities.len(),
@@ -168,7 +177,34 @@ pub fn run(
         return Ok(result);
     }
 
-    // Stage 5: Grep Shield — only for symbols still dead after stages 0-4.
+    // Stage 4.5: Bridge Shield — protect Python route handlers referenced by JS/TS API paths.
+    // Extracts path strings (e.g. "/users") from JS/TS files and cross-references them
+    // against each candidate entity's decorator text.
+    let bridge_paths = scan::bridge_extract(&root).unwrap_or_default();
+    if !bridge_paths.is_empty() {
+        let mut remaining: Vec<Entity> = Vec::new();
+        for mut entity in candidates {
+            let hit = entity
+                .decorators
+                .iter()
+                .any(|d| bridge_paths.iter().any(|bp| d.contains(bp.as_str())));
+            if hit {
+                entity.protected_by = Some(Protection::GrepShield);
+                result.stage_counts[5] += 1;
+                result.protected.push(entity);
+            } else {
+                remaining.push(entity);
+            }
+        }
+        candidates = remaining;
+    }
+
+    if candidates.is_empty() {
+        result.dead = candidates;
+        return Ok(result);
+    }
+
+    // Stage 5: Grep Shield — only for symbols still dead after stages 0-4.5.
     let dead_names: Vec<String> = candidates.iter().map(|e| e.name.clone()).collect();
     let grep_found = scan::grep_shield(&dead_names, &root)?;
 
@@ -181,6 +217,29 @@ pub fn run(
             result.dead.push(entity);
         }
     }
+
+    // Post-pipeline orphan refinement.
+    //
+    // A raw_orphan file is a TRUE dead orphan only when none of its entities
+    // acquired any protection in stages 0-5. If ANY entity in the file was
+    // protected (by directory filter, reference graph, wisdom, library mode,
+    // or grep shield), the file is alive from the framework's perspective and
+    // must not appear in the orphan list.
+    //
+    // This eliminates false positives from:
+    // - tests/ files (Stage 0: Directory protection)
+    // - Framework-managed modules (Stage 3: LibraryMode in --library scans)
+    // - Plugin dirs already handled by wisdom Stage 2 (EntryPoint)
+    let protected_files: HashSet<&str> = result
+        .protected
+        .iter()
+        .map(|e| e.file_path.as_str())
+        .collect();
+    result.orphan_files = raw_orphan_set
+        .into_iter()
+        .filter(|f| !protected_files.contains(f.as_str()))
+        .collect();
+    result.orphan_files.sort();
 
     Ok(result)
 }

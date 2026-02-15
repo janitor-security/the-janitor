@@ -1,0 +1,21 @@
+{
+    "exact_matches": [
+        "close_spider",
+        "connectionMade",
+        "dataReceived",
+        "dispatch",
+        "from_crawler",
+        "handle",
+        "middleware",
+        "open_spider",
+        "process_item",
+        "start_requests"
+    ],
+    "prefix_matches": [
+        "_get_",
+        "_set_",
+        "test_"
+    ],
+    "suffix_matches": [],
+    "syntax_markers": []
+}
