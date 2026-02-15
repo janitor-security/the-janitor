@@ -1,0 +1,9 @@
+[package]
+name = "reaper"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aho-corasick.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true

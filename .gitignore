@@ -1,0 +1,48 @@
+# --- THE JANITOR v5.0: SOVEREIGN IGNORE PROTOCOL ---
+
+# 1. Rust Build Artifacts
+/target/
+**/*.rs.bk
+debug/
+release/
+
+# 2. Sovereignty & PQC (SECURITY CRITICAL)
+# Never commit private keys, HSM tokens, or attestation blobs
+*.key
+*.pem
+*.pqc_secret
+/crates/vault/secrets/
+/crates/common/attestations/local/
+
+# 3. The Necropolis (The Ghost Dimension)
+# Archive is local-only; managed via V-DWARF & FUSE/Symlink
+.janitor/ghost/
+.janitor/shadow_src/
+.janitor/kill_list.ld
+
+# 4. Metabolic Data & CLR Caches
+# Ephemeral Datalog facts and rkyv zero-copy buffers
+*.rkyv
+*.facts
+/crates/oracle/db/
+/crates/shadow/traces/
+
+# 5. Fiduciary Enforcement (LSM/eBPF)
+# Compiled eBPF bytecode and kernel maps
+*.o
+*.bc
+/crates/reaper/ebpf/target/
+
+# 6. IDE & Environment
+.vscode/
+.idea/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# 7. Agentic Context (Local Constitution)
+# Prevent Claude/Antigravity from leaking instructions to remote
+CLAUDE.md
+.agent/
+.claude/

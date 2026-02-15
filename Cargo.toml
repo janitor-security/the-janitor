@@ -1,0 +1,57 @@
+[workspace]
+members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
+resolver = "2"
+
+[workspace.package]
+version = "5.4.0"
+edition = "2021"
+repository = "https://github.com/GhrammR/the-janitor"
+
+[workspace.dependencies]
+# Core
+tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"
+bytes = "1.7"
+uuid = { version = "1.10", features = ["v4"] }
+
+# Modern Instrumentation & Security (2027 Baseline)
+libbpf-rs = "0.24" # eBPF LSM and tracing
+aya = "0.13" # Pure-rust eBPF
+libloading = "0.8" # Dynamic segment analysis
+
+# Logic & SMT
+z3 = { version = "0.12", features = ["static-link-z3"] }
+souffle-rs = "0.2" # Datalog global reachability
+llvm-sys = "181" # LLVM-IR analysis for UFM
+
+# Cryptography (2027 Baseline)
+plonky3 = { git = "https://github.com/Plonky3/Plonky3.git" } # Field-agnostic Prover
+blake3 = "1.5"
+pqcrypto-dilithium = "0.4" # NIST PQC - CRYSTALS-Dilithium
+pqcrypto-traits = "0.3"
+
+# Serialization (Zero-Copy)
+rkyv = { version = "0.8", features = ["std", "bytecheck"] }
+bytecheck = { version = "0.8", default-features = false }
+thiserror = "2.0"
+
+# Parsing
+tree-sitter = "0.26"
+tree-sitter-rust = "0.23"
+tree-sitter-python = "0.25"
+
+# File System & Path Utilities
+memmap2 = "0.9"
+dunce = "1.0"
+walkdir = "2.5"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Graph
+petgraph = "0.7"
+
+# String matching
+aho-corasick = "1.1"

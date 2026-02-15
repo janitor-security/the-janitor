@@ -1,0 +1,11 @@
+[package]
+name = "oracle"
+version = "5.4.0"
+edition = "2021"
+
+[dependencies]
+petgraph = "0.7"
+anyhow = "1.0"
+thiserror = "1.0"
+common = { path = "../common" }
+lazarus = { path = "../lazarus" }

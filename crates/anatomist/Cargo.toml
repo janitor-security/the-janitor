@@ -1,0 +1,19 @@
+[package]
+name = "anatomist"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+common = { path = "../common" }
+forge = { path = "../forge" }
+rkyv.workspace = true
+bytecheck.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tree-sitter.workspace = true
+tree-sitter-python.workspace = true
+memmap2.workspace = true
+dunce.workspace = true
+petgraph.workspace = true
+walkdir.workspace = true
+aho-corasick.workspace = true

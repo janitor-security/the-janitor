@@ -1,0 +1,42 @@
+name: "The Janitor — CI"
+description: "Rust workspace audit: fmt + clippy + check + test"
+author: "The Janitor"
+
+inputs:
+  rust-toolchain:
+    description: "Rust toolchain version"
+    required: false
+    default: "stable"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ inputs.rust-toolchain }}
+        components: rustfmt, clippy
+
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends cmake clang libclang-dev llvm-dev
+
+    - name: Cache Cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-
+
+    - name: Run audit (fmt + clippy + check + test)
+      shell: bash
+      run: |
+        cargo fmt --all -- --check
+        cargo clippy --workspace -- -D warnings
+        cargo check --workspace
+        cargo test --workspace

@@ -1,0 +1,21 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anatomist = { path = "../anatomist" }
+shadow = { path = "../shadow" }
+common = { path = "../common" }
+reaper = { path = "../reaper" }
+vault = { path = "../vault" }
+dashboard = { path = "../dashboard" }
+lazarus = { path = "../lazarus" }
+oracle = { path = "../oracle" }
+memmap2.workspace = true
+rkyv = { version = "0.8", features = ["std", "bytecheck"] }
+clap.workspace = true
+tokio.workspace = true
+walkdir.workspace = true
+anyhow.workspace = true
+dotenvy = "0.15"

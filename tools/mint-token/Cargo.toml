@@ -1,0 +1,16 @@
+[package]
+name = "mint-token"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mint-token"
+path = "src/main.rs"
+
+[dependencies]
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+base64 = "0.22"
+hex = "0.4"
+clap.workspace = true
+anyhow.workspace = true
