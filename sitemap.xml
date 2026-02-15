@@ -2,50 +2,10 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://thejanitor.app/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <lastmod>2026-02-15</lastmod>
     </url>
     <url>
-         <loc>https://thejanitor.app/PREMIUM_LOGIC/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/TROUBLESHOOTING/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/architecture/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/brain_audit/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/dedup_audit_report/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/governor_design/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/performance_fix_proposal/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/premium/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/safety/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/self_heal_plan/</loc>
-         <lastmod>2026-02-08</lastmod>
-    </url>
-    <url>
-         <loc>https://thejanitor.app/ui_rearchitecture_proposal/</loc>
-         <lastmod>2026-02-08</lastmod>
+         <loc>https://thejanitor.app/sovereignty/tokens/</loc>
+         <lastmod>2026-02-15</lastmod>
     </url>
 </urlset>

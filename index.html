@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Stop the Slop. Start the Engineering. High-fidelity technical debt reduction with AST-based surgical deletions.">
+        <meta name="description" content="Sovereign Governance for the AI Era. Rust-Native. Zero-Copy. Link-Time Excision.">
       
-      
-        <meta name="author" content="GhrammR">
       
       
         <link rel="canonical" href="https://thejanitor.app/">
       
       
       
-        <link rel="next" href="architecture/">
+        <link rel="next" href="sovereignty/tokens/">
       
       
         
@@ -27,7 +25,7 @@
     
     
       
-        <title>The Janitor (v4.2.0)</title>
+        <title>The Janitor</title>
       
     
     
@@ -48,12 +46,10 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Space+Grotesk:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Space Grotesk";--md-code-font:"JetBrains Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Mono:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto Mono";--md-code-font:"Roboto Mono"}</style>
       
     
-    
-      <link rel="stylesheet" href="stylesheets/clinical.css">
     
     <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -71,7 +67,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="red">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -80,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#stop-the-slop-start-the-engineering" class="md-skip">
+        <a href="#the-janitor" class="md-skip">
           Skip to content
         </a>
       
@@ -89,16 +85,14 @@
       
     </div>
     
-      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
-        
-      </div>
-    
     
       
 
-<header class="md-header" data-md-component="header">
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="The Janitor (v4.2.0)" class="md-header__button md-logo" aria-label="The Janitor (v4.2.0)" data-md-component="logo">
+    <a href="." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -112,13 +106,13 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            The Janitor (v4.2.0)
+            The Janitor
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Overview
             
           </span>
         </div>
@@ -131,21 +125,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
-    
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7M9 21v-1h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1m3-17a5 5 0 0 0-5 5c0 2.05 1.23 3.81 3 4.58V16h4v-2.42c1.77-.77 3-2.53 3-4.58a5 5 0 0 0-5-5"/></svg>
-      </label>
-    
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
-    
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9z"/></svg>
-      </label>
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="red"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
     
   
 </form>
@@ -181,8 +161,6 @@
         </button>
       </nav>
       
-        <div class="md-search__suggest" data-md-component="search-suggest"></div>
-      
     </form>
     <div class="md-search__output">
       <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
@@ -203,7 +181,7 @@
         <a href="https://github.com/GhrammR/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     GhrammR/the-janitor
@@ -220,93 +198,6 @@
       
         
           
-            
-<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
-  <div class="md-grid">
-    <ul class="md-tabs__list">
-      
-        
-  
-  
-  
-    
-  
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="." class="md-tabs__link">
-        
-  
-  
-    
-  
-  Home
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="architecture/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Architecture
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="safety/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Safety
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="premium/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Pro License
-
-      </a>
-    </li>
-  
-
-      
-    </ul>
-  </div>
-</nav>
-          
         
       
       <main class="md-main" data-md-component="main">
@@ -320,25 +211,23 @@
                     
 
 
-  
 
-
-<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="The Janitor (v4.2.0)" class="md-nav__button md-logo" aria-label="The Janitor (v4.2.0)" data-md-component="logo">
+    <a href="." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
     </a>
-    The Janitor (v4.2.0)
+    The Janitor
   </label>
   
     <div class="md-nav__source">
       <a href="https://github.com/GhrammR/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     GhrammR/the-janitor
@@ -371,7 +260,7 @@
   <span class="md-ellipsis">
     
   
-    Home
+    Overview
   
 
     
@@ -389,7 +278,7 @@
   <span class="md-ellipsis">
     
   
-    Home
+    Overview
   
 
     
@@ -415,10 +304,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-problem-ai-generated-code-bloat" class="md-nav__link">
+  <a href="#i-the-diagnosis-metabolic-bloat" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Problem: AI-Generated Code Bloat
+        I. THE DIAGNOSIS: METABOLIC BLOAT
       
     </span>
   </a>
@@ -426,33 +315,66 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-philosophy-negative-net-lines-of-code" class="md-nav__link">
+  <a href="#ii-the-cure-the-sovereign-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Philosophy: Negative Net Lines of Code
+        II. THE CURE: THE SOVEREIGN STACK
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-solution-intelligent-dead-code-detection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The Solution: Intelligent Dead Code Detection
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The Solution: Intelligent Dead Code Detection">
+    <nav class="md-nav" aria-label="II. THE CURE: THE SOVEREIGN STACK">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-makes-the-janitor-different" class="md-nav__link">
+  <a href="#the-anatomist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What Makes The Janitor Different?
+        The Anatomist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-6-stage-dead-symbol-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 6-Stage Dead Symbol Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-reaper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Reaper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-forge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Forge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-shadow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Shadow
       
     </span>
   </a>
@@ -465,22 +387,44 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-guarantee-zero-fear-deletion" class="md-nav__link">
+  <a href="#iii-the-economics-utility-pricing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Guarantee: Zero-Fear Deletion
+        III. THE ECONOMICS: UTILITY PRICING
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The Guarantee: Zero-Fear Deletion">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IV. INSTALLATION
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IV. INSTALLATION">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#surgical-safety-the-safe-proxy-pattern-v420" class="md-nav__link">
+  <a href="#from-source-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Surgical Safety: The Safe Proxy Pattern (v4.2.0)
+        From Source (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pre-built-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-built Binary
       
     </span>
   </a>
@@ -493,38 +437,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#codebase-roi-calculator" class="md-nav__link">
+  <a href="#v-commands" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Codebase ROI Calculator
+        V. COMMANDS
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Codebase ROI Calculator">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#engineering-time-savings-annual" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Engineering Time Savings (Annual)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#get-started" class="md-nav__link">
+  <a href="#vi-legacy-deprecation-python-v4-is-dead" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Get Started
+        VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD
       
     </span>
   </a>
@@ -545,15 +472,67 @@
   
   
   
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sovereignty
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sovereignty
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
-      <a href="architecture/" class="md-nav__link">
+      <a href="sovereignty/tokens/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Architecture
+    Token Gate
   
 
     
@@ -565,57 +544,11 @@
     </li>
   
 
-    
+              
+            
+          </ul>
+        </nav>
       
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="safety/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Safety
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="premium/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Pro License
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -647,10 +580,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-problem-ai-generated-code-bloat" class="md-nav__link">
+  <a href="#i-the-diagnosis-metabolic-bloat" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Problem: AI-Generated Code Bloat
+        I. THE DIAGNOSIS: METABOLIC BLOAT
       
     </span>
   </a>
@@ -658,33 +591,66 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-philosophy-negative-net-lines-of-code" class="md-nav__link">
+  <a href="#ii-the-cure-the-sovereign-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Philosophy: Negative Net Lines of Code
+        II. THE CURE: THE SOVEREIGN STACK
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-solution-intelligent-dead-code-detection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The Solution: Intelligent Dead Code Detection
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The Solution: Intelligent Dead Code Detection">
+    <nav class="md-nav" aria-label="II. THE CURE: THE SOVEREIGN STACK">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-makes-the-janitor-different" class="md-nav__link">
+  <a href="#the-anatomist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What Makes The Janitor Different?
+        The Anatomist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-6-stage-dead-symbol-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 6-Stage Dead Symbol Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-reaper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Reaper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-forge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Forge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-shadow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Shadow
       
     </span>
   </a>
@@ -697,22 +663,44 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-guarantee-zero-fear-deletion" class="md-nav__link">
+  <a href="#iii-the-economics-utility-pricing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Guarantee: Zero-Fear Deletion
+        III. THE ECONOMICS: UTILITY PRICING
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The Guarantee: Zero-Fear Deletion">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IV. INSTALLATION
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IV. INSTALLATION">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#surgical-safety-the-safe-proxy-pattern-v420" class="md-nav__link">
+  <a href="#from-source-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Surgical Safety: The Safe Proxy Pattern (v4.2.0)
+        From Source (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pre-built-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-built Binary
       
     </span>
   </a>
@@ -725,38 +713,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#codebase-roi-calculator" class="md-nav__link">
+  <a href="#v-commands" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Codebase ROI Calculator
+        V. COMMANDS
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Codebase ROI Calculator">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#engineering-time-savings-annual" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Engineering Time Savings (Annual)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#get-started" class="md-nav__link">
+  <a href="#vi-legacy-deprecation-python-v4-is-dead" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Get Started
+        VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD
       
     </span>
   </a>
@@ -783,182 +754,174 @@
   
 
 
-<h1 id="stop-the-slop-start-the-engineering">Stop the Slop, Start the Engineering</h1>
-<p><img alt="The Janitor in Action" src="https://raw.githubusercontent.com/GhrammR/the-janitor/main/docs/assets/demo.gif" /></p>
-<h2 id="the-problem-ai-generated-code-bloat">The Problem: AI-Generated Code Bloat</h2>
-<p>We are drowning in <strong>AI-generated code bloat</strong>. Large Language Models hallucinate dependencies, duplicate logic, and generate functions that are never called. Every coding session with AI assistants leaves behind:</p>
-<ul>
-<li><strong>Orphaned imports</strong> that slow down module loading</li>
-<li><strong>Dead classes</strong> that confuse new developers</li>
-<li><strong>Zombie test fixtures</strong> that waste CI/CD time</li>
-<li><strong>Duplicate logic</strong> that creates maintenance nightmares</li>
-</ul>
-<h2 id="the-philosophy-negative-net-lines-of-code">The Philosophy: Negative Net Lines of Code</h2>
-<p>The best developers measure success in <strong>Negative Net Lines of Code</strong>. Every line deleted is:</p>
-<ul>
-<li><strong>One less bug</strong> to debug in production</li>
-<li><strong>One less security vulnerability</strong> to patch</li>
-<li><strong>One less cognitive burden</strong> for your team</li>
-<li><strong>One less import</strong> that breaks when you upgrade dependencies</li>
-</ul>
-<p><strong>The Janitor makes negative LOC your default.</strong></p>
-<h2 id="the-solution-intelligent-dead-code-detection">The Solution: Intelligent Dead Code Detection</h2>
-<p>The Janitor is not a simple linter. It's a <strong>semantic analysis engine</strong> that understands:</p>
-<ul>
-<li><strong>Framework lifecycle methods</strong> (Django models, Flask routes, pytest fixtures)</li>
-<li><strong>Metaprogramming patterns</strong> (getattr, dynamic imports, exec)</li>
-<li><strong>Cross-language references</strong> (YAML configs, package.json scripts)</li>
-<li><strong>Type-aware resolution</strong> (method calls through variable type inference)</li>
-</ul>
-<h3 id="what-makes-the-janitor-different">What Makes The Janitor Different?</h3>
-<p>Traditional tools use text matching. The Janitor uses <strong>compiler-grade analysis</strong>:</p>
+<h1 id="the-janitor">The Janitor</h1>
+<p><strong>v5.4.0-GOLD — Rust-Native. Zero-Copy. Link-Time Excision.</strong></p>
+<p><em>"Code is Liability. Sovereignty is Metabolic."</em></p>
+<hr />
+<h2 id="i-the-diagnosis-metabolic-bloat">I. THE DIAGNOSIS: METABOLIC BLOAT</h2>
+<p>Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect entropy.</p>
+<p>The consequence is <strong>Metabolic Bloat</strong>: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.</p>
+<hr />
+<h2 id="ii-the-cure-the-sovereign-stack">II. THE CURE: THE SOVEREIGN STACK</h2>
+<p>The Janitor is not a linter. It is a fiduciary agent.</p>
+<h3 id="the-anatomist">The Anatomist</h3>
+<p>Parses Python source via Tree-sitter CST. Extracts every <code>def</code>, <code>class</code>, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and <code>__all__</code> exports.</p>
+<h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
 <thead>
 <tr>
-<th>Feature</th>
-<th>Traditional Linters</th>
-<th>The Janitor</th>
+<th>Stage</th>
+<th>Filter</th>
+<th>Guard</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Analysis Depth</strong></td>
-<td>Text search</td>
-<td>AST + type inference</td>
+<td>0</td>
+<td>Directory exclusion (<code>tests/</code>, <code>migrations/</code>, <code>venv/</code>)</td>
+<td><code>Protection::Directory</code></td>
 </tr>
 <tr>
-<td><strong>Framework Support</strong></td>
-<td>Generic rules</td>
-<td>100+ framework patterns</td>
+<td>1</td>
+<td>Reference graph: in-degree &gt; 0</td>
+<td><code>Protection::Referenced</code></td>
 </tr>
 <tr>
-<td><strong>Safety</strong></td>
-<td>None</td>
-<td>Sandbox + auto-rollback</td>
+<td>2+4</td>
+<td>Heuristic wisdom + <code>__all__</code> exports</td>
+<td>Various</td>
 </tr>
 <tr>
-<td><strong>False Positives</strong></td>
-<td>High</td>
-<td>Near-zero</td>
+<td>3</td>
+<td>Library mode: all public symbols</td>
+<td><code>Protection::LibraryMode</code></td>
 </tr>
 <tr>
-<td><strong>Configuration Files</strong></td>
-<td>Ignored</td>
-<td>Parsed &amp; protected</td>
+<td>5</td>
+<td>Aho-Corasick scan of non-<code>.py</code> files</td>
+<td><code>Protection::GrepShield</code></td>
 </tr>
 </tbody>
 </table>
-<h2 id="the-guarantee-zero-fear-deletion">The Guarantee: Zero-Fear Deletion</h2>
-<p><strong>Delete with zero fear.</strong> The Janitor refuses to break your build:</p>
-<ol>
-<li><strong>Backup</strong>: Files are safely staged in <code>.janitor_trash</code></li>
-<li><strong>Surgery</strong>: Dead code is surgically removed (AST-based)</li>
-<li><strong>Verification</strong>: Your tests (<code>pytest</code>, <code>npm test</code>) are executed in a sandbox</li>
-<li><strong>Auto-Rollback</strong>: If tests fail, everything is instantly restored</li>
-</ol>
+<p>Anything that survives all five gates is a confirmed dead symbol.</p>
+<h3 id="the-reaper">The Reaper</h3>
+<p>Executes surgical byte-range deletion. Sorts targets <strong>descending by <code>start_byte</code></strong> (bottom-to-top splice) to preserve upstream offsets. UTF-8 hardened via <code>str::is_char_boundary()</code>. Atomic backup to <code>.janitor/ghost/</code> before first write.</p>
+<h3 id="the-forge">The Forge</h3>
+<p>Alpha-normalized BLAKE3 structural hashing detects duplicate functions with identical logic but different names. Injects Safe Proxy Pattern: duplicate bodies become one-line wrappers delegating to a shared canonical implementation.</p>
+<h3 id="the-shadow">The Shadow</h3>
+<p>Symlink-based overlay of the source tree. Before any physical deletion, symlinks for dead-symbol files are unmapped and <code>pytest</code> is run in the shadow tree. Physical deletion proceeds only on a passing test suite; symlinks are restored on failure.</p>
 <hr />
-<div class="surgical-safety">
-<h3 id="surgical-safety-the-safe-proxy-pattern-v420">Surgical Safety: The Safe Proxy Pattern (v4.2.0)</h3>
-<p>When merging duplicate functions, The Janitor uses the <strong>Safe Proxy Pattern</strong> to ensure zero breaking changes:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># BEFORE: Two duplicate functions</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_price</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>  <span class="c1"># Add tax</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_total</span><span class="p">(</span><span class="n">products</span><span class="p">):</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">products</span><span class="p">)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>  <span class="c1"># Add tax</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># AFTER: Safe Proxy Pattern (Original signatures preserved)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">_merged_logic</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Internal helper with shared logic&quot;&quot;&quot;</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">price</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mf">1.1</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_price</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Original function → thin wrapper&quot;&quot;&quot;</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="k">return</span> <span class="n">_merged_logic</span><span class="p">(</span><span class="n">items</span><span class="p">)</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_total</span><span class="p">(</span><span class="n">products</span><span class="p">):</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Original function → thin wrapper&quot;&quot;&quot;</span>
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="k">return</span> <span class="n">_merged_logic</span><span class="p">(</span><span class="n">products</span><span class="p">)</span>
-</code></pre></div>
-<p><strong>Why This Matters</strong>:
-- ✅ <strong>Zero call-site changes</strong>: All existing code continues to work
-- ✅ <strong>Decorator preservation</strong>: @property, @staticmethod, @lru_cache retained
-- ✅ <strong>Private member safety</strong>: Avoids Python name mangling crashes
-- ✅ <strong>Global state guard</strong>: Static analysis rejects unsafe variable captures</p>
-<p><strong>The Result</strong>: You get DRY code without the risk of breaking production.</p>
-</div>
-<hr />
-<h2 id="codebase-roi-calculator">Codebase ROI Calculator</h2>
-<div class="roi-calculator">
-<h3 id="engineering-time-savings-annual">Engineering Time Savings (Annual)</h3>
+<h2 id="iii-the-economics-utility-pricing">III. THE ECONOMICS: UTILITY PRICING</h2>
+<p>The Audit is <strong>Free</strong>. The Purge is <strong>Paid</strong>.</p>
 <table>
 <thead>
 <tr>
-<th>Scenario</th>
-<th>Without Janitor</th>
-<th>With Janitor</th>
-<th><strong>Savings</strong></th>
+<th style="text-align: left;">Tier</th>
+<th style="text-align: left;">Cost</th>
+<th style="text-align: left;">Scope</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Production Hotfixes</strong> (3/yr × 8 hrs)</td>
-<td>$2,400</td>
-<td>$300</td>
-<td><strong>$2,100</strong></td>
+<td style="text-align: left;"><strong>Bounty Hunter</strong></td>
+<td style="text-align: left;"><strong>$49/yr</strong></td>
+<td style="text-align: left;">Individual. Pay-as-you-purge ($1.00/MB deleted).</td>
 </tr>
 <tr>
-<td><strong>Onboarding Delays</strong> (4 devs × 4 hrs)</td>
-<td>$1,600</td>
-<td>$200</td>
-<td><strong>$1,400</strong></td>
+<td style="text-align: left;"><strong>Sovereign Squad</strong></td>
+<td style="text-align: left;"><strong>$499/yr</strong></td>
+<td style="text-align: left;">Team (5 users). Shared PoUD credit pool.</td>
 </tr>
 <tr>
-<td><strong>Security Audits</strong> (2/yr × 12 hrs)</td>
-<td>$2,400</td>
-<td>$400</td>
-<td><strong>$2,000</strong></td>
-</tr>
-<tr>
-<td><strong>CI/CD Pipeline Waste</strong> (unused tests)</td>
-<td>$800</td>
-<td>$100</td>
-<td><strong>$700</strong></td>
-</tr>
-<tr>
-<td><strong>Code Review Overhead</strong> (zombie code)</td>
-<td>$1,200</td>
-<td>$300</td>
-<td><strong>$900</strong></td>
-</tr>
-<tr>
-<td><strong>Total Annual Savings</strong></td>
-<td>$8,400</td>
-<td>$1,300</td>
-<td><strong>$7,100</strong></td>
+<td style="text-align: left;"><strong>Fiduciary Core</strong></td>
+<td style="text-align: left;"><strong>Custom</strong></td>
+<td style="text-align: left;">Enterprise (&gt;10M LOC). Priority support.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>ROI</strong>: For every 1,000 LOC removed, you save <strong>~$400</strong> in maintenance costs annually.</p>
-<p><em>Calculated at $100/hr engineering rate. Your actual ROI may vary based on team size and codebase complexity.</em></p>
-</div>
-<h2 id="get-started">Get Started</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pip<span class="w"> </span>install<span class="w"> </span>the-janitor
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Audit your codebase</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>janitor<span class="w"> </span>audit<span class="w"> </span>.
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Clean dead code (with safety checks)</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>janitor<span class="w"> </span>clean<span class="w"> </span>--mode<span class="w"> </span>symbols<span class="w"> </span>.
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Find duplicates</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>.<span class="w"> </span>--threshold<span class="w"> </span><span class="m">0</span>.9
+<p>Anti-gaming constraint: code must be &gt;90 days old. Purging symbols created within 90 days incurs a <strong>5× tax</strong> and generates zero credits.</p>
+<p><a href="https://thejanitor.app">Purchase a Token → thejanitor.app</a></p>
+<hr />
+<h2 id="iv-installation">IV. INSTALLATION</h2>
+<h3 id="from-source-recommended">From Source (Recommended)</h3>
+<p>Requires: <strong>Rust 1.82+</strong>, <code>just</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/GhrammR/the-janitor
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>the-janitor
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>just<span class="w"> </span>build
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Binary at: target/release/janitor</span>
 </code></pre></div>
-<p><strong>Ready to stop the slop?</strong> <a href="architecture/">View the documentation</a> or <a href="premium/">upgrade to Pro License</a>.</p>
+<p>Or with audit verification:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>just<span class="w"> </span>audit<span class="w">   </span><span class="c1"># fmt + clippy + check + 103 tests</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>just<span class="w"> </span>build
+</code></pre></div>
+<h3 id="pre-built-binary">Pre-built Binary</h3>
+<p>Download the stripped release binary from <a href="https://github.com/GhrammR/the-janitor/releases">Releases</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>chmod<span class="w"> </span>+x<span class="w"> </span>janitor
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>sudo<span class="w"> </span>mv<span class="w"> </span>janitor<span class="w"> </span>/usr/local/bin/
+</code></pre></div>
+<hr />
+<h2 id="v-commands">V. COMMANDS</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Detect dead symbols (free, no token required)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Find structurally duplicate functions (free, report only)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Apply Safe Proxy deduplication (token required)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--token<span class="w"> </span>&lt;TOKEN&gt;
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Shadow-simulate deletion + test, then physically purge (token required)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--token<span class="w"> </span>&lt;TOKEN&gt;
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Initialize symlink shadow tree</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>shadow<span class="w"> </span>init<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Load .janitor/symbols.rkyv and launch TUI dashboard (free)</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
+</code></pre></div>
+<hr />
+<h2 id="vi-legacy-deprecation-python-v4-is-dead">VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD</h2>
+<p><strong>Python v4.0 through v4.2 are permanently deprecated.</strong></p>
+<p>The Python implementation relied on ChromaDB semantic search, external LLM API calls, and NetworkX graphs. Every component has been replaced:</p>
+<table>
+<thead>
+<tr>
+<th>Python (v4)</th>
+<th>Rust (v5.4.0)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NetworkX DiGraph</td>
+<td><code>petgraph</code> directed reference graph</td>
+</tr>
+<tr>
+<td>Tree-sitter (Python binding)</td>
+<td>Tree-sitter (Rust, zero-copy mmap)</td>
+</tr>
+<tr>
+<td>ChromaDB + UniXcoder</td>
+<td>BLAKE3 alpha-normalized structural hashing</td>
+</tr>
+<tr>
+<td>LLM merge generation</td>
+<td>Deterministic Safe Proxy Pattern</td>
+</tr>
+<tr>
+<td>JSON manifests</td>
+<td><code>rkyv</code> zero-copy binary registry</td>
+</tr>
+<tr>
+<td>SQLite cache</td>
+<td><code>.janitor/symbols.rkyv</code> mmap</td>
+</tr>
+</tbody>
+</table>
+<p>No migration path is provided. Purge your Python v4 source. Re-materialize in Rust.</p>
+<hr />
+<blockquote>
+<p>See <a href="sovereignty/tokens/">Sovereignty → Token Gate</a> for how the Ed25519 purge authorization works.</p>
+</blockquote>
 
 
 
@@ -993,27 +956,10 @@
     <div class="md-footer-meta__inner md-grid">
       <div class="md-copyright">
   
-    <div class="md-copyright__highlight">
-      Copyright &copy; 2026 The Janitor
-    </div>
-  
   
     Made with
     <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
       Material for MkDocs
-    </a>
-  
-</div>
-      
-        
-<div class="md-social">
-  
-    
-    
-    
-    
-    <a href="https://github.com/GhrammR/the-janitor" target="_blank" rel="noopener" title="GitHub Repository" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
     </a>
   
 </div>
@@ -1031,7 +977,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "v4.2.0"}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
