@@ -1,42 +1,31 @@
-name: "The Janitor — CI"
-description: "Rust workspace audit: fmt + clippy + check + test"
-author: "The Janitor"
+name: 'The Janitor'
+description: 'Automated Dead Code Detection & Excision for Rust/Python/JS/C++'
 
 inputs:
-  rust-toolchain:
-    description: "Rust toolchain version"
+  token:
+    description: 'Janitor purge token (required for clean and dedup --apply). Obtain at thejanitor.app.'
     required: false
-    default: "stable"
+    default: ''
+  path:
+    description: 'Path to the codebase to analyze (relative to workspace root).'
+    required: false
+    default: '.'
+  args:
+    description: >
+      Janitor subcommand and flags. Default runs a free audit.
+      Examples: "scan --verbose", "dedup", "clean --token TOKEN".
+      When using clean or dedup --apply, embed the token in this argument
+      via ${{ secrets.JANITOR_TOKEN }}.
+    required: false
+    default: 'scan'
+
+branding:
+  icon: 'trash-2'
+  color: 'red'
 
 runs:
-  using: "composite"
-  steps:
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: ${{ inputs.rust-toolchain }}
-        components: rustfmt, clippy
-
-    - name: Install system dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends cmake clang libclang-dev llvm-dev
-
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-
-
-    - name: Run audit (fmt + clippy + check + test)
-      shell: bash
-      run: |
-        cargo fmt --all -- --check
-        cargo clippy --workspace -- -D warnings
-        cargo check --workspace
-        cargo test --workspace
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.args }}
+    - ${{ inputs.path }}

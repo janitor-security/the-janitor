@@ -130,6 +130,9 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         || bytes_contain(source, b"QObject");
     let has_metaprog = any_in(source, METAPROG);
     let is_init = file_path.ends_with("__init__.py");
+    let has_asyncctx = bytes_contain(source, b"asynccontextmanager");
+    let has_pydantic_imports =
+        bytes_contain(source, b"BaseModel") || bytes_contain(source, b"pydantic");
 
     // Plugin directory flag: file lives in a framework-managed directory.
     let is_plugin_dir = PLUGIN_DIRS
@@ -138,6 +141,19 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
 
     // Stage 4: extract __all__ exports (single scan, result is &str slices into `source`).
     let all_exports = extract_all_exports(source);
+
+    // Pre-compute lifespan teardown identifiers and Pydantic forward reference names.
+    // Both require scanning the entity list before the mutable classification pass.
+    let post_yield_names = if has_asyncctx {
+        extract_post_yield_names(entities, source)
+    } else {
+        HashSet::new()
+    };
+    let forward_ref_names = if has_pydantic_imports {
+        extract_pydantic_forward_refs(source)
+    } else {
+        HashSet::new()
+    };
 
     for entity in entities.iter_mut() {
         // Already protected by a prior pass (e.g., PytestFixture from parser).
@@ -181,11 +197,40 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
             continue;
         }
 
+        // 2c-lifespan. FastAPI lifespan function: @asynccontextmanager + yield.
+        // The function itself is an entry point; entities called in its post-yield
+        // teardown block are also immortal (resolved in `post_yield_names`).
+        if has_asyncctx {
+            if entity
+                .decorators
+                .iter()
+                .any(|d| bytes_contain(d.as_bytes(), b"asynccontextmanager"))
+            {
+                entity.protected_by = Some(Protection::FastApiOverride);
+                continue;
+            }
+            if !post_yield_names.is_empty() && post_yield_names.contains(entity.name.as_str()) {
+                entity.protected_by = Some(Protection::FastApiOverride);
+                continue;
+            }
+        }
+
         // 2d. Pydantic validator decorators.
         if entity.decorators.iter().any(|d| {
             let b = d.as_bytes();
             PYDANTIC_DEC.iter().any(|p| bytes_contain(b, p))
         }) {
+            entity.protected_by = Some(Protection::PydanticAlias);
+            continue;
+        }
+
+        // 2d-fwdref. Pydantic forward reference: class referenced as a string literal
+        // in type annotations, e.g. `items: List['MyModel']`. Only applies when the
+        // file imports pydantic / BaseModel, reducing noise.
+        if has_pydantic_imports
+            && !forward_ref_names.is_empty()
+            && forward_ref_names.contains(entity.name.as_str())
+        {
             entity.protected_by = Some(Protection::PydanticAlias);
             continue;
         }
@@ -290,6 +335,139 @@ fn bytes_contain(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.windows(needle.len()).any(|w| w == needle)
 }
 
+/// Extracts PascalCase string literals from `source` — Pydantic forward reference targets.
+///
+/// Scans for `'ClassName'` or `"ClassName"` where the content starts with an uppercase
+/// letter and consists only of identifier characters. Matches forward references like
+/// `items: List['MyModel']` without requiring a full CST pass.
+///
+/// Only called when the file is known to import pydantic / BaseModel, keeping false
+/// positive noise low.
+fn extract_pydantic_forward_refs(source: &[u8]) -> HashSet<String> {
+    let mut names = HashSet::new();
+    let mut i = 0;
+    while i < source.len() {
+        let q = source[i];
+        if q == b'\'' || q == b'"' {
+            i += 1;
+            let content_start = i;
+            // Consume valid identifier characters.
+            while i < source.len() && (source[i].is_ascii_alphanumeric() || source[i] == b'_') {
+                i += 1;
+            }
+            let content_end = i;
+            // Accept: non-empty, ends with matching quote, starts with uppercase.
+            if content_end > content_start
+                && i < source.len()
+                && source[i] == q
+                && source[content_start].is_ascii_uppercase()
+            {
+                if let Ok(name) = std::str::from_utf8(&source[content_start..content_end]) {
+                    names.insert(name.to_string());
+                }
+                i += 1; // skip closing quote
+            }
+        } else {
+            i += 1;
+        }
+    }
+    names
+}
+
+/// Collects identifier names appearing after the first `yield` in each
+/// `@asynccontextmanager`-decorated entity's source bytes.
+///
+/// FastAPI lifespan teardown code runs after `yield`. Any function called there
+/// may appear dead to the reference graph if it has no other callers. This
+/// pre-pass harvests those names so they can be shielded in the classify loop.
+fn extract_post_yield_names(entities: &[Entity], source: &[u8]) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for entity in entities {
+        if !entity
+            .decorators
+            .iter()
+            .any(|d| bytes_contain(d.as_bytes(), b"asynccontextmanager"))
+        {
+            continue;
+        }
+        let es = entity_src(source, entity);
+        let yield_kw = b"yield";
+        let Some(yield_pos) = es.windows(yield_kw.len()).position(|w| w == yield_kw) else {
+            continue;
+        };
+        // Scan post-yield portion for identifier-like tokens.
+        let post = &es[yield_pos + yield_kw.len()..];
+        let mut i = 0;
+        while i < post.len() {
+            if post[i].is_ascii_alphabetic() || post[i] == b'_' {
+                let start = i;
+                while i < post.len() && (post[i].is_ascii_alphanumeric() || post[i] == b'_') {
+                    i += 1;
+                }
+                if let Ok(name) = std::str::from_utf8(&post[start..i]) {
+                    if name.len() > 2 && !is_python_keyword(name) {
+                        names.insert(name.to_string());
+                    }
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+    names
+}
+
+/// Returns true if `name` is a Python keyword or common builtin that should be
+/// excluded from the post-yield identifier set.
+fn is_python_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "if" | "else"
+            | "elif"
+            | "for"
+            | "while"
+            | "in"
+            | "not"
+            | "and"
+            | "or"
+            | "True"
+            | "False"
+            | "None"
+            | "return"
+            | "yield"
+            | "async"
+            | "await"
+            | "def"
+            | "class"
+            | "import"
+            | "from"
+            | "as"
+            | "with"
+            | "pass"
+            | "raise"
+            | "try"
+            | "except"
+            | "finally"
+            | "del"
+            | "lambda"
+            | "self"
+            | "cls"
+            | "super"
+            | "print"
+            | "len"
+            | "range"
+            | "type"
+            | "str"
+            | "int"
+            | "float"
+            | "bool"
+            | "list"
+            | "dict"
+            | "set"
+            | "tuple"
+    )
+}
+
 /// Extracts names listed in `__all__ = [...]` or `__all__ = (...)`.
 ///
 /// Single linear scan: finds the `__all__` marker, then collects quoted identifiers
@@ -344,7 +522,7 @@ fn extract_all_exports(source: &[u8]) -> HashSet<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EntityType, Protection};
+    use crate::{Entity, EntityType, Protection};
 
     fn make_entity(name: &str, decorators: Vec<String>, parent: Option<String>) -> Entity {
         Entity {
@@ -489,5 +667,70 @@ mod tests {
         classify(&mut entities, b"", "app/utils/helpers.py");
         // Regular file — no plugin protection
         assert_eq!(entities[1 - 1].protected_by, None);
+    }
+
+    #[test]
+    fn test_asynccontextmanager_lifespan_protected() {
+        let source = b"from contextlib import asynccontextmanager\n\
+            @asynccontextmanager\n\
+            async def lifespan(app):\n\
+                db.connect()\n\
+                yield\n\
+                db.disconnect()\n";
+        let mut entities = vec![make_entity(
+            "lifespan",
+            vec!["asynccontextmanager".into()],
+            None,
+        )];
+        classify(&mut entities, source, "app/main.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::FastApiOverride));
+    }
+
+    #[test]
+    fn test_post_yield_teardown_protected() {
+        // `shutdown_worker` is only called after yield — it must be shielded.
+        let source = b"from contextlib import asynccontextmanager\n\
+            @asynccontextmanager\n\
+            async def lifespan(app):\n\
+                yield\n\
+                shutdown_worker()\n";
+        // Entity for the lifespan function (occupies whole source range so entity_src
+        // returns the full source).
+        let lifespan = Entity {
+            name: "lifespan".into(),
+            entity_type: EntityType::FunctionDefinition,
+            start_byte: 0,
+            end_byte: source.len() as u32,
+            start_line: 1,
+            end_line: 6,
+            file_path: "app/main.py".into(),
+            qualified_name: "lifespan".into(),
+            parent_class: None,
+            base_classes: vec![],
+            protected_by: None,
+            decorators: vec!["asynccontextmanager".into()],
+            structural_hash: None,
+        };
+        let mut entities = vec![lifespan, make_entity("shutdown_worker", vec![], None)];
+        classify(&mut entities, source, "app/main.py");
+        assert_eq!(entities[1].protected_by, Some(Protection::FastApiOverride));
+    }
+
+    #[test]
+    fn test_pydantic_forward_ref_protected() {
+        // `UserModel` is only referenced as `'UserModel'` in a type annotation.
+        let source = b"from pydantic import BaseModel\ndef get_users() -> List['UserModel']: ...\n";
+        let mut entities = vec![make_entity("UserModel", vec![], None)];
+        classify(&mut entities, source, "app/models.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::PydanticAlias));
+    }
+
+    #[test]
+    fn test_pydantic_forward_ref_no_false_positive_without_pydantic() {
+        // Same quoted name, but file has no pydantic import — should NOT be protected.
+        let source = b"def get_users() -> List['UserModel']: ...\n";
+        let mut entities = vec![make_entity("UserModel", vec![], None)];
+        classify(&mut entities, source, "app/models.py");
+        assert_eq!(entities[0].protected_by, None);
     }
 }
