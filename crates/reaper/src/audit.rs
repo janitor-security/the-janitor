@@ -11,9 +11,9 @@
 //!     "timestamp": "2026-02-16T12:34:56Z",
 //!     "file_path": "/abs/path/to/module.py",
 //!     "symbol_name": "unused_helper",
-//!     "sha256_pre_excision": "a3b4c5...",
+//!     "sha256_pre_cleanup": "a3b4c5...",
 //!     "heuristic_id": "DEAD_SYMBOL",
-//!     "affected_lines": [42, 55]
+//!     "lines_removed": 14
 //!   }
 //! ]
 //! ```
@@ -32,15 +32,15 @@ pub struct AuditEntry {
     pub file_path: String,
     /// Qualified name of the excised symbol (e.g. `ClassName.method_name`).
     pub symbol_name: String,
-    /// Lowercase hex SHA-256 of the **entire file** before the excision.
-    pub sha256_pre_excision: String,
-    /// Identifier describing why the symbol was classified for excision.
+    /// Lowercase hex SHA-256 of the **entire file** before the cleanup.
+    pub sha256_pre_cleanup: String,
+    /// Identifier describing why the symbol was classified for removal.
     ///
     /// `"DEAD_SYMBOL"` for unreferenced symbols; protection variant name
     /// (e.g. `"Referenced"`) if the symbol survived the pipeline.
     pub heuristic_id: String,
-    /// Inclusive `[start_line, end_line]` range of the excised symbol.
-    pub affected_lines: [u32; 2],
+    /// Number of source lines removed by this cleanup operation.
+    pub lines_removed: u32,
 }
 
 impl AuditEntry {
@@ -58,9 +58,9 @@ impl AuditEntry {
             timestamp: utc_now(),
             file_path: file_path.into(),
             symbol_name: symbol_name.into(),
-            sha256_pre_excision: hash,
+            sha256_pre_cleanup: hash,
             heuristic_id: heuristic_id.into(),
-            affected_lines: [start_line, end_line],
+            lines_removed: end_line.saturating_sub(start_line) + 1,
         }
     }
 }
@@ -209,8 +209,8 @@ mod tests {
         );
         assert_eq!(entry.symbol_name, "unused_fn");
         assert_eq!(entry.heuristic_id, "DEAD_SYMBOL");
-        assert_eq!(entry.affected_lines, [10, 12]);
-        assert_eq!(entry.sha256_pre_excision.len(), 64);
+        assert_eq!(entry.lines_removed, 3); // end_line - start_line + 1 = 12 - 10 + 1
+        assert_eq!(entry.sha256_pre_cleanup.len(), 64);
     }
 
     #[test]

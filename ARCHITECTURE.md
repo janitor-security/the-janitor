@@ -198,9 +198,9 @@ def _calculate_tax_us_impl(amount, rate):
 
 ---
 
-## IX. THE GUERRILLA MANDATE
+## IX. RESOURCE-EFFICIENT ARCHITECTURE
 
-All engineering decisions are constrained by the target hardware (Dell Inspiron 15 3000, 8GB RAM).
+Engineering constraints for correctness and low memory overhead.
 
 1. **Lazy/Streaming Only**: Never collect a full file tree into memory. `walkdir` iterators, `BufReader` line-by-line.
 2. **Absolute Paths Only**: No relative path resolution. `dunce::canonicalize` at ingestion boundaries.

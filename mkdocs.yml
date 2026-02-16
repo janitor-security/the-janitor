@@ -1,5 +1,5 @@
 site_name: The Janitor
-site_description: "Sovereign Governance for the AI Era. Rust-Native. Zero-Copy. Link-Time Excision."
+site_description: "Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot."
 site_url: https://thejanitor.app
 repo_url: https://github.com/GhrammR/the-janitor
 repo_name: GhrammR/the-janitor
@@ -8,8 +8,8 @@ theme:
   name: material
   palette:
     - scheme: slate
-      primary: black
-      accent: red
+      primary: indigo
+      accent: blue
   font:
     text: Roboto Mono
     code: Roboto Mono
@@ -20,8 +20,7 @@ theme:
 
 nav:
   - Overview: index.md
-  - Sovereignty:
-    - Token Gate: sovereignty/tokens.md
+  - Safety Guarantees: safety.md
 
 markdown_extensions:
   - admonition

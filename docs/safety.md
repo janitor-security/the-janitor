@@ -109,14 +109,14 @@ Every physical excision is recorded in `.janitor/audit_log.json`:
     "timestamp": "2026-02-16T14:30:00Z",
     "file_path": "/abs/path/src/module.py",
     "symbol_name": "unused_helper",
-    "sha256_pre_excision": "a3b4c5d6...",
+    "sha256_pre_cleanup": "a3b4c5d6...",
     "heuristic_id": "DEAD_SYMBOL",
-    "affected_lines": [42, 55]
+    "lines_removed": 14
   }
 ]
 ```
 
-The `sha256_pre_excision` field captures the SHA-256 hash of the entire file *before* modification. This allows auditors to verify that the pre-excision state matches any backup copy, and provides a forensic trail for compliance reviews.
+The `sha256_pre_cleanup` field captures the SHA-256 hash of the entire file *before* modification. This allows auditors to verify that the pre-cleanup state matches any backup copy, and provides a forensic trail for compliance reviews.
 
 ---
 

@@ -1,15 +1,15 @@
-# The Janitor: Automated Technical Debt Excision
-**Current Version:** v5.6.0
+# The Janitor: Automated Dead Symbol Detection & Code Cleanup
+**Current Version:** v5.7.0
 
 **Stop paying for code you don't use.**
 
-The Janitor creates a Shadow Tree to verify deletion safety, then surgically excises dead code at the symbol level — functions, classes, and entire orphan files — across Python, Rust, JavaScript/TypeScript, and C++ codebases.
+The Janitor creates a Shadow Tree to verify deletion safety, then surgically removes dead code at the symbol level — functions, classes, and entire orphan files — across Python, Rust, JavaScript/TypeScript, and C++ codebases.
 
 ## How It Works
 
 1. **Scan** — Static reference graph + 6-stage heuristic pipeline identifies every dead symbol.
-2. **Simulate** — Shadow Tree overlays symlinks to the dead files. Your test suite runs against the simulated deletion.
-3. **Excise** — Tests pass? Dead code is removed bottom-to-top (byte-precise, UTF-8 hardened). Tests fail? Full rollback, zero corruption.
+2. **Simulate** — Shadow Tree overlays links to the dead files. Your test suite runs against the simulated deletion.
+3. **Remove** — Tests pass? Dead code is removed bottom-to-top (byte-precise, UTF-8 hardened). Tests fail? Full rollback, zero corruption.
 
 ## Quick Start
 
@@ -20,8 +20,8 @@ janitor scan ./src
 # Free: find duplicate functions (structural clone detection)
 janitor dedup ./src
 
-# Paid: simulate + excise
-janitor clean ./src --token <YOUR_TOKEN>
+# Free: simulate + remove (no token required)
+janitor clean ./src --force-purge
 ```
 
 ## Language Support
@@ -47,18 +47,15 @@ janitor clean ./src --token <YOUR_TOKEN>
 
 ## Pricing
 
-**The Audit is Free. The Purge is Paid.**
+**Cleanup is Free. Integrity Attestations are Paid.**
 
 | Tier | Cost | Includes |
 |------|------|----------|
-| **Scan** | Free forever | Dead code detection, dedup report, TUI dashboard |
-| **Bounty Hunter** | First 50 MB deleted **free**, then $1.00/MB | `janitor clean` on any codebase |
-| **Sovereign Squad** | $499/yr (5 seats) | Shared purge credit pool, CI integration |
-| **Fiduciary Core** | Custom | Monoliths >10M LOC, SLA, PQC attestation |
+| **Junior Janitor** | **Free** | Scan, cleanup, dedup, badge, TUI dashboard — unlimited. |
+| **Lead Specialist** | **$499/yr** | Signed audit logs, PQC attestation, CI integration token. |
+| **Industrial Core** | **Custom** | SLA, on-prem token server, >10M LOC support. |
 
-**Anti-Gaming Policy:** Code must be >90 days old. Deleting code created within 90 days incurs a 5× surcharge.
-
-[Purchase tokens at thejanitor.app](https://thejanitor.app)
+[Get started at thejanitor.app](https://thejanitor.app)
 
 ## CI Integration
 
@@ -69,12 +66,21 @@ janitor clean ./src --token <YOUR_TOKEN>
     args: scan --verbose
 ```
 
-For automated purge in CI, pass your token via a secret:
+For automated cleanup in CI (free):
 
 ```yaml
 - uses: GhrammR/the-janitor@v5
   with:
-    args: clean --token ${{ secrets.JANITOR_TOKEN }}
+    args: clean --force-purge
+    path: ./src
+```
+
+For signed attestation in CI (Lead Specialist tier):
+
+```yaml
+- uses: GhrammR/the-janitor@v5
+  with:
+    args: clean --force-purge --token ${{ secrets.JANITOR_TOKEN }}
     path: ./src
 ```
 
@@ -84,12 +90,15 @@ For automated purge in CI, pass your token via a secret:
 |---------|------|---------|
 | `janitor scan <path>` | Free | Detect dead symbols, save `.janitor/symbols.rkyv` |
 | `janitor dedup <path>` | Free | Report structural clone groups |
-| `janitor dedup <path> --apply --token <tok>` | Paid | Inject safe proxy pattern |
-| `janitor clean <path> --token <tok>` | Paid | Shadow simulate → test → excise |
+| `janitor dedup <path> --apply --force-purge` | Free | Inject safe proxy pattern |
+| `janitor clean <path> --force-purge` | Free | Shadow simulate → test → remove dead code |
+| `janitor clean <path> --force-purge --token <tok>` | Lead Specialist | Clean + signed integrity attestation |
+| `janitor badge <path>` | Free | Generate code health SVG badge |
+| `janitor undo <path>` | Free | Reverse last cleanup (git stash or ghost restore) |
 | `janitor dashboard <path>` | Free | Ratatui TUI — Top 10 dead symbols by size |
 
 ## License
 
-**Sovereign Proprietary License (SPL v1.0)** — Source Available, Paid Execution.
+**Business Source License 1.1 (BSL 1.1)** — Source Available. Converts to MIT on 2030-02-15.
 
-Analysis is free. Execution (`clean`, `dedup --apply`) requires a PQC-signed token from [thejanitor.app](https://thejanitor.app). Redistribution of purge logic or ghost-file output is prohibited.
+Scan, cleanup, badge, and dashboard are permanently free. Integrity attestation (signed audit logs, PQC compliance reports) requires a [Lead Specialist token](https://thejanitor.app).

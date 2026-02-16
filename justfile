@@ -49,7 +49,7 @@ bump-version version:
 	cargo check > /dev/null 2>&1 || true
 	@echo "✅ Manifests updated."
 
-release version: audit (bump-version version)
+release version: audit (bump-version version) sync
 	@echo "🚀 Initiating Release Sequence v{{version}}..."
 	git add .
 	git commit -m "chore: release v{{version}}"
@@ -59,6 +59,14 @@ release version: audit (bump-version version)
 
 # 5. DOCUMENTATION
 deploy-docs:
-	@command -v mkdocs >/dev/null 2>&1 || { echo "❌ mkdocs not found. Install: pip install mkdocs-material"; exit 1; }
-	mkdocs build
-	@echo "✅ Docs built. Run 'mkdocs gh-deploy --force' to push to GitHub Pages."
+	uv run --with mkdocs-material mkdocs gh-deploy --force
+
+# 6. WINDOWS SYNC
+sync:
+	@echo "🪟 Syncing to Windows mount..."
+	rsync -av --delete \
+		--exclude 'target' \
+		--exclude '.git' \
+		--exclude '.janitor/shadow_src' \
+		. /mnt/c/Projects/the-janitor/
+	@echo "✅ Windows sync complete."

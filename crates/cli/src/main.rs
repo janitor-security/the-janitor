@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "janitor")]
-#[command(
-    about = "Code Integrity Protocol — Automated Dead Symbol Detection & Surgical Artifact Excision"
-)]
+#[command(about = "Code Integrity Protocol — Automated Dead Symbol Detection & Cleanup")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -30,7 +28,7 @@ enum Commands {
     Dedup {
         /// Python file or directory to analyse.
         path: PathBuf,
-        /// Rewrite duplicates using the Safe Proxy Pattern (requires --force-purge and --token).
+        /// Rewrite duplicates using the Safe Proxy Pattern (requires --force-purge).
         #[arg(long)]
         apply: bool,
         /// Execute physical rewriting. Requires --token. Default is dry-run.
@@ -45,20 +43,20 @@ enum Commands {
         #[command(subcommand)]
         cmd: ShadowCmd,
     },
-    /// Shadow-simulate deletion, verify tests, then physically delete dead symbols.
+    /// Shadow-simulate deletion, verify tests, then physically remove dead symbols.
     ///
-    /// Default: dry-run. Pass --force-purge to execute physical excision.
-    /// A valid --token is required when --force-purge is set.
+    /// Default: dry-run (scan and report). Pass --force-purge to execute cleanup.
+    /// Cleanup is free. Pass --token to also generate a signed integrity attestation.
     Clean {
         /// Project root.
         path: PathBuf,
-        /// Dry-run mode (default): scan and report without deleting anything.
+        /// Dry-run mode (default): scan and report without removing anything.
         #[arg(long)]
         dry_run: bool,
-        /// Execute physical excision. Requires --token.
+        /// Execute physical cleanup. No token required.
         #[arg(long)]
         force_purge: bool,
-        /// Ed25519 purge token (required with --force-purge).
+        /// Ed25519 token for signed integrity attestation (optional).
         #[arg(long)]
         token: Option<String>,
     },
@@ -75,7 +73,7 @@ enum Commands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Undo the last excision. Uses git stash if inside a VCS repo, otherwise
+    /// Undo the last cleanup. Uses git stash if inside a VCS repo, otherwise
     /// restores files from .janitor/ghost/.
     Undo {
         /// Project root.
@@ -415,7 +413,7 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
          +------------------------------------------+"
     );
     println!("  Dead symbols: {}", result.dead.len());
-    println!("  Would excise:");
+    println!("  Would remove:");
     for entity in &result.dead {
         println!(
             "    {}:{} - {}",
@@ -426,13 +424,17 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
     if !force_purge {
         println!(
             "\n[DRY RUN] No files modified.\n\
-             Pass --force-purge --token <TOKEN> to execute surgical excision."
+             Pass --force-purge to execute cleanup (free).\n\
+             Pass --force-purge --token <TOKEN> to also generate a signed integrity attestation."
         );
         return Ok(());
     }
 
-    // --force-purge path: verify token first.
-    require_token(token)?;
+    // Token is optional: required only for signed attestation (Lead Specialist tier).
+    if token.is_some() {
+        require_token(token)?;
+        println!("Integrity attestation: token verified.");
+    }
 
     // 2. Initialise (or open existing) shadow tree.
     let shadow_path = project_root.join(".janitor").join("shadow_src");
@@ -466,7 +468,7 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
     println!("Shadow simulation: {}", manager.shadow_root().display());
     match run_pytest(manager.shadow_root()) {
         Ok(()) => {
-            println!("Shadow verification PASSED. Executing physical excision...");
+            println!("Shadow verification PASSED. Executing cleanup...");
         }
         Err(e) => {
             eprintln!("Shadow verification FAILED: {}. Restoring...", e);
@@ -503,7 +505,7 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
             })
             .collect();
 
-        // Record audit entry before deletion (pre-excision hash).
+        // Record audit entry before deletion (pre-cleanup hash).
         for entity in entities.iter() {
             audit_log.record(AuditEntry::new(
                 *file_str,
@@ -518,10 +520,10 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
         match deleter.delete_symbols(file_path, &mut targets) {
             Ok(n) => {
                 deleter.commit()?;
-                println!("Excised {} symbols from {}", n, file_str);
+                println!("Removed {} symbols from {}", n, file_str);
             }
             Err(e) => {
-                eprintln!("Excision error in {}: {}. Restoring backup...", file_str, e);
+                eprintln!("Cleanup error in {}: {}. Restoring backup...", file_str, e);
                 deleter.restore_all()?;
             }
         }

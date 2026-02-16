@@ -6,11 +6,11 @@
 
 ---
 
-## I. THE DIAGNOSIS: METABOLIC BLOAT
+## I. THE PROBLEM: CODE BLOAT
 
-Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect entropy.
+Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect dead code.
 
-The consequence is **Metabolic Bloat**: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.
+The consequence is **Code Bloat**: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.
 
 ---
 
@@ -50,15 +50,13 @@ Symlink-based overlay of the source tree. Before any physical deletion, symlinks
 
 ## III. THE ECONOMICS: UTILITY PRICING
 
-The Audit is **Free**. The Purge is **Paid**.
+**Cleanup is Free. Integrity Attestations are Paid.**
 
 | Tier | Cost | Scope |
 |:-----|:-----|:------|
-| **Bounty Hunter** | **$49/yr** | Individual. Pay-as-you-purge ($1.00/MB deleted). |
-| **Sovereign Squad** | **$499/yr** | Team (5 users). Shared PoUD credit pool. |
-| **Fiduciary Core** | **Custom** | Enterprise (>10M LOC). Priority support. |
-
-Anti-gaming constraint: code must be >90 days old. Purging symbols created within 90 days incurs a **5× tax** and generates zero credits.
+| **Junior Janitor** | **Free** | Scan, cleanup, TUI dashboard. Unlimited. |
+| **Lead Specialist** | **$499/yr** | Signed audit logs, PQC attestation, CI integration. |
+| **Industrial Core** | **Custom** | SLA, on-prem token server, >10M LOC. |
 
 [Purchase a Token → thejanitor.app](https://thejanitor.app)
 
@@ -98,20 +96,23 @@ sudo mv janitor /usr/local/bin/
 ## V. COMMANDS
 
 ```sh
-# Detect dead symbols (free, no token required)
+# Detect dead symbols (free)
 janitor scan <path> [--library] [--verbose]
 
 # Find structurally duplicate functions (free, report only)
 janitor dedup <path>
 
-# Apply Safe Proxy deduplication (token required)
-janitor dedup <path> --apply --token <TOKEN>
+# Apply Safe Proxy deduplication (free, explicit flag required)
+janitor dedup <path> --apply --force-purge
 
-# Shadow-simulate deletion + test, then physically purge (token + explicit flag required)
-janitor clean <path> --force-purge --token <TOKEN>
+# Shadow-simulate deletion + test, then physically remove dead symbols (free)
+janitor clean <path> --force-purge
 
-# Initialize symlink shadow tree
-janitor shadow init <path>
+# Generate a code health badge (free)
+janitor badge <path>
+
+# Undo last cleanup (git stash or ghost restore)
+janitor undo <path>
 
 # Load .janitor/symbols.rkyv and launch TUI dashboard (free)
 janitor dashboard <path>
