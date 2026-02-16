@@ -34,7 +34,8 @@ build:
 
 clean:
 	cargo clean
-	@echo "💥 Target directory vaporized."
+	find . -name "*.rkyv" -not -path "./.git/*" -delete
+	@echo "💥 Target directory and rkyv artefacts vaporized."
 
 # 3. AUTHENTICATION
 auth-refresh:
@@ -43,9 +44,15 @@ auth-refresh:
 # 4. RELEASE PROTOCOL
 bump-version version:
 	@echo "📈 Bumping version to {{version}}..."
+	# Rust manifests — workspace root + all crates + tools
 	sed -i 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
-	find crates -name "Cargo.toml" -exec sed -i 's/^version = ".*"/version = "{{version}}"/' {} +
+	find crates tools -name "Cargo.toml" -exec sed -i 's/^version = ".*"/version = "{{version}}"/' {} +
+	# Markdown docs — v-prefixed version strings (README.md, docs/index.md)
 	sed -i 's/v[0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?/v{{version}}/g' README.md
+	sed -i 's/v[0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?/v{{version}}/g' docs/index.md
+	# ARCHITECTURE.md — two VERSION patterns: header (**VERSION:** x) and footer (**VERSION: x**)
+	sed -i 's/\*\*VERSION:\*\* [0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?/\*\*VERSION:\*\* {{version}}/' ARCHITECTURE.md
+	sed -i 's/\*\*VERSION: [0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?\*\*/\*\*VERSION: {{version}}\*\*/' ARCHITECTURE.md
 	cargo check > /dev/null 2>&1 || true
 	@echo "✅ Manifests updated."
 
