@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod safe_delete;
 pub mod test_fingerprint;
 

@@ -1,0 +1,57 @@
+Business Source License 1.1
+
+Licensor:             The Janitor Project
+Licensed Work:        The Janitor v5.6.0
+                      The Licensed Work is (c) 2026 The Janitor Project
+
+Additional Use Grant: You may use the Licensed Work for any purpose except
+                      offering it as a competing service to thejanitor.app.
+                      The following operations are permanently free of charge
+                      regardless of use:
+                        - janitor scan     (dead symbol detection)
+                        - janitor dedup    (duplicate detection, report only)
+                        - janitor badge    (badge generation)
+                        - janitor dashboard (TUI dashboard)
+
+Change Date:          2030-02-15
+
+Change License:       MIT License
+
+--------------------------------------------------------------------------------
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, above, permitting limited production
+use.
+
+Effective on the Change Date, or the fourth anniversary of the first publicly
+available distribution of a specific version of the Licensed Work under this
+License, whichever comes first, the Licensor hereby grants you rights under
+the terms of the Change License, and these rights are irrevocable thereafter.
+
+License Notice
+--------------
+Each copy of any part of the Licensed Work must include a notice that the
+Licensed Work is Copyright (c) 2026 The Janitor Project, and that this
+License applies to it. Such notice may be in the electronic documentation
+accompanying the Licensed Work, on a prominent page of the Licensed Work's
+website, or any other location where a purchaser would look for such a notice.
+
+Use Limitations
+---------------
+You may not provide the Licensed Work to third parties as a hosted or managed
+service, where the service provides users with access to any substantial set
+of the features or functionality of the Licensed Work. In particular, offering
+the purge execution pipeline (janitor clean, janitor dedup --apply) as a
+cloud or SaaS service requires a separate commercial agreement.
+
+Additional Information
+----------------------
+MariaDB plc originally created the Business Source License to foster open
+development and allow usage of the source code by individuals and
+non-commercial entities. This License follows those principles.
+
+To obtain a commercial license or to inquire about enterprise agreements,
+contact: thejanitor.app

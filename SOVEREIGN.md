@@ -1,7 +1,7 @@
-# SOVEREIGN.md
-**VERSION:** 5.5.0-SOVEREIGN
-**DATE:** 2026-02-15
-**CONTEXT:** Polyglot Blade — C++ Integration (Phase 3.6), Flask/Requests Live-Fire Verified
+# ARCHITECTURE.md (formerly SOVEREIGN.md)
+**VERSION:** 5.6.0
+**DATE:** 2026-02-16
+**CONTEXT:** Polyglot — C++ Integration (Phase 3.6), Windows Bridge, Audit Log, Badge, Undo
 
 ---
 
@@ -142,7 +142,7 @@ def _calculate_tax_us_impl(amount, rate):
 
 ---
 
-## VI. ECONOMIC PROTOCOL: THE SOVEREIGN VAULT
+## VI. ECONOMIC PROTOCOL: THE VAULT
 
 **Status**: **[COMPLETE]** — Phase 7
 
@@ -213,4 +213,4 @@ All engineering decisions are constrained by the target hardware (Dell Inspiron 
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.4.0-GOLD**
+**VERSION: 5.6.0**

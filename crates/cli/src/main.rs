@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "janitor")]
-#[command(about = "Sovereign Governance for the AI Era", long_about = None)]
+#[command(
+    about = "Code Integrity Protocol — Automated Dead Symbol Detection & Surgical Artifact Excision"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -15,7 +17,7 @@ struct Cli {
 enum Commands {
     /// Run the 6-stage dead-symbol detection pipeline.
     Scan {
-        /// Python project root to analyse.
+        /// Project root to analyse (Python, Rust, JS/TS, C++).
         path: PathBuf,
         /// Protect all public top-level symbols (library mode).
         #[arg(long)]
@@ -28,10 +30,13 @@ enum Commands {
     Dedup {
         /// Python file or directory to analyse.
         path: PathBuf,
-        /// Rewrite duplicates using the Safe Proxy Pattern and verify with pytest.
+        /// Rewrite duplicates using the Safe Proxy Pattern (requires --force-purge and --token).
         #[arg(long)]
         apply: bool,
-        /// Ed25519 purge token (required with --apply).
+        /// Execute physical rewriting. Requires --token. Default is dry-run.
+        #[arg(long)]
+        force_purge: bool,
+        /// Ed25519 purge token (required with --force-purge).
         #[arg(long)]
         token: Option<String>,
     },
@@ -41,16 +46,39 @@ enum Commands {
         cmd: ShadowCmd,
     },
     /// Shadow-simulate deletion, verify tests, then physically delete dead symbols.
+    ///
+    /// Default: dry-run. Pass --force-purge to execute physical excision.
+    /// A valid --token is required when --force-purge is set.
     Clean {
-        /// Python project root.
+        /// Project root.
         path: PathBuf,
-        /// Ed25519 purge token (required).
+        /// Dry-run mode (default): scan and report without deleting anything.
         #[arg(long)]
-        token: String,
+        dry_run: bool,
+        /// Execute physical excision. Requires --token.
+        #[arg(long)]
+        force_purge: bool,
+        /// Ed25519 purge token (required with --force-purge).
+        #[arg(long)]
+        token: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
-        /// Python project root (reads .janitor/symbols.rkyv).
+        /// Project root (reads .janitor/symbols.rkyv).
+        path: PathBuf,
+    },
+    /// Generate a Code Health SVG badge from the last scan result.
+    Badge {
+        /// Project root (reads .janitor/symbols.rkyv).
+        path: PathBuf,
+        /// Output path for the SVG file. Default: <path>/.janitor/badge.svg.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Undo the last excision. Uses git stash if inside a VCS repo, otherwise
+    /// restores files from .janitor/ghost/.
+    Undo {
+        /// Project root.
         path: PathBuf,
     },
 }
@@ -59,7 +87,7 @@ enum Commands {
 enum ShadowCmd {
     /// Initialise (or re-initialise) the symlink shadow tree.
     Init {
-        /// Python project root.
+        /// Project root.
         path: PathBuf,
     },
 }
@@ -79,12 +107,24 @@ async fn main() -> anyhow::Result<()> {
             library,
             verbose,
         } => cmd_scan(path, *library, *verbose)?,
-        Commands::Dedup { path, apply, token } => cmd_dedup(path, *apply, token.as_deref())?,
+        Commands::Dedup {
+            path,
+            apply,
+            force_purge,
+            token,
+        } => cmd_dedup(path, *apply, *force_purge, token.as_deref())?,
         Commands::Shadow { cmd } => match cmd {
             ShadowCmd::Init { path } => cmd_shadow_init(path)?,
         },
-        Commands::Clean { path, token } => cmd_clean(path, token)?,
+        Commands::Clean {
+            path,
+            dry_run: _,
+            force_purge,
+            token,
+        } => cmd_clean(path, *force_purge, token.as_deref())?,
         Commands::Dashboard { path } => cmd_dashboard(path)?,
+        Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
+        Commands::Undo { path } => cmd_undo(path)?,
     }
 
     Ok(())
@@ -147,7 +187,7 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
         }
     }
 
-    // Persist the full registry to .janitor/symbols.rkyv for the dashboard.
+    // Persist the full registry to .janitor/symbols.rkyv for the dashboard and badge.
     let rkyv_path = project_root.join(".janitor").join("symbols.rkyv");
     let mut registry = SymbolRegistry::new();
     for entity in result.dead.iter().chain(result.protected.iter()) {
@@ -182,10 +222,15 @@ struct DupGroup {
     members: Vec<anatomist::Entity>,
 }
 
-fn cmd_dedup(path: &Path, apply: bool, token: Option<&str>) -> anyhow::Result<()> {
+fn cmd_dedup(
+    path: &Path,
+    apply: bool,
+    force_purge: bool,
+    token: Option<&str>,
+) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost};
 
-    if apply {
+    if apply && force_purge {
         require_token(token)?;
     }
 
@@ -248,8 +293,10 @@ fn cmd_dedup(path: &Path, apply: bool, token: Option<&str>) -> anyhow::Result<()
         }
     }
 
-    if apply {
+    if apply && force_purge {
         apply_dedup(&all_groups, path)?;
+    } else if apply {
+        println!("\n[DRY RUN] Pass --force-purge --token <TOKEN> to apply Safe Proxy Pattern.");
     }
 
     Ok(())
@@ -347,23 +394,45 @@ fn cmd_shadow_init(project_root: &Path) -> anyhow::Result<()> {
 // clean
 // ---------------------------------------------------------------------------
 
-fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
+fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
-    use reaper::{DeletionTarget, SafeDeleter};
+    use reaper::{audit::AuditEntry, audit::AuditLog, DeletionTarget, SafeDeleter};
     use shadow::ShadowManager;
 
-    require_token(Some(token))?;
-
-    // 1. Pipeline: get kill list.
+    // 1. Run the detection pipeline (always — even in dry-run mode).
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
     let result = pipeline::run(project_root, &mut host, false)?;
 
     if result.dead.is_empty() {
-        println!("Nothing to clean.");
+        println!("Nothing to clean — no dead symbols detected.");
         return Ok(());
     }
-    println!("{} dead symbols identified.", result.dead.len());
+
+    println!(
+        "+------------------------------------------+\n\
+         | JANITOR CLEAN                            |\n\
+         +------------------------------------------+"
+    );
+    println!("  Dead symbols: {}", result.dead.len());
+    println!("  Would excise:");
+    for entity in &result.dead {
+        println!(
+            "    {}:{} - {}",
+            entity.file_path, entity.start_line, entity.qualified_name
+        );
+    }
+
+    if !force_purge {
+        println!(
+            "\n[DRY RUN] No files modified.\n\
+             Pass --force-purge --token <TOKEN> to execute surgical excision."
+        );
+        return Ok(());
+    }
+
+    // --force-purge path: verify token first.
+    require_token(token)?;
 
     // 2. Initialise (or open existing) shadow tree.
     let shadow_path = project_root.join(".janitor").join("shadow_src");
@@ -373,7 +442,7 @@ fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
         ShadowManager::initialize(project_root, &shadow_path)?
     };
 
-    // 3. Collect unique files and unmap their symlinks.
+    // 3. Collect unique files and unmap their shadow entries.
     let mut dead_files: Vec<PathBuf> = result
         .dead
         .iter()
@@ -394,13 +463,13 @@ fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
     }
 
     // 4. Shadow simulation: run tests against the shadow tree.
-    println!("Shadow simulation in: {}", manager.shadow_root().display());
+    println!("Shadow simulation: {}", manager.shadow_root().display());
     match run_pytest(manager.shadow_root()) {
         Ok(()) => {
-            println!("Shadow tests PASSED. Executing physical deletion...");
+            println!("Shadow verification PASSED. Executing physical excision...");
         }
         Err(e) => {
-            eprintln!("Shadow simulation FAILED: {}. Restoring symlinks...", e);
+            eprintln!("Shadow verification FAILED: {}. Restoring...", e);
             for rel in &unmapped {
                 manager.remap(rel).ok();
             }
@@ -408,7 +477,10 @@ fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
         }
     }
 
-    // 5. Physical deletion via SafeDeleter.
+    // 5. Physical excision via SafeDeleter + AuditLog.
+    let janitor_dir = project_root.join(".janitor");
+    let mut audit_log = AuditLog::new(&janitor_dir);
+
     let mut by_file: HashMap<&str, Vec<&anatomist::Entity>> = HashMap::new();
     for entity in &result.dead {
         by_file
@@ -419,6 +491,8 @@ fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
 
     for (file_str, entities) in &by_file {
         let file_path = Path::new(file_str);
+        let file_bytes = std::fs::read(file_path).unwrap_or_default();
+
         let mut deleter = SafeDeleter::new(project_root)?;
         let mut targets: Vec<DeletionTarget> = entities
             .iter()
@@ -429,17 +503,35 @@ fn cmd_clean(project_root: &Path, token: &str) -> anyhow::Result<()> {
             })
             .collect();
 
+        // Record audit entry before deletion (pre-excision hash).
+        for entity in entities.iter() {
+            audit_log.record(AuditEntry::new(
+                *file_str,
+                entity.qualified_name.as_str(),
+                &file_bytes,
+                "DEAD_SYMBOL",
+                entity.start_line,
+                entity.end_line,
+            ));
+        }
+
         match deleter.delete_symbols(file_path, &mut targets) {
             Ok(n) => {
                 deleter.commit()?;
-                println!("Deleted {} symbols from {}", n, file_str);
+                println!("Excised {} symbols from {}", n, file_str);
             }
             Err(e) => {
-                eprintln!("Deletion error in {}: {}. Restoring backup...", file_str, e);
+                eprintln!("Excision error in {}: {}. Restoring backup...", file_str, e);
                 deleter.restore_all()?;
             }
         }
     }
+
+    audit_log.flush()?;
+    println!(
+        "Audit log updated: {}",
+        janitor_dir.join("audit_log.json").display()
+    );
 
     Ok(())
 }
@@ -471,6 +563,166 @@ fn cmd_dashboard(project_root: &Path) -> anyhow::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// badge
+// ---------------------------------------------------------------------------
+
+fn cmd_badge(project_root: &Path, output: Option<&Path>) -> anyhow::Result<()> {
+    use common::registry::{MappedRegistry, SymbolRegistry};
+
+    let rkyv_path = project_root.join(".janitor").join("symbols.rkyv");
+    if !rkyv_path.exists() {
+        anyhow::bail!(
+            "No symbol registry found. Run `janitor scan {}` first.",
+            project_root.display()
+        );
+    }
+
+    let mapped = MappedRegistry::open(&rkyv_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
+
+    let registry: SymbolRegistry = rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
+        .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
+
+    let total = registry.entries.len();
+    let dead = registry
+        .entries
+        .iter()
+        .filter(|e| e.protected_by.is_none())
+        .count();
+
+    let health_pct: u32 = if total == 0 {
+        100
+    } else {
+        ((total - dead) * 100 / total) as u32
+    };
+
+    let color = match health_pct {
+        90..=100 => "#4c1",
+        70..=89 => "#dfb317",
+        _ => "#e05d44",
+    };
+
+    let label = format!("{}%", health_pct);
+    // Approximate character width for the label region.
+    let label_w: u32 = (label.len() as u32 * 7 + 10).max(32);
+    let left_w: u32 = 90;
+    let total_w = left_w + label_w;
+    let label_x = left_w + label_w / 2;
+
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20">
+  <linearGradient id="g" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <rect rx="3" width="{total_w}" height="20" fill="#555"/>
+  <rect rx="3" x="{left_w}" width="{label_w}" height="20" fill="{color}"/>
+  <rect rx="3" width="{total_w}" height="20" fill="url(#g)"/>
+  <g fill="#fff" text-anchor="middle"
+     font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+    <text x="45" y="15" fill="#010101" fill-opacity=".3">code health</text>
+    <text x="45" y="14">code health</text>
+    <text x="{label_x}" y="15" fill="#010101" fill-opacity=".3">{label}</text>
+    <text x="{label_x}" y="14">{label}</text>
+  </g>
+</svg>"##
+    );
+
+    let out = output
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| project_root.join(".janitor").join("badge.svg"));
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&out, svg.as_bytes())?;
+
+    println!("Badge written: {}", out.display());
+    println!(
+        "Code Health: {}%  ({} total, {} dead, {} protected)",
+        health_pct,
+        total,
+        dead,
+        total - dead
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// undo
+// ---------------------------------------------------------------------------
+
+fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
+    use walkdir::WalkDir;
+
+    // Strategy 1: delegate to git stash if inside a git repository.
+    if project_root.join(".git").exists() {
+        let status = std::process::Command::new("git")
+            .args(["stash"])
+            .current_dir(project_root)
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                println!("Undo complete: changes stashed via `git stash`.");
+                println!("Run `git stash pop` to re-apply, or `git stash drop` to discard stash.");
+                return Ok(());
+            }
+            Ok(s) => {
+                eprintln!(
+                    "warning: git stash exited {}. Falling back to ghost restore.",
+                    s.code().unwrap_or(-1)
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: git not available ({}). Falling back to ghost restore.",
+                    e
+                );
+            }
+        }
+    }
+
+    // Strategy 2: restore from .janitor/ghost/.
+    let ghost_dir = project_root.join(".janitor").join("ghost");
+    if !ghost_dir.exists() {
+        println!(
+            "Nothing to undo: no .janitor/ghost/ directory and no git repo detected at {}.",
+            project_root.display()
+        );
+        return Ok(());
+    }
+
+    let mut restored: u32 = 0;
+    for entry in WalkDir::new(&ghost_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let relative = entry
+            .path()
+            .strip_prefix(&ghost_dir)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let dest = project_root.join(relative);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(entry.path(), &dest)?;
+        restored += 1;
+        println!("Restored: {}", relative.display());
+    }
+
+    if restored > 0 {
+        println!("{} file(s) restored from .janitor/ghost/.", restored);
+    } else {
+        println!("Ghost directory exists but is empty. Nothing to restore.");
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Token gate
 // ---------------------------------------------------------------------------
 
@@ -480,11 +732,12 @@ fn require_token(token: Option<&str>) -> anyhow::Result<()> {
     match token {
         Some(t) if SigningOracle::verify_token(t) => Ok(()),
         Some(_) => {
-            eprintln!("ACCESS DENIED. Purchase PQC/Ed25519 Token at thejanitor.app");
+            eprintln!("AUTHORIZATION FAILED. Token is invalid or has been revoked.");
+            eprintln!("Purchase or refresh your purge token at thejanitor.app");
             std::process::exit(1);
         }
         None => {
-            eprintln!("--token <TOKEN> is required for this operation.");
+            eprintln!("--token <TOKEN> is required for --force-purge operations.");
             eprintln!("Purchase a token at thejanitor.app");
             std::process::exit(1);
         }

@@ -19,3 +19,4 @@ tokio.workspace = true
 walkdir.workspace = true
 anyhow.workspace = true
 dotenvy = "0.15"
+serde_json.workspace = true

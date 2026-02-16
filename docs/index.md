@@ -1,8 +1,8 @@
 # The Janitor
 
-**v5.4.0-GOLD — Rust-Native. Zero-Copy. Link-Time Excision.**
+**v5.6.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
-*"Code is Liability. Sovereignty is Metabolic."*
+*"Code is Liability. Precision is the Cure."*
 
 ---
 
@@ -14,9 +14,9 @@ The consequence is **Metabolic Bloat**: dead symbols that occupy binary space, e
 
 ---
 
-## II. THE CURE: THE SOVEREIGN STACK
+## II. THE CURE: THE TECHNICAL STACK
 
-The Janitor is not a linter. It is a fiduciary agent.
+The Janitor is not a linter. It is a surgical instrument.
 
 ### The Anatomist
 
@@ -107,8 +107,8 @@ janitor dedup <path>
 # Apply Safe Proxy deduplication (token required)
 janitor dedup <path> --apply --token <TOKEN>
 
-# Shadow-simulate deletion + test, then physically purge (token required)
-janitor clean <path> --token <TOKEN>
+# Shadow-simulate deletion + test, then physically purge (token + explicit flag required)
+janitor clean <path> --force-purge --token <TOKEN>
 
 # Initialize symlink shadow tree
 janitor shadow init <path>
@@ -138,4 +138,4 @@ No migration path is provided. Purge your Python v4 source. Re-materialize in Ru
 
 ---
 
-> See [Sovereignty → Token Gate](sovereignty/tokens.md) for how the Ed25519 purge authorization works.
+> See [Safety Guarantees](safety.md) for how the Shadow Tree isolation and atomic rollback protocol works.

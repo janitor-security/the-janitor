@@ -1,5 +1,5 @@
 # The Janitor: Automated Technical Debt Excision
-**Current Version:** v5.5.1
+**Current Version:** v5.6.0
 
 **Stop paying for code you don't use.**
 

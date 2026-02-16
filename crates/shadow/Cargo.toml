@@ -7,3 +7,6 @@ edition.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 walkdir.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+junction = "1.1"

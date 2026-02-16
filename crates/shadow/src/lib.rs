@@ -11,6 +11,8 @@ pub enum ShadowError {
     WalkError(#[from] walkdir::Error),
     #[error("Symlink failure: {0}")]
     SymlinkFailure(String),
+    #[error("Junction error: {0}")]
+    JunctionError(String),
 }
 
 /// Manages the symlink-based shadow source tree.
@@ -84,15 +86,12 @@ impl ShadowManager {
                         return Err(ShadowError::IoError(e));
                     }
                 }
+                // On Windows, use hard links — no Administrator or Developer Mode required.
+                // Hard links behave identically to symlinks for unmap/remap: removing the hard
+                // link from shadow_src leaves the original in the source tree untouched.
                 #[cfg(windows)]
                 {
-                    if let Err(e) = std::os::windows::fs::symlink_file(entry_path, &shadow_path) {
-                        if e.kind() == std::io::ErrorKind::PermissionDenied {
-                            return Err(ShadowError::SymlinkFailure(format!(
-                                "Windows symlink failure: Enable Developer Mode or run as Admin. Path: {}",
-                                shadow_path.display()
-                            )));
-                        }
+                    if let Err(e) = std::fs::hard_link(entry_path, &shadow_path) {
                         return Err(ShadowError::IoError(e));
                     }
                 }
@@ -146,7 +145,8 @@ impl ShadowManager {
     pub fn move_to_ghost(&self, relative_path: &Path) -> Result<(), ShadowError> {
         let shadow_path = self.shadow_root.join(relative_path);
 
-        // Resolve the symlink to the real file.
+        // On Unix, shadow entries are symlinks — resolve the symlink to get the real path.
+        #[cfg(unix)]
         let real_path = fs::read_link(&shadow_path).map_err(|e| {
             ShadowError::SymlinkFailure(format!(
                 "Cannot resolve symlink at {}: {}",
@@ -154,6 +154,20 @@ impl ShadowManager {
                 e
             ))
         })?;
+
+        // On Windows, shadow entries are hard links. Derive the source path from the
+        // known source root and relative path — `read_link` is not applicable to hard links.
+        #[cfg(windows)]
+        let real_path = {
+            let p = self.source_root.join(relative_path);
+            if !p.exists() {
+                return Err(ShadowError::SymlinkFailure(format!(
+                    "Source file not found at {}",
+                    p.display()
+                )));
+            }
+            p
+        };
 
         // Build the ghost destination path.
         let ghost_path = self
@@ -228,9 +242,9 @@ impl ShadowManager {
         })?;
 
         #[cfg(windows)]
-        std::os::windows::fs::symlink_file(&real_path, &shadow_path).map_err(|e| {
+        std::fs::hard_link(&real_path, &shadow_path).map_err(|e| {
             ShadowError::SymlinkFailure(format!(
-                "remap symlink failed for {}: {}",
+                "remap hard_link failed for {}: {}",
                 shadow_path.display(),
                 e
             ))
@@ -247,6 +261,41 @@ impl ShadowManager {
     /// Get the shadow root path.
     pub fn shadow_root(&self) -> &Path {
         &self.shadow_root
+    }
+}
+
+/// Creates a directory junction (Windows) or directory symlink (Unix) from `link` → `target`.
+///
+/// ## Windows
+/// Uses an NTFS Directory Junction reparse point. Unlike file/directory symlinks, junctions
+/// require **no Administrator privileges and no Developer Mode**. They work on any NTFS volume
+/// on Vista+. Appropriate for shadowing an entire project directory tree without per-file links.
+///
+/// ## Unix
+/// Falls back to `std::os::unix::fs::symlink`, which creates a standard symbolic link.
+///
+/// ## Usage
+/// ```rust,no_run
+/// # use shadow::create_dir_junction;
+/// # use std::path::Path;
+/// // Mirror ./source as ./shadow (zero additional disk for source files)
+/// create_dir_junction(Path::new("./source"), Path::new("./shadow")).unwrap();
+/// ```
+pub fn create_dir_junction(target: &Path, link: &Path) -> Result<(), ShadowError> {
+    #[cfg(windows)]
+    {
+        junction::create(target, link).map_err(|e| {
+            ShadowError::JunctionError(format!(
+                "Failed to create junction {} -> {}: {}",
+                link.display(),
+                target.display(),
+                e
+            ))
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        std::os::unix::fs::symlink(target, link).map_err(ShadowError::IoError)
     }
 }
 
