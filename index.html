@@ -315,15 +315,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ii-the-cure-the-sovereign-stack" class="md-nav__link">
+  <a href="#ii-the-cure-the-technical-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        II. THE CURE: THE SOVEREIGN STACK
+        II. THE CURE: THE TECHNICAL STACK
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="II. THE CURE: THE SOVEREIGN STACK">
+    <nav class="md-nav" aria-label="II. THE CURE: THE TECHNICAL STACK">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -591,15 +591,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ii-the-cure-the-sovereign-stack" class="md-nav__link">
+  <a href="#ii-the-cure-the-technical-stack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        II. THE CURE: THE SOVEREIGN STACK
+        II. THE CURE: THE TECHNICAL STACK
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="II. THE CURE: THE SOVEREIGN STACK">
+    <nav class="md-nav" aria-label="II. THE CURE: THE TECHNICAL STACK">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -755,15 +755,15 @@
 
 
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v5.4.0-GOLD — Rust-Native. Zero-Copy. Link-Time Excision.</strong></p>
-<p><em>"Code is Liability. Sovereignty is Metabolic."</em></p>
+<p><strong>v5.6.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.</strong></p>
+<p><em>"Code is Liability. Precision is the Cure."</em></p>
 <hr />
 <h2 id="i-the-diagnosis-metabolic-bloat">I. THE DIAGNOSIS: METABOLIC BLOAT</h2>
 <p>Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect entropy.</p>
 <p>The consequence is <strong>Metabolic Bloat</strong>: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.</p>
 <hr />
-<h2 id="ii-the-cure-the-sovereign-stack">II. THE CURE: THE SOVEREIGN STACK</h2>
-<p>The Janitor is not a linter. It is a fiduciary agent.</p>
+<h2 id="ii-the-cure-the-technical-stack">II. THE CURE: THE TECHNICAL STACK</h2>
+<p>The Janitor is not a linter. It is a surgical instrument.</p>
 <h3 id="the-anatomist">The Anatomist</h3>
 <p>Parses Python source via Tree-sitter CST. Extracts every <code>def</code>, <code>class</code>, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and <code>__all__</code> exports.</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
@@ -870,8 +870,8 @@
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Apply Safe Proxy deduplication (token required)</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--token<span class="w"> </span>&lt;TOKEN&gt;
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Shadow-simulate deletion + test, then physically purge (token required)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--token<span class="w"> </span>&lt;TOKEN&gt;
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Shadow-simulate deletion + test, then physically purge (token + explicit flag required)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge<span class="w"> </span>--token<span class="w"> </span>&lt;TOKEN&gt;
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Initialize symlink shadow tree</span>
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>shadow<span class="w"> </span>init<span class="w"> </span>&lt;path&gt;
@@ -920,7 +920,7 @@
 <p>No migration path is provided. Purge your Python v4 source. Re-materialize in Rust.</p>
 <hr />
 <blockquote>
-<p>See <a href="sovereignty/tokens/">Sovereignty → Token Gate</a> for how the Ed25519 purge authorization works.</p>
+<p>See <a href="safety/">Safety Guarantees</a> for how the Shadow Tree isolation and atomic rollback protocol works.</p>
 </blockquote>
 
 
