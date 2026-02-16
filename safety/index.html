@@ -6,12 +6,14 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Sovereign Governance for the AI Era. Rust-Native. Zero-Copy. Link-Time Excision.">
+        <meta name="description" content="Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot.">
       
       
       
         <link rel="canonical" href="https://thejanitor.app/safety/">
       
+      
+        <link rel="prev" href="..">
       
       
       
@@ -23,7 +25,7 @@
     
     
       
-        <title>Safety Guarantees: Shadow Tree Isolation & Atomic Rollback - The Janitor</title>
+        <title>Safety Guarantees - The Janitor</title>
       
     
     
@@ -65,7 +67,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="red">
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -110,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Safety Guarantees: Shadow Tree Isolation &amp; Atomic Rollback
+              Safety Guarantees
             
           </span>
         </div>
@@ -123,7 +125,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="red"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
     
   
 </form>
@@ -266,33 +268,26 @@
       
   
   
+    
   
   
-    
-    
-    
-    
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
       
         
-        
       
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
-        
+        <label class="md-nav__link md-nav__link--active" for="__toc">
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
-            
   
   
   <span class="md-ellipsis">
     
   
-    Sovereignty
+    Safety Guarantees
   
 
     
@@ -300,35 +295,17 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Sovereignty
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../sovereignty/tokens/" class="md-nav__link">
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
     
   
-    Token Gate
+    Safety Guarantees
   
 
     
@@ -337,14 +314,186 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-core-promise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Core Promise
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-shadow-tree-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Shadow Tree Isolation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1: Shadow Tree Isolation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-atomic-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Atomic Rollback
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2: Atomic Rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layer-1-shadow-rollback-always-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1: Shadow Rollback (always active)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-2-backup-rollback-active-during-physical-excision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2: Backup Rollback (active during physical excision)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-janitor-undo-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The janitor undo Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-dry-run-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Dry-Run Default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Log
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-what-can-go-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary: What Can Go Wrong?
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
-              
-            
-          </ul>
-        </nav>
+    
       
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -620,13 +769,13 @@
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-02-16T14:30:00Z&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/abs/path/src/module.py&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">&quot;symbol_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;unused_helper&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">&quot;sha256_pre_excision&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a3b4c5d6...&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">&quot;sha256_pre_cleanup&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a3b4c5d6...&quot;</span><span class="p">,</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">&quot;heuristic_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;DEAD_SYMBOL&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">&quot;affected_lines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">42</span><span class="p">,</span><span class="w"> </span><span class="mi">55</span><span class="p">]</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">&quot;lines_removed&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="p">}</span>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">]</span>
 </code></pre></div>
-<p>The <code>sha256_pre_excision</code> field captures the SHA-256 hash of the entire file <em>before</em> modification. This allows auditors to verify that the pre-excision state matches any backup copy, and provides a forensic trail for compliance reviews.</p>
+<p>The <code>sha256_pre_cleanup</code> field captures the SHA-256 hash of the entire file <em>before</em> modification. This allows auditors to verify that the pre-cleanup state matches any backup copy, and provides a forensic trail for compliance reviews.</p>
 <hr />
 <h2 id="summary-what-can-go-wrong">Summary: What Can Go Wrong?</h2>
 <table>
