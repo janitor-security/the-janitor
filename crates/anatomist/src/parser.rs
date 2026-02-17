@@ -34,14 +34,36 @@ static TS_QUERY: OnceLock<Query> = OnceLock::new();
 static TSX_QUERY: OnceLock<Query> = OnceLock::new();
 /// Static cache for the C++ entity extraction query.
 static CPP_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the C entity extraction query.
+static C_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the Java entity extraction query.
+static JAVA_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the C# entity extraction query.
+static CSHARP_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the Go entity extraction query.
+static GO_QUERY: OnceLock<Query> = OnceLock::new();
 
-/// S-expression shared by JS, TS, and TSX grammars (all extend the JS grammar node shapes).
+/// S-expression for JS / JSX grammars.
 const JS_ENTITY_S_EXPR: &str = r#"
     (function_declaration
       name: (identifier) @fn.name) @fn.def
 
     (class_declaration
       name: (identifier) @class.name) @class.def
+
+    (method_definition
+      name: (property_identifier) @method.name) @method.def
+"#;
+
+/// S-expression for TypeScript / TSX grammars.
+///
+/// Uses `type_identifier` for class names (TypeScript grammar differs from JS here).
+const TS_ENTITY_S_EXPR: &str = r#"
+    (function_declaration
+      name: (identifier) @fn.name) @fn.def
+
+    (class_declaration
+      name: (type_identifier) @class.name) @class.def
 
     (method_definition
       name: (property_identifier) @method.name) @method.def
@@ -119,7 +141,7 @@ fn get_ts_query() -> &'static Query {
     TS_QUERY.get_or_init(|| {
         Query::new(
             &tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            JS_ENTITY_S_EXPR,
+            TS_ENTITY_S_EXPR,
         )
         .expect("TS entity query compilation failed — this is a bug in the hardcoded S-expression")
     })
@@ -129,7 +151,7 @@ fn get_tsx_query() -> &'static Query {
     TSX_QUERY.get_or_init(|| {
         Query::new(
             &tree_sitter_typescript::LANGUAGE_TSX.into(),
-            JS_ENTITY_S_EXPR,
+            TS_ENTITY_S_EXPR,
         )
         .expect("TSX entity query compilation failed — this is a bug in the hardcoded S-expression")
     })
@@ -139,6 +161,125 @@ fn get_cpp_query() -> &'static Query {
     CPP_QUERY.get_or_init(|| {
         Query::new(&tree_sitter_cpp::LANGUAGE.into(), CPP_ENTITY_S_EXPR).expect(
             "C++ entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+/// S-expression for C grammar entity extraction.
+const C_ENTITY_S_EXPR: &str = r#"
+    (function_definition
+      declarator: (function_declarator
+        declarator: (identifier) @fn.name)) @fn.def
+
+    (struct_specifier
+      name: (type_identifier) @struct.name
+      body: (field_declaration_list)) @struct.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for C grammar.
+const C_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("struct.def", "struct.name", EntityType::ClassDefinition),
+];
+
+/// S-expression for Java grammar entity extraction.
+const JAVA_ENTITY_S_EXPR: &str = r#"
+    (method_declaration
+      name: (identifier) @fn.name) @fn.def
+
+    (class_declaration
+      name: (identifier) @class.name) @class.def
+
+    (interface_declaration
+      name: (identifier) @class.name) @class.def
+
+    (enum_declaration
+      name: (identifier) @class.name) @class.def
+
+    (constructor_declaration
+      name: (identifier) @fn.name) @fn.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Java grammar.
+const JAVA_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition),
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // interface
+    ("class.def", "class.name", EntityType::ClassDefinition), // enum_declaration
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // constructor
+];
+
+/// S-expression for C# grammar entity extraction.
+const CSHARP_ENTITY_S_EXPR: &str = r#"
+    (method_declaration
+      name: (identifier) @fn.name) @fn.def
+
+    (class_declaration
+      name: (identifier) @class.name) @class.def
+
+    (interface_declaration
+      name: (identifier) @class.name) @class.def
+
+    (constructor_declaration
+      name: (identifier) @fn.name) @fn.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for C# grammar.
+const CSHARP_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition), // interface
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),    // constructor
+];
+
+/// S-expression for Go grammar entity extraction.
+const GO_ENTITY_S_EXPR: &str = r#"
+    (function_declaration
+      name: (identifier) @fn.name) @fn.def
+
+    (method_declaration
+      name: (field_identifier) @fn.name) @fn.def
+
+    (type_declaration
+      (type_spec
+        name: (type_identifier) @type.name)) @type.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Go grammar.
+const GO_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("fn.def", "fn.name", EntityType::MethodDefinition),
+    ("type.def", "type.name", EntityType::ClassDefinition),
+];
+
+fn get_c_query() -> &'static Query {
+    C_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_c::LANGUAGE.into(), C_ENTITY_S_EXPR).expect(
+            "C entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_java_query() -> &'static Query {
+    JAVA_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_java::LANGUAGE.into(), JAVA_ENTITY_S_EXPR).expect(
+            "Java entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_csharp_query() -> &'static Query {
+    CSHARP_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_c_sharp::LANGUAGE.into(), CSHARP_ENTITY_S_EXPR).expect(
+            "C# entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_go_query() -> &'static Query {
+    GO_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_go::LANGUAGE.into(), GO_ENTITY_S_EXPR).expect(
+            "Go entity query compilation failed — this is a bug in the hardcoded S-expression",
         )
     })
 }
@@ -256,7 +397,11 @@ impl ParserHost {
     /// - `.rs`: Rust functions, structs, enums, and traits.
     /// - `.js` / `.jsx`: JavaScript functions, classes, and methods.
     /// - `.ts` / `.tsx`: TypeScript functions, classes, and methods.
-    /// - `.cpp` / `.cxx` / `.cc` / `.h` / `.hpp`: C++ functions, classes, and structs.
+    /// - `.cpp` / `.cxx` / `.cc` / `.hpp`: C++ functions, classes, and structs.
+    /// - `.c` / `.h`: C functions and structs.
+    /// - `.java`: Java methods, classes, interfaces, enums, and constructors.
+    /// - `.cs`: C# methods, classes, interfaces, and constructors.
+    /// - `.go`: Go functions, methods, and type declarations.
     ///
     /// # Errors
     /// - `IoError`: File not found, permission denied, mmap failure
@@ -300,6 +445,10 @@ impl ParserHost {
             "cpp" | "cxx" | "cc" | "h" | "hpp" => {
                 Self::extract_cpp_entities(source, &normalized_path)
             }
+            "c" => Self::extract_c_entities(source, &normalized_path),
+            "java" => Self::extract_java_entities(source, &normalized_path),
+            "cs" => Self::extract_csharp_entities(source, &normalized_path),
+            "go" => Self::extract_go_entities(source, &normalized_path),
             _ => self.dissect_impl(source, &normalized_path), // Python + unknown → Python pass
         }
     }
@@ -353,6 +502,70 @@ impl ParserHost {
             get_cpp_query(),
             file_path,
             CPP_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_definition` and `struct_specifier` entities from a C source buffer.
+    ///
+    /// Captures named struct types with bodies. `protected_by` is `None` for all returned entities.
+    pub fn extract_c_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_c::LANGUAGE.into(),
+            get_c_query(),
+            file_path,
+            C_PATTERNS,
+        )
+    }
+
+    /// Extracts method, class, interface, enum, and constructor entities from a Java source buffer.
+    ///
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_java_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_java::LANGUAGE.into(),
+            get_java_query(),
+            file_path,
+            JAVA_PATTERNS,
+        )
+    }
+
+    /// Extracts method, class, interface, and constructor entities from a C# source buffer.
+    ///
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_csharp_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_c_sharp::LANGUAGE.into(),
+            get_csharp_query(),
+            file_path,
+            CSHARP_PATTERNS,
+        )
+    }
+
+    /// Extracts function, method, and type declaration entities from a Go source buffer.
+    ///
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_go_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_go::LANGUAGE.into(),
+            get_go_query(),
+            file_path,
+            GO_PATTERNS,
         )
     }
 
