@@ -24,6 +24,26 @@ use std::collections::HashSet;
 /// (`PROTECTED_DIRS` in `pipeline.rs`) which marks the entire directory as `Directory`.
 static PLUGIN_DIRS: &[&str] = &["spiders", "plugins", "commands", "handlers", "tasks"];
 
+// --- Global shield: framework-agnostic lifecycle / entry-point names ---
+
+/// Names that are protected regardless of language or framework.
+///
+/// Covers game-engine lifecycle methods (Unity, Godot), generic entry points, and
+/// framework-invoked hooks that are never explicitly called from user code.
+static GLOBAL_SHIELD_NAMES: &[&str] = &[
+    "main",
+    "Main",
+    "init",
+    "update",
+    "draw",
+    "act",
+    "Start",
+    "FixedUpdate",
+    "Awake",
+    "OnEnable",
+    "OnTriggerEnter",
+];
+
 // --- Byte pattern tables (compile-time constants) ---
 
 /// FastAPI/Flask/Starlette route decorator patterns (without leading `@`).
@@ -177,13 +197,18 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
             continue;
         }
 
-        // 2b. Entry points: `main` function or CLI decorator.
-        if entity.name == "main"
-            || entity.decorators.iter().any(|d| {
-                let b = d.as_bytes();
-                CLI_DEC.iter().any(|p| bytes_contain(b, p))
-            })
-        {
+        // 2b-global. Global shield: framework-agnostic lifecycle / entry-point names.
+        // Protects game-engine callbacks (Unity, Godot) and universal entry points.
+        if GLOBAL_SHIELD_NAMES.contains(&entity.name.as_str()) {
+            entity.protected_by = Some(Protection::EntryPoint);
+            continue;
+        }
+
+        // 2b. Entry points: CLI decorator (main already covered by GLOBAL_SHIELD_NAMES).
+        if entity.decorators.iter().any(|d| {
+            let b = d.as_bytes();
+            CLI_DEC.iter().any(|p| bytes_contain(b, p))
+        }) {
             entity.protected_by = Some(Protection::EntryPoint);
             continue;
         }

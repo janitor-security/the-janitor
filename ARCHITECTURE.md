@@ -1,7 +1,7 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.7.1
+**VERSION:** 5.8.0
 **DATE:** 2026-02-16
-**CONTEXT:** Polyglot — C++ Integration (Phase 3.6), Windows Bridge, Audit Log, Badge, Undo
+**CONTEXT:** Omni-Polyglot (Phase 3.7) — C, Java, C#, Go parsers; polyglot graph walker; global shield
 
 ---
 
@@ -13,11 +13,12 @@
 
 ### 1.1 Core Architecture
 
-- **Parser Host**: Tree-sitter (Python grammar) + mmap zero-copy parsing.
+- **Parser Host**: Tree-sitter (9 grammars) + mmap zero-copy parsing.
+- **Languages**: Python (primary), Rust, C, C++, Java, C#, Go, JavaScript, TypeScript.
 - **CST Generation**: Builds Concrete Syntax Tree preserving all tokens.
 - **Entity Extraction**: Converts CST nodes → `Entity` structs with byte ranges, qualified names, parent classes, decorators, structural hashes.
 - **Graph Building**: Directed reference graph (Symbol A references Symbol B).
-- **Reference Linking**: Resolves imports, attribute access, function calls.
+- **Reference Linking**: Resolves imports, attribute access, function calls (Python + C++ `#include`).
 
 ### 1.2 Entity Struct
 
@@ -191,10 +192,13 @@ def _calculate_tax_us_impl(amount, rate):
 | **1** | Anatomist Core: Tree-sitter parsing, Entity extraction | **[COMPLETE]** |
 | **2** | Reference Linking: directed graph, import resolution | **[COMPLETE]** |
 | **3** | Dead Symbol Pipeline: 6-stage gate, WisdomRegistry | **[COMPLETE]** |
+| **3.5** | Polyglot: Rust, JS, TS, C++ parsers; plugin shield | **[COMPLETE]** |
+| **3.6** | C++ Integration: `#include` edges, C++ entity extraction | **[COMPLETE]** |
+| **3.7** | Omni-Polyglot: C, Java, C#, Go parsers; polyglot graph walker; global shield | **[COMPLETE]** |
 | **4** | Reaper: UTF-8 SafeDeleter, test fingerprinting | **[COMPLETE]** |
 | **5** | Forge: BLAKE3 structural hashing, Safe Proxy Pattern | **[COMPLETE]** |
 | **6** | Shadow: symlink overlay, Ghost Protocol, shadow simulation | **[COMPLETE]** |
-| **7** | Vault: Ed25519 token gate, TUI dashboard, SOVEREIGN.md refresh | **[COMPLETE]** |
+| **7** | Vault: Ed25519 token gate, TUI dashboard, ARCHITECTURE.md refresh | **[COMPLETE]** |
 
 ---
 
@@ -213,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.7.1**
+**VERSION: 5.8.0**

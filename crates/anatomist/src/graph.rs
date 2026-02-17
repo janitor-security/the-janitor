@@ -1,8 +1,11 @@
 //! # Reference Graph Builder
 //!
-//! Two-pass pipeline:
+//! Multi-pass pipeline:
 //! 1. **Index Pass**: Walk all `.py` files, extract entities, build `SymbolRegistry`, add nodes to graph.
 //! 2. **Link Pass**: Re-parse each file for imports + call sites, add symbol-to-symbol edges.
+//! 3. **Pass 1b**: Extract C++ entities, register symbols and `__MODULE__` sentinels.
+//! 4. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
+//! 5. **Pass 1c**: Extract polyglot entities (Rust, JS, TS, C, Java, C#, Go) via `ParserHost::dissect()`.
 
 use crate::imports::{extract_cpp_includes, extract_imports, resolve_import};
 use crate::{AnatomistError, Entity, ParserHost};
@@ -194,11 +197,13 @@ fn find_containing_entity(byte_offset: u32, entries: &[(u64, u32, u32)]) -> Opti
 /// Builds a reference graph from a polyglot project directory.
 ///
 /// # Algorithm
-/// 1. Walk directory for `.py` and C++ (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`) files.
+/// 1. Walk directory for `.py`, C++ (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`), and polyglot
+///    (`.rs`, `.js`, `.jsx`, `.ts`, `.tsx`, `.c`, `.java`, `.cs`, `.go`) files.
 /// 2. **Pass 1**: Extract Python entities, populate registry, add graph nodes.
 /// 3. **Pass 1b**: Extract C++ entities, register symbols and `__MODULE__` sentinels.
-/// 4. **Pass 2**: Re-parse Python files for imports + call sites; add symbol-to-symbol edges.
-/// 5. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
+/// 4. **Pass 1c**: Extract polyglot entities via `ParserHost::dissect()`, register symbols.
+/// 5. **Pass 2**: Re-parse Python files for imports + call sites; add symbol-to-symbol edges.
+/// 6. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
 ///
 /// # Memory
 /// - Registry stores all symbols (~80 bytes per symbol)
@@ -211,6 +216,7 @@ pub fn build_reference_graph(
     let root = dunce::canonicalize(project_root)?;
     let py_files = walk_py_files(&root)?;
     let cpp_files = walk_cpp_files(&root)?;
+    let polyglot_files = walk_polyglot_files(&root)?;
 
     let mut registry = SymbolRegistry::new();
     let mut graph = DiGraph::new();
@@ -218,7 +224,7 @@ pub fn build_reference_graph(
     let mut id_to_node: HashMap<u64, NodeIndex> = HashMap::new();
     let mut all_entities: Vec<Entity> = Vec::new();
     let mut stats = GraphStats {
-        file_count: py_files.len() + cpp_files.len(),
+        file_count: py_files.len() + cpp_files.len() + polyglot_files.len(),
         ..Default::default()
     };
 
@@ -524,6 +530,76 @@ pub fn build_reference_graph(
         }
     }
 
+    // PASS 1c: Index polyglot symbols (Rust, JS, TS, C, Java, C#, Go)
+    // No import/reference parsing — entities get graph nodes and __MODULE__ sentinels only.
+    // The grep shield (Stage 5) handles cross-file usage detection for these languages.
+    for path in &polyglot_files {
+        let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let file_key = normalize_path(&canonical);
+        let file_size = std::fs::metadata(path)
+            .map(|m| m.len().min(u32::MAX as u64) as u32)
+            .unwrap_or(0);
+
+        let module_sym_id = format!("{}::__MODULE__", file_key);
+        let module_hash = symbol_hash(&module_sym_id);
+        registry.insert(SymbolEntry {
+            id: module_hash,
+            name: "__MODULE__".to_string(),
+            qualified_name: "__MODULE__".to_string(),
+            file_path: file_key.clone(),
+            entity_type: 0,
+            start_line: 1,
+            end_line: 0,
+            start_byte: 0,
+            end_byte: file_size,
+            structural_hash: 0,
+            protected_by: None,
+        });
+        let module_node = graph.add_node(module_hash);
+        id_to_node.insert(module_hash, module_node);
+        file_symbols
+            .entry(file_key.clone())
+            .or_default()
+            .push(module_hash);
+
+        match host.dissect(path) {
+            Ok(entities) => {
+                for entity in entities {
+                    let symbol_id = entity.symbol_id();
+                    let hash = symbol_hash(&symbol_id);
+
+                    let entry = SymbolEntry {
+                        id: hash,
+                        name: entity.name.clone(),
+                        qualified_name: entity.qualified_name.clone(),
+                        file_path: entity.file_path.clone(),
+                        entity_type: entity.entity_type as u8,
+                        start_line: entity.start_line,
+                        end_line: entity.end_line,
+                        start_byte: entity.start_byte,
+                        end_byte: entity.end_byte,
+                        structural_hash: entity.structural_hash.unwrap_or(0),
+                        protected_by: entity.protected_by,
+                    };
+                    registry.insert(entry);
+
+                    let node_idx = graph.add_node(hash);
+                    id_to_node.insert(hash, node_idx);
+                    file_symbols
+                        .entry(entity.file_path.clone())
+                        .or_default()
+                        .push(hash);
+
+                    all_entities.push(entity);
+                    stats.symbol_count += 1;
+                }
+            }
+            Err(_) => {
+                stats.parse_errors += 1;
+            }
+        }
+    }
+
     Ok(ReferenceGraph {
         registry,
         graph,
@@ -564,6 +640,31 @@ fn walk_cpp_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
         let path = entry.path();
         if path.is_file() {
             if let Some("cpp" | "cxx" | "cc" | "h" | "hpp") =
+                path.extension().and_then(|s| s.to_str())
+            {
+                files.push(path.to_path_buf());
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+/// Walks a directory for polyglot source files (Rust, JS, TS, C, Java, C#, Go),
+/// skipping the same excluded directories as [`walk_py_files`].
+///
+/// Excludes files already handled by [`walk_cpp_files`] and [`walk_py_files`].
+fn walk_polyglot_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
+    let mut files = Vec::new();
+
+    for entry in WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|e| !is_excluded(e.path()))
+    {
+        let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some("rs" | "js" | "jsx" | "ts" | "tsx" | "c" | "java" | "cs" | "go") =
                 path.extension().and_then(|s| s.to_str())
             {
                 files.push(path.to_path_buf());
@@ -852,5 +953,25 @@ mod tests {
         assert!(graph.stats.symbol_count >= 1); // At least 'bar' from good.py
 
         fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_polyglot_rust_walker() {
+        let tmp = std::env::temp_dir().join("test_graph_polyglot");
+        fs::create_dir_all(&tmp).ok();
+        let rs_file = tmp.join("lib.rs");
+        fs::write(&rs_file, "pub fn hello() {} struct Foo {}").ok();
+
+        let mut host = ParserHost::new().unwrap();
+        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        eprintln!(
+            "file_count={} symbol_count={} entities={}",
+            result.stats.file_count,
+            result.stats.symbol_count,
+            result.entities.len()
+        );
+        fs::remove_dir_all(&tmp).ok();
+        assert!(result.stats.file_count > 0, "Should find polyglot files");
+        assert!(result.entities.len() > 0, "Should extract Rust entities");
     }
 }

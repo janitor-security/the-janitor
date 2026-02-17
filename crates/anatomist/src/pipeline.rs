@@ -161,8 +161,10 @@ pub fn run(
             if entity.protected_by.is_some() {
                 result.stage_counts[2] += 1;
                 result.protected.push(entity);
-            } else if library_mode && entity.parent_class.is_none() && !entity.is_private() {
-                // Stage 3: Library mode — protect all public top-level symbols.
+            } else if library_mode && !entity.is_private() {
+                // Stage 3: Library mode — protect all public symbols (top-level and methods).
+                // In a library, public methods are part of the public API surface regardless
+                // of whether they're called internally.
                 entity.protected_by = Some(Protection::LibraryMode);
                 result.stage_counts[3] += 1;
                 result.protected.push(entity);
