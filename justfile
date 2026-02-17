@@ -1,4 +1,5 @@
 set shell := ["bash", "-c"]
+export PATH := env_var("HOME") + "/.local/bin:" + env_var("PATH")
 
 # 1. INITIALIZATION
 init:
@@ -64,7 +65,7 @@ release version: audit (bump-version version)
 	git commit -m "chore: release v{{version}}"
 	git tag v{{version}}
 	git push origin main --tags
-	gh release create v{{version}} target/release/janitor \
+	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
 		--title "v{{version}} - The Industrial Pivot" \
 		--notes-file README.md \
 		--latest
