@@ -1,5 +1,5 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.7.0
+**VERSION:** 5.7.1
 **DATE:** 2026-02-16
 **CONTEXT:** Polyglot — C++ Integration (Phase 3.6), Windows Bridge, Audit Log, Badge, Undo
 
@@ -213,4 +213,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.7.0**
+**VERSION: 5.7.1**

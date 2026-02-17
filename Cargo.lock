@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -264,7 +264,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "cli"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -292,7 +292,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -412,7 +412,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "common",
  "crossterm",
@@ -540,7 +540,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "forge"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "blake3",
@@ -673,7 +673,7 @@ dependencies = [
 
 [[package]]
 name = "lazarus"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -749,7 +749,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -816,7 +816,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "oracle"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "common",
@@ -994,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "junction",
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "5.7.0"
+version = "5.7.1"
 
 [[package]]
 name = "subtle"
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "5.7.0"
+version = "5.7.1"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -1847,7 +1847,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "wisdom-bake"
-version = "5.5.0-SOVEREIGN"
+version = "5.7.1"
 dependencies = [
  "anyhow",
  "common",
