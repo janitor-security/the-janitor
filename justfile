@@ -56,12 +56,18 @@ bump-version version:
 	cargo check > /dev/null 2>&1 || true
 	@echo "✅ Manifests updated."
 
-release version: audit (bump-version version) sync
+release version: audit (bump-version version)
 	@echo "🚀 Initiating Release Sequence v{{version}}..."
+	cargo build --release --workspace
+	strip target/release/janitor
 	git add .
 	git commit -m "chore: release v{{version}}"
 	git tag v{{version}}
-	git push origin main --force --tags
+	git push origin main --tags
+	gh release create v{{version}} target/release/janitor \
+		--title "v{{version}} - The Industrial Pivot" \
+		--notes-file README.md \
+		--latest
 	@echo "💀 Release v{{version}} deployed."
 
 # 5. DOCUMENTATION

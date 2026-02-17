@@ -1,6 +1,6 @@
 [package]
 name = "wisdom-bake"
-version = "5.5.0-SOVEREIGN"
+version = "5.7.1"
 edition = "2021"
 
 [dependencies]
