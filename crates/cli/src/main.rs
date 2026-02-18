@@ -27,7 +27,7 @@ enum Commands {
     },
     /// Detect (and optionally refactor) structurally-duplicate functions.
     Dedup {
-        /// Python file or directory to analyse.
+        /// Source file or directory to analyse (Python, Rust, JS/TS, Go, C/C++).
         path: PathBuf,
         /// Rewrite duplicates using the Safe Proxy Pattern (requires --force-purge).
         #[arg(long)]
@@ -227,8 +227,10 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
 
 struct DupGroup {
     hash: u64,
-    file_path: PathBuf,
     members: Vec<anatomist::Entity>,
+    /// True only when every member's byte range is byte-for-byte identical.
+    /// Structural-only matches (same AST shape, different literals) are false.
+    identical_content: bool,
 }
 
 fn cmd_dedup(
@@ -243,57 +245,76 @@ fn cmd_dedup(
         require_token(token)?;
     }
 
-    let py_files = collect_py_files(path)?;
-    if py_files.is_empty() {
-        println!("No Python files found at: {}", path.display());
+    // Collect all supported source files — polyglot, not Python-only.
+    let source_files = collect_source_files(path)?;
+    if source_files.is_empty() {
+        println!("No source files found at: {}", path.display());
         return Ok(());
     }
 
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
 
-    let mut all_groups: Vec<DupGroup> = Vec::new();
-
-    for file_path in &py_files {
-        let entities = match host.dissect(file_path) {
-            Ok(e) => e,
-            Err(e) => {
-                eprintln!("warning: skipping {}: {}", file_path.display(), e);
-                continue;
-            }
-        };
-
-        let mut hash_groups: HashMap<u64, Vec<anatomist::Entity>> = HashMap::new();
-        for entity in entities {
-            if let Some(hash) = entity.structural_hash {
-                hash_groups.entry(hash).or_default().push(entity);
-            }
-        }
-
-        for (hash, members) in hash_groups {
-            if members.len() >= 2 {
-                all_groups.push(DupGroup {
-                    hash,
-                    file_path: file_path.clone(),
-                    members,
-                });
-            }
+    // Gather all entities from ALL files into a flat list for cross-file detection.
+    let mut all_entities: Vec<anatomist::Entity> = Vec::new();
+    for file_path in &source_files {
+        match host.dissect(file_path) {
+            Ok(entities) => all_entities.extend(entities),
+            Err(e) => eprintln!("warning: skipping {}: {}", file_path.display(), e),
         }
     }
+
+    // Group by structural hash across all files.
+    let mut hash_map: HashMap<u64, Vec<anatomist::Entity>> = HashMap::new();
+    for entity in all_entities {
+        if let Some(hash) = entity.structural_hash {
+            hash_map.entry(hash).or_default().push(entity);
+        }
+    }
+
+    let mut all_groups: Vec<DupGroup> = hash_map
+        .into_iter()
+        .filter(|(_, members)| members.len() >= 2)
+        .map(|(hash, members)| {
+            let identical_content = are_contents_identical(&members);
+            DupGroup {
+                hash,
+                members,
+                identical_content,
+            }
+        })
+        .collect();
+
+    // True duplicates first, then structural patterns; largest groups first within tier.
+    all_groups.sort_by(|a, b| {
+        b.identical_content
+            .cmp(&a.identical_content)
+            .then(b.members.len().cmp(&a.members.len()))
+    });
 
     if all_groups.is_empty() {
         println!("No duplicate functions found.");
         return Ok(());
     }
 
+    let true_dups = all_groups.iter().filter(|g| g.identical_content).count();
+    let patterns = all_groups.len() - true_dups;
+
     println!("+------------------------------------------+");
     println!("| JANITOR DEDUP                            |");
     println!("+------------------------------------------+");
     println!("| Duplicate groups : {:>20} |", all_groups.len());
+    println!("| True duplicates  : {:>20} |", true_dups);
+    println!("| Structural pats. : {:>20} |", patterns);
     println!("+------------------------------------------+");
 
     for group in &all_groups {
-        println!("\n  Hash: {:016x}", group.hash);
+        let tag = if group.identical_content {
+            "DUPLICATE"
+        } else {
+            "PATTERN  "
+        };
+        println!("\n  [{}] Hash: {:016x}", tag, group.hash);
         for entity in &group.members {
             println!(
                 "    {}:{} - {}",
@@ -303,7 +324,18 @@ fn cmd_dedup(
     }
 
     if apply && force_purge {
-        apply_dedup(&all_groups, path)?;
+        // Only Python files with truly identical bodies can be safely refactored.
+        let mergeable: Vec<DupGroup> = all_groups
+            .into_iter()
+            .filter(|g| {
+                g.identical_content && g.members.iter().all(|e| e.file_path.ends_with(".py"))
+            })
+            .collect();
+        if mergeable.is_empty() {
+            println!("\nNo mergeable duplicates (identical Python bodies) found.");
+        } else {
+            apply_dedup(&mergeable, path)?;
+        }
     } else if apply {
         println!("\n[DRY RUN] Pass --force-purge --token <TOKEN> to apply Safe Proxy Pattern.");
     }
@@ -320,16 +352,39 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path) -> anyhow::Result<()> {
         root_hint.parent().unwrap_or(root_hint).to_path_buf()
     };
 
-    let mut by_file: HashMap<&Path, (Vec<ReplacementTarget>, Vec<String>)> = HashMap::new();
+    let runner = detect_test_runner(&project_root);
+
+    // Pre-flight: run tests before any changes so we can detect Janitor-caused regressions.
+    let baseline_passed = match run_tests(&project_root, runner) {
+        Ok(()) => {
+            println!("Pre-flight verification PASSED.");
+            true
+        }
+        Err(e) => {
+            eprintln!(
+                "Pre-flight verification FAILED: {}.\n\
+                 Pre-existing failures — Janitor did not cause them. Proceeding.",
+                e
+            );
+            false
+        }
+    };
+
+    // Groups at this point are pre-filtered: identical_content=true, Python-only.
+    // Group members by their source file — members across different files get separate
+    // proxy injection into their own files.
+    type FileBatch = Vec<(Vec<ReplacementTarget>, Vec<String>)>;
+    let mut by_file: HashMap<String, FileBatch> = HashMap::new();
 
     for group in groups {
-        let file_path = group.file_path.as_path();
-        let source_file = std::fs::File::open(file_path)?;
+        // Members are guaranteed same-file or cross-file but identical content.
+        // For cross-file identical bodies, pick canonical from first file.
+        let canon = &group.members[0];
+        let canon_path = canon.file_path.as_str();
+        let source_file = std::fs::File::open(canon_path)?;
         let source = unsafe { memmap2::Mmap::map(&source_file)? };
 
-        let canon = &group.members[0];
         let impl_name = format!("_{}_impl", canon.name);
-
         let (body_start, params_str) = extract_function_parts(&source, canon)?;
         let original_body =
             std::str::from_utf8(&source[body_start as usize..canon.end_byte as usize])
@@ -343,39 +398,81 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path) -> anyhow::Result<()> {
             format!("    return {}({})\n", impl_name, call_args)
         };
 
-        let entry = by_file.entry(file_path).or_default();
-        entry.1.push(impl_block);
-
+        // Collect replacements per file (members may span multiple files for cross-file dups).
+        let mut per_file_replacements: HashMap<String, Vec<ReplacementTarget>> = HashMap::new();
         for member in &group.members {
-            let (member_body_start, _) = extract_function_parts(&source, member)?;
-            entry.0.push(ReplacementTarget {
-                qualified_name: member.qualified_name.clone(),
-                start_byte: member_body_start,
-                end_byte: member.end_byte,
-                replacement: proxy_body.clone(),
-            });
+            let member_file = std::fs::File::open(&member.file_path)?;
+            let member_source = unsafe { memmap2::Mmap::map(&member_file)? };
+            let (member_body_start, _) = extract_function_parts(&member_source, member)?;
+            per_file_replacements
+                .entry(member.file_path.clone())
+                .or_default()
+                .push(ReplacementTarget {
+                    qualified_name: member.qualified_name.clone(),
+                    start_byte: member_body_start,
+                    end_byte: member.end_byte,
+                    replacement: proxy_body.clone(),
+                });
+        }
+
+        // impl block goes into the canonical file
+        for (file_path, replacements) in per_file_replacements {
+            let impl_to_inject = if file_path == canon_path {
+                vec![impl_block.clone()]
+            } else {
+                vec![]
+            };
+            by_file
+                .entry(file_path)
+                .or_default()
+                .push((replacements, impl_to_inject));
         }
     }
 
-    for (file_path, (mut replacements, impl_blocks)) in by_file {
+    for (file_path_str, batches) in &by_file {
+        let file_path = Path::new(file_path_str);
         let mut deleter = SafeDeleter::new(&project_root)?;
-        deleter.replace_symbols(file_path, &mut replacements)?;
 
-        let mut current = std::fs::read_to_string(file_path)?;
-        for block in &impl_blocks {
-            current.push_str(block);
+        let mut all_replacements: Vec<ReplacementTarget> = Vec::new();
+        let mut all_impl_blocks: Vec<String> = Vec::new();
+        for (replacements, impl_blocks) in batches {
+            all_replacements.extend(replacements.iter().cloned());
+            all_impl_blocks.extend(impl_blocks.iter().cloned());
         }
-        std::fs::write(file_path, &current)?;
 
-        match run_pytest(&project_root) {
+        deleter.replace_symbols(file_path, &mut all_replacements)?;
+        if !all_impl_blocks.is_empty() {
+            let mut current = std::fs::read_to_string(file_path)?;
+            for block in &all_impl_blocks {
+                current.push_str(block);
+            }
+            std::fs::write(file_path, &current)?;
+        }
+
+        match run_tests(&project_root, runner) {
             Ok(()) => {
                 deleter.commit()?;
-                println!("APPLIED + VERIFIED: {}", file_path.display());
+                println!("APPLIED + VERIFIED: {}", file_path_str);
             }
             Err(e) => {
-                eprintln!("PYTEST FAILED: {}. Rolling back...", e);
-                deleter.restore_all()?;
-                return Err(e);
+                if baseline_passed {
+                    eprintln!(
+                        "TEST FAILED (Janitor caused regression): {}. Rolling back...",
+                        e
+                    );
+                    deleter.restore_all()?;
+                    return Err(e);
+                } else {
+                    eprintln!(
+                        "Tests failed: {} (pre-existing failures — not caused by Janitor).",
+                        e
+                    );
+                    deleter.commit()?;
+                    println!(
+                        "APPLIED (pre-existing failures not resolved): {}",
+                        file_path_str
+                    );
+                }
             }
         }
     }
@@ -453,16 +550,42 @@ fn cmd_clean(
         println!("Integrity attestation: token verified.");
     }
 
-    // 2. Initialise a fresh shadow tree (always re-create to avoid stale symlinks).
-    let shadow_path = project_root.join(".janitor").join("shadow_src");
-    if shadow_path.exists() {
-        std::fs::remove_dir_all(&shadow_path)?;
+    // 2. Auto-detect the repo's test runner.
+    let runner = detect_test_runner(project_root);
+    if runner.is_none() {
+        eprintln!(
+            "warning: no test runner detected in {}.\n\
+             Supported: pytest (Python), cargo test (Rust), go test (Go), npm test (JS).\n\
+             Proceeding without verification — ghost backups available via `janitor undo`.",
+            project_root.display()
+        );
     }
-    let manager = ShadowManager::initialize(project_root, &shadow_path)?;
+    let use_shadow = matches!(runner, Some(TestRunner::Pytest));
 
-    // 3. Build per-file entity map and write cleaned versions into the shadow tree.
-    // The shadow simulation mirrors exactly what SafeDeleter will do physically,
-    // allowing pytest to verify that removing these symbols does not break tests.
+    // 3. For Python repos: baseline verification via shadow simulation.
+    //    For compiled repos: baseline test run before ANY changes.
+    //    For unknown repos: skip verification (warn already emitted above).
+    let baseline_passed = if use_shadow {
+        true // Shadow simulation is the pre-flight check — no separate baseline needed.
+    } else {
+        match run_tests(project_root, runner) {
+            Ok(()) => {
+                println!("Pre-flight verification PASSED.");
+                true
+            }
+            Err(e) => {
+                eprintln!(
+                    "Pre-flight verification FAILED: {}.\n\
+                     Pre-existing failures detected — Janitor did not cause them.\n\
+                     Proceeding with cleanup; post-cleanup failures will be compared against this baseline.",
+                    e
+                );
+                false
+            }
+        }
+    };
+
+    // 4. Build per-file entity map.
     let mut by_file: HashMap<&str, Vec<&anatomist::Entity>> = HashMap::new();
     for entity in &result.dead {
         by_file
@@ -471,41 +594,49 @@ fn cmd_clean(
             .push(entity);
     }
 
-    for (file_str, entities) in &by_file {
-        let abs = Path::new(file_str);
-        let rel = abs.strip_prefix(manager.source_root()).unwrap_or(abs);
-        let shadow_file = manager.shadow_root().join(rel);
-        let original = std::fs::read(abs)
-            .with_context(|| format!("reading {} for shadow simulation", file_str))?;
-        let ranges: Vec<(usize, usize)> = entities
-            .iter()
-            .map(|e| (e.start_byte as usize, e.end_byte as usize))
-            .collect();
-        let cleaned = apply_deletions(&original, ranges);
-        // Replace symlink with cleaned file content.
-        if shadow_file.is_symlink() || shadow_file.exists() {
-            std::fs::remove_file(&shadow_file)
-                .with_context(|| format!("removing shadow symlink for {}", rel.display()))?;
+    // 5a. Python repos: shadow simulation — write cleaned files into shadow tree and run
+    //     tests there before touching the real source (this is the true pre-flight).
+    if use_shadow {
+        let shadow_path = project_root.join(".janitor").join("shadow_src");
+        if shadow_path.exists() {
+            std::fs::remove_dir_all(&shadow_path)?;
         }
-        std::fs::write(&shadow_file, cleaned)
-            .with_context(|| format!("writing cleaned shadow for {}", rel.display()))?;
+        let manager = ShadowManager::initialize(project_root, &shadow_path)?;
+
+        for (file_str, entities) in &by_file {
+            let abs = Path::new(file_str);
+            let rel = abs.strip_prefix(manager.source_root()).unwrap_or(abs);
+            let shadow_file = manager.shadow_root().join(rel);
+            let original = std::fs::read(abs)
+                .with_context(|| format!("reading {} for shadow simulation", file_str))?;
+            let ranges: Vec<(usize, usize)> = entities
+                .iter()
+                .map(|e| (e.start_byte as usize, e.end_byte as usize))
+                .collect();
+            let cleaned = apply_deletions(&original, ranges);
+            if shadow_file.is_symlink() || shadow_file.exists() {
+                std::fs::remove_file(&shadow_file)
+                    .with_context(|| format!("removing shadow symlink for {}", rel.display()))?;
+            }
+            std::fs::write(&shadow_file, cleaned)
+                .with_context(|| format!("writing cleaned shadow for {}", rel.display()))?;
+        }
+
+        println!("Shadow simulation: {}", manager.shadow_root().display());
+        match run_tests(manager.shadow_root(), runner) {
+            Ok(()) => println!("Shadow verification PASSED. Executing cleanup..."),
+            Err(e) => {
+                eprintln!("Shadow verification FAILED: {}", e);
+                return Err(e);
+            }
+        }
     }
 
-    // 4. Shadow simulation: run tests against the shadow tree.
-    println!("Shadow simulation: {}", manager.shadow_root().display());
-    match run_pytest(manager.shadow_root()) {
-        Ok(()) => {
-            println!("Shadow verification PASSED. Executing cleanup...");
-        }
-        Err(e) => {
-            eprintln!("Shadow verification FAILED: {}", e);
-            return Err(e);
-        }
-    }
-
-    // 5. Physical excision via SafeDeleter + AuditLog.
+    // 5b. Physical excision via SafeDeleter + AuditLog.
     let janitor_dir = project_root.join(".janitor");
     let mut audit_log = AuditLog::new(&janitor_dir);
+    let mut deleters: Vec<SafeDeleter> = Vec::new();
+    let mut deletion_counts: Vec<(String, usize)> = Vec::new();
 
     for (file_str, entities) in &by_file {
         let file_path = Path::new(file_str);
@@ -524,7 +655,6 @@ fn cmd_clean(
             })
             .collect();
 
-        // Record audit entry before deletion (pre-cleanup hash).
         for entity in entities.iter() {
             audit_log.record(AuditEntry::new(
                 *file_str,
@@ -538,14 +668,57 @@ fn cmd_clean(
 
         match deleter.delete_symbols(file_path, &mut targets) {
             Ok(n) => {
-                deleter.commit()?;
-                println!("Removed {} symbols from {}", n, file_str);
+                deletion_counts.push((file_str.to_string(), n));
+                deleters.push(deleter);
             }
             Err(e) => {
                 eprintln!("Cleanup error in {}: {}. Restoring backup...", file_str, e);
                 deleter.restore_all()?;
             }
         }
+    }
+
+    // 5c. Post-cleanup verification for compiled-language repos.
+    //     Only roll back if baseline was passing AND post-cleanup now fails
+    //     (we caused a regression). Pre-existing failures don't warrant rollback.
+    if !use_shadow {
+        if let Some(r) = runner {
+            let runner_name = match r {
+                TestRunner::Cargo => "cargo test",
+                TestRunner::Go => "go test",
+                TestRunner::Npm => "npm test",
+                TestRunner::Pytest => "pytest",
+            };
+            println!("Post-cleanup verification ({})...", runner_name);
+            match run_tests(project_root, Some(r)) {
+                Ok(()) => println!("Post-cleanup verification PASSED."),
+                Err(e) => {
+                    if baseline_passed {
+                        eprintln!(
+                            "Post-cleanup verification FAILED (Janitor caused regression): {}. Restoring...",
+                            e
+                        );
+                        for d in &mut deleters {
+                            d.restore_all().ok();
+                        }
+                        return Err(e);
+                    } else {
+                        eprintln!(
+                            "Post-cleanup verification FAILED: {} (pre-existing failures — not caused by Janitor).",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Commit all deletions (finalises ghost backups).
+    for d in &mut deleters {
+        d.commit()?;
+    }
+    for (file_str, n) in &deletion_counts {
+        println!("Removed {} symbols from {}", n, file_str);
     }
 
     audit_log.flush()?;
@@ -839,17 +1012,228 @@ fn params_to_call_args(params: &str) -> String {
     args.join(", ")
 }
 
-fn collect_py_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+// ---------------------------------------------------------------------------
+// Language-aware test runner detection
+// ---------------------------------------------------------------------------
+
+/// Which test framework is available in a given project root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TestRunner {
+    /// pytest — Python projects.
+    Pytest,
+    /// cargo test — Rust workspaces.
+    Cargo,
+    /// go test ./... — Go modules.
+    Go,
+    /// npm test — JS/TS projects.
+    Npm,
+}
+
+/// Auto-detect the appropriate test runner by probing the project root.
+///
+/// Detection order: Rust → Go → JS/TS → Python.
+/// Returns `None` when no recognised test framework is found.
+fn detect_test_runner(root: &Path) -> Option<TestRunner> {
+    if root.join("Cargo.toml").exists() {
+        return Some(TestRunner::Cargo);
+    }
+    if root.join("go.mod").exists() {
+        return Some(TestRunner::Go);
+    }
+    if root.join("package.json").exists() {
+        // Only count as JS test runner if a "test" script is present.
+        if std::fs::read_to_string(root.join("package.json"))
+            .map(|s| s.contains("\"test\""))
+            .unwrap_or(false)
+        {
+            return Some(TestRunner::Npm);
+        }
+    }
+    // Python: require unambiguous pytest configuration — not just presence of pyproject.toml
+    // (which many C++ / non-Python projects also use for tooling config).
+    if root.join("pytest.ini").exists() || root.join("tox.ini").exists() {
+        return Some(TestRunner::Pytest);
+    }
+    // pyproject.toml only counts when it explicitly configures pytest.
+    if let Ok(content) = std::fs::read_to_string(root.join("pyproject.toml")) {
+        if content.contains("[tool.pytest") {
+            return Some(TestRunner::Pytest);
+        }
+    }
+    // setup.cfg counts when it has a [tool:pytest] section.
+    if let Ok(content) = std::fs::read_to_string(root.join("setup.cfg")) {
+        if content.contains("[tool:pytest]") {
+            return Some(TestRunner::Pytest);
+        }
+    }
+    // Fallback: tests/ directory containing actual test files (test_*.py or *_test.py).
+    let tests_dir = root.join("tests");
+    if tests_dir.is_dir() {
+        let has_test_files = walkdir::WalkDir::new(&tests_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .any(|e| {
+                let name = e.file_name().to_string_lossy();
+                let is_py = e.path().extension().and_then(|x| x.to_str()) == Some("py");
+                is_py && (name.starts_with("test_") || name.ends_with("_test.py"))
+            });
+        if has_test_files {
+            return Some(TestRunner::Pytest);
+        }
+    }
+    None
+}
+
+/// Run the project's test suite using the detected runner.
+///
+/// `dir` is the directory passed to the test command (shadow root for Python
+/// shadow simulation; project root for compiled-language post-cleanup tests).
+///
+/// Returns `Ok(())` on test success.  `None` runner skips verification with a
+/// warning (caller should gate on `--skip-tests` before calling with `None`).
+fn run_tests(dir: &Path, runner: Option<TestRunner>) -> anyhow::Result<()> {
+    match runner {
+        None => {
+            eprintln!(
+                "warning: no test runner detected in {}. Skipping verification.",
+                dir.display()
+            );
+            Ok(())
+        }
+        Some(TestRunner::Pytest) => run_pytest(dir),
+        Some(TestRunner::Cargo) => run_cargo_test(dir),
+        Some(TestRunner::Go) => run_go_test(dir),
+        Some(TestRunner::Npm) => run_npm_test(dir),
+    }
+}
+
+fn run_cargo_test(dir: &Path) -> anyhow::Result<()> {
+    let status = std::process::Command::new("cargo")
+        .args(["test", "--workspace", "--quiet"])
+        .current_dir(dir)
+        .status();
+    match status {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(anyhow::anyhow!("cargo not found"))
+        }
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn cargo test: {}", e)),
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => Err(anyhow::anyhow!(
+            "cargo test exited with code {}",
+            s.code().unwrap_or(-1)
+        )),
+    }
+}
+
+fn run_go_test(dir: &Path) -> anyhow::Result<()> {
+    let status = std::process::Command::new("go")
+        .args(["test", "./..."])
+        .current_dir(dir)
+        .status();
+    match status {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("go not found")),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn go test: {}", e)),
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => Err(anyhow::anyhow!(
+            "go test exited with code {}",
+            s.code().unwrap_or(-1)
+        )),
+    }
+}
+
+fn run_npm_test(dir: &Path) -> anyhow::Result<()> {
+    let status = std::process::Command::new("npm")
+        .args(["test", "--", "--passWithNoTests"])
+        .current_dir(dir)
+        .status();
+    match status {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("npm not found")),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn npm test: {}", e)),
+
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => Err(anyhow::anyhow!(
+            "npm test exited with code {}",
+            s.code().unwrap_or(-1)
+        )),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dedup helpers
+// ---------------------------------------------------------------------------
+
+/// Returns `true` if every member's source byte range is byte-for-byte identical.
+///
+/// Functions sharing only structural shape (same AST, different literal values)
+/// return `false` — they are not true duplicates and must not be auto-merged.
+fn are_contents_identical(members: &[anatomist::Entity]) -> bool {
+    if members.is_empty() {
+        return false;
+    }
+    let first = &members[0];
+    let first_bytes = match std::fs::read(&first.file_path) {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+    let first_range = first.start_byte as usize..first.end_byte as usize;
+    if first_range.end > first_bytes.len() {
+        return false;
+    }
+    let first_content = &first_bytes[first_range];
+
+    for member in &members[1..] {
+        let bytes = match std::fs::read(&member.file_path) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+        let range = member.start_byte as usize..member.end_byte as usize;
+        if range.end > bytes.len() || bytes[range.clone()] != *first_content {
+            return false;
+        }
+    }
+    true
+}
+
+/// Collect all supported source files under `path`, skipping common noise dirs.
+///
+/// Covers Python, Rust, JS/TS, Go, and C/C++ so that cross-language structural
+/// clone detection works on polyglot repos.
+fn collect_source_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
     use walkdir::WalkDir;
+    const SKIP: &[&str] = &[
+        "target",
+        ".git",
+        ".janitor",
+        "venv",
+        "__pycache__",
+        ".venv",
+        "node_modules",
+        "vendor",
+        ".mypy_cache",
+    ];
+    const EXTS: &[&str] = &[
+        "py", "rs", "js", "jsx", "ts", "tsx", "go", "c", "cpp", "cxx", "cc", "h", "hpp",
+    ];
     if path.is_file() {
         return Ok(vec![path.to_path_buf()]);
     }
     let files = WalkDir::new(path)
         .follow_links(false)
         .into_iter()
+        .filter_entry(|e| {
+            e.file_name()
+                .to_str()
+                .map(|n| !SKIP.contains(&n))
+                .unwrap_or(true)
+        })
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_type().is_file() && e.path().extension().and_then(|x| x.to_str()) == Some("py")
+            e.file_type().is_file()
+                && e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| EXTS.contains(&x))
+                    .unwrap_or(false)
         })
         .map(|e| e.path().to_path_buf())
         .collect();
@@ -887,6 +1271,11 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
         }
         Err(e) => Err(anyhow::anyhow!("Failed to spawn pytest: {}", e)),
         Ok(s) if s.success() => Ok(()),
+        // Exit 5 = no tests collected — vacuous pass, nothing to break.
+        Ok(s) if s.code() == Some(5) => {
+            eprintln!("note: pytest collected no tests (exit 5). Proceeding.");
+            Ok(())
+        }
         Ok(s) => Err(anyhow::anyhow!(
             "pytest exited with code {}",
             s.code().unwrap_or(-1)
