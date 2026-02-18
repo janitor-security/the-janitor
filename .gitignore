@@ -56,9 +56,12 @@
 *.pqc_secret
 *.p12
 *.pfx
+*.token
+*.seed
 secrets/
 /crates/vault/secrets/
 /crates/common/attestations/local/
+attestations/local/
 .env
 .env.*
 !.env.example

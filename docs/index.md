@@ -1,6 +1,6 @@
 # The Janitor
 
-**v5.9.1 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v5.9.2 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -126,7 +126,7 @@ janitor dashboard <path>
 
 The Python implementation relied on ChromaDB semantic search, external LLM API calls, and NetworkX graphs. Every component has been replaced:
 
-| Python (v4) | Rust (v5.9.1) |
+| Python (v4) | Rust (v5.9.2) |
 |-------------|---------------|
 | NetworkX DiGraph | `petgraph` directed reference graph |
 | Tree-sitter (Python binding) | Tree-sitter (Rust, zero-copy mmap) |

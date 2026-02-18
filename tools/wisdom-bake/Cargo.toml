@@ -1,6 +1,6 @@
 [package]
 name = "wisdom-bake"
-version = "5.9.1"
+version = "5.9.2"
 edition = "2021"
 license.workspace = true
 

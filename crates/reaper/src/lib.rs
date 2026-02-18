@@ -17,6 +17,8 @@ pub enum ReaperError {
     IoError(#[from] std::io::Error),
     #[error("Parse error: {0}")]
     ParseError(String),
+    #[error("Aho-Corasick build error: {0}")]
+    AcBuildError(#[from] aho_corasick::BuildError),
 }
 
 /// Ingests liveness signals from log files to determine symbol usage.
@@ -51,26 +53,28 @@ pub struct SimpleLogTracker {
 impl SimpleLogTracker {
     /// Creates a new tracker from symbol (id, qualified_name) pairs.
     ///
+    /// Returns `Err` if the Aho-Corasick automaton cannot be constructed
+    /// (e.g. a pattern exceeds the implementation's byte limit).
+    ///
     /// # Examples
     /// ```
     /// # use reaper::SimpleLogTracker;
     /// let tracker = SimpleLogTracker::new(vec![
     ///     (1, "module.foo".into()),
     ///     (2, "module.bar".into()),
-    /// ]);
+    /// ]).unwrap();
     /// assert_eq!(tracker.alive_count(), 0);
     /// ```
-    pub fn new(symbols: impl IntoIterator<Item = (u64, String)>) -> Self {
+    pub fn new(symbols: impl IntoIterator<Item = (u64, String)>) -> Result<Self, ReaperError> {
         let pairs: Vec<(u64, String)> = symbols.into_iter().collect();
         let pattern_ids: Vec<u64> = pairs.iter().map(|(id, _)| *id).collect();
         let patterns: Vec<&str> = pairs.iter().map(|(_, name)| name.as_str()).collect();
-        let automaton =
-            AhoCorasick::new(&patterns).expect("Failed to build Aho-Corasick automaton");
-        Self {
+        let automaton = AhoCorasick::new(&patterns)?;
+        Ok(Self {
             automaton,
             pattern_ids,
             alive: HashSet::new(),
-        }
+        })
     }
 
     /// Returns the set of alive symbol IDs.
@@ -114,7 +118,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_log_empty.txt");
         fs::write(&tmp, "").ok();
 
-        let mut tracker = SimpleLogTracker::new(vec![(1, "foo".into())]);
+        let mut tracker = SimpleLogTracker::new(vec![(1, "foo".into())]).unwrap();
         let signals = tracker.ingest_log(&tmp).unwrap();
 
         assert_eq!(signals, 0);
@@ -128,7 +132,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_log_single.txt");
         fs::write(&tmp, "INFO: module.foo called\n").ok();
 
-        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]);
+        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]).unwrap();
         let signals = tracker.ingest_log(&tmp).unwrap();
 
         assert_eq!(signals, 1);
@@ -143,7 +147,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_log_nomatch.txt");
         fs::write(&tmp, "INFO: something else happened\n").ok();
 
-        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]);
+        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]).unwrap();
         let signals = tracker.ingest_log(&tmp).unwrap();
 
         assert_eq!(signals, 0);
@@ -157,7 +161,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_log_dup.txt");
         fs::write(&tmp, "module.foo\nmodule.foo\nmodule.foo\n").ok();
 
-        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]);
+        let mut tracker = SimpleLogTracker::new(vec![(1, "module.foo".into())]).unwrap();
         let signals = tracker.ingest_log(&tmp).unwrap();
 
         assert_eq!(signals, 1); // Only counts the first time
@@ -175,7 +179,8 @@ mod tests {
             (1, "module.foo".into()),
             (2, "module.bar".into()),
             (3, "module.baz".into()),
-        ]);
+        ])
+        .unwrap();
         let signals = tracker.ingest_log(&tmp).unwrap();
 
         assert_eq!(signals, 2);
