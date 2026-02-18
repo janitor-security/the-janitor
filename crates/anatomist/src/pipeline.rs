@@ -12,11 +12,28 @@
 
 use crate::graph::build_reference_graph;
 use crate::parser::ParserHost;
-use crate::{scan, wisdom, Entity, Protection};
+use crate::{scan, wisdom, Entity, EntityType, Protection};
 use common::registry::symbol_hash;
 use petgraph::Direction;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+
+/// Reconstructs an [`Entity`] from a registry `entity_type: u8` discriminant.
+///
+/// Defaults to `FunctionDefinition` for any unrecognised discriminant (defensive).
+#[inline]
+fn entity_type_from_u8(v: u8) -> EntityType {
+    match v {
+        0 => EntityType::FunctionDefinition,
+        1 => EntityType::AsyncFunctionDefinition,
+        2 => EntityType::ClassDefinition,
+        3 => EntityType::MethodDefinition,
+        4 => EntityType::DecoratedDefinition,
+        5 => EntityType::Assignment,
+        6 => EntityType::TypeAlias,
+        _ => EntityType::FunctionDefinition,
+    }
+}
 
 /// Results of a full pipeline run.
 #[derive(Debug, Default)]
@@ -81,7 +98,7 @@ pub fn run(
     let raw_orphan_set: HashSet<String> = ref_graph.find_orphan_files().into_iter().collect();
 
     let mut result = ScanResult {
-        total: ref_graph.entities.len(),
+        total: ref_graph.stats.symbol_count,
         ..Default::default()
     };
 
@@ -100,9 +117,33 @@ pub fn run(
         .copied()
         .collect();
 
-    // Group entities by file for the wisdom pass (Stage 2+4).
+    // Reconstruct entities from the registry — skipping virtual __MODULE__ sentinels.
+    // No secondary Vec<Entity> is kept in the graph; peak memory is now proportional to
+    // the registry itself (one copy of strings), not registry + accumulator (two copies).
     let mut file_groups: HashMap<String, Vec<Entity>> = HashMap::new();
-    for entity in ref_graph.entities {
+    for entry in &ref_graph.registry.entries {
+        if entry.name == "__MODULE__" {
+            continue;
+        }
+        let entity = Entity {
+            name: entry.name.clone(),
+            entity_type: entity_type_from_u8(entry.entity_type),
+            start_byte: entry.start_byte,
+            end_byte: entry.end_byte,
+            start_line: entry.start_line,
+            end_line: entry.end_line,
+            file_path: entry.file_path.clone(),
+            qualified_name: entry.qualified_name.clone(),
+            parent_class: None,
+            base_classes: vec![],
+            protected_by: entry.protected_by,
+            decorators: vec![],
+            structural_hash: if entry.structural_hash == 0 {
+                None
+            } else {
+                Some(entry.structural_hash)
+            },
+        };
         file_groups
             .entry(entity.file_path.clone())
             .or_default()

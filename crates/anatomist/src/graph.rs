@@ -8,7 +8,7 @@
 //! 5. **Pass 1c**: Extract polyglot entities (Rust, JS, TS, C, Java, C#, Go) via `ParserHost::dissect()`.
 
 use crate::imports::{extract_cpp_includes, extract_imports, resolve_import};
-use crate::{AnatomistError, Entity, ParserHost};
+use crate::{AnatomistError, ParserHost};
 use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
 use memmap2::Mmap;
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -31,12 +31,14 @@ pub struct GraphStats {
 }
 
 /// Cross-file reference graph with symbol registry.
+///
+/// Entities are stored exclusively in `registry` — there is no secondary accumulator.
+/// Pass them back to callers by iterating `registry.entries` and skipping `__MODULE__`
+/// sentinels (see [`pipeline::run`] for the canonical reconstruction pattern).
 pub struct ReferenceGraph {
     pub registry: SymbolRegistry,
     pub graph: DiGraph<u64, ()>,
     pub file_symbols: HashMap<String, Vec<u64>>,
-    /// All entities extracted across the project (populated in Pass 1).
-    pub entities: Vec<Entity>,
     pub stats: GraphStats,
 }
 
@@ -222,7 +224,6 @@ pub fn build_reference_graph(
     let mut graph = DiGraph::new();
     let mut file_symbols: HashMap<String, Vec<u64>> = HashMap::new();
     let mut id_to_node: HashMap<u64, NodeIndex> = HashMap::new();
-    let mut all_entities: Vec<Entity> = Vec::new();
     let mut stats = GraphStats {
         file_count: py_files.len() + cpp_files.len() + polyglot_files.len(),
         ..Default::default()
@@ -287,7 +288,6 @@ pub fn build_reference_graph(
                         .or_default()
                         .push(hash);
 
-                    all_entities.push(entity);
                     stats.symbol_count += 1;
                 }
             }
@@ -460,7 +460,6 @@ pub fn build_reference_graph(
                         .or_default()
                         .push(hash);
 
-                    all_entities.push(entity);
                     stats.symbol_count += 1;
                 }
             }
@@ -590,7 +589,6 @@ pub fn build_reference_graph(
                         .or_default()
                         .push(hash);
 
-                    all_entities.push(entity);
                     stats.symbol_count += 1;
                 }
             }
@@ -604,7 +602,6 @@ pub fn build_reference_graph(
         registry,
         graph,
         file_symbols,
-        entities: all_entities,
         stats,
     })
 }
@@ -650,7 +647,7 @@ fn walk_cpp_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
     Ok(files)
 }
 
-/// Walks a directory for polyglot source files (Rust, JS, TS, C, Java, C#, Go),
+/// Walks a directory for polyglot source files (Rust, JS, TS, C, Java, C#, Go, GLSL, ObjC),
 /// skipping the same excluded directories as [`walk_py_files`].
 ///
 /// Excludes files already handled by [`walk_cpp_files`] and [`walk_py_files`].
@@ -664,8 +661,10 @@ fn walk_polyglot_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
         let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
         let path = entry.path();
         if path.is_file() {
-            if let Some("rs" | "js" | "jsx" | "ts" | "tsx" | "c" | "java" | "cs" | "go") =
-                path.extension().and_then(|s| s.to_str())
+            if let Some(
+                "rs" | "js" | "jsx" | "ts" | "tsx" | "c" | "java" | "cs" | "go" | "glsl" | "vert"
+                | "frag" | "m" | "mm",
+            ) = path.extension().and_then(|s| s.to_str())
             {
                 files.push(path.to_path_buf());
             }
@@ -965,13 +964,14 @@ mod tests {
         let mut host = ParserHost::new().unwrap();
         let result = build_reference_graph(&tmp, &mut host).unwrap();
         eprintln!(
-            "file_count={} symbol_count={} entities={}",
-            result.stats.file_count,
-            result.stats.symbol_count,
-            result.entities.len()
+            "file_count={} symbol_count={}",
+            result.stats.file_count, result.stats.symbol_count,
         );
         fs::remove_dir_all(&tmp).ok();
         assert!(result.stats.file_count > 0, "Should find polyglot files");
-        assert!(result.entities.len() > 0, "Should extract Rust entities");
+        assert!(
+            result.stats.symbol_count > 0,
+            "Should extract Rust entities"
+        );
     }
 }

@@ -21,6 +21,8 @@
 //! // → same structural hash
 //! ```
 
+pub mod slop_filter;
+
 use tree_sitter::Node;
 
 /// Node kinds that carry only naming information and must be erased

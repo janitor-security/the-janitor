@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -41,9 +41,11 @@ dependencies = [
  "tree-sitter-c",
  "tree-sitter-c-sharp",
  "tree-sitter-cpp",
+ "tree-sitter-glsl",
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
+ "tree-sitter-objc",
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
@@ -310,7 +312,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -319,6 +321,7 @@ dependencies = [
  "dashboard",
  "dotenvy",
  "lazarus",
+ "mcp",
  "memmap2",
  "oracle",
  "reaper",
@@ -338,7 +341,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -530,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -758,10 +761,11 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "blake3",
+ "common",
  "thiserror 2.0.18",
  "tree-sitter",
  "tree-sitter-python",
@@ -951,7 +955,7 @@ checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
 name = "lazarus"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1044,13 +1048,14 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anatomist",
  "anyhow",
  "common",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1101,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "base64",
@@ -1215,7 +1220,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "oracle"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "common",
@@ -1578,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1791,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "junction",
@@ -1920,7 +1925,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "5.9.2"
+version = "5.9.3"
 
 [[package]]
 name = "subtle"
@@ -2108,6 +2113,7 @@ version = "1.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
 dependencies = [
+ "bytes",
  "pin-project-lite",
  "tokio-macros",
 ]
@@ -2168,6 +2174,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-glsl"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0ee57cbf4c2b35d3a7f17a01bf33c0ef2e85987cb85e516ac8c6904c4e62ac"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-go"
 version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2202,6 +2218,16 @@ name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
+
+[[package]]
+name = "tree-sitter-objc"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ca8bb556423fc176f0535e79d525f783a6684d3c9da81bf9d905303c129e1d2"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
 
 [[package]]
 name = "tree-sitter-python"
@@ -2301,7 +2327,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -2628,7 +2654,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wisdom-bake"
-version = "5.9.2"
+version = "5.9.3"
 dependencies = [
  "anyhow",
  "common",
