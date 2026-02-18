@@ -1,3 +1,4 @@
+use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
 use std::env;
@@ -82,6 +83,11 @@ enum Commands {
         /// Project root.
         path: PathBuf,
     },
+    /// Start the MCP (Model Context Protocol) stdio JSON-RPC server.
+    ///
+    /// Reads newline-delimited JSON-RPC 2.0 from stdin, responds on stdout.
+    /// Designed for use as an MCP tool server by AI assistants.
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -127,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
+        Commands::Mcp => mcp::serve().await?,
     }
 
     Ok(())
@@ -446,32 +453,42 @@ fn cmd_clean(
         println!("Integrity attestation: token verified.");
     }
 
-    // 2. Initialise (or open existing) shadow tree.
+    // 2. Initialise a fresh shadow tree (always re-create to avoid stale symlinks).
     let shadow_path = project_root.join(".janitor").join("shadow_src");
-    let manager = if shadow_path.exists() {
-        ShadowManager::open(project_root, &shadow_path)?
-    } else {
-        ShadowManager::initialize(project_root, &shadow_path)?
-    };
+    if shadow_path.exists() {
+        std::fs::remove_dir_all(&shadow_path)?;
+    }
+    let manager = ShadowManager::initialize(project_root, &shadow_path)?;
 
-    // 3. Collect unique files and unmap their shadow entries.
-    let mut dead_files: Vec<PathBuf> = result
-        .dead
-        .iter()
-        .map(|e| PathBuf::from(&e.file_path))
-        .collect();
-    dead_files.sort();
-    dead_files.dedup();
+    // 3. Build per-file entity map and write cleaned versions into the shadow tree.
+    // The shadow simulation mirrors exactly what SafeDeleter will do physically,
+    // allowing pytest to verify that removing these symbols does not break tests.
+    let mut by_file: HashMap<&str, Vec<&anatomist::Entity>> = HashMap::new();
+    for entity in &result.dead {
+        by_file
+            .entry(entity.file_path.as_str())
+            .or_default()
+            .push(entity);
+    }
 
-    let mut unmapped: Vec<PathBuf> = Vec::new();
-    for abs in &dead_files {
-        let rel = abs
-            .strip_prefix(manager.source_root())
-            .unwrap_or(abs.as_path());
-        match manager.unmap(rel) {
-            Ok(()) => unmapped.push(rel.to_path_buf()),
-            Err(e) => eprintln!("warning: unmap {}: {}", abs.display(), e),
+    for (file_str, entities) in &by_file {
+        let abs = Path::new(file_str);
+        let rel = abs.strip_prefix(manager.source_root()).unwrap_or(abs);
+        let shadow_file = manager.shadow_root().join(rel);
+        let original = std::fs::read(abs)
+            .with_context(|| format!("reading {} for shadow simulation", file_str))?;
+        let ranges: Vec<(usize, usize)> = entities
+            .iter()
+            .map(|e| (e.start_byte as usize, e.end_byte as usize))
+            .collect();
+        let cleaned = apply_deletions(&original, ranges);
+        // Replace symlink with cleaned file content.
+        if shadow_file.is_symlink() || shadow_file.exists() {
+            std::fs::remove_file(&shadow_file)
+                .with_context(|| format!("removing shadow symlink for {}", rel.display()))?;
         }
+        std::fs::write(&shadow_file, cleaned)
+            .with_context(|| format!("writing cleaned shadow for {}", rel.display()))?;
     }
 
     // 4. Shadow simulation: run tests against the shadow tree.
@@ -481,10 +498,7 @@ fn cmd_clean(
             println!("Shadow verification PASSED. Executing cleanup...");
         }
         Err(e) => {
-            eprintln!("Shadow verification FAILED: {}. Restoring...", e);
-            for rel in &unmapped {
-                manager.remap(rel).ok();
-            }
+            eprintln!("Shadow verification FAILED: {}", e);
             return Err(e);
         }
     }
@@ -492,14 +506,6 @@ fn cmd_clean(
     // 5. Physical excision via SafeDeleter + AuditLog.
     let janitor_dir = project_root.join(".janitor");
     let mut audit_log = AuditLog::new(&janitor_dir);
-
-    let mut by_file: HashMap<&str, Vec<&anatomist::Entity>> = HashMap::new();
-    for entity in &result.dead {
-        by_file
-            .entry(entity.file_path.as_str())
-            .or_default()
-            .push(entity);
-    }
 
     for (file_str, entities) in &by_file {
         let file_path = Path::new(file_str);
@@ -848,6 +854,21 @@ fn collect_py_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
         .map(|e| e.path().to_path_buf())
         .collect();
     Ok(files)
+}
+
+/// Apply byte-range deletions to `source`, processing ranges bottom-to-top
+/// (descending `start` order) so each splice does not invalidate later offsets.
+fn apply_deletions(source: &[u8], mut ranges: Vec<(usize, usize)>) -> Vec<u8> {
+    ranges.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut content = source.to_vec();
+    for (start, end) in ranges {
+        let start = start.min(content.len());
+        let end = end.min(content.len());
+        if start < end {
+            content.drain(start..end);
+        }
+    }
+    content
 }
 
 fn run_pytest(dir: &Path) -> anyhow::Result<()> {

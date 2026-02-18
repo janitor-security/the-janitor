@@ -5,10 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+common = { path = "../common" }
 blake3.workspace = true
 tree-sitter.workspace = true
+tree-sitter-python.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
-tree-sitter-python.workspace = true

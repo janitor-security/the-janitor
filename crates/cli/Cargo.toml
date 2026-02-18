@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 anatomist = { path = "../anatomist" }
+mcp = { path = "../mcp" }
 shadow = { path = "../shadow" }
 common = { path = "../common" }
 reaper = { path = "../reaper" }

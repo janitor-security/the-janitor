@@ -10,3 +10,4 @@ common = { path = "../common" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true

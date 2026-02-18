@@ -6,11 +6,14 @@
 //! - `janitor_clean` — Report dead symbols eligible for removal (dry-run).
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
-//! Each request line → one response line. No streaming.
+//! Each request line → one response line.
+//!
+//! The serve loop is async (Tokio). CPU-intensive dispatch is offloaded to the
+//! blocking thread pool via [`tokio::task::spawn_blocking`] to keep the executor
+//! responsive during multi-second pipeline runs.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, Write};
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -213,30 +216,41 @@ fn run_dedup(path: &str) -> Result<serde_json::Value> {
 // Server entry point
 // ---------------------------------------------------------------------------
 
-/// Run the MCP stdio transport loop.
+/// Run the MCP stdio transport loop (async).
 ///
 /// Reads newline-delimited JSON-RPC 2.0 requests from stdin, dispatches to
 /// the appropriate tool handler, and writes JSON-RPC 2.0 responses to stdout.
-/// Terminates when stdin is closed.
-pub fn serve() -> Result<()> {
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut out = std::io::BufWriter::new(stdout.lock());
+/// Terminates when stdin is closed (EOF).
+///
+/// CPU-intensive tool handlers are offloaded to the blocking thread pool via
+/// [`tokio::task::spawn_blocking`] so the executor stays responsive during
+/// multi-second pipeline runs.
+pub async fn serve() -> Result<()> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-    for line in stdin.lock().lines() {
-        let line = line.context("stdin read error")?;
+    let stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut lines = BufReader::new(stdin).lines();
+
+    while let Some(line) = lines.next_line().await.context("stdin read error")? {
         if line.trim().is_empty() {
             continue;
         }
 
         let resp = match serde_json::from_str::<Request>(&line) {
             Err(e) => Response::err(serde_json::Value::Null, -32700, format!("Parse error: {e}")),
-            Ok(req) => dispatch(req),
+            Ok(req) => {
+                // Offload CPU-intensive pipeline work to the blocking thread pool.
+                tokio::task::spawn_blocking(move || dispatch(req))
+                    .await
+                    .context("dispatch thread panicked")?
+            }
         };
 
-        let encoded = serde_json::to_string(&resp).context("response serialisation failed")?;
-        writeln!(out, "{}", encoded)?;
-        out.flush()?;
+        let mut encoded = serde_json::to_string(&resp).context("response serialisation failed")?;
+        encoded.push('\n');
+        stdout.write_all(encoded.as_bytes()).await?;
+        stdout.flush().await?;
     }
 
     Ok(())

@@ -1,6 +1,6 @@
 [package]
 name = "lazarus"
-version = "5.9.2"
+version = "5.9.3"
 edition = "2021"
 license = "BUSL-1.1"
 

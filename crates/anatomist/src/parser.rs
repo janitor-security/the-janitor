@@ -42,6 +42,10 @@ static JAVA_QUERY: OnceLock<Query> = OnceLock::new();
 static CSHARP_QUERY: OnceLock<Query> = OnceLock::new();
 /// Static cache for the Go entity extraction query.
 static GO_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the GLSL entity extraction query.
+static GLSL_QUERY: OnceLock<Query> = OnceLock::new();
+/// Static cache for the Objective-C entity extraction query.
+static OBJC_QUERY: OnceLock<Query> = OnceLock::new();
 
 /// S-expression for JS / JSX grammars.
 const JS_ENTITY_S_EXPR: &str = r#"
@@ -252,6 +256,42 @@ const GO_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("type.def", "type.name", EntityType::ClassDefinition),
 ];
 
+/// S-expression for GLSL (OpenGL Shading Language) entity extraction.
+///
+/// GLSL syntax is C-like; only `function_definition` nodes are captured.
+const GLSL_ENTITY_S_EXPR: &str = r#"
+    (function_definition
+      declarator: (function_declarator
+        declarator: (identifier) @fn.name)) @fn.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for GLSL grammar.
+const GLSL_PATTERNS: &[(&str, &str, EntityType)] =
+    &[("fn.def", "fn.name", EntityType::FunctionDefinition)];
+
+/// S-expression for Objective-C grammar entity extraction.
+///
+/// Captures C-style `function_definition` nodes plus `@interface` and
+/// `@implementation` class declarations. The class name is the first unnamed
+/// `identifier` child (not a named field). Method selectors are excluded due to
+/// their complex multi-keyword grammar structure.
+const OBJC_ENTITY_S_EXPR: &str = r#"
+    (function_definition
+      declarator: (function_declarator
+        declarator: (identifier) @fn.name)) @fn.def
+
+    (class_interface . (identifier) @class.name) @class.def
+
+    (class_implementation . (identifier) @class.name) @class.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Objective-C grammar.
+const OBJC_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition), // class_interface
+    ("class.def", "class.name", EntityType::ClassDefinition), // class_implementation
+];
+
 fn get_c_query() -> &'static Query {
     C_QUERY.get_or_init(|| {
         Query::new(&tree_sitter_c::LANGUAGE.into(), C_ENTITY_S_EXPR).expect(
@@ -280,6 +320,22 @@ fn get_go_query() -> &'static Query {
     GO_QUERY.get_or_init(|| {
         Query::new(&tree_sitter_go::LANGUAGE.into(), GO_ENTITY_S_EXPR).expect(
             "Go entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_glsl_query() -> &'static Query {
+    GLSL_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_glsl::LANGUAGE_GLSL.into(), GLSL_ENTITY_S_EXPR).expect(
+            "GLSL entity query compilation failed — this is a bug in the hardcoded S-expression",
+        )
+    })
+}
+
+fn get_objc_query() -> &'static Query {
+    OBJC_QUERY.get_or_init(|| {
+        Query::new(&tree_sitter_objc::LANGUAGE.into(), OBJC_ENTITY_S_EXPR).expect(
+            "Objective-C entity query compilation failed — this is a bug in the hardcoded S-expression",
         )
     })
 }
@@ -402,6 +458,8 @@ impl ParserHost {
     /// - `.java`: Java methods, classes, interfaces, enums, and constructors.
     /// - `.cs`: C# methods, classes, interfaces, and constructors.
     /// - `.go`: Go functions, methods, and type declarations.
+    /// - `.glsl` / `.vert` / `.frag`: GLSL shader functions.
+    /// - `.m` / `.mm`: Objective-C functions and `@interface`/`@implementation` classes.
     ///
     /// # Errors
     /// - `IoError`: File not found, permission denied, mmap failure
@@ -449,6 +507,8 @@ impl ParserHost {
             "java" => Self::extract_java_entities(source, &normalized_path),
             "cs" => Self::extract_csharp_entities(source, &normalized_path),
             "go" => Self::extract_go_entities(source, &normalized_path),
+            "glsl" | "vert" | "frag" => Self::extract_glsl_entities(source, &normalized_path),
+            "m" | "mm" => Self::extract_objc_entities(source, &normalized_path),
             _ => self.dissect_impl(source, &normalized_path), // Python + unknown → Python pass
         }
     }
@@ -566,6 +626,41 @@ impl ParserHost {
             get_go_query(),
             file_path,
             GO_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_definition` entities from a GLSL source buffer.
+    ///
+    /// Captures all named shader functions (vertex, fragment, geometry, compute, etc.).
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_glsl_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_glsl::LANGUAGE_GLSL.into(),
+            get_glsl_query(),
+            file_path,
+            GLSL_PATTERNS,
+        )
+    }
+
+    /// Extracts C-style function and `@interface`/`@implementation` class entities from
+    /// an Objective-C source buffer.
+    ///
+    /// Method selectors are not captured due to their complex multi-keyword grammar.
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_objc_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_objc::LANGUAGE.into(),
+            get_objc_query(),
+            file_path,
+            OBJC_PATTERNS,
         )
     }
 

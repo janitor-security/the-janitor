@@ -3,14 +3,14 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
 resolver = "2"
 
 [workspace.package]
-version = "5.9.2"
+version = "5.9.3"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
 
 [workspace.dependencies]
 # Core
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "io-util", "io-std"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.10", features = ["v4"] }
@@ -34,6 +34,8 @@ tree-sitter-c = "0.23"
 tree-sitter-java = "0.23"
 tree-sitter-c-sharp = "0.23"
 tree-sitter-go = "0.23"
+tree-sitter-glsl = "0.2.0"
+tree-sitter-objc = "3.0.2"
 
 # File System & Path Utilities
 memmap2 = "0.9"
