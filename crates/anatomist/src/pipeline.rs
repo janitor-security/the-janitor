@@ -147,14 +147,12 @@ pub fn run(
             continue;
         }
 
-        // Stage 2+4: Wisdom + PackageExport (single mmap pass per file).
-        match std::fs::read(&file_path) {
-            Ok(source) => {
-                wisdom::classify(&mut still_dead, &source, &file_path);
+        // Stage 2+4: Wisdom + PackageExport (zero-copy mmap pass per file).
+        if let Ok(f) = std::fs::File::open(&file_path) {
+            if let Ok(mmap) = unsafe { memmap2::Mmap::map(&f) } {
+                wisdom::classify(&mut still_dead, &mmap, &file_path);
             }
-            Err(_) => {
-                // Cannot read file — leave entities in still_dead for later stages.
-            }
+            // If mmap fails, leave entities in still_dead for later stages.
         }
 
         for mut entity in still_dead {

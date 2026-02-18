@@ -3,34 +3,19 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
 resolver = "2"
 
 [workspace.package]
-version = "5.8.1"
+version = "5.9.0"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 
 [workspace.dependencies]
 # Core
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-async-trait = "0.1"
-bytes = "1.7"
 uuid = { version = "1.10", features = ["v4"] }
 
-# Modern Instrumentation & Security (2027 Baseline)
-libbpf-rs = "0.24" # eBPF LSM and tracing
-aya = "0.13" # Pure-rust eBPF
-libloading = "0.8" # Dynamic segment analysis
-
-# Logic & SMT
-z3 = { version = "0.12", features = ["static-link-z3"] }
-souffle-rs = "0.2" # Datalog global reachability
-llvm-sys = "181" # LLVM-IR analysis for UFM
-
-# Cryptography (2027 Baseline)
-plonky3 = { git = "https://github.com/Plonky3/Plonky3.git" } # Field-agnostic Prover
+# Cryptography
 blake3 = "1.5"
-pqcrypto-dilithium = "0.4" # NIST PQC - CRYSTALS-Dilithium
-pqcrypto-traits = "0.3"
 
 # Serialization (Zero-Copy)
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 aho-corasick.workspace = true
+memmap2.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["derive"] }

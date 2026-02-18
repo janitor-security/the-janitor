@@ -1,5 +1,5 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.8.1
+**VERSION:** 5.9.0
 **DATE:** 2026-02-16
 **CONTEXT:** Omni-Polyglot (Phase 3.7) — C, Java, C#, Go parsers; polyglot graph walker; global shield
 
@@ -168,9 +168,9 @@ def _calculate_tax_us_impl(amount, rate):
 
 | Tier | Cost | Scope |
 |------|------|-------|
-| **Bounty Hunter** | **$49/yr** | Individual. Pay-as-you-purge ($1.00/MB deleted). |
-| **Sovereign Squad** | **$499/yr** | Team (5 users). Shared PoUD credit pool. |
-| **Fiduciary Core** | **Custom** | Enterprise (>10M LOC). Priority support. |
+| **Junior Janitor** | **Free** | Individual. Scan + Dedup + Dashboard. |
+| **Lead Specialist** | **$499/yr** | Team (5 users). Signed audit attestation. |
+| **Industrial Core** | **Custom** | Enterprise (>10M LOC). Priority support. |
 
 ---
 
@@ -180,7 +180,7 @@ def _calculate_tax_us_impl(amount, rate):
 
 - `janitor scan <path>` → saves `.janitor/symbols.rkyv` (rkyv zero-copy).
 - `janitor dashboard <path>` → loads registry → launches Ratatui TUI.
-- Panels: Sovereign Status bar, symbol count overview, Top 10 largest dead functions.
+- Panels: Integrity status bar, symbol count overview, Top 10 largest dead functions.
 - Press `q` to exit.
 
 ---
@@ -217,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.8.1**
+**VERSION: 5.9.0**
