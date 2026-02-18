@@ -101,7 +101,7 @@ fn run_app<B: ratatui::backend::Backend>(
 
             // Status Block
             let status = Paragraph::new(vec![Line::from(vec![
-                Span::raw("Sovereign Status: "),
+                Span::raw("Integrity Status: "),
                 Span::styled(
                     format!("{} ({:.1}%)", sovereign_status_text, density),
                     Style::default()

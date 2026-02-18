@@ -56,6 +56,9 @@ enum Commands {
         /// Execute physical cleanup. No token required.
         #[arg(long)]
         force_purge: bool,
+        /// Protect all public symbols (library mode). Use for library repositories.
+        #[arg(long)]
+        library: bool,
         /// Ed25519 token for signed integrity attestation (optional).
         #[arg(long)]
         token: Option<String>,
@@ -118,8 +121,9 @@ async fn main() -> anyhow::Result<()> {
             path,
             dry_run: _,
             force_purge,
+            library,
             token,
-        } => cmd_clean(path, *force_purge, token.as_deref())?,
+        } => cmd_clean(path, *force_purge, *library, token.as_deref())?,
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
@@ -313,7 +317,8 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path) -> anyhow::Result<()> {
 
     for group in groups {
         let file_path = group.file_path.as_path();
-        let source = std::fs::read(file_path)?;
+        let source_file = std::fs::File::open(file_path)?;
+        let source = unsafe { memmap2::Mmap::map(&source_file)? };
 
         let canon = &group.members[0];
         let impl_name = format!("_{}_impl", canon.name);
@@ -392,7 +397,12 @@ fn cmd_shadow_init(project_root: &Path) -> anyhow::Result<()> {
 // clean
 // ---------------------------------------------------------------------------
 
-fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> anyhow::Result<()> {
+fn cmd_clean(
+    project_root: &Path,
+    force_purge: bool,
+    library: bool,
+    token: Option<&str>,
+) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use reaper::{audit::AuditEntry, audit::AuditLog, DeletionTarget, SafeDeleter};
     use shadow::ShadowManager;
@@ -400,7 +410,7 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
     // 1. Run the detection pipeline (always — even in dry-run mode).
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
-    let result = pipeline::run(project_root, &mut host, false)?;
+    let result = pipeline::run(project_root, &mut host, library)?;
 
     if result.dead.is_empty() {
         println!("Nothing to clean — no dead symbols detected.");
@@ -493,7 +503,10 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
 
     for (file_str, entities) in &by_file {
         let file_path = Path::new(file_str);
-        let file_bytes = std::fs::read(file_path).unwrap_or_default();
+        let mmap = std::fs::File::open(file_path)
+            .ok()
+            .and_then(|f| unsafe { memmap2::Mmap::map(&f).ok() });
+        let file_bytes: &[u8] = mmap.as_deref().unwrap_or(&[]);
 
         let mut deleter = SafeDeleter::new(project_root)?;
         let mut targets: Vec<DeletionTarget> = entities
@@ -510,7 +523,7 @@ fn cmd_clean(project_root: &Path, force_purge: bool, token: Option<&str>) -> any
             audit_log.record(AuditEntry::new(
                 *file_str,
                 entity.qualified_name.as_str(),
-                &file_bytes,
+                file_bytes,
                 "DEAD_SYMBOL",
                 entity.start_line,
                 entity.end_line,
@@ -845,8 +858,11 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
 
     match status {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!("note: pytest not found — skipping verification");
-            Ok(())
+            // BLOCKING: never proceed without test verification.
+            Err(anyhow::anyhow!(
+                "pytest not found — test verification is required for physical cleanup.\n\
+                 Install pytest in the target environment, or use a repo with a native test suite."
+            ))
         }
         Err(e) => Err(anyhow::anyhow!("Failed to spawn pytest: {}", e)),
         Ok(s) if s.success() => Ok(()),

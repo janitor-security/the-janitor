@@ -97,10 +97,12 @@ impl AuditLog {
         }
 
         // Load existing entries (tolerate missing file or corrupt JSON).
+        // Zero-copy: mmap the log file rather than heap-allocating its contents.
         let mut existing: Vec<AuditEntry> = if self.path.exists() {
-            std::fs::read(&self.path)
+            std::fs::File::open(&self.path)
                 .ok()
-                .and_then(|raw| serde_json::from_slice(&raw).ok())
+                .and_then(|f| unsafe { memmap2::Mmap::map(&f).ok() })
+                .and_then(|mmap| serde_json::from_slice(&mmap).ok())
                 .unwrap_or_default()
         } else {
             Vec::new()

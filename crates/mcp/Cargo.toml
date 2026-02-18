@@ -1,0 +1,11 @@
+[package]
+name = "mcp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anatomist = { path = "../anatomist" }
+common = { path = "../common" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true

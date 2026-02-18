@@ -6,11 +6,141 @@
 //! **Stage 2**: WisdomRegistry heuristics — decorators, names, framework patterns.
 //! **Stage 4**: Package export detection — `__all__` and `__init__.py` top-level symbols.
 //!
-//! Both stages share pre-computed file-level flags (one linear pass each),
-//! then iterate entities once. Total cost: O(file_size + entity_count).
+//! Both stages share pre-computed file-level flags extracted in **one combined
+//! Aho-Corasick pass** over the full source bytes. Total cost: O(file_size + entity_count).
 
 use crate::{Entity, Protection};
+use aho_corasick::AhoCorasick;
 use std::collections::HashSet;
+use std::sync::OnceLock;
+
+// ---------------------------------------------------------------------------
+// Combined Aho-Corasick automaton for file-level flag extraction.
+//
+// One AC pass over the full source bytes simultaneously tests for all 7 file-level
+// boolean flags. Each pattern is tagged with a bitmask; scanning stops as soon as
+// all 7 bits are set (short-circuits on highly idiomatic files).
+// ---------------------------------------------------------------------------
+
+/// Bit positions for the 7 file-level flags extracted by the combined AC.
+const FLAG_DI: u8 = 1 << 0; // has FastAPI DI (`Depends(`, `Security(`, `dependency_overrides`)
+const FLAG_ORM: u8 = 1 << 1; // has ORM base class (`(Model)`, `(Base)`, …)
+const FLAG_SQLA: u8 = 1 << 2; // has SQLAlchemy (`sqlalchemy`, `SQLAlchemy`)
+const FLAG_QT: u8 = 1 << 3; // has Qt widget (`QWidget`, `QMainWindow`, `QObject`)
+const FLAG_META: u8 = 1 << 4; // has metaprogramming (`getattr(`, `eval(`, …)
+const FLAG_ACTX: u8 = 1 << 5; // has `asynccontextmanager`
+const FLAG_PYDA: u8 = 1 << 6; // has pydantic imports (`BaseModel`, `pydantic`)
+const FLAG_ALL: u8 = 0b0111_1111; // all flags set — used for early-exit
+
+/// (pattern, flag_bitmask) pairs for the combined file-level AC.
+///
+/// Patterns appear in roughly frequency order so the AC DFA has good locality.
+#[rustfmt::skip]
+static FILE_PATTERNS: &[(&[u8], u8)] = &[
+    // Pydantic (very common in modern Python codebases)
+    (b"BaseModel",              FLAG_PYDA),
+    (b"pydantic",               FLAG_PYDA),
+    // FastAPI DI
+    (b"Depends(",               FLAG_DI),
+    (b"Security(",              FLAG_DI),
+    (b"dependency_overrides",   FLAG_DI),
+    // ORM
+    (b"(Model)",                FLAG_ORM),
+    (b"(Base)",                 FLAG_ORM),
+    (b"(Document)",             FLAG_ORM),
+    (b"(db.Model)",             FLAG_ORM),
+    // SQLAlchemy
+    (b"sqlalchemy",             FLAG_SQLA),
+    (b"SQLAlchemy",             FLAG_SQLA),
+    // Qt
+    (b"QWidget",                FLAG_QT),
+    (b"QMainWindow",            FLAG_QT),
+    (b"QObject",                FLAG_QT),
+    // Metaprogramming
+    (b"getattr(",               FLAG_META),
+    (b"setattr(",               FLAG_META),
+    (b"hasattr(",               FLAG_META),
+    (b"delattr(",               FLAG_META),
+    (b"eval(",                  FLAG_META),
+    (b"exec(",                  FLAG_META),
+    (b"__import__(",            FLAG_META),
+    (b"importlib.",             FLAG_META),
+    (b".__dict__",              FLAG_META),
+    (b"type(",                  FLAG_META),
+    // Async context manager
+    (b"asynccontextmanager",    FLAG_ACTX),
+];
+
+/// Returns (automaton, per-pattern flag array). Compiled once at first call.
+fn get_file_ac() -> &'static (AhoCorasick, Vec<u8>) {
+    static FILE_AC: OnceLock<(AhoCorasick, Vec<u8>)> = OnceLock::new();
+    FILE_AC.get_or_init(|| {
+        let pats: Vec<&[u8]> = FILE_PATTERNS.iter().map(|(p, _)| *p).collect();
+        let flags: Vec<u8> = FILE_PATTERNS.iter().map(|(_, f)| *f).collect();
+        let ac =
+            AhoCorasick::new(pats).expect("FILE_AC: invalid pattern — this is a compile-time bug");
+        (ac, flags)
+    })
+}
+
+/// Scans `source` once with the combined automaton and returns the 7-bit flag word.
+///
+/// Short-circuits as soon as all 7 flags are set (common for framework-heavy files).
+#[inline]
+fn file_flags(source: &[u8]) -> u8 {
+    let (ac, flags) = get_file_ac();
+    let mut found: u8 = 0;
+    for mat in ac.find_iter(source) {
+        found |= flags[mat.pattern().as_usize()];
+        if found == FLAG_ALL {
+            break;
+        }
+    }
+    found
+}
+
+// ---------------------------------------------------------------------------
+// Per-pattern-group AhoCorasick automata for entity/decorator-level scans.
+//
+// Decorator bodies are typically ≤ 128 bytes, so a pre-compiled AC is still
+// faster than calling `AhoCorasick::new` per invocation.
+// ---------------------------------------------------------------------------
+
+/// Pre-compiled AC for route decorator patterns.
+fn get_route_dec_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(ROUTE_DEC).expect("ROUTE_DEC_AC: invalid pattern"))
+}
+
+/// Pre-compiled AC for CLI decorator patterns.
+fn get_cli_dec_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(CLI_DEC).expect("CLI_DEC_AC: invalid pattern"))
+}
+
+/// Pre-compiled AC for Pydantic validator decorator patterns.
+fn get_pydantic_dec_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(PYDANTIC_DEC).expect("PYDANTIC_DEC_AC: invalid pattern"))
+}
+
+/// Pre-compiled AC for SQLAlchemy decorator patterns.
+fn get_sqlalchemy_dec_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(SQLALCHEMY_DEC).expect("SQLALCHEMY_DEC_AC: invalid pattern"))
+}
+
+/// Pre-compiled AC for DI patterns (entity-body scan).
+fn get_di_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(DI_PATTERNS).expect("DI_AC: invalid pattern"))
+}
+
+/// Pre-compiled AC for metaprogramming patterns (entity-body scan).
+fn get_metaprog_ac() -> &'static AhoCorasick {
+    static AC: OnceLock<AhoCorasick> = OnceLock::new();
+    AC.get_or_init(|| AhoCorasick::new(METAPROG).expect("METAPROG_AC: invalid pattern"))
+}
 
 // --- Directory-level protection ---
 
@@ -76,9 +206,6 @@ static CLI_DEC: &[&[u8]] = &[
     b"typer.command",
 ];
 
-/// ORM base class patterns (file-level: indicates ORM usage).
-static ORM_BASE: &[&[u8]] = &[b"(Model)", b"(Base)", b"(Document)", b"(db.Model)"];
-
 /// ORM lifecycle method names that are called by the framework, not user code.
 static ORM_LIFECYCLE_NAMES: &[&str] = &[
     "save",
@@ -140,19 +267,16 @@ static METAPROG: &[&[u8]] = &[
 /// - `source`: Raw bytes of that file (used for byte-level pattern scanning).
 /// - `file_path`: Normalized file path (UTF-8, forward slashes).
 pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
-    // Pre-compute file-level flags — one linear scan each, amortised over all entities.
-    let has_di = any_in(source, DI_PATTERNS);
-    let has_orm = any_in(source, ORM_BASE);
-    let has_sqlalchemy =
-        bytes_contain(source, b"sqlalchemy") || bytes_contain(source, b"SQLAlchemy");
-    let has_qt = bytes_contain(source, b"QWidget")
-        || bytes_contain(source, b"QMainWindow")
-        || bytes_contain(source, b"QObject");
-    let has_metaprog = any_in(source, METAPROG);
+    // Pre-compute file-level flags — single combined Aho-Corasick pass over source.
+    let flags = file_flags(source);
+    let has_di = flags & FLAG_DI != 0;
+    let has_orm = flags & FLAG_ORM != 0;
+    let has_sqlalchemy = flags & FLAG_SQLA != 0;
+    let has_qt = flags & FLAG_QT != 0;
+    let has_metaprog = flags & FLAG_META != 0;
+    let has_asyncctx = flags & FLAG_ACTX != 0;
+    let has_pydantic_imports = flags & FLAG_PYDA != 0;
     let is_init = file_path.ends_with("__init__.py");
-    let has_asyncctx = bytes_contain(source, b"asynccontextmanager");
-    let has_pydantic_imports =
-        bytes_contain(source, b"BaseModel") || bytes_contain(source, b"pydantic");
 
     // Plugin directory flag: file lives in a framework-managed directory.
     let is_plugin_dir = PLUGIN_DIRS
@@ -205,19 +329,21 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         }
 
         // 2b. Entry points: CLI decorator (main already covered by GLOBAL_SHIELD_NAMES).
-        if entity.decorators.iter().any(|d| {
-            let b = d.as_bytes();
-            CLI_DEC.iter().any(|p| bytes_contain(b, p))
-        }) {
+        if entity
+            .decorators
+            .iter()
+            .any(|d| get_cli_dec_ac().is_match(d.as_bytes()))
+        {
             entity.protected_by = Some(Protection::EntryPoint);
             continue;
         }
 
         // 2c. FastAPI / Flask / Starlette route decorators.
-        if entity.decorators.iter().any(|d| {
-            let b = d.as_bytes();
-            ROUTE_DEC.iter().any(|p| bytes_contain(b, p))
-        }) {
+        if entity
+            .decorators
+            .iter()
+            .any(|d| get_route_dec_ac().is_match(d.as_bytes()))
+        {
             entity.protected_by = Some(Protection::MetaprogrammingDanger);
             continue;
         }
@@ -241,10 +367,11 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         }
 
         // 2d. Pydantic validator decorators.
-        if entity.decorators.iter().any(|d| {
-            let b = d.as_bytes();
-            PYDANTIC_DEC.iter().any(|p| bytes_contain(b, p))
-        }) {
+        if entity
+            .decorators
+            .iter()
+            .any(|d| get_pydantic_dec_ac().is_match(d.as_bytes()))
+        {
             entity.protected_by = Some(Protection::PydanticAlias);
             continue;
         }
@@ -269,7 +396,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2f. SQLAlchemy decorator on this entity.
         if has_sqlalchemy {
             let es = entity_src(source, entity);
-            if any_in(es, SQLALCHEMY_DEC) {
+            if get_sqlalchemy_dec_ac().is_match(es) {
                 entity.protected_by = Some(Protection::SqlAlchemyMeta);
                 continue;
             }
@@ -287,7 +414,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2h. FastAPI dependency injection in entity body.
         if has_di {
             let es = entity_src(source, entity);
-            if any_in(es, DI_PATTERNS) {
+            if get_di_ac().is_match(es) {
                 entity.protected_by = Some(Protection::FastApiOverride);
                 continue;
             }
@@ -302,7 +429,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2j. General metaprogramming in this entity's body.
         if has_metaprog {
             let es = entity_src(source, entity);
-            if any_in(es, METAPROG) {
+            if get_metaprog_ac().is_match(es) {
                 entity.protected_by = Some(Protection::MetaprogrammingDanger);
                 continue;
             }
@@ -344,15 +471,11 @@ fn entity_src<'a>(source: &'a [u8], entity: &Entity) -> &'a [u8] {
     }
 }
 
-/// Returns true if any pattern in `patterns` is found in `haystack`.
-fn any_in(haystack: &[u8], patterns: &[&[u8]]) -> bool {
-    patterns.iter().any(|p| bytes_contain(haystack, p))
-}
-
-/// Returns true if `needle` is a substring of `haystack` (naive O(n·m) scan).
+/// Returns true if `needle` is a substring of `haystack`.
 ///
-/// Fast enough for decorator regions (<512 bytes) and entity-body checks.
-/// For large file-level scans, call once per flag and cache the result.
+/// Used only for small haystacks (single decorator strings, ≤128 bytes) where
+/// the AC startup cost exceeds the linear scan cost. All large file-level scans
+/// use the combined [`file_flags`] AC automaton instead.
 fn bytes_contain(haystack: &[u8], needle: &[u8]) -> bool {
     if needle.len() > haystack.len() {
         return false;
