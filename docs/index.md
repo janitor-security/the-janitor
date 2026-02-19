@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.0.0-RC1 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.0.0-RC2 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -20,7 +20,7 @@ The Janitor is not a linter. It is a surgical instrument.
 
 ### The Anatomist
 
-Parses Python source via Tree-sitter CST. Extracts every `def`, `class`, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and `__all__` exports.
+Parses source code via zero-copy Tree-sitter CSTs across **9 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, and Python**. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage (`#include`, `import`, `use`, `require`).
 
 ### The 6-Stage Dead Symbol Pipeline
 
@@ -55,10 +55,10 @@ Symlink-based overlay of the source tree. Before any physical deletion, symlinks
 | Tier | Cost | Scope |
 |:-----|:-----|:------|
 | **Junior Janitor** | **Free** | Scan, cleanup, TUI dashboard. Unlimited. |
-| **Lead Specialist** | **$499/yr** | Signed audit logs, PQC attestation, CI integration. |
-| **Industrial Core** | **Custom** | SLA, on-prem token server, >10M LOC. |
+| **[Lead Specialist](https://thejanitor.app/pricing)** | **$499/yr** | Signed audit logs, Ed25519 attestation, CI integration. |
+| **[Industrial Core](https://thejanitor.app/pricing)** | **Custom** | SLA, on-prem token server, >10M LOC. |
 
-[Purchase a Token → thejanitor.app](https://thejanitor.app)
+[**Purchase a License → thejanitor.app/pricing**](https://thejanitor.app/pricing)
 
 ---
 
@@ -99,6 +99,12 @@ sudo mv janitor /usr/local/bin/
 # Detect dead symbols (free)
 janitor scan <path> [--library] [--verbose]
 
+# Machine-readable dead-code report for CI/GitHub Checks (free)
+janitor scan <path> --format json
+
+# Score a pull request patch for dead symbol reintroductions (free)
+janitor bounce <path> [--patch <file>] [--format json]
+
 # Find structurally duplicate functions (free, report only)
 janitor dedup <path>
 
@@ -120,23 +126,6 @@ janitor dashboard <path>
 
 ---
 
-## VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD
-
-**Python v4.0 through v4.2 are permanently deprecated.**
-
-The Python implementation relied on ChromaDB semantic search, external LLM API calls, and NetworkX graphs. Every component has been replaced:
-
-| Python (v4) | Rust (v6.0.0-RC1) |
-|-------------|---------------|
-| NetworkX DiGraph | `petgraph` directed reference graph |
-| Tree-sitter (Python binding) | Tree-sitter (Rust, zero-copy mmap) |
-| ChromaDB + UniXcoder | BLAKE3 alpha-normalized structural hashing |
-| LLM merge generation | Deterministic Safe Proxy Pattern |
-| JSON manifests | `rkyv` zero-copy binary registry |
-| SQLite cache | `.janitor/symbols.rkyv` mmap |
-
-No migration path is provided. Purge your Python v4 source. Re-materialize in Rust.
-
----
-
-> See [Safety Guarantees](safety.md) for how the Shadow Tree isolation and atomic rollback protocol works.
+> See [Safety Guarantees](safety.md) for the Shadow Tree isolation and atomic rollback protocol.
+> See [Licensing](licensing.md) for the BUSL-1.1 terms and commercial tier details.
+> Pre-v5 Python implementation history: [Archive](archive/legacy.md).
