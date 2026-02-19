@@ -1,12 +1,13 @@
 [package]
 name = "oracle"
-version = "5.9.11"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
-petgraph = "0.7"
-anyhow = "1.0"
+petgraph.workspace = true
+anyhow.workspace = true
 thiserror = "1.0"
 common = { path = "../common" }
 lazarus = { path = "../lazarus" }

@@ -1,8 +1,9 @@
 [package]
 name = "dashboard"
-version = "5.9.11"
-edition = "2021"
-license = "BUSL-1.1"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 ratatui = "0.30"

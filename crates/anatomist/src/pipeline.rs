@@ -12,7 +12,7 @@
 
 use crate::graph::build_reference_graph;
 use crate::parser::ParserHost;
-use crate::{scan, wisdom, Entity, EntityType, Protection};
+use crate::{bridge, scan, wisdom, Entity, EntityType, Protection};
 use common::registry::symbol_hash;
 use petgraph::Direction;
 use std::collections::{HashMap, HashSet};
@@ -255,7 +255,7 @@ pub fn run(
     // Stage 4.5: Bridge Shield — protect Python route handlers referenced by JS/TS API paths.
     // Extracts path strings (e.g. "/users") from JS/TS files and cross-references them
     // against each candidate entity's decorator text.
-    let bridge_paths = scan::bridge_extract(&root).unwrap_or_default();
+    let bridge_paths = bridge::bridge_extract(&root).unwrap_or_default();
     if !bridge_paths.is_empty() {
         let mut remaining: Vec<Entity> = Vec::new();
         for mut entity in candidates {

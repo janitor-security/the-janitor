@@ -1,7 +1,7 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.9.11
+**VERSION:** 5.9.12
 **DATE:** 2026-02-19
-**CONTEXT:** Sovereign Hardening (v5.9.10) — `VaultError` typed Result from `verify_token`; startup fail-closed on zero verifying key; `RegistryError::Corrupt`; atomic BLAKE3-checksummed registry writes; pipeline.rs redundant clone eliminated; dependabot metadata
+**CONTEXT:** Metadata hygiene (v5.9.12) — `repository.workspace = true` propagated to all 14 workspace members; `dashboard`/`lazarus`/`oracle`/`wisdom-bake` hardcoded metadata replaced with workspace inheritance; `bridge_extract` extracted from `scan.rs` → dedicated `bridge.rs` module; aspirational fiction purged from docs
 
 ---
 
@@ -217,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.9.11**
+**VERSION: 5.9.12**

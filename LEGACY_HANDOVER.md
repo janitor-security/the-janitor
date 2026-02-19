@@ -508,7 +508,7 @@ The `WisdomRegistry.is_immortal()` method checks in this order:
 
 ### 5.1 Current SOVEREIGN.md Assessment
 
-The SOVEREIGN.md describes an ambitious architecture including eBPF probes, LLVM-IR analysis, Z3 SMT solving, post-quantum cryptography, and DNA-based archival. Here is the reality check:
+The SOVEREIGN.md describes an ambitious architecture including eBPF probes, LLVM-IR analysis, Z3 SMT solving, post-quantum cryptography, and long-term disk archival. Here is the reality check:
 
 | SOVEREIGN Feature | Python Equivalent | Port Priority | Assessment |
 |---|---|---|---|
@@ -520,7 +520,7 @@ The SOVEREIGN.md describes an ambitious architecture including eBPF probes, LLVM
 | Notary Kernel (LSM) | Not implemented | NONE | eBPF LSM hooks are Linux-only. Breaks Windows/macOS. |
 | Boltzmann Gate (VRM) | Not implemented | NONE | Thermodynamic voltage starvation is not a real product feature. |
 | Metabolic Hypervisor | Not implemented | NONE | Microfluidic thermal redirect is not a real product feature. |
-| DNA Archival | Not implemented | NONE | Enzymatic synthesis is not a real product feature. |
+| Offline Archival | Not implemented | NONE | Long-term disk archival to `.janitor/ghost/`. Not needed for MVP. |
 | Datalog Engine | Not implemented | MEDIUM | Global reachability analysis via Datalog IS valuable. Consider `crepe` crate. |
 | Z3 SMT Solver | Not implemented | LOW | Local proofs are interesting but not needed for dead-code detection. |
 
@@ -559,7 +559,7 @@ The SOVEREIGN.md describes an ambitious architecture including eBPF probes, LLVM
 - Post-quantum cryptography
 - Symlink shadow trees
 - Amnesia Protocol
-- DNA archival
+- Long-term disk archival
 - Insurance Bridge API
 - Anything in Sections VI-IX of SOVEREIGN.md
 

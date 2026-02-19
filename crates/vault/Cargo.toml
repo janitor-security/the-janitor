@@ -3,6 +3,7 @@ name = "vault"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 ed25519-dalek = "2.1"
