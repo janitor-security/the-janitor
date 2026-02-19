@@ -23,29 +23,29 @@ const PATTERN_DECORATED: usize = 2; // decorated_definition wrapping function or
 const PATTERN_ASSIGNMENT: usize = 3; // Module-level assignments
 
 /// Static cache for the Python entity extraction query.
-static ENTITY_QUERY: OnceLock<Query> = OnceLock::new();
+static ENTITY_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Rust entity extraction query.
-static RUST_QUERY: OnceLock<Query> = OnceLock::new();
+static RUST_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the JavaScript entity extraction query.
-static JS_QUERY: OnceLock<Query> = OnceLock::new();
+static JS_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the TypeScript (.ts) entity extraction query.
-static TS_QUERY: OnceLock<Query> = OnceLock::new();
+static TS_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the TypeScript JSX (.tsx) entity extraction query.
-static TSX_QUERY: OnceLock<Query> = OnceLock::new();
+static TSX_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the C++ entity extraction query.
-static CPP_QUERY: OnceLock<Query> = OnceLock::new();
+static CPP_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the C entity extraction query.
-static C_QUERY: OnceLock<Query> = OnceLock::new();
+static C_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Java entity extraction query.
-static JAVA_QUERY: OnceLock<Query> = OnceLock::new();
+static JAVA_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the C# entity extraction query.
-static CSHARP_QUERY: OnceLock<Query> = OnceLock::new();
+static CSHARP_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Go entity extraction query.
-static GO_QUERY: OnceLock<Query> = OnceLock::new();
+static GO_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the GLSL entity extraction query.
-static GLSL_QUERY: OnceLock<Query> = OnceLock::new();
+static GLSL_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Objective-C entity extraction query.
-static OBJC_QUERY: OnceLock<Query> = OnceLock::new();
+static OBJC_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 
 /// S-expression for JS / JSX grammars.
 const JS_ENTITY_S_EXPR: &str = r#"
@@ -125,48 +125,60 @@ const JS_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("method.def", "method.name", EntityType::MethodDefinition),
 ];
 
-fn get_rust_query() -> &'static Query {
-    RUST_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_rust::LANGUAGE.into(), RUST_ENTITY_S_EXPR).expect(
-            "Rust entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_rust_query() -> Result<&'static Query, AnatomistError> {
+    RUST_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_rust::LANGUAGE.into(), RUST_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_js_query() -> &'static Query {
-    JS_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_javascript::LANGUAGE.into(), JS_ENTITY_S_EXPR).expect(
-            "JS entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_js_query() -> Result<&'static Query, AnatomistError> {
+    JS_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_javascript::LANGUAGE.into(), JS_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_ts_query() -> &'static Query {
-    TS_QUERY.get_or_init(|| {
-        Query::new(
-            &tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            TS_ENTITY_S_EXPR,
-        )
-        .expect("TS entity query compilation failed — this is a bug in the hardcoded S-expression")
-    })
+fn get_ts_query() -> Result<&'static Query, AnatomistError> {
+    TS_QUERY
+        .get_or_init(|| {
+            Query::new(
+                &tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+                TS_ENTITY_S_EXPR,
+            )
+            .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_tsx_query() -> &'static Query {
-    TSX_QUERY.get_or_init(|| {
-        Query::new(
-            &tree_sitter_typescript::LANGUAGE_TSX.into(),
-            TS_ENTITY_S_EXPR,
-        )
-        .expect("TSX entity query compilation failed — this is a bug in the hardcoded S-expression")
-    })
+fn get_tsx_query() -> Result<&'static Query, AnatomistError> {
+    TSX_QUERY
+        .get_or_init(|| {
+            Query::new(
+                &tree_sitter_typescript::LANGUAGE_TSX.into(),
+                TS_ENTITY_S_EXPR,
+            )
+            .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_cpp_query() -> &'static Query {
-    CPP_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_cpp::LANGUAGE.into(), CPP_ENTITY_S_EXPR).expect(
-            "C++ entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_cpp_query() -> Result<&'static Query, AnatomistError> {
+    CPP_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_cpp::LANGUAGE.into(), CPP_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
 /// S-expression for C grammar entity extraction.
@@ -307,52 +319,63 @@ const OBJC_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("method.def", "method.name", EntityType::MethodDefinition), // unary ObjC method
 ];
 
-fn get_c_query() -> &'static Query {
-    C_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_c::LANGUAGE.into(), C_ENTITY_S_EXPR).expect(
-            "C entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_c_query() -> Result<&'static Query, AnatomistError> {
+    C_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_c::LANGUAGE.into(), C_ENTITY_S_EXPR).map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_java_query() -> &'static Query {
-    JAVA_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_java::LANGUAGE.into(), JAVA_ENTITY_S_EXPR).expect(
-            "Java entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_java_query() -> Result<&'static Query, AnatomistError> {
+    JAVA_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), JAVA_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_csharp_query() -> &'static Query {
-    CSHARP_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_c_sharp::LANGUAGE.into(), CSHARP_ENTITY_S_EXPR).expect(
-            "C# entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_csharp_query() -> Result<&'static Query, AnatomistError> {
+    CSHARP_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_c_sharp::LANGUAGE.into(), CSHARP_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_go_query() -> &'static Query {
-    GO_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_go::LANGUAGE.into(), GO_ENTITY_S_EXPR).expect(
-            "Go entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_go_query() -> Result<&'static Query, AnatomistError> {
+    GO_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_go::LANGUAGE.into(), GO_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_glsl_query() -> &'static Query {
-    GLSL_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_glsl::LANGUAGE_GLSL.into(), GLSL_ENTITY_S_EXPR).expect(
-            "GLSL entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_glsl_query() -> Result<&'static Query, AnatomistError> {
+    GLSL_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_glsl::LANGUAGE_GLSL.into(), GLSL_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
-fn get_objc_query() -> &'static Query {
-    OBJC_QUERY.get_or_init(|| {
-        Query::new(&tree_sitter_objc::LANGUAGE.into(), OBJC_ENTITY_S_EXPR).expect(
-            "Objective-C entity query compilation failed — this is a bug in the hardcoded S-expression",
-        )
-    })
+fn get_objc_query() -> Result<&'static Query, AnatomistError> {
+    OBJC_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_objc::LANGUAGE.into(), OBJC_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
 /// Returns the compiled entity extraction query, initializing it on first call.
@@ -363,14 +386,15 @@ fn get_objc_query() -> &'static Query {
 /// - Pattern 2: `decorated_definition` wrapping function or class
 /// - Pattern 3: Module-level assignments (e.g., `__all__ = [...]`)
 ///
-/// # Panic
-/// Panics if the query S-expression is malformed. This is a compile-time bug,
-/// not a runtime condition — the query is a hardcoded string literal.
-fn get_entity_query() -> &'static Query {
-    ENTITY_QUERY.get_or_init(|| {
-        Query::new(
-            &tree_sitter_python::LANGUAGE.into(),
-            r#"
+/// # Errors
+/// Returns `AnatomistError::ParseFailure` if the hardcoded S-expression is malformed
+/// (compile-time bug — should never happen in a correct build).
+fn get_entity_query() -> Result<&'static Query, AnatomistError> {
+    ENTITY_QUERY
+        .get_or_init(|| {
+            Query::new(
+                &tree_sitter_python::LANGUAGE.into(),
+                r#"
             ; Pattern 0: Standalone function definitions
             (function_definition
               name: (identifier) @fn.name) @fn.def
@@ -395,9 +419,11 @@ fn get_entity_query() -> &'static Query {
               left: (identifier) @assign.name
               right: (_) @assign.value) @assign.stmt
             "#,
-        )
-        .expect("Entity query compilation failed — this is a bug in the hardcoded S-expression")
-    })
+            )
+            .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
 }
 
 /// The main parser host for extracting entities from Python source files.
@@ -505,14 +531,14 @@ impl ParserHost {
             "ts" => extract_named_entities(
                 source,
                 tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-                get_ts_query(),
+                get_ts_query()?,
                 &normalized_path,
                 JS_PATTERNS,
             ),
             "tsx" => extract_named_entities(
                 source,
                 tree_sitter_typescript::LANGUAGE_TSX.into(),
-                get_tsx_query(),
+                get_tsx_query()?,
                 &normalized_path,
                 JS_PATTERNS,
             ),
@@ -540,7 +566,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_rust::LANGUAGE.into(),
-            get_rust_query(),
+            get_rust_query()?,
             file_path,
             RUST_PATTERNS,
         )
@@ -557,7 +583,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_javascript::LANGUAGE.into(),
-            get_js_query(),
+            get_js_query()?,
             file_path,
             JS_PATTERNS,
         )
@@ -575,7 +601,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_cpp::LANGUAGE.into(),
-            get_cpp_query(),
+            get_cpp_query()?,
             file_path,
             CPP_PATTERNS,
         )
@@ -591,7 +617,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_c::LANGUAGE.into(),
-            get_c_query(),
+            get_c_query()?,
             file_path,
             C_PATTERNS,
         )
@@ -607,7 +633,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_java::LANGUAGE.into(),
-            get_java_query(),
+            get_java_query()?,
             file_path,
             JAVA_PATTERNS,
         )
@@ -623,7 +649,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_c_sharp::LANGUAGE.into(),
-            get_csharp_query(),
+            get_csharp_query()?,
             file_path,
             CSHARP_PATTERNS,
         )
@@ -639,7 +665,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_go::LANGUAGE.into(),
-            get_go_query(),
+            get_go_query()?,
             file_path,
             GO_PATTERNS,
         )
@@ -656,7 +682,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_glsl::LANGUAGE_GLSL.into(),
-            get_glsl_query(),
+            get_glsl_query()?,
             file_path,
             GLSL_PATTERNS,
         )
@@ -674,7 +700,7 @@ impl ParserHost {
         extract_named_entities(
             source,
             tree_sitter_objc::LANGUAGE.into(),
-            get_objc_query(),
+            get_objc_query()?,
             file_path,
             OBJC_PATTERNS,
         )
@@ -692,7 +718,7 @@ impl ParserHost {
         })?;
 
         let root = tree.root_node();
-        let query = get_entity_query();
+        let query = get_entity_query()?;
 
         // Two-pass deduplication: Track inner node IDs from decorated_definition
         let mut inner_node_ids = HashSet::new();

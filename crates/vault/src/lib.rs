@@ -45,23 +45,26 @@ pub enum VaultError {
     InvalidSignature,
 }
 
-static VERIFYING_KEY: OnceLock<VerifyingKey> = OnceLock::new();
+static VERIFYING_KEY: OnceLock<Option<VerifyingKey>> = OnceLock::new();
 
-fn get_verifying_key() -> &'static VerifyingKey {
-    VERIFYING_KEY.get_or_init(|| {
-        if VERIFYING_KEY_BYTES == [0u8; 32] {
-            // Fail-closed at startup: a production binary with an unset verifying key is
-            // a configuration flaw. Panicking here is intentional — it surfaces the error
-            // loudly before any user data is touched.
-            panic!(
-                "PRODUCTION BUILD FLAW: VERIFYING_KEY_BYTES is all-zeros. \
-                 Run `cargo run -p mint-token -- generate`, paste the output into \
-                 vault/src/lib.rs, and rebuild. Refusing to start."
-            );
-        }
-        VerifyingKey::from_bytes(&VERIFYING_KEY_BYTES)
-            .expect("BUG: VERIFYING_KEY_BYTES contains invalid Ed25519 key bytes")
-    })
+fn get_verifying_key() -> Option<&'static VerifyingKey> {
+    VERIFYING_KEY
+        .get_or_init(|| {
+            if VERIFYING_KEY_BYTES == [0u8; 32] {
+                // Fail-closed at startup: a production binary with an unset verifying key is
+                // a configuration flaw. Panicking here is intentional — it surfaces the error
+                // loudly before any user data is touched.
+                panic!(
+                    "PRODUCTION BUILD FLAW: VERIFYING_KEY_BYTES is all-zeros. \
+                     Run `cargo run -p mint-token -- generate`, paste the output into \
+                     vault/src/lib.rs, and rebuild. Refusing to start."
+                );
+            }
+            VerifyingKey::from_bytes(&VERIFYING_KEY_BYTES)
+                .map_err(|e| eprintln!("vault: invalid Ed25519 verifying key bytes: {e}"))
+                .ok()
+        })
+        .as_ref()
 }
 
 /// Token-based access control for destructive operations.
@@ -93,6 +96,7 @@ impl SigningOracle {
 
         // 3. Verify against the embedded verifying key.
         get_verifying_key()
+            .ok_or(VaultError::InvalidSignature)?
             .verify(PURGE_MESSAGE, &sig)
             .map_err(|_| VaultError::InvalidSignature)
     }

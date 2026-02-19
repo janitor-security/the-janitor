@@ -182,10 +182,10 @@ impl MappedRegistry {
             return Err(RegistryError::Corrupt);
         }
 
-        // Verify BLAKE3 checksum.
-        let stored: [u8; CHECKSUM_LEN] = mmap[..CHECKSUM_LEN]
-            .try_into()
-            .expect("slice is exactly CHECKSUM_LEN bytes");
+        // Verify BLAKE3 checksum. copy_from_slice is infallible here because we
+        // verified mmap.len() >= CHECKSUM_LEN immediately above.
+        let mut stored = [0u8; CHECKSUM_LEN];
+        stored.copy_from_slice(&mmap[..CHECKSUM_LEN]);
         let payload = &mmap[CHECKSUM_LEN..];
         let computed = blake3::hash(payload);
 

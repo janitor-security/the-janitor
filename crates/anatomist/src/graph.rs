@@ -135,7 +135,7 @@ impl ReferenceGraph {
     }
 }
 
-static CALL_QUERY: OnceLock<Query> = OnceLock::new();
+static CALL_QUERY: OnceLock<Option<Query>> = OnceLock::new();
 
 /// A call expression extracted from Python source.
 struct CallSite {
@@ -146,11 +146,14 @@ struct CallSite {
 }
 
 /// Extracts all call sites from a parsed Python source tree.
+///
+/// Returns an empty vec if the query automaton failed to build (compile-time bug).
 fn extract_calls(source: &[u8], root: Node) -> Vec<CallSite> {
-    let query = CALL_QUERY.get_or_init(|| {
-        Query::new(
-            &tree_sitter_python::LANGUAGE.into(),
-            r#"
+    let Some(query) = CALL_QUERY
+        .get_or_init(|| {
+            Query::new(
+                &tree_sitter_python::LANGUAGE.into(),
+                r#"
             (call
               function: (identifier) @direct_call)
 
@@ -158,9 +161,14 @@ fn extract_calls(source: &[u8], root: Node) -> Vec<CallSite> {
               function: (attribute
                 attribute: (identifier) @attr_call))
             "#,
-        )
-        .expect("Invalid call query")
-    });
+            )
+            .map_err(|e| eprintln!("graph: CALL_QUERY build failed (compile-time bug): {e}"))
+            .ok()
+        })
+        .as_ref()
+    else {
+        return Vec::new();
+    };
 
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(query, root, source);

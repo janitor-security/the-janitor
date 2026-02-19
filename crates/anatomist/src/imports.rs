@@ -28,7 +28,7 @@ pub struct CppInclude {
     pub line: u32,
 }
 
-static IMPORT_QUERY: OnceLock<Query> = OnceLock::new();
+static IMPORT_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 
 /// Extracts import statements from Python source code.
 ///
@@ -42,10 +42,11 @@ static IMPORT_QUERY: OnceLock<Query> = OnceLock::new();
 /// assert_eq!(imports.len(), 2);
 /// ```
 pub fn extract_imports(source: &[u8], root: Node) -> Result<Vec<ImportInfo>, AnatomistError> {
-    let query = IMPORT_QUERY.get_or_init(|| {
-        Query::new(
-            &tree_sitter_python::LANGUAGE.into(),
-            r#"
+    let query = IMPORT_QUERY
+        .get_or_init(|| {
+            Query::new(
+                &tree_sitter_python::LANGUAGE.into(),
+                r#"
             (import_statement
               name: (dotted_name) @import_module)
 
@@ -65,9 +66,11 @@ pub fn extract_imports(source: &[u8], root: Node) -> Result<Vec<ImportInfo>, Ana
               module_name: (relative_import) @from_relative_star
               (wildcard_import))
             "#,
-        )
-        .expect("Invalid import query")
-    });
+            )
+            .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))?;
 
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(query, root, source);
