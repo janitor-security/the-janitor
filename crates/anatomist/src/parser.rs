@@ -205,12 +205,16 @@ const JAVA_ENTITY_S_EXPR: &str = r#"
 "#;
 
 /// Pattern-index → (def_cap, name_cap, entity_type) mapping for Java grammar.
+///
+/// Indices must align exactly with the pattern order in `JAVA_ENTITY_S_EXPR`:
+/// 0=method_declaration, 1=class_declaration, 2=interface_declaration,
+/// 3=enum_declaration, 4=constructor_declaration.
 const JAVA_PATTERNS: &[(&str, &str, EntityType)] = &[
-    ("fn.def", "fn.name", EntityType::FunctionDefinition),
-    ("class.def", "class.name", EntityType::ClassDefinition),
-    ("fn.def", "fn.name", EntityType::FunctionDefinition), // interface
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // method_declaration
+    ("class.def", "class.name", EntityType::ClassDefinition), // class_declaration
+    ("class.def", "class.name", EntityType::ClassDefinition), // interface_declaration
     ("class.def", "class.name", EntityType::ClassDefinition), // enum_declaration
-    ("fn.def", "fn.name", EntityType::FunctionDefinition), // constructor
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // constructor_declaration
 ];
 
 /// S-expression for C# grammar entity extraction.
@@ -271,10 +275,15 @@ const GLSL_PATTERNS: &[(&str, &str, EntityType)] =
 
 /// S-expression for Objective-C grammar entity extraction.
 ///
-/// Captures C-style `function_definition` nodes plus `@interface` and
-/// `@implementation` class declarations. The class name is the first unnamed
-/// `identifier` child (not a named field). Method selectors are excluded due to
-/// their complex multi-keyword grammar structure.
+/// Captures C-style `function_definition` nodes, `@interface`/`@implementation`
+/// class declarations, and **simple unary** Objective-C method definitions.
+///
+/// ## Method Selector Coverage
+/// In tree-sitter-objc 3.0.2, `method_definition` has no `selector:` field.
+/// The method name appears as a direct `identifier` child only for unary (zero-arg)
+/// methods: `- (void)dealloc`, `+ (instancetype)sharedInstance`, etc.  Multi-keyword
+/// selectors (`doSomething:withArg:`) store the keyword inside `keyword_declarator`
+/// sub-nodes and are excluded here — they are not patterns in the dead-code hot path.
 const OBJC_ENTITY_S_EXPR: &str = r#"
     (function_definition
       declarator: (function_declarator
@@ -283,13 +292,19 @@ const OBJC_ENTITY_S_EXPR: &str = r#"
     (class_interface . (identifier) @class.name) @class.def
 
     (class_implementation . (identifier) @class.name) @class.def
+
+    (method_definition (identifier) @method.name) @method.def
 "#;
 
 /// Pattern-index → (def_cap, name_cap, entity_type) mapping for Objective-C grammar.
+///
+/// Pattern 3 captures unary ObjC method names via the direct `identifier` child
+/// of `method_definition` (e.g. `"dealloc"`, `"sharedInstance"`).
 const OBJC_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("fn.def", "fn.name", EntityType::FunctionDefinition),
     ("class.def", "class.name", EntityType::ClassDefinition), // class_interface
     ("class.def", "class.name", EntityType::ClassDefinition), // class_implementation
+    ("method.def", "method.name", EntityType::MethodDefinition), // unary ObjC method
 ];
 
 fn get_c_query() -> &'static Query {
@@ -459,7 +474,8 @@ impl ParserHost {
     /// - `.cs`: C# methods, classes, interfaces, and constructors.
     /// - `.go`: Go functions, methods, and type declarations.
     /// - `.glsl` / `.vert` / `.frag`: GLSL shader functions.
-    /// - `.m` / `.mm`: Objective-C functions and `@interface`/`@implementation` classes.
+    /// - `.m` / `.mm`: Objective-C functions, `@interface`/`@implementation` classes, and
+    ///   instance/class method selectors (full selector string used as entity name).
     ///
     /// # Errors
     /// - `IoError`: File not found, permission denied, mmap failure

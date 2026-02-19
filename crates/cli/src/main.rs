@@ -555,7 +555,7 @@ fn cmd_clean(
     if runner.is_none() {
         eprintln!(
             "warning: no test runner detected in {}.\n\
-             Supported: pytest (Python), cargo test (Rust), go test (Go), npm test (JS).\n\
+             Supported: pytest (Python), cargo test (Rust), go test (Go), npm test (JS), scons tests (C++).\n\
              Proceeding without verification — ghost backups available via `janitor undo`.",
             project_root.display()
         );
@@ -688,6 +688,7 @@ fn cmd_clean(
                 TestRunner::Go => "go test",
                 TestRunner::Npm => "npm test",
                 TestRunner::Pytest => "pytest",
+                TestRunner::SCons => "scons tests",
             };
             println!("Post-cleanup verification ({})...", runner_name);
             match run_tests(project_root, Some(r)) {
@@ -1027,11 +1028,13 @@ enum TestRunner {
     Go,
     /// npm test — JS/TS projects.
     Npm,
+    /// scons tests — SCons-based projects (e.g. Godot engine).
+    SCons,
 }
 
 /// Auto-detect the appropriate test runner by probing the project root.
 ///
-/// Detection order: Rust → Go → JS/TS → Python.
+/// Detection order: Rust → Go → SCons → JS/TS → Python.
 /// Returns `None` when no recognised test framework is found.
 fn detect_test_runner(root: &Path) -> Option<TestRunner> {
     if root.join("Cargo.toml").exists() {
@@ -1039,6 +1042,11 @@ fn detect_test_runner(root: &Path) -> Option<TestRunner> {
     }
     if root.join("go.mod").exists() {
         return Some(TestRunner::Go);
+    }
+    // SCons: detect SConstruct or SConscript at the project root.
+    // Common in C++ projects such as Godot engine.
+    if root.join("SConstruct").exists() || root.join("SConscript").exists() {
+        return Some(TestRunner::SCons);
     }
     if root.join("package.json").exists() {
         // Only count as JS test runner if a "test" script is present.
@@ -1104,6 +1112,7 @@ fn run_tests(dir: &Path, runner: Option<TestRunner>) -> anyhow::Result<()> {
         Some(TestRunner::Cargo) => run_cargo_test(dir),
         Some(TestRunner::Go) => run_go_test(dir),
         Some(TestRunner::Npm) => run_npm_test(dir),
+        Some(TestRunner::SCons) => run_scons_test(dir),
     }
 }
 
@@ -1153,6 +1162,29 @@ fn run_npm_test(dir: &Path) -> anyhow::Result<()> {
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(anyhow::anyhow!(
             "npm test exited with code {}",
+            s.code().unwrap_or(-1)
+        )),
+    }
+}
+
+/// Run `scons tests` in `dir`.
+///
+/// Suitable for SCons-based C++ projects such as Godot engine.  The `tests`
+/// target is the de-facto convention; projects that use a different target
+/// must be run manually.
+fn run_scons_test(dir: &Path) -> anyhow::Result<()> {
+    let status = std::process::Command::new("scons")
+        .args(["tests"])
+        .current_dir(dir)
+        .status();
+    match status {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!(
+            "scons not found — install SCons (pip install scons) to enable test verification."
+        )),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn scons: {}", e)),
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => Err(anyhow::anyhow!(
+            "scons tests exited with code {}",
             s.code().unwrap_or(-1)
         )),
     }
@@ -1212,7 +1244,8 @@ fn collect_source_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
         ".mypy_cache",
     ];
     const EXTS: &[&str] = &[
-        "py", "rs", "js", "jsx", "ts", "tsx", "go", "c", "cpp", "cxx", "cc", "h", "hpp",
+        "py", "rs", "js", "jsx", "ts", "tsx", "go", "c", "cpp", "cxx", "cc", "h", "hpp", "java",
+        "cs", "glsl", "vert", "frag", "m", "mm",
     ];
     if path.is_file() {
         return Ok(vec![path.to_path_buf()]);

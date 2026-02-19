@@ -70,12 +70,24 @@ impl ShadowManager {
             let shadow_path = shadow_root.join(relative);
 
             if entry.file_type().is_dir() {
-                // Create directory in shadow tree
+                // Create directory in shadow tree (idempotent).
                 fs::create_dir_all(&shadow_path)?;
             } else if entry.file_type().is_file() {
-                // Create symlink to original file
+                // Incremental sync: skip this entry when the shadow link already
+                // exists and points to the same canonical source path.
+                // This makes re-running `shadow init` on large repos (75k+ files)
+                // cheap — only new or changed files incur any I/O.
                 #[cfg(unix)]
                 {
+                    if shadow_path.is_symlink() {
+                        if let Ok(existing_target) = fs::read_link(&shadow_path) {
+                            if existing_target == entry_path {
+                                continue; // Already up to date — skip.
+                            }
+                        }
+                        // Stale or wrong target: remove so we can recreate below.
+                        fs::remove_file(&shadow_path)?;
+                    }
                     if let Err(e) = std::os::unix::fs::symlink(entry_path, &shadow_path) {
                         if e.kind() == std::io::ErrorKind::PermissionDenied {
                             return Err(ShadowError::SymlinkFailure(format!(
@@ -89,8 +101,12 @@ impl ShadowManager {
                 // On Windows, use hard links — no Administrator or Developer Mode required.
                 // Hard links behave identically to symlinks for unmap/remap: removing the hard
                 // link from shadow_src leaves the original in the source tree untouched.
+                // Incremental: skip if the hard link already exists.
                 #[cfg(windows)]
                 {
+                    if shadow_path.exists() {
+                        continue; // Hard link already present — skip.
+                    }
                     if let Err(e) = std::fs::hard_link(entry_path, &shadow_path) {
                         return Err(ShadowError::IoError(e));
                     }

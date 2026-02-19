@@ -1,5 +1,5 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.9.5
+**VERSION:** 5.9.7
 **DATE:** 2026-02-16
 **CONTEXT:** Omni-Polyglot (Phase 3.7) — C, Java, C#, Go parsers; polyglot graph walker; global shield
 
@@ -217,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.9.5**
+**VERSION: 5.9.7**
