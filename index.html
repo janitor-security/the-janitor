@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
@@ -447,17 +447,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#vi-legacy-deprecation-python-v4-is-dead" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -516,6 +505,208 @@
   
 
       </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Governance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="licensing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BUSL-1.1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sovereignty/tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Gate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Archive
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="archive/legacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Legacy (Python v4)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -690,17 +881,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#vi-legacy-deprecation-python-v4-is-dead" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -722,7 +902,7 @@
 
 
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v5.9.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.</strong></p>
+<p><strong>v6.0.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.</strong></p>
 <p><em>"Code is Liability. Precision is the Cure."</em></p>
 <hr />
 <h2 id="i-the-problem-code-bloat">I. THE PROBLEM: CODE BLOAT</h2>
@@ -732,7 +912,7 @@
 <h2 id="ii-the-cure-the-technical-stack">II. THE CURE: THE TECHNICAL STACK</h2>
 <p>The Janitor is not a linter. It is a surgical instrument.</p>
 <h3 id="the-anatomist">The Anatomist</h3>
-<p>Parses Python source via Tree-sitter CST. Extracts every <code>def</code>, <code>class</code>, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and <code>__all__</code> exports.</p>
+<p>Parses source code via zero-copy Tree-sitter CSTs across <strong>9 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, and Python</strong>. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage (<code>#include</code>, <code>import</code>, <code>use</code>, <code>require</code>).</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
 <thead>
@@ -795,18 +975,18 @@
 <td style="text-align: left;">Scan, cleanup, TUI dashboard. Unlimited.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Lead Specialist</strong></td>
+<td style="text-align: left;"><strong><a href="https://thejanitor.app/pricing">Lead Specialist</a></strong></td>
 <td style="text-align: left;"><strong>$499/yr</strong></td>
-<td style="text-align: left;">Signed audit logs, PQC attestation, CI integration.</td>
+<td style="text-align: left;">Signed audit logs, Ed25519 attestation, CI integration.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Industrial Core</strong></td>
+<td style="text-align: left;"><strong><a href="https://thejanitor.app/pricing">Industrial Core</a></strong></td>
 <td style="text-align: left;"><strong>Custom</strong></td>
 <td style="text-align: left;">SLA, on-prem token server, &gt;10M LOC.</td>
 </tr>
 </tbody>
 </table>
-<p><a href="https://thejanitor.app">Purchase a Token → thejanitor.app</a></p>
+<p><a href="https://thejanitor.app/pricing"><strong>Purchase a License → thejanitor.app/pricing</strong></a></p>
 <hr />
 <h2 id="iv-installation">IV. INSTALLATION</h2>
 <h3 id="from-source-recommended">From Source (Recommended)</h3>
@@ -830,66 +1010,35 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Detect dead symbols (free)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Find structurally duplicate functions (free, report only)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Machine-readable dead-code report for CI/GitHub Checks (free)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--format<span class="w"> </span>json
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Apply Safe Proxy deduplication (free, explicit flag required)</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Score a pull request patch for dead symbol reintroductions (free)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--patch<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>json<span class="o">]</span>
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Shadow-simulate deletion + test, then physically remove dead symbols (free)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Find structurally duplicate functions (free, report only)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Generate a code health badge (free)</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>badge<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Apply Safe Proxy deduplication (free, explicit flag required)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Undo last cleanup (git stash or ghost restore)</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>undo<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Shadow-simulate deletion + test, then physically remove dead symbols (free)</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
 <a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Load .janitor/symbols.rkyv and launch TUI dashboard (free)</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Generate a code health badge (free)</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>janitor<span class="w"> </span>badge<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="c1"># Undo last cleanup (git stash or ghost restore)</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>janitor<span class="w"> </span>undo<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="c1"># Load .janitor/symbols.rkyv and launch TUI dashboard (free)</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
 </code></pre></div>
 <hr />
-<h2 id="vi-legacy-deprecation-python-v4-is-dead">VI. LEGACY DEPRECATION — PYTHON v4 IS DEAD</h2>
-<p><strong>Python v4.0 through v4.2 are permanently deprecated.</strong></p>
-<p>The Python implementation relied on ChromaDB semantic search, external LLM API calls, and NetworkX graphs. Every component has been replaced:</p>
-<table>
-<thead>
-<tr>
-<th>Python (v4)</th>
-<th>Rust (v5.9.0)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>NetworkX DiGraph</td>
-<td><code>petgraph</code> directed reference graph</td>
-</tr>
-<tr>
-<td>Tree-sitter (Python binding)</td>
-<td>Tree-sitter (Rust, zero-copy mmap)</td>
-</tr>
-<tr>
-<td>ChromaDB + UniXcoder</td>
-<td>BLAKE3 alpha-normalized structural hashing</td>
-</tr>
-<tr>
-<td>LLM merge generation</td>
-<td>Deterministic Safe Proxy Pattern</td>
-</tr>
-<tr>
-<td>JSON manifests</td>
-<td><code>rkyv</code> zero-copy binary registry</td>
-</tr>
-<tr>
-<td>SQLite cache</td>
-<td><code>.janitor/symbols.rkyv</code> mmap</td>
-</tr>
-</tbody>
-</table>
-<p>No migration path is provided. Purge your Python v4 source. Re-materialize in Rust.</p>
-<hr />
 <blockquote>
-<p>See <a href="safety/">Safety Guarantees</a> for how the Shadow Tree isolation and atomic rollback protocol works.</p>
+<p>See <a href="safety/">Safety Guarantees</a> for the Shadow Tree isolation and atomic rollback protocol.
+See <a href="licensing/">Licensing</a> for the BUSL-1.1 terms and commercial tier details.
+Pre-v5 Python implementation history: <a href="archive/legacy/">Archive</a>.</p>
 </blockquote>
 
 
