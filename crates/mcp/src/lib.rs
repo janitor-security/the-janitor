@@ -158,7 +158,8 @@ fn run_scan(path: &str, library: bool) -> Result<serde_json::Value> {
     // the library path here just returns the in-memory result directly).
     let mut host =
         anatomist::parser::ParserHost::new().context("Failed to initialise parser host")?;
-    let result = anatomist::pipeline::run(root, &mut host, library).context("Pipeline failed")?;
+    let result =
+        anatomist::pipeline::run(root, &mut host, library, None).context("Pipeline failed")?;
 
     let dead_names: Vec<&str> = result.dead.iter().map(|e| e.name.as_str()).collect();
     Ok(serde_json::json!({
@@ -187,7 +188,8 @@ fn run_dedup(path: &str) -> Result<serde_json::Value> {
     let mut host =
         anatomist::parser::ParserHost::new().context("Failed to initialise parser host")?;
     // Library mode = true so all public symbols are considered for dedup.
-    let result = anatomist::pipeline::run(root, &mut host, true).context("Pipeline failed")?;
+    let result =
+        anatomist::pipeline::run(root, &mut host, true, None).context("Pipeline failed")?;
 
     use std::collections::HashMap;
     let mut by_hash: HashMap<u64, Vec<String>> = HashMap::new();

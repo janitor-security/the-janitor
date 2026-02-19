@@ -35,6 +35,23 @@ fn entity_type_from_u8(v: u8) -> EntityType {
     }
 }
 
+/// Progress events emitted during pipeline execution.
+///
+/// Consumers (e.g. the CLI progress bars) receive these via the `on_progress`
+/// callback passed to [`run`]. Tests pass `None` — zero overhead when unused.
+#[non_exhaustive]
+pub enum ScanEvent {
+    /// Reference graph built. Carries file and symbol counts from the graph walk.
+    GraphBuilt {
+        /// Number of source files discovered.
+        files: usize,
+        /// Total entity count (including sentinels).
+        symbols: usize,
+    },
+    /// A pipeline stage completed. `stage` corresponds to the stage index (0–5).
+    StageComplete(u8),
+}
+
 /// Results of a full pipeline run.
 #[derive(Debug, Default)]
 pub struct ScanResult {
@@ -75,6 +92,9 @@ const PROTECTED_DIRS: &[&str] = &[
 /// - `project_root`: Root directory of the Python project.
 /// - `host`: Configured `ParserHost` (with heuristics registered).
 /// - `library_mode`: When `true`, Stage 3 protects all public symbols.
+/// - `on_progress`: Optional callback invoked at key pipeline milestones.
+///   Pass `None` in tests and benchmarks (zero overhead). The CLI passes
+///   a closure that drives `indicatif` progress bars.
 ///
 /// # Returns
 /// A [`ScanResult`] containing the dead and protected entity lists.
@@ -85,11 +105,19 @@ pub fn run(
     project_root: &Path,
     host: &mut ParserHost,
     library_mode: bool,
+    on_progress: Option<&dyn Fn(ScanEvent)>,
 ) -> anyhow::Result<ScanResult> {
     let root = dunce::canonicalize(project_root)?;
 
     // Build cross-file reference graph (Pass 1: index, Pass 2: link edges).
     let ref_graph = build_reference_graph(&root, host)?;
+
+    if let Some(cb) = on_progress {
+        cb(ScanEvent::GraphBuilt {
+            files: ref_graph.stats.file_count,
+            symbols: ref_graph.stats.symbol_count,
+        });
+    }
 
     // Pre-compute raw orphan candidates (files with zero cross-file incoming edges).
     // These are refined post-pipeline: a file is only a TRUE orphan when none of its
@@ -213,6 +241,11 @@ pub fn run(
         }
     }
 
+    // Stages 0-4 complete.
+    if let Some(cb) = on_progress {
+        cb(ScanEvent::StageComplete(4));
+    }
+
     if candidates.is_empty() {
         result.dead = candidates;
         return Ok(result);
@@ -246,7 +279,7 @@ pub fn run(
     }
 
     // Stage 5: Grep Shield — only for symbols still dead after stages 0-4.5.
-    let dead_names: Vec<String> = candidates.iter().map(|e| e.name.clone()).collect();
+    let dead_names: Vec<&str> = candidates.iter().map(|e| e.name.as_str()).collect();
     let grep_found = scan::grep_shield(&dead_names, &root)?;
 
     for mut entity in candidates {
@@ -257,6 +290,11 @@ pub fn run(
         } else {
             result.dead.push(entity);
         }
+    }
+
+    // Stage 5 complete.
+    if let Some(cb) = on_progress {
+        cb(ScanEvent::StageComplete(5));
     }
 
     // Post-pipeline orphan refinement.
@@ -309,7 +347,7 @@ mod tests {
         fs::create_dir_all(&tmp).ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false).unwrap();
+        let result = run(&tmp, &mut host, false, None).unwrap();
         assert_eq!(result.total, 0);
         assert!(result.dead.is_empty());
 
@@ -329,7 +367,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false).unwrap();
+        let result = run(&tmp, &mut host, false, None).unwrap();
 
         // `helper` is called by `run`, so it is referenced — not dead.
         assert!(!result.dead.iter().any(|e| e.name == "helper"));
@@ -346,7 +384,7 @@ mod tests {
         fs::write(tmp.join("main.py"), b"# nothing uses utils\n").ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false).unwrap();
+        let result = run(&tmp, &mut host, false, None).unwrap();
 
         assert!(result.dead.iter().any(|e| e.name == "dead_code"));
 
@@ -365,7 +403,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false).unwrap();
+        let result = run(&tmp, &mut host, false, None).unwrap();
 
         assert!(!result.dead.iter().any(|e| e.name == "__init__"));
 
@@ -384,7 +422,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, true).unwrap();
+        let result = run(&tmp, &mut host, true, None).unwrap();
 
         assert!(!result.dead.iter().any(|e| e.name == "public_fn"));
         // _private is still a candidate (private even in library mode)
@@ -405,7 +443,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false).unwrap();
+        let result = run(&tmp, &mut host, false, None).unwrap();
 
         // All symbols in tests/ should be Directory-protected, not dead.
         assert!(result.dead.is_empty());

@@ -157,13 +157,59 @@ async fn main() -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 
 fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result<()> {
+    use anatomist::pipeline::ScanEvent;
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
+    use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+    use std::time::Duration;
+
+    let mp = MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+    let style = ProgressStyle::default_spinner()
+        .template("{spinner:.cyan} {msg}")
+        .unwrap_or_else(|_| ProgressStyle::default_spinner());
+
+    let pb_graph = mp.add(ProgressBar::new_spinner());
+    pb_graph.set_style(style.clone());
+    pb_graph.set_message("Dissecting artifacts...");
+    pb_graph.enable_steady_tick(Duration::from_millis(100));
+
+    let pb_resolve = mp.add(ProgressBar::new_spinner());
+    pb_resolve.set_style(style.clone());
+    pb_resolve.set_message("Resolving dependencies...");
+
+    let pb_filter = mp.add(ProgressBar::new_spinner());
+    pb_filter.set_style(style);
+    pb_filter.set_message("Filtering slop...");
+
+    // Clone handles (ProgressBar is Arc-backed — clones share state).
+    let (pb_g, pb_r, pb_f) = (pb_graph.clone(), pb_resolve.clone(), pb_filter.clone());
 
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
 
-    let result = pipeline::run(project_root, &mut host, library)?;
+    let result = pipeline::run(
+        project_root,
+        &mut host,
+        library,
+        Some(&|event| match event {
+            ScanEvent::GraphBuilt { files, symbols } => {
+                pb_g.finish_with_message(format!("Dissected {} files, {} symbols", files, symbols));
+                pb_r.enable_steady_tick(Duration::from_millis(100));
+            }
+            ScanEvent::StageComplete(4) => {
+                pb_r.finish_with_message("Dependencies resolved");
+                pb_f.enable_steady_tick(Duration::from_millis(100));
+            }
+            ScanEvent::StageComplete(5) => {
+                pb_f.finish_with_message("Slop filtered");
+            }
+            _ => {}
+        }),
+    )?;
+    // Ensure all bars are finished if pipeline returned early (no candidates).
+    pb_graph.finish_and_clear();
+    pb_resolve.finish_and_clear();
+    pb_filter.finish_and_clear();
 
     println!("+------------------------------------------+");
     println!("| JANITOR SCAN                             |");
@@ -203,8 +249,14 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
         println!("\nPROTECTED SYMBOLS:");
         for entity in &result.protected {
             println!(
-                "  {}:{} - {} [{:?}]",
-                entity.file_path, entity.start_line, entity.qualified_name, entity.protected_by
+                "  {}:{} - {} [{}]",
+                entity.file_path,
+                entity.start_line,
+                entity.qualified_name,
+                entity
+                    .protected_by
+                    .map(|p| p.to_string())
+                    .unwrap_or_else(|| "unknown".to_string())
             );
         }
     }
@@ -270,11 +322,24 @@ fn cmd_dedup(
 
     // Gather all entities from ALL files into a flat list for cross-file detection.
     let mut all_entities: Vec<anatomist::Entity> = Vec::new();
-    for file_path in &source_files {
-        match host.dissect(file_path) {
-            Ok(entities) => all_entities.extend(entities),
-            Err(e) => eprintln!("warning: skipping {}: {}", file_path.display(), e),
+    {
+        use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+        use std::time::Duration;
+        let pb = ProgressBar::with_draw_target(None, ProgressDrawTarget::stderr_with_hz(10));
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.cyan} {msg}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner()),
+        );
+        pb.set_message("Analyzing for structural clones...");
+        pb.enable_steady_tick(Duration::from_millis(100));
+        for file_path in &source_files {
+            match host.dissect(file_path) {
+                Ok(entities) => all_entities.extend(entities),
+                Err(e) => eprintln!("warning: skipping {}: {}", file_path.display(), e),
+            }
         }
+        pb.finish_and_clear();
     }
 
     // Group by structural hash across all files.
@@ -522,13 +587,27 @@ fn cmd_clean(
     test_command: Option<&str>,
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
+    use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
     use reaper::{audit::AuditEntry, audit::AuditLog, DeletionTarget, SafeDeleter};
     use shadow::ShadowManager;
+    use std::time::Duration;
 
-    // 1. Run the detection pipeline (always — even in dry-run mode).
+    // 1. Run the detection pipeline — show a spinner while it works.
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
-    let result = pipeline::run(project_root, &mut host, library)?;
+    let result = {
+        let pb = ProgressBar::with_draw_target(None, ProgressDrawTarget::stderr_with_hz(10));
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.cyan} {msg}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner()),
+        );
+        pb.set_message("Scanning for dead symbols...");
+        pb.enable_steady_tick(Duration::from_millis(100));
+        let r = pipeline::run(project_root, &mut host, library, None)?;
+        pb.finish_and_clear();
+        r
+    };
 
     if result.dead.is_empty() {
         println!("Nothing to clean — no dead symbols detected.");

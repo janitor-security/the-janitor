@@ -1,7 +1,7 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.9.8
+**VERSION:** 5.9.9
 **DATE:** 2026-02-18
-**CONTEXT:** Stabilization (v5.9.8) — ObjC SlopFilter wiring; `--test-command` escape hatch; binary metabolic audit
+**CONTEXT:** Final Hardening (v5.9.9) — `grep_shield` zero-clone `&[&str]`; `Protection::Display`; `indicatif` MultiProgress (3-bar, 10Hz) in `cmd_scan`/`cmd_clean`/`cmd_dedup`; `ScanEvent` callback in `pipeline::run`
 
 ---
 
@@ -217,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.9.8**
+**VERSION: 5.9.9**

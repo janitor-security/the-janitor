@@ -3,6 +3,7 @@ pub mod wisdom;
 
 use rkyv::bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
+use std::fmt;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -48,6 +49,31 @@ pub enum Protection {
     GrepShield = 15,
     /// Post-pipeline: symbol is directly referenced by a test node ID.
     TestReference = 16,
+}
+
+impl fmt::Display for Protection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Protection::Directory => "protected-dir",
+            Protection::Referenced => "referenced",
+            Protection::WisdomRule => "wisdom-rule",
+            Protection::LibraryMode => "library-mode",
+            Protection::PackageExport => "package-export",
+            Protection::ConfigReference => "config-reference",
+            Protection::MetaprogrammingDanger => "metaprogramming",
+            Protection::LifecycleMethod => "lifecycle-method",
+            Protection::EntryPoint => "entry-point",
+            Protection::QtAutoSlot => "qt-auto-slot",
+            Protection::SqlAlchemyMeta => "sqlalchemy-meta",
+            Protection::OrmLifecycle => "orm-lifecycle",
+            Protection::PydanticAlias => "pydantic-alias",
+            Protection::FastApiOverride => "fastapi-override",
+            Protection::PytestFixture => "pytest-fixture",
+            Protection::GrepShield => "grep-shield",
+            Protection::TestReference => "test-reference",
+        };
+        f.write_str(label)
+    }
 }
 
 // THE ATOM: CLR FACT

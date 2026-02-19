@@ -36,7 +36,7 @@ const GREP_EXTENSIONS: &[&str] = &[
 /// # Errors
 /// Returns an `anyhow::Error` only if automaton construction fails (malformed patterns).
 /// Individual file I/O errors are silently skipped.
-pub fn grep_shield(dead_names: &[String], project_root: &Path) -> anyhow::Result<HashSet<String>> {
+pub fn grep_shield(dead_names: &[&str], project_root: &Path) -> anyhow::Result<HashSet<String>> {
     if dead_names.is_empty() {
         return Ok(HashSet::new());
     }
@@ -78,7 +78,7 @@ pub fn grep_shield(dead_names: &[String], project_root: &Path) -> anyhow::Result
         };
 
         for mat in ac.find_iter(&*mmap) {
-            found.insert(dead_names[mat.pattern().as_usize()].clone());
+            found.insert(dead_names[mat.pattern().as_usize()].to_string());
         }
 
         // Early exit: all symbols accounted for.
@@ -209,8 +209,7 @@ mod tests {
 
         fs::write(tmp.join("README.md"), b"Call `my_function` to get started.").ok();
 
-        let names = vec!["my_function".to_string()];
-        let found = grep_shield(&names, &tmp).unwrap();
+        let found = grep_shield(&["my_function"], &tmp).unwrap();
         assert!(found.contains("my_function"));
 
         fs::remove_dir_all(tmp).ok();
@@ -223,8 +222,7 @@ mod tests {
 
         fs::write(tmp.join("config.yaml"), b"key: value\nother: data").ok();
 
-        let names = vec!["nonexistent_fn".to_string()];
-        let found = grep_shield(&names, &tmp).unwrap();
+        let found = grep_shield(&["nonexistent_fn"], &tmp).unwrap();
         assert!(found.is_empty());
 
         fs::remove_dir_all(tmp).ok();
@@ -241,8 +239,7 @@ mod tests {
         )
         .ok();
 
-        let names = vec!["process_request".to_string(), "unused_fn".to_string()];
-        let found = grep_shield(&names, &tmp).unwrap();
+        let found = grep_shield(&["process_request", "unused_fn"], &tmp).unwrap();
         assert!(found.contains("process_request"));
         assert!(!found.contains("unused_fn"));
 
