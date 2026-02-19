@@ -145,6 +145,22 @@ fn lang_for_ext(ext: &str) -> Option<LangConfig> {
                   body: (compound_statement) @fn.body)
             "#,
         }),
+        // Objective-C / Objective-C++: covers both C-style free functions and simple
+        // unary ObjC method selectors (e.g. `dealloc`, `sharedInstance`).
+        // Multi-keyword selectors are excluded — they are not in the dead-code hot path.
+        "m" | "mm" => Some(LangConfig {
+            language: tree_sitter_objc::LANGUAGE.into(),
+            query_src: r#"
+                (method_definition
+                  (identifier) @fn.name
+                  (compound_statement) @fn.body)
+
+                (function_definition
+                  declarator: (function_declarator
+                    declarator: (identifier) @fn.name)
+                  body: (compound_statement) @fn.body)
+            "#,
+        }),
         _ => None,
     }
 }

@@ -1,7 +1,7 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.9.7
-**DATE:** 2026-02-16
-**CONTEXT:** Omni-Polyglot (Phase 3.7) — C, Java, C#, Go parsers; polyglot graph walker; global shield
+**VERSION:** 5.9.8
+**DATE:** 2026-02-18
+**CONTEXT:** Stabilization (v5.9.8) — ObjC SlopFilter wiring; `--test-command` escape hatch; binary metabolic audit
 
 ---
 
@@ -194,7 +194,7 @@ def _calculate_tax_us_impl(amount, rate):
 | **3** | Dead Symbol Pipeline: 6-stage gate, WisdomRegistry | **[COMPLETE]** |
 | **3.5** | Polyglot: Rust, JS, TS, C++ parsers; plugin shield | **[COMPLETE]** |
 | **3.6** | C++ Integration: `#include` edges, C++ entity extraction | **[COMPLETE]** |
-| **3.7** | Omni-Polyglot: C, Java, C#, Go parsers; polyglot graph walker; global shield | **[COMPLETE]** |
+| **3.7** | Omni-Polyglot: C, Java, C#, Go parsers; polyglot graph walker; global shield | **[COMPLETE] ★ Historical Landmark: Proven O(1) Stability (Godot Siege — 77 k entities, 157MB RAM)** |
 | **4** | Reaper: UTF-8 SafeDeleter, test fingerprinting | **[COMPLETE]** |
 | **5** | Forge: BLAKE3 structural hashing, Safe Proxy Pattern | **[COMPLETE]** |
 | **6** | Shadow: symlink overlay, Ghost Protocol, shadow simulation | **[COMPLETE]** |
@@ -217,4 +217,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.9.7**
+**VERSION: 5.9.8**
