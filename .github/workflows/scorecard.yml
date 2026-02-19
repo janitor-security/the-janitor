@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@5ef0c07d38392176472d8299166f9f7435f99195 # v2.14.2
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
         with:
           egress-policy: audit
 
@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
 
       - name: Run analysis
-        uses: ossf/scorecard-action@62b2cac7f8ab6a4a021e05547ecf87f06eb43f13 # v2.4.0
+        uses: ossf/scorecard-action@62b2cac7ed8198b15735ed49ab1e5cf35480ba46 # v2.4.0
         with:
           results_file: results.sarif
           results_format: sarif
