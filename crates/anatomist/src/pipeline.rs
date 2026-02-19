@@ -148,11 +148,15 @@ pub fn run(
     // Reconstruct entities from the registry — skipping virtual __MODULE__ sentinels.
     // No secondary Vec<Entity> is kept in the graph; peak memory is now proportional to
     // the registry itself (one copy of strings), not registry + accumulator (two copies).
+    //
+    // file_path is cloned once and moved into the HashMap key; the entity owns a second
+    // clone — avoiding the redundant 4th clone that would arise from keying on entity.file_path.
     let mut file_groups: HashMap<String, Vec<Entity>> = HashMap::new();
     for entry in &ref_graph.registry.entries {
         if entry.name == "__MODULE__" {
             continue;
         }
+        let file_path_key = entry.file_path.clone();
         let entity = Entity {
             name: entry.name.clone(),
             entity_type: entity_type_from_u8(entry.entity_type),
@@ -172,10 +176,7 @@ pub fn run(
                 Some(entry.structural_hash)
             },
         };
-        file_groups
-            .entry(entity.file_path.clone())
-            .or_default()
-            .push(entity);
+        file_groups.entry(file_path_key).or_default().push(entity);
     }
 
     // Per-file stage loop (Stages 0 → 1 → 2+4 → 3).

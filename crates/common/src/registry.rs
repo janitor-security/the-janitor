@@ -2,6 +2,18 @@
 //!
 //! Stores cross-file symbol references via `rkyv` zero-copy serialization.
 //! Enables fast mmap-based lookups for reference graph construction.
+//!
+//! ## File Format (`symbols.rkyv`)
+//!
+//! ```text
+//! [0..32]  BLAKE3 hash of the rkyv payload
+//! [32..]   rkyv-serialized SymbolRegistry (aligned)
+//! ```
+//!
+//! On save, the payload is written atomically: `symbols.rkyv.tmp` is created,
+//! flushed, then renamed to `symbols.rkyv`. Reads verify the checksum before
+//! accessing the rkyv data. A mismatch deletes the corrupt file and returns
+//! [`RegistryError::Corrupt`], triggering a forced re-scan on the next run.
 
 use crate::Protection;
 use memmap2::Mmap;
@@ -12,6 +24,9 @@ use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::Path;
 
+/// The length of the BLAKE3 checksum prepended to every registry file.
+const CHECKSUM_LEN: usize = 32;
+
 /// Errors from registry operations.
 #[derive(Debug, thiserror::Error)]
 pub enum RegistryError {
@@ -19,6 +34,12 @@ pub enum RegistryError {
     IoError(#[from] std::io::Error),
     #[error("Deserialization error: {0}")]
     DeserializeError(String),
+    /// The registry file exists but its BLAKE3 checksum does not match the payload.
+    ///
+    /// The corrupt file has been deleted. The caller should trigger a fresh scan
+    /// to rebuild the registry.
+    #[error("registry is corrupt (checksum mismatch); file deleted, re-scan required")]
+    Corrupt,
 }
 
 /// SipHash of symbol ID strings. Deterministic within a Rust version.
@@ -87,7 +108,7 @@ impl SymbolRegistry {
         self.entries.is_empty()
     }
 
-    /// Sorts entries by ID and serializes the registry to bytes using `rkyv`.
+    /// Sorts entries by ID and serializes the registry payload (without checksum prefix).
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, RegistryError> {
         self.entries.sort_by_key(|e| e.id);
         let aligned = rkyv::to_bytes::<rkyv::rancor::Error>(self)
@@ -95,14 +116,35 @@ impl SymbolRegistry {
         Ok(aligned.to_vec())
     }
 
-    /// Saves the registry to a file (sorts by ID before writing).
+    /// Atomically saves the registry to `path`.
+    ///
+    /// # Atomic protocol
+    /// 1. Serialize to rkyv bytes.
+    /// 2. Compute BLAKE3 checksum of the payload.
+    /// 3. Write `[checksum | payload]` to `<path>.tmp`.
+    /// 4. Rename `<path>.tmp` → `<path>` (atomic on POSIX; best-effort on Windows).
     pub fn save(&mut self, path: &Path) -> Result<(), RegistryError> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let bytes = self.to_bytes()?;
-        let mut file = File::create(path)?;
-        file.write_all(&bytes)?;
+
+        let payload = self.to_bytes()?;
+        let checksum = blake3::hash(&payload);
+
+        // Write to a temporary file first, then rename for atomicity.
+        let tmp_path = path.with_extension("rkyv.tmp");
+        {
+            let mut tmp = File::create(&tmp_path)?;
+            tmp.write_all(checksum.as_bytes())?;
+            tmp.write_all(&payload)?;
+            tmp.flush()?;
+        }
+
+        std::fs::rename(&tmp_path, path).inspect_err(|_| {
+            // Best-effort cleanup of the temp file on rename failure.
+            let _ = std::fs::remove_file(&tmp_path);
+        })?;
+
         Ok(())
     }
 }
@@ -114,28 +156,60 @@ impl Default for SymbolRegistry {
 }
 
 /// Memory-mapped read-only registry handle.
+///
+/// The first [`CHECKSUM_LEN`] bytes of the mapping are the BLAKE3 checksum;
+/// the rkyv payload starts at byte `CHECKSUM_LEN`.
+#[derive(Debug)]
 pub struct MappedRegistry {
     _mmap: Mmap,
 }
 
 impl MappedRegistry {
-    /// Opens a registry file via mmap.
+    /// Opens a registry file via mmap, verifying the BLAKE3 checksum.
+    ///
+    /// # Errors
+    /// - [`RegistryError::IoError`] — file cannot be opened or mapped.
+    /// - [`RegistryError::Corrupt`] — checksum mismatch; the corrupt file has been deleted.
+    /// - [`RegistryError::DeserializeError`] — rkyv validation failed after checksum passes.
     pub fn open(path: &Path) -> Result<Self, RegistryError> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
 
-        // Validate the archive
-        rkyv::access::<ArchivedSymbolRegistry, rkyv::rancor::Error>(&mmap)
+        if mmap.len() < CHECKSUM_LEN {
+            // File is too small to contain even the checksum — corrupt.
+            drop(mmap);
+            let _ = std::fs::remove_file(path);
+            return Err(RegistryError::Corrupt);
+        }
+
+        // Verify BLAKE3 checksum.
+        let stored: [u8; CHECKSUM_LEN] = mmap[..CHECKSUM_LEN]
+            .try_into()
+            .expect("slice is exactly CHECKSUM_LEN bytes");
+        let payload = &mmap[CHECKSUM_LEN..];
+        let computed = blake3::hash(payload);
+
+        if computed.as_bytes() != &stored {
+            drop(mmap);
+            let _ = std::fs::remove_file(path);
+            return Err(RegistryError::Corrupt);
+        }
+
+        // Validate the rkyv archive structure.
+        rkyv::access::<ArchivedSymbolRegistry, rkyv::rancor::Error>(payload)
             .map_err(|e| RegistryError::DeserializeError(e.to_string()))?;
 
         Ok(Self { _mmap: mmap })
     }
 
     /// Returns a reference to the archived registry (zero-copy).
+    ///
+    /// # Safety
+    /// The mmap is held for the lifetime of `self`. The checksum was verified in
+    /// [`open`], so the bytes are structurally valid rkyv data starting at offset
+    /// [`CHECKSUM_LEN`].
     pub fn archived(&self) -> &ArchivedSymbolRegistry {
-        // SAFETY: We validated the archive in `open()` via rkyv::access.
-        // The mmap is held for the lifetime of self, so the reference is valid.
-        unsafe { rkyv::access_unchecked::<ArchivedSymbolRegistry>(&self._mmap[..]) }
+        unsafe { rkyv::access_unchecked::<ArchivedSymbolRegistry>(&self._mmap[CHECKSUM_LEN..]) }
     }
 
     /// Finds an entry by symbol ID (binary search; requires sorted registry).
@@ -199,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save_and_mmap() {
+    fn test_save_and_mmap_with_checksum() {
         let mut registry = SymbolRegistry::new();
         registry.insert(SymbolEntry {
             id: 999,
@@ -215,7 +289,7 @@ mod tests {
             protected_by: Some(Protection::LifecycleMethod),
         });
 
-        let tmp_path = std::env::temp_dir().join("test_registry.db");
+        let tmp_path = std::env::temp_dir().join("test_registry_blake3.rkyv");
         registry.save(&tmp_path).unwrap();
 
         let mapped = MappedRegistry::open(&tmp_path).unwrap();
@@ -223,6 +297,25 @@ mod tests {
         assert_eq!(mapped.archived().entries[0].id, 999);
 
         std::fs::remove_file(tmp_path).ok();
+    }
+
+    #[test]
+    fn test_corrupt_file_detected() {
+        let tmp_path = std::env::temp_dir().join("test_registry_corrupt.rkyv");
+
+        // Write a file with valid header size but garbage content.
+        let mut garbage = vec![0xABu8; CHECKSUM_LEN + 64];
+        // Intentionally wrong checksum (all zeros vs. hash of garbage payload).
+        garbage[..CHECKSUM_LEN].fill(0x00);
+        std::fs::write(&tmp_path, &garbage).unwrap();
+
+        let result = MappedRegistry::open(&tmp_path);
+        assert!(
+            matches!(result, Err(RegistryError::Corrupt)),
+            "expected Corrupt, got {result:?}"
+        );
+        // File should have been deleted by open().
+        assert!(!tmp_path.exists(), "corrupt file should have been deleted");
     }
 
     #[test]
@@ -249,7 +342,7 @@ mod tests {
             protected_by: None,
         });
 
-        let tmp_path = std::env::temp_dir().join("test_find_by_id.db");
+        let tmp_path = std::env::temp_dir().join("test_find_by_id_blake3.rkyv");
         registry.save(&tmp_path).unwrap();
 
         let mapped = MappedRegistry::open(&tmp_path).unwrap();

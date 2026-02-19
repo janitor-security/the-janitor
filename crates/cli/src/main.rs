@@ -1037,15 +1037,25 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 
 /// Verifies the purge token; exits the process on failure.
+///
+/// Treats every [`vault::VaultError`] variant as a hard abort — no destructive
+/// operation may proceed without a valid token.
 fn require_token(token: Option<&str>) -> anyhow::Result<()> {
-    use vault::SigningOracle;
+    use vault::{SigningOracle, VaultError};
     match token {
-        Some(t) if SigningOracle::verify_token(t) => Ok(()),
-        Some(_) => {
-            eprintln!("AUTHORIZATION FAILED. Token is invalid or has been revoked.");
-            eprintln!("Purchase or refresh your purge token at thejanitor.app");
-            std::process::exit(1);
-        }
+        Some(t) => match SigningOracle::verify_token(t) {
+            Ok(()) => Ok(()),
+            Err(VaultError::MalformedToken) => {
+                eprintln!("AUTHORIZATION FAILED. Token is malformed.");
+                eprintln!("Tokens must be base64-encoded Ed25519 signatures (64 bytes).");
+                std::process::exit(1);
+            }
+            Err(VaultError::InvalidSignature) => {
+                eprintln!("AUTHORIZATION FAILED. Token signature is invalid or has been revoked.");
+                eprintln!("Purchase or refresh your purge token at thejanitor.app");
+                std::process::exit(1);
+            }
+        },
         None => {
             eprintln!("--token <TOKEN> is required for --force-purge operations.");
             eprintln!("Purchase a token at thejanitor.app");

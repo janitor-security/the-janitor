@@ -22,3 +22,6 @@ anyhow = "1.0"
 # Disk I/O
 memmap2.workspace = true
 dunce.workspace = true
+
+# Checksum (registry integrity)
+blake3.workspace = true

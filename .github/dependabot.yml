@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
     groups:
       tree-sitter:
         patterns:
@@ -13,8 +18,17 @@ updates:
           - "ed25519-dalek"
           - "sha2"
           - "blake3"
+      rkyv:
+        patterns:
+          - "rkyv"
+          - "bytecheck"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
