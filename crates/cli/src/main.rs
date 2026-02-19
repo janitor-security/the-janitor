@@ -63,6 +63,12 @@ enum Commands {
         /// Ed25519 token for signed integrity attestation (optional).
         #[arg(long)]
         token: Option<String>,
+        /// Custom test command executed via `sh -c <CMD>` instead of auto-detection.
+        ///
+        /// Example: `--test-command "make test"` or `--test-command "pytest tests/"`.
+        /// Bypasses all auto-detection heuristics (pytest/cargo/go/npm/scons).
+        #[arg(long)]
+        test_command: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -129,7 +135,14 @@ async fn main() -> anyhow::Result<()> {
             force_purge,
             library,
             token,
-        } => cmd_clean(path, *force_purge, *library, token.as_deref())?,
+            test_command,
+        } => cmd_clean(
+            path,
+            *force_purge,
+            *library,
+            token.as_deref(),
+            test_command.as_deref(),
+        )?,
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
@@ -506,6 +519,7 @@ fn cmd_clean(
     force_purge: bool,
     library: bool,
     token: Option<&str>,
+    test_command: Option<&str>,
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use reaper::{audit::AuditEntry, audit::AuditLog, DeletionTarget, SafeDeleter};
@@ -550,9 +564,13 @@ fn cmd_clean(
         println!("Integrity attestation: token verified.");
     }
 
-    // 2. Auto-detect the repo's test runner.
-    let runner = detect_test_runner(project_root);
-    if runner.is_none() {
+    // 2. Auto-detect the repo's test runner, unless --test-command overrides it.
+    let runner = if test_command.is_none() {
+        detect_test_runner(project_root)
+    } else {
+        None // Override mode — auto-detection skipped.
+    };
+    if test_command.is_none() && runner.is_none() {
         eprintln!(
             "warning: no test runner detected in {}.\n\
              Supported: pytest (Python), cargo test (Rust), go test (Go), npm test (JS), scons tests (C++).\n\
@@ -568,7 +586,12 @@ fn cmd_clean(
     let baseline_passed = if use_shadow {
         true // Shadow simulation is the pre-flight check — no separate baseline needed.
     } else {
-        match run_tests(project_root, runner) {
+        let test_result = if let Some(cmd) = test_command {
+            run_custom_test(project_root, cmd)
+        } else {
+            run_tests(project_root, runner)
+        };
+        match test_result {
             Ok(()) => {
                 println!("Pre-flight verification PASSED.");
                 true
@@ -678,20 +701,33 @@ fn cmd_clean(
         }
     }
 
-    // 5c. Post-cleanup verification for compiled-language repos.
+    // 5c. Post-cleanup verification for compiled-language repos (and custom-command repos).
     //     Only roll back if baseline was passing AND post-cleanup now fails
     //     (we caused a regression). Pre-existing failures don't warrant rollback.
     if !use_shadow {
-        if let Some(r) = runner {
-            let runner_name = match r {
-                TestRunner::Cargo => "cargo test",
-                TestRunner::Go => "go test",
-                TestRunner::Npm => "npm test",
-                TestRunner::Pytest => "pytest",
-                TestRunner::SCons => "scons tests",
+        let has_verification = test_command.is_some() || runner.is_some();
+        if has_verification {
+            let runner_display: &str = if let Some(cmd) = test_command {
+                cmd
+            } else {
+                match runner {
+                    Some(TestRunner::Cargo) => "cargo test",
+                    Some(TestRunner::Go) => "go test",
+                    Some(TestRunner::Npm) => "npm test",
+                    Some(TestRunner::Pytest) => "pytest",
+                    Some(TestRunner::SCons) => "scons tests",
+                    None => unreachable!(
+                        "has_verification requires runner.is_some() when test_command is None"
+                    ),
+                }
             };
-            println!("Post-cleanup verification ({})...", runner_name);
-            match run_tests(project_root, Some(r)) {
+            println!("Post-cleanup verification ({})...", runner_display);
+            let verify_result = if let Some(cmd) = test_command {
+                run_custom_test(project_root, cmd)
+            } else {
+                run_tests(project_root, runner)
+            };
+            match verify_result {
                 Ok(()) => println!("Post-cleanup verification PASSED."),
                 Err(e) => {
                     if baseline_passed {
@@ -1187,6 +1223,28 @@ fn run_scons_test(dir: &Path) -> anyhow::Result<()> {
             "scons tests exited with code {}",
             s.code().unwrap_or(-1)
         )),
+    }
+}
+
+/// Execute an arbitrary test command via `sh -c <cmd>` in `dir`.
+///
+/// Used when the caller passes `--test-command` to override auto-detection.
+/// The command is forwarded to the shell verbatim, enabling make targets,
+/// script paths, or any compound invocation (e.g. `"pytest tests/ && mypy src/"`).
+fn run_custom_test(dir: &Path, cmd: &str) -> anyhow::Result<()> {
+    let status = std::process::Command::new("sh")
+        .args(["-c", cmd])
+        .current_dir(dir)
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to spawn test command `{}`: {}", cmd, e))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Test command `{}` exited with code {}",
+            cmd,
+            status.code().unwrap_or(-1)
+        ))
     }
 }
 
