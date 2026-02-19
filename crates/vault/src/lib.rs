@@ -11,7 +11,7 @@
 //!    [`SigningOracle::verify_token`] before any destructive operation.
 //!    An `Err` return is a hard gate — the operation must not proceed.
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use std::sync::OnceLock;
 
 /// The message that all purge tokens must be a valid signature of.
@@ -31,7 +31,29 @@ const VERIFYING_KEY_BYTES: [u8; 32] = [
     0x00, 0x45, 0x8f, 0x72, 0x8c, 0xd2, 0x53, 0xc2, 0x81, 0x76, 0x82, 0x1b, 0x27, 0xc7, 0xab, 0x64,
 ];
 
-/// Errors returned by [`SigningOracle::verify_token`].
+/// Local audit attestation signing key seed.
+///
+/// This is the Ed25519 private key seed used to sign audit log entries produced
+/// by this Janitor binary. Its purpose is tamper evidence: any post-cleanup
+/// modification to a signed audit entry will fail verification against the
+/// embedded [`VERIFYING_KEY_BYTES`].
+///
+/// This key is **not** the commercial purge authorization key held at
+/// thejanitor.app. The signing key IS embedded in the binary — it is not
+/// secret. Its value is attestation (proving the entry was written by this
+/// binary), not access control.
+///
+/// Rotation: run `cargo run -p mint-token -- generate` and update both
+/// `VERIFYING_KEY_BYTES` and this constant together.
+const LOCAL_AUDIT_SIGNING_SEED: [u8; 32] = [
+    0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c, 0x41,
+    0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4, 0xeb, 0xe5,
+];
+
+/// The number of seconds in 90 days (the symbol immaturity window).
+const NINETY_DAYS_SECS: u64 = 90 * 24 * 3_600; // 7_776_000
+
+/// Errors returned by [`SigningOracle`] methods.
 ///
 /// The caller (CLI) must treat every variant as a hard failure and abort the operation.
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +65,19 @@ pub enum VaultError {
     /// Token decoded successfully but the Ed25519 signature does not match.
     #[error("token signature is invalid or has been revoked")]
     InvalidSignature,
+
+    /// A dead symbol's source file was modified less than 90 days ago.
+    ///
+    /// Pass `--override-tax` to the `clean` or `dedup --apply` command to bypass
+    /// this hard-gate and proceed with cleanup of recently modified code.
+    #[error(
+        "immature code: {file} was last modified less than 90 days ago — \
+         pass --override-tax to proceed"
+    )]
+    ImmatureCode {
+        /// The source file path that triggered the maturity check.
+        file: String,
+    },
 }
 
 static VERIFYING_KEY: OnceLock<Option<VerifyingKey>> = OnceLock::new();
@@ -67,7 +102,7 @@ fn get_verifying_key() -> Option<&'static VerifyingKey> {
         .as_ref()
 }
 
-/// Token-based access control for destructive operations.
+/// Token-based access control and audit attestation for Janitor operations.
 pub struct SigningOracle;
 
 impl SigningOracle {
@@ -100,6 +135,50 @@ impl SigningOracle {
             .verify(PURGE_MESSAGE, &sig)
             .map_err(|_| VaultError::InvalidSignature)
     }
+
+    /// Signs `msg` with the embedded local audit attestation key and returns a
+    /// base64-encoded Ed25519 signature.
+    ///
+    /// Used by [`reaper::audit::AuditEntry`] to sign each excision event.
+    /// The signature covers `{timestamp}{file_path}{sha256_pre_cleanup}` and
+    /// can be verified against the embedded [`VERIFYING_KEY_BYTES`].
+    ///
+    /// This is **not** a purge authorization signature. See [`LOCAL_AUDIT_SIGNING_SEED`].
+    pub fn sign_audit(msg: &[u8]) -> String {
+        use base64::Engine;
+        let sk = SigningKey::from_bytes(&LOCAL_AUDIT_SIGNING_SEED);
+        let sig = sk.sign(msg);
+        base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())
+    }
+
+    /// Hard-gates cleanup of recently modified source files.
+    ///
+    /// Returns [`VaultError::ImmatureCode`] when `file_mtime_secs` is within the
+    /// last 90 days (7,776,000 seconds), unless `override_tax` is `true`.
+    ///
+    /// # Arguments
+    /// - `file`: Source file path (used in the error message).
+    /// - `file_mtime_secs`: Unix timestamp of the file's last modification (`mtime`).
+    /// - `override_tax`: When `true`, bypasses the 90-day gate unconditionally.
+    pub fn enforce_maturity(
+        file: &str,
+        file_mtime_secs: u64,
+        override_tax: bool,
+    ) -> Result<(), VaultError> {
+        if override_tax {
+            return Ok(());
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if now.saturating_sub(file_mtime_secs) < NINETY_DAYS_SECS {
+            return Err(VaultError::ImmatureCode {
+                file: file.to_string(),
+            });
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -107,14 +186,6 @@ mod tests {
     use super::*;
     use base64::Engine;
     use ed25519_dalek::{Signature, Signer, SigningKey};
-
-    /// Private key seed that matches the `VERIFYING_KEY_BYTES` embedded in this
-    /// crate.  Used solely by the test suite — never exposed in production.
-    const TEST_SIGNING_KEY_SEED: [u8; 32] = [
-        0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c,
-        0x41, 0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4,
-        0xeb, 0xe5,
-    ];
 
     fn make_token(seed: &[u8; 32], message: &[u8]) -> String {
         let sk = SigningKey::from_bytes(seed);
@@ -124,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_valid_token_accepted() {
-        let token = make_token(&TEST_SIGNING_KEY_SEED, PURGE_MESSAGE);
+        let token = make_token(&LOCAL_AUDIT_SIGNING_SEED, PURGE_MESSAGE);
         assert!(SigningOracle::verify_token(&token).is_ok());
     }
 
@@ -147,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_wrong_message_rejected() {
-        let token = make_token(&TEST_SIGNING_KEY_SEED, b"DIFFERENT_MESSAGE");
+        let token = make_token(&LOCAL_AUDIT_SIGNING_SEED, b"DIFFERENT_MESSAGE");
         assert!(matches!(
             SigningOracle::verify_token(&token),
             Err(VaultError::InvalidSignature)
@@ -162,5 +233,63 @@ mod tests {
             SigningOracle::verify_token(&token),
             Err(VaultError::InvalidSignature)
         ));
+    }
+
+    #[test]
+    fn test_sign_audit_produces_decodable_64_byte_signature() {
+        let msg = b"2026-01-01T00:00:00Z/path/to/file.pydeadbeef1234";
+        let sig_b64 = SigningOracle::sign_audit(msg);
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&sig_b64)
+            .expect("must be valid base64");
+        assert_eq!(decoded.len(), 64, "Ed25519 signature must be 64 bytes");
+    }
+
+    #[test]
+    fn test_sign_audit_is_verifiable() {
+        // Signatures produced by sign_audit must verify against VERIFYING_KEY_BYTES.
+        let msg = b"audit-entry-payload";
+        let sig_b64 = SigningOracle::sign_audit(msg);
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&sig_b64)
+            .unwrap();
+        let sig_bytes: [u8; 64] = decoded.as_slice().try_into().unwrap();
+        let sig = Signature::from_bytes(&sig_bytes);
+        let vk = get_verifying_key().expect("verifying key must initialise");
+        assert!(
+            vk.verify(msg, &sig).is_ok(),
+            "audit signature must verify against embedded verifying key"
+        );
+    }
+
+    #[test]
+    fn test_enforce_maturity_old_file_passes() {
+        // A file at Unix epoch (definitely > 90 days old) must pass.
+        assert!(SigningOracle::enforce_maturity("/old/module.py", 0, false).is_ok());
+    }
+
+    #[test]
+    fn test_enforce_maturity_new_file_fails() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let result = SigningOracle::enforce_maturity("/new/module.py", now_secs, false);
+        assert!(
+            matches!(result, Err(VaultError::ImmatureCode { .. })),
+            "a file modified now must be flagged as immature"
+        );
+    }
+
+    #[test]
+    fn test_enforce_maturity_override_tax_bypasses() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        // Even a brand-new file passes when override_tax = true.
+        assert!(SigningOracle::enforce_maturity("/new/module.py", now_secs, true).is_ok());
     }
 }

@@ -13,10 +13,16 @@
 //!     "symbol_name": "unused_helper",
 //!     "sha256_pre_cleanup": "a3b4c5...",
 //!     "heuristic_id": "DEAD_SYMBOL",
-//!     "lines_removed": 14
+//!     "lines_removed": 14,
+//!     "signature": "<base64-encoded Ed25519 signature>"
 //!   }
 //! ]
 //! ```
+//!
+//! The `signature` field covers `{timestamp}{file_path}{sha256_pre_cleanup}` and
+//! is signed with the local audit attestation key embedded in the binary. Use
+//! [`vault::SigningOracle::verify_token`] against the binary's embedded verifying
+//! key to confirm authenticity.
 
 use crate::ReaperError;
 use serde::{Deserialize, Serialize};
@@ -41,6 +47,16 @@ pub struct AuditEntry {
     pub heuristic_id: String,
     /// Number of source lines removed by this cleanup operation.
     pub lines_removed: u32,
+    /// Base64-encoded Ed25519 signature of `{timestamp}{file_path}{sha256_pre_cleanup}`.
+    ///
+    /// Signed with the local audit attestation key embedded in the Janitor binary.
+    /// Provides tamper evidence: any post-cleanup modification to this entry will
+    /// produce a verification failure against the binary's embedded verifying key.
+    ///
+    /// `#[serde(default)]` ensures backward-compatible deserialization of audit logs
+    /// that predate the v6.0.0-RC1 signature field.
+    #[serde(default)]
+    pub signature: String,
 }
 
 impl AuditEntry {
@@ -53,14 +69,22 @@ impl AuditEntry {
         start_line: u32,
         end_line: u32,
     ) -> Self {
+        let file_path_str = file_path.into();
         let hash = hex_sha256(file_bytes);
+        let timestamp = utc_now();
+        // Sign the concatenation of (timestamp + file_path + sha256_pre_cleanup).
+        // The signature provides tamper evidence: any post-cleanup edit to this entry
+        // will fail verification against the binary's embedded Ed25519 verifying key.
+        let sign_input = format!("{}{}{}", timestamp, file_path_str, hash);
+        let signature = vault::SigningOracle::sign_audit(sign_input.as_bytes());
         AuditEntry {
-            timestamp: utc_now(),
-            file_path: file_path.into(),
+            timestamp,
+            file_path: file_path_str,
             symbol_name: symbol_name.into(),
             sha256_pre_cleanup: hash,
             heuristic_id: heuristic_id.into(),
             lines_removed: end_line.saturating_sub(start_line) + 1,
+            signature,
         }
     }
 }
@@ -213,6 +237,9 @@ mod tests {
         assert_eq!(entry.heuristic_id, "DEAD_SYMBOL");
         assert_eq!(entry.lines_removed, 3); // end_line - start_line + 1 = 12 - 10 + 1
         assert_eq!(entry.sha256_pre_cleanup.len(), 64);
+        // Signature must be a non-empty base64 string (64-byte Ed25519 → 88 base64 chars).
+        assert!(!entry.signature.is_empty(), "signature must be present");
+        assert_eq!(entry.signature.len(), 88, "base64(64 bytes) = 88 chars");
     }
 
     #[test]
