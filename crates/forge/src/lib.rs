@@ -59,7 +59,8 @@ pub fn compute_structural_hash(node: Node<'_>, source: &[u8]) -> u64 {
     let mut hasher = blake3::Hasher::new();
     hash_node_recursive(&mut hasher, node, source);
     let digest = hasher.finalize();
-    u64::from_le_bytes(digest.as_bytes()[..8].try_into().expect("blake3 ≥ 8 bytes"))
+    let d = digest.as_bytes();
+    u64::from_le_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]])
 }
 
 /// Represents a group of symbols sharing the same structural hash.

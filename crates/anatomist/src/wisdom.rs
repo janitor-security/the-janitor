@@ -72,23 +72,32 @@ static FILE_PATTERNS: &[(&[u8], u8)] = &[
 ];
 
 /// Returns (automaton, per-pattern flag array). Compiled once at first call.
-fn get_file_ac() -> &'static (AhoCorasick, Vec<u8>) {
-    static FILE_AC: OnceLock<(AhoCorasick, Vec<u8>)> = OnceLock::new();
-    FILE_AC.get_or_init(|| {
-        let pats: Vec<&[u8]> = FILE_PATTERNS.iter().map(|(p, _)| *p).collect();
-        let flags: Vec<u8> = FILE_PATTERNS.iter().map(|(_, f)| *f).collect();
-        let ac =
-            AhoCorasick::new(pats).expect("FILE_AC: invalid pattern — this is a compile-time bug");
-        (ac, flags)
-    })
+fn get_file_ac() -> Option<&'static (AhoCorasick, Vec<u8>)> {
+    static FILE_AC: OnceLock<Option<(AhoCorasick, Vec<u8>)>> = OnceLock::new();
+    FILE_AC
+        .get_or_init(|| {
+            let pats: Vec<&[u8]> = FILE_PATTERNS.iter().map(|(p, _)| *p).collect();
+            let flags: Vec<u8> = FILE_PATTERNS.iter().map(|(_, f)| *f).collect();
+            match AhoCorasick::new(pats) {
+                Ok(ac) => Some((ac, flags)),
+                Err(e) => {
+                    eprintln!("wisdom: FILE_AC build failed (compile-time bug): {e}");
+                    None
+                }
+            }
+        })
+        .as_ref()
 }
 
 /// Scans `source` once with the combined automaton and returns the 7-bit flag word.
 ///
 /// Short-circuits as soon as all 7 flags are set (common for framework-heavy files).
+/// Returns 0 if the automaton failed to build (should never happen in practice).
 #[inline]
 fn file_flags(source: &[u8]) -> u8 {
-    let (ac, flags) = get_file_ac();
+    let Some((ac, flags)) = get_file_ac() else {
+        return 0;
+    };
     let mut found: u8 = 0;
     for mat in ac.find_iter(source) {
         found |= flags[mat.pattern().as_usize()];
@@ -107,39 +116,69 @@ fn file_flags(source: &[u8]) -> u8 {
 // ---------------------------------------------------------------------------
 
 /// Pre-compiled AC for route decorator patterns.
-fn get_route_dec_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(ROUTE_DEC).expect("ROUTE_DEC_AC: invalid pattern"))
+fn get_route_dec_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(ROUTE_DEC)
+            .map_err(|e| eprintln!("wisdom: ROUTE_DEC_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 /// Pre-compiled AC for CLI decorator patterns.
-fn get_cli_dec_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(CLI_DEC).expect("CLI_DEC_AC: invalid pattern"))
+fn get_cli_dec_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(CLI_DEC)
+            .map_err(|e| eprintln!("wisdom: CLI_DEC_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 /// Pre-compiled AC for Pydantic validator decorator patterns.
-fn get_pydantic_dec_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(PYDANTIC_DEC).expect("PYDANTIC_DEC_AC: invalid pattern"))
+fn get_pydantic_dec_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(PYDANTIC_DEC)
+            .map_err(|e| eprintln!("wisdom: PYDANTIC_DEC_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 /// Pre-compiled AC for SQLAlchemy decorator patterns.
-fn get_sqlalchemy_dec_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(SQLALCHEMY_DEC).expect("SQLALCHEMY_DEC_AC: invalid pattern"))
+fn get_sqlalchemy_dec_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(SQLALCHEMY_DEC)
+            .map_err(|e| eprintln!("wisdom: SQLALCHEMY_DEC_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 /// Pre-compiled AC for DI patterns (entity-body scan).
-fn get_di_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(DI_PATTERNS).expect("DI_AC: invalid pattern"))
+fn get_di_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(DI_PATTERNS)
+            .map_err(|e| eprintln!("wisdom: DI_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 /// Pre-compiled AC for metaprogramming patterns (entity-body scan).
-fn get_metaprog_ac() -> &'static AhoCorasick {
-    static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(METAPROG).expect("METAPROG_AC: invalid pattern"))
+fn get_metaprog_ac() -> Option<&'static AhoCorasick> {
+    static AC: OnceLock<Option<AhoCorasick>> = OnceLock::new();
+    AC.get_or_init(|| {
+        AhoCorasick::new(METAPROG)
+            .map_err(|e| eprintln!("wisdom: METAPROG_AC build failed: {e}"))
+            .ok()
+    })
+    .as_ref()
 }
 
 // --- Directory-level protection ---
@@ -332,7 +371,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         if entity
             .decorators
             .iter()
-            .any(|d| get_cli_dec_ac().is_match(d.as_bytes()))
+            .any(|d| get_cli_dec_ac().is_some_and(|ac| ac.is_match(d.as_bytes())))
         {
             entity.protected_by = Some(Protection::EntryPoint);
             continue;
@@ -342,7 +381,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         if entity
             .decorators
             .iter()
-            .any(|d| get_route_dec_ac().is_match(d.as_bytes()))
+            .any(|d| get_route_dec_ac().is_some_and(|ac| ac.is_match(d.as_bytes())))
         {
             entity.protected_by = Some(Protection::MetaprogrammingDanger);
             continue;
@@ -370,7 +409,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         if entity
             .decorators
             .iter()
-            .any(|d| get_pydantic_dec_ac().is_match(d.as_bytes()))
+            .any(|d| get_pydantic_dec_ac().is_some_and(|ac| ac.is_match(d.as_bytes())))
         {
             entity.protected_by = Some(Protection::PydanticAlias);
             continue;
@@ -396,7 +435,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2f. SQLAlchemy decorator on this entity.
         if has_sqlalchemy {
             let es = entity_src(source, entity);
-            if get_sqlalchemy_dec_ac().is_match(es) {
+            if get_sqlalchemy_dec_ac().is_some_and(|ac| ac.is_match(es)) {
                 entity.protected_by = Some(Protection::SqlAlchemyMeta);
                 continue;
             }
@@ -414,7 +453,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2h. FastAPI dependency injection in entity body.
         if has_di {
             let es = entity_src(source, entity);
-            if get_di_ac().is_match(es) {
+            if get_di_ac().is_some_and(|ac| ac.is_match(es)) {
                 entity.protected_by = Some(Protection::FastApiOverride);
                 continue;
             }
@@ -429,7 +468,7 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // 2j. General metaprogramming in this entity's body.
         if has_metaprog {
             let es = entity_src(source, entity);
-            if get_metaprog_ac().is_match(es) {
+            if get_metaprog_ac().is_some_and(|ac| ac.is_match(es)) {
                 entity.protected_by = Some(Protection::MetaprogrammingDanger);
                 continue;
             }
