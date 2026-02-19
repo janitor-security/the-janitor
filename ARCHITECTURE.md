@@ -1,7 +1,7 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 5.9.12
+**VERSION:** 6.0.0-RC1
 **DATE:** 2026-02-19
-**CONTEXT:** Metadata hygiene (v5.9.12) — `repository.workspace = true` propagated to all 14 workspace members; `dashboard`/`lazarus`/`oracle`/`wisdom-bake` hardcoded metadata replaced with workspace inheritance; `bridge_extract` extracted from `scan.rs` → dedicated `bridge.rs` module; aspirational fiction purged from docs
+**CONTEXT:** v6.0.0-RC1 — Machine-Readable Interface (`--format json` on `scan`/`bounce`); Signed Audit Logs (Ed25519 per-entry attestation); 90-Day Immaturity Hard-Gate (`enforce_maturity` + `--override-tax`); Hardened Dependabot (rebase-strategy + commit-message prefix)
 
 ---
 
@@ -185,7 +185,66 @@ def _calculate_tax_us_impl(amount, rate):
 
 ---
 
-## VIII. ROADMAP — ALL PHASES COMPLETE
+## VIII. THE MACHINE INTERFACE: JSON API
+
+**Status**: **[COMPLETE]** — v6.0.0-RC1
+
+### 8.1 `janitor scan --format json`
+
+Machine-readable dead-code report for CI/CD and GitHub Checks integration.
+
+```json
+{
+  "slop_score": 0.042,
+  "dead_symbols": [
+    { "id": "module.unused_helper", "reason": "DEAD_SYMBOL" }
+  ],
+  "merkle_root": "3f9a1b2c..."
+}
+```
+
+- **`slop_score`**: Ratio of dead symbols to total (`dead / total`, range 0.0–1.0).
+- **`dead_symbols`**: Array of `{ id: qualified_name, reason }` for every dead entity.
+- **`merkle_root`**: BLAKE3 hash over newline-joined sorted dead qualified names. Deterministic across identical codebase states — suitable as a GitHub Check annotation key.
+
+### 8.2 `janitor bounce [--patch <file>] [--format json]`
+
+Polyglot patch quality gate for pull request automation.
+
+```json
+{
+  "slop_score": 15,
+  "dead_symbols_added": 1,
+  "logic_clones_found": 1,
+  "merkle_root": "a1b2c3d4..."
+}
+```
+
+- Reads a unified diff from `--patch <file>` or stdin.
+- Loads `.janitor/symbols.rkyv` (produced by `janitor scan`) for dead-symbol cross-reference.
+- **`merkle_root`**: BLAKE3 hash of the raw patch bytes — ties the score to the specific diff.
+- Backed by `forge::slop_filter::PatchBouncer` (structural hashing, 9 grammars).
+
+### 8.3 Signed Audit Logs
+
+Every `AuditEntry` in `.janitor/audit_log.json` now carries a `signature` field.
+
+- **Algorithm**: Ed25519 sign of `{timestamp}{file_path}{sha256_pre_cleanup}`.
+- **Key**: `LOCAL_AUDIT_SIGNING_SEED` embedded in the binary (distinct from purge authorization key).
+- **Verification**: `vault::SigningOracle::verify_token` against embedded `VERIFYING_KEY_BYTES`.
+- **Backward compat**: `#[serde(default)]` ensures old log entries deserialize without error.
+
+### 8.4 90-Day Immaturity Hard-Gate
+
+`vault::SigningOracle::enforce_maturity(file, mtime_secs, override_tax)` returns
+`Err(VaultError::ImmatureCode)` when a dead symbol's source file was last modified
+fewer than 90 days ago. Blocks `clean --force-purge` and `dedup --apply --force-purge`.
+
+Pass `--override-tax` to both commands to bypass the gate when deliberate.
+
+---
+
+## IX. ROADMAP — ALL PHASES COMPLETE
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -199,10 +258,11 @@ def _calculate_tax_us_impl(amount, rate):
 | **5** | Forge: BLAKE3 structural hashing, Safe Proxy Pattern | **[COMPLETE]** |
 | **6** | Shadow: symlink overlay, Ghost Protocol, shadow simulation | **[COMPLETE]** |
 | **7** | Vault: Ed25519 token gate, TUI dashboard, ARCHITECTURE.md refresh | **[COMPLETE]** |
+| **8** | Machine Interface: `--format json`, `bounce` command, signed audit logs, 90-day gate | **[COMPLETE]** |
 
 ---
 
-## IX. RESOURCE-EFFICIENT ARCHITECTURE
+## X. RESOURCE-EFFICIENT ARCHITECTURE
 
 Engineering constraints for correctness and low memory overhead.
 
@@ -217,4 +277,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 5.9.12**
+**VERSION: 6.0.0-RC1**

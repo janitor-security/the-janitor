@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 anatomist = { path = "../anatomist" }
+forge = { path = "../forge" }
 mcp = { path = "../mcp" }
 shadow = { path = "../shadow" }
 common = { path = "../common" }
@@ -27,4 +28,5 @@ walkdir.workspace = true
 anyhow.workspace = true
 dotenvy = "0.15"
 serde_json.workspace = true
+blake3.workspace = true
 indicatif.workspace = true

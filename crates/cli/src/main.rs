@@ -24,6 +24,12 @@ enum Commands {
         /// Also print protected symbols with their protection reason.
         #[arg(long)]
         verbose: bool,
+        /// Output format: `text` (default) or `json` for machine-readable output.
+        ///
+        /// JSON schema: `{ slop_score, dead_symbols: [{id, reason}], merkle_root }`.
+        /// Suitable for automated GitHub Checks integration.
+        #[arg(long, default_value = "text")]
+        format: String,
     },
     /// Detect (and optionally refactor) structurally-duplicate functions.
     Dedup {
@@ -38,6 +44,9 @@ enum Commands {
         /// Ed25519 purge token (required with --force-purge).
         #[arg(long)]
         token: Option<String>,
+        /// Bypass the 90-day immaturity gate for recently modified files.
+        #[arg(long)]
+        override_tax: bool,
     },
     /// Shadow tree management.
     Shadow {
@@ -69,6 +78,26 @@ enum Commands {
         /// Bypasses all auto-detection heuristics (pytest/cargo/go/npm/scons).
         #[arg(long)]
         test_command: Option<String>,
+        /// Bypass the 90-day immaturity gate for recently modified files.
+        #[arg(long)]
+        override_tax: bool,
+    },
+    /// Analyse a unified diff patch for slop: dead-symbol additions and logic clones.
+    ///
+    /// Reads the patch from `--patch <file>` or from stdin.
+    /// Loads the symbol registry from `.janitor/symbols.rkyv` (run `janitor scan` first).
+    /// Output: slop_score, dead_symbols_added, logic_clones_found, merkle_root.
+    Bounce {
+        /// Project root (reads .janitor/symbols.rkyv for the registry).
+        path: PathBuf,
+        /// Path to unified diff patch file (reads stdin if omitted).
+        #[arg(long)]
+        patch: Option<PathBuf>,
+        /// Output format: `text` (default) or `json` for machine-readable output.
+        ///
+        /// JSON schema: `{ slop_score, dead_symbols_added, logic_clones_found, merkle_root }`.
+        #[arg(long, default_value = "text")]
+        format: String,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -119,13 +148,15 @@ async fn main() -> anyhow::Result<()> {
             path,
             library,
             verbose,
-        } => cmd_scan(path, *library, *verbose)?,
+            format,
+        } => cmd_scan(path, *library, *verbose, format)?,
         Commands::Dedup {
             path,
             apply,
             force_purge,
             token,
-        } => cmd_dedup(path, *apply, *force_purge, token.as_deref())?,
+            override_tax,
+        } => cmd_dedup(path, *apply, *force_purge, token.as_deref(), *override_tax)?,
         Commands::Shadow { cmd } => match cmd {
             ShadowCmd::Init { path } => cmd_shadow_init(path)?,
         },
@@ -136,16 +167,23 @@ async fn main() -> anyhow::Result<()> {
             library,
             token,
             test_command,
+            override_tax,
         } => cmd_clean(
             path,
             *force_purge,
             *library,
             token.as_deref(),
             test_command.as_deref(),
+            *override_tax,
         )?,
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
+        Commands::Bounce {
+            path,
+            patch,
+            format,
+        } => cmd_bounce(path, patch.as_deref(), format)?,
         Commands::Mcp => mcp::serve().await?,
     }
 
@@ -156,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
 // scan
 // ---------------------------------------------------------------------------
 
-fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result<()> {
+fn cmd_scan(project_root: &Path, library: bool, verbose: bool, format: &str) -> anyhow::Result<()> {
     use anatomist::pipeline::ScanEvent;
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
@@ -211,53 +249,83 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool) -> anyhow::Result
     pb_resolve.finish_and_clear();
     pb_filter.finish_and_clear();
 
-    println!("+------------------------------------------+");
-    println!("| JANITOR SCAN                             |");
-    println!("+------------------------------------------+");
-    println!("| Total entities : {:>22} |", result.total);
-    println!("| Dead           : {:>22} |", result.dead.len());
-    println!("| Protected      : {:>22} |", result.protected.len());
-    println!("| Orphan files   : {:>22} |", result.orphan_files.len());
-    println!("+------------------------------------------+");
+    if format == "json" {
+        // Machine-readable output for Governor SaaS / GitHub Checks integration.
+        let slop_score = if result.total == 0 {
+            0.0_f64
+        } else {
+            result.dead.len() as f64 / result.total as f64
+        };
+        // Merkle root: BLAKE3 over sorted qualified names of dead symbols.
+        // Deterministic across runs on the same codebase state.
+        let mut sorted_names: Vec<&str> = result
+            .dead
+            .iter()
+            .map(|e| e.qualified_name.as_str())
+            .collect();
+        sorted_names.sort_unstable();
+        let merkle_root = blake3::hash(sorted_names.join("\n").as_bytes())
+            .to_hex()
+            .to_string();
 
-    if result.dead.is_empty() {
-        println!("No dead symbols detected.");
+        let json_out = serde_json::json!({
+            "slop_score": slop_score,
+            "dead_symbols": result.dead.iter().map(|e| serde_json::json!({
+                "id": e.qualified_name,
+                "reason": "DEAD_SYMBOL",
+            })).collect::<Vec<_>>(),
+            "merkle_root": merkle_root,
+        });
+        println!("{}", serde_json::to_string_pretty(&json_out)?);
     } else {
-        println!("\nDEAD SYMBOLS:");
-        for entity in &result.dead {
-            println!(
-                "  {}:{} - {}",
-                entity.file_path, entity.start_line, entity.qualified_name
-            );
-        }
-    }
+        println!("+------------------------------------------+");
+        println!("| JANITOR SCAN                             |");
+        println!("+------------------------------------------+");
+        println!("| Total entities : {:>22} |", result.total);
+        println!("| Dead           : {:>22} |", result.dead.len());
+        println!("| Protected      : {:>22} |", result.protected.len());
+        println!("| Orphan files   : {:>22} |", result.orphan_files.len());
+        println!("+------------------------------------------+");
 
-    println!("\n+------------------------------------------+");
-    println!("| DEAD FILES (ORPHANS)                     |");
-    println!("+------------------------------------------+");
-    println!("| Count          : {:>22} |", result.orphan_files.len());
-    println!("+------------------------------------------+");
-    if result.orphan_files.is_empty() {
-        println!("No orphan files detected.");
-    } else {
-        for path in &result.orphan_files {
-            println!("  {path}");
+        if result.dead.is_empty() {
+            println!("No dead symbols detected.");
+        } else {
+            println!("\nDEAD SYMBOLS:");
+            for entity in &result.dead {
+                println!(
+                    "  {}:{} - {}",
+                    entity.file_path, entity.start_line, entity.qualified_name
+                );
+            }
         }
-    }
 
-    if verbose {
-        println!("\nPROTECTED SYMBOLS:");
-        for entity in &result.protected {
-            println!(
-                "  {}:{} - {} [{}]",
-                entity.file_path,
-                entity.start_line,
-                entity.qualified_name,
-                entity
-                    .protected_by
-                    .map(|p| p.to_string())
-                    .unwrap_or_else(|| "unknown".to_string())
-            );
+        println!("\n+------------------------------------------+");
+        println!("| DEAD FILES (ORPHANS)                     |");
+        println!("+------------------------------------------+");
+        println!("| Count          : {:>22} |", result.orphan_files.len());
+        println!("+------------------------------------------+");
+        if result.orphan_files.is_empty() {
+            println!("No orphan files detected.");
+        } else {
+            for path in &result.orphan_files {
+                println!("  {path}");
+            }
+        }
+
+        if verbose {
+            println!("\nPROTECTED SYMBOLS:");
+            for entity in &result.protected {
+                println!(
+                    "  {}:{} - {} [{}]",
+                    entity.file_path,
+                    entity.start_line,
+                    entity.qualified_name,
+                    entity
+                        .protected_by
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                );
+            }
         }
     }
 
@@ -303,6 +371,7 @@ fn cmd_dedup(
     apply: bool,
     force_purge: bool,
     token: Option<&str>,
+    override_tax: bool,
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost};
 
@@ -412,7 +481,7 @@ fn cmd_dedup(
         if mergeable.is_empty() {
             println!("\nNo mergeable duplicates (identical Python bodies) found.");
         } else {
-            apply_dedup(&mergeable, path)?;
+            apply_dedup(&mergeable, path, override_tax)?;
         }
     } else if apply {
         println!("\n[DRY RUN] Pass --force-purge --token <TOKEN> to apply Safe Proxy Pattern.");
@@ -421,7 +490,7 @@ fn cmd_dedup(
     Ok(())
 }
 
-fn apply_dedup(groups: &[DupGroup], root_hint: &Path) -> anyhow::Result<()> {
+fn apply_dedup(groups: &[DupGroup], root_hint: &Path, override_tax: bool) -> anyhow::Result<()> {
     use reaper::{ReplacementTarget, SafeDeleter};
 
     let project_root = if root_hint.is_dir() {
@@ -429,6 +498,20 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path) -> anyhow::Result<()> {
     } else {
         root_hint.parent().unwrap_or(root_hint).to_path_buf()
     };
+
+    // 90-day hard-gate: refuse to merge code from recently modified files.
+    for group in groups {
+        for member in &group.members {
+            let mtime_secs = std::fs::metadata(&member.file_path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            vault::SigningOracle::enforce_maturity(&member.file_path, mtime_secs, override_tax)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        }
+    }
 
     let runner = detect_test_runner(&project_root);
 
@@ -585,6 +668,7 @@ fn cmd_clean(
     library: bool,
     token: Option<&str>,
     test_command: Option<&str>,
+    override_tax: bool,
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -694,6 +778,20 @@ fn cmd_clean(
             .entry(entity.file_path.as_str())
             .or_default()
             .push(entity);
+    }
+
+    // 4.5. Hard-gate: 90-day immaturity rule.
+    // Dead symbols in files modified less than 90 days ago are not eligible for cleanup
+    // unless --override-tax is passed. Uses file mtime as a proxy for symbol age.
+    for file_str in by_file.keys() {
+        let mtime_secs = std::fs::metadata(file_str)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        vault::SigningOracle::enforce_maturity(file_str, mtime_secs, override_tax)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
     }
 
     // 5a. Python repos: shadow simulation — write cleaned files into shadow tree and run
@@ -1053,6 +1151,12 @@ fn require_token(token: Option<&str>) -> anyhow::Result<()> {
             Err(VaultError::InvalidSignature) => {
                 eprintln!("AUTHORIZATION FAILED. Token signature is invalid or has been revoked.");
                 eprintln!("Purchase or refresh your purge token at thejanitor.app");
+                std::process::exit(1);
+            }
+            // ImmatureCode is only raised by enforce_maturity, not by verify_token.
+            // Handled defensively to keep the match exhaustive.
+            Err(VaultError::ImmatureCode { file }) => {
+                eprintln!("AUTHORIZATION FAILED. Immature code gate: {file}");
                 std::process::exit(1);
             }
         },
@@ -1433,6 +1537,85 @@ fn apply_deletions(source: &[u8], mut ranges: Vec<(usize, usize)>) -> Vec<u8> {
         }
     }
     content
+}
+
+// ---------------------------------------------------------------------------
+// bounce
+// ---------------------------------------------------------------------------
+
+/// Analyse a unified diff patch for slop using the PatchBouncer.
+///
+/// Loads the symbol registry from `.janitor/symbols.rkyv` (written by `janitor scan`).
+/// Reads the patch from `patch_file` or from stdin when `None`.
+fn cmd_bounce(project_root: &Path, patch_file: Option<&Path>, format: &str) -> anyhow::Result<()> {
+    use common::registry::{MappedRegistry, SymbolRegistry};
+    use forge::slop_filter::{PRBouncer, PatchBouncer};
+    use std::io::Read as _;
+
+    // Load patch content.
+    let patch = match patch_file {
+        Some(pf) => std::fs::read_to_string(pf)
+            .with_context(|| format!("reading patch file: {}", pf.display()))?,
+        None => {
+            let mut s = String::new();
+            std::io::stdin()
+                .read_to_string(&mut s)
+                .context("reading patch from stdin")?;
+            s
+        }
+    };
+
+    // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
+    let rkyv_path = project_root.join(".janitor").join("symbols.rkyv");
+    let registry: SymbolRegistry = if rkyv_path.exists() {
+        let mapped = MappedRegistry::open(&rkyv_path)
+            .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
+        rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
+            .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?
+    } else {
+        eprintln!(
+            "warning: no symbol registry at {}. Run `janitor scan {}` first for full accuracy.",
+            rkyv_path.display(),
+            project_root.display()
+        );
+        SymbolRegistry::new()
+    };
+
+    let score = PatchBouncer.bounce(&patch, &registry)?;
+
+    // Merkle root: BLAKE3 over the raw patch bytes — ties the score to this specific diff.
+    let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
+
+    if format == "json" {
+        let json_out = serde_json::json!({
+            "slop_score": score.score(),
+            "dead_symbols_added": score.dead_symbols_added,
+            "logic_clones_found": score.logic_clones_found,
+            "merkle_root": merkle_root,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json_out)
+                .map_err(|e| anyhow::anyhow!("JSON serialization failed: {}", e))?
+        );
+    } else {
+        println!("+------------------------------------------+");
+        println!("| JANITOR BOUNCE                           |");
+        println!("+------------------------------------------+");
+        println!("| Slop score       : {:>20} |", score.score());
+        println!("| Dead syms added  : {:>20} |", score.dead_symbols_added);
+        println!("| Logic clones     : {:>20} |", score.logic_clones_found);
+        println!("+------------------------------------------+");
+        println!("  Merkle root: {}...", &merkle_root[..32]);
+        println!();
+        if score.is_clean() {
+            println!("PATCH CLEAN — no slop detected.");
+        } else {
+            println!("PATCH FLAGGED — slop score: {}", score.score());
+        }
+    }
+
+    Ok(())
 }
 
 fn run_pytest(dir: &Path) -> anyhow::Result<()> {
