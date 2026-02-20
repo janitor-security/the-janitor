@@ -936,10 +936,15 @@ fn cmd_clean(
     }
 
     audit_log.flush()?;
-    println!(
-        "Audit log updated: {}",
-        janitor_dir.join("audit_log.json").display()
-    );
+    if token.is_some() {
+        println!(
+            "\u{1f6e1}\u{fe0f} INTEGRITY VERIFIED. PQC-Signed Audit Log generated at .janitor/audit_log.json."
+        );
+    } else {
+        println!(
+            "\u{2705} RECLAMATION COMPLETE. (Note: No signed attestation generated. Run with --token to certify this excision.)"
+        );
+    }
 
     Ok(())
 }

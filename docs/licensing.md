@@ -53,11 +53,11 @@ A commercial license is required when **any of the following apply**:
 
 | Tier | Price | Who It's For |
 |------|-------|--------------|
-| **Junior Janitor** | **Free** | Individual developers. Unlimited local scans, cleanup, and dashboard. No token required. |
-| **Lead Specialist** | **$499/yr** | Teams of up to 5. Enables signed Ed25519 audit attestations and CI token integration. Covers commercial use of the purge pipeline. |
-| **Industrial Core** | **Custom** | Enterprises with >10M LOC. Includes SLA, on-premises token server, and priority support. |
+| **Junior Janitor** | **Free** | Individual developers. Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
+| **Lead Specialist** | **$499/yr** | Teams up to 5. All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
+| **Industrial Core** | **Custom** | Monoliths >1M LOC. SLA, on-prem token server, unlimited seats. |
 
-[**Purchase a License → thejanitor.app/pricing**](https://thejanitor.app/pricing)
+[**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 
 ---
 

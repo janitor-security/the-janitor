@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.0.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.1.1 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -50,15 +50,15 @@ Symlink-based overlay of the source tree. Before any physical deletion, symlinks
 
 ## III. THE ECONOMICS: UTILITY PRICING
 
-**Cleanup is Free. Integrity Attestations are Paid.**
+**Automated Cleanup is Free. Integrity Proof is the Standard.**
 
 | Tier | Cost | Scope |
 |:-----|:-----|:------|
-| **Junior Janitor** | **Free** | Scan, cleanup, TUI dashboard. Unlimited. |
-| **[Lead Specialist](https://thejanitor.app/pricing)** | **$499/yr** | Signed audit logs, Ed25519 attestation, CI integration. |
-| **[Industrial Core](https://thejanitor.app/pricing)** | **Custom** | SLA, on-prem token server, >10M LOC. |
+| **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
+| **[Lead Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
+| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | For monoliths >1M LOC. SLA + On-Prem Token Server. |
 
-[**Purchase a License → thejanitor.app/pricing**](https://thejanitor.app/pricing)
+[**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 
 ---
 

@@ -1,5 +1,5 @@
 # The Janitor: Automated Dead Symbol Detection & Code Cleanup
-**Current Version:** v6.0.0
+**Current Version:** v6.1.1
 
 **Stop paying for code you don't use.**
 
@@ -47,15 +47,15 @@ janitor clean ./src --force-purge
 
 ## Pricing
 
-**Cleanup is Free. Integrity Attestations are Paid.**
+**Automated Cleanup is Free. Integrity Proof is the Standard.**
 
 | Tier | Cost | Includes |
 |------|------|----------|
-| **Junior Janitor** | **Free** | Scan, cleanup, dedup, badge, TUI dashboard — unlimited. |
-| **Lead Specialist** | **$499/yr** | Signed audit logs, PQC attestation, CI integration token. |
-| **Industrial Core** | **Custom** | SLA, on-prem token server, >10M LOC support. |
+| **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Badge, Dashboard. No signed logs. No PQC attestation. |
+| **Lead Specialist** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
+| **Industrial Core** | **Custom** | For monoliths >1M LOC. SLA + On-Prem Token Server. |
 
-[Get started at thejanitor.app](https://thejanitor.app)
+[Get Certified → thejanitor.lemonsqueezy.com](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 
 ## CI Integration
 
@@ -101,4 +101,4 @@ For signed attestation in CI (Lead Specialist tier):
 
 **Business Source License 1.1 (BSL 1.1)** — Source Available. Converts to MIT on 2030-02-15.
 
-Scan, cleanup, badge, and dashboard are permanently free. Integrity attestation (signed audit logs, PQC compliance reports) requires a [Lead Specialist token](https://thejanitor.app).
+Scan, cleanup, badge, and dashboard are permanently free. Integrity attestation (PQC-Signed Audit Logs, CI/CD Compliance Attestation) requires a [Lead Specialist token](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key).

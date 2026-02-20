@@ -1,5 +1,5 @@
 # ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 6.0.0
+**VERSION:** 6.1.1
 **DATE:** 2026-02-19
 **CONTEXT:** v6.0.0-RC1 — Machine-Readable Interface (`--format json` on `scan`/`bounce`); Signed Audit Logs (Ed25519 per-entry attestation); 90-Day Immaturity Hard-Gate (`enforce_maturity` + `--override-tax`); Hardened Dependabot (rebase-strategy + commit-message prefix)
 
@@ -277,4 +277,4 @@ Engineering constraints for correctness and low memory overhead.
 ---
 
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 6.0.0**
+**VERSION: 6.1.1**

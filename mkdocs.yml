@@ -22,6 +22,7 @@ nav:
   - Overview: index.md
   - Safety Guarantees: safety.md
   - Benchmarks: benchmarks.md
+  - Pricing: pricing.md
   - Governance:
     - Licensing (BUSL-1.1): licensing.md
     - Token Gate: sovereignty/tokens.md
