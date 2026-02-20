@@ -26,6 +26,9 @@ nav:
   - Governance:
     - Licensing (BUSL-1.1): licensing.md
     - Token Gate: sovereignty/tokens.md
+  - Legal:
+    - Terms of Service: terms.md
+    - Privacy Policy: privacy.md
   - Archive:
     - Legacy (Python v4): archive/legacy.md
 
