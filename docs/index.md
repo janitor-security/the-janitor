@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.1.1 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.1.2 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -128,4 +128,5 @@ janitor dashboard <path>
 
 > See [Safety Guarantees](safety.md) for the Shadow Tree isolation and atomic rollback protocol.
 > See [Licensing](licensing.md) for the BUSL-1.1 terms and commercial tier details.
+> See [Terms of Service](terms.md) · [Privacy Policy](privacy.md) for legal and data handling.
 > Pre-v5 Python implementation history: [Archive](archive/legacy.md).
