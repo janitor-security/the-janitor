@@ -231,6 +231,8 @@ static GLOBAL_SHIELD_NAMES: &[&str] = &[
     "_get",
     "_set",
     "_property_get_revert",
+    // Godot node lifecycle: _init is the constructor equivalent in GDScript/GDNative
+    "_init",
 ];
 
 // --- Byte pattern tables (compile-time constants) ---

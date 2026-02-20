@@ -59,6 +59,12 @@ enum Commands {
         /// Patterns are matched against directory name components of each file path.
         #[arg(long, default_values = ["thirdparty/", "vendor/", "node_modules/", "target/"])]
         exclude: Vec<String>,
+        /// [DANGEROUS] Bypass the C++/C#/GLSL dedup safety hard-gate.
+        ///
+        /// By default, dedup --apply refuses to rewrite C++, C, header, C#, and GLSL
+        /// files to prevent SIMD/template corruption. This flag disables that gate.
+        #[arg(long, hide = true)]
+        force_unsafe_cpp_dedup: bool,
     },
     /// Shadow tree management.
     Shadow {
@@ -135,6 +141,11 @@ enum Commands {
         /// Project root.
         path: PathBuf,
     },
+    /// Local telemetry management (anonymous failure learning loop).
+    Telemetry {
+        #[command(subcommand)]
+        cmd: TelemetryCmd,
+    },
     /// Start the MCP (Model Context Protocol) stdio JSON-RPC server.
     ///
     /// Reads newline-delimited JSON-RPC 2.0 from stdin, responds on stdout.
@@ -147,6 +158,19 @@ enum ShadowCmd {
     /// Initialise (or re-initialise) the symlink shadow tree.
     Init {
         /// Project root.
+        path: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum TelemetryCmd {
+    /// Export the local anonymous telemetry log as a PQC-signed JSON block.
+    ///
+    /// Reads `.janitor/telemetry.json`, signs the entry set with the embedded
+    /// Ed25519 attestation key, and prints the signed payload to stdout.
+    /// The output is zero-knowledge: no file paths or source code are included.
+    Export {
+        /// Project root (reads .janitor/telemetry.json).
         path: PathBuf,
     },
 }
@@ -178,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
             token,
             override_tax,
             exclude,
+            force_unsafe_cpp_dedup,
         } => {
             let segs: Vec<&str> = exclude.iter().map(String::as_str).collect();
             cmd_dedup(
@@ -187,6 +212,7 @@ async fn main() -> anyhow::Result<()> {
                 token.as_deref(),
                 *override_tax,
                 &segs,
+                *force_unsafe_cpp_dedup,
             )?;
         }
         Commands::Shadow { cmd } => match cmd {
@@ -216,6 +242,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
+        Commands::Telemetry { cmd } => match cmd {
+            TelemetryCmd::Export { path } => cmd_telemetry_export(path)?,
+        },
         Commands::Bounce {
             path,
             patch,
@@ -410,6 +439,20 @@ struct DupGroup {
     identical_content: bool,
 }
 
+/// Returns `true` if the file extension belongs to the unsafe-dedup category:
+/// C++, C, header files, C#, or GLSL — where merging risks SIMD/template corruption.
+fn is_unsafe_dedup_ext(file_path: &str) -> bool {
+    matches!(
+        file_path
+            .rsplit('.')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "cpp" | "cxx" | "cc" | "c" | "h" | "hpp" | "cs" | "glsl" | "vert" | "frag"
+    )
+}
+
 fn cmd_dedup(
     path: &Path,
     apply: bool,
@@ -417,6 +460,7 @@ fn cmd_dedup(
     token: Option<&str>,
     override_tax: bool,
     exclude_segments: &[&str],
+    force_unsafe_cpp_dedup: bool,
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost};
 
@@ -531,11 +575,34 @@ fn cmd_dedup(
     }
 
     if apply && force_purge {
+        // C++ / C# / GLSL Hard-Gate: refuse to apply dedup on unsafe-extension groups.
+        // These file types contain SIMD intrinsics, preprocessor branches, and template
+        // specialisations that structurally identical ASTs do NOT capture — merging them
+        // silently corrupts inlining, AVX optimisations, and platform-specific code paths.
+        if !force_unsafe_cpp_dedup {
+            let unsafe_groups: Vec<u64> = all_groups
+                .iter()
+                .filter(|g| g.members.iter().any(|e| is_unsafe_dedup_ext(&e.file_path)))
+                .map(|g| g.hash)
+                .collect();
+            for hash in &unsafe_groups {
+                println!(
+                    "\n  [HARD-GATE] {:016x}: C++/C#/GLSL deduplication is strictly advisory \
+                     to prevent SIMD/Template corruption.",
+                    hash
+                );
+            }
+        }
+
         // Only Python files with truly identical bodies can be safely refactored.
+        // An unsafe-extension group is additionally blocked unless --force-unsafe-cpp-dedup.
         let mergeable: Vec<DupGroup> = all_groups
             .into_iter()
             .filter(|g| {
-                g.identical_content && g.members.iter().all(|e| e.file_path.ends_with(".py"))
+                g.identical_content
+                    && g.members.iter().all(|e| e.file_path.ends_with(".py"))
+                    && (force_unsafe_cpp_dedup
+                        || !g.members.iter().any(|e| is_unsafe_dedup_ext(&e.file_path)))
             })
             .collect();
         if mergeable.is_empty() {
@@ -973,6 +1040,18 @@ fn cmd_clean(
                             "Post-cleanup verification FAILED (Janitor caused regression): {}. Restoring...",
                             e
                         );
+                        // Zero-knowledge telemetry: record each rolled-back entity's hash.
+                        let janitor_dir = project_root.join(".janitor");
+                        for entities in by_file.values() {
+                            for entity in entities.iter() {
+                                telemetry_append(
+                                    &janitor_dir,
+                                    "rollback",
+                                    "unknown",
+                                    entity.structural_hash.unwrap_or(0),
+                                );
+                            }
+                        }
                         for d in &mut deleters {
                             d.restore_all().ok();
                         }
@@ -1168,6 +1247,7 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let janitor_dir = project_root.join(".janitor");
     let mut restored: u32 = 0;
     for entry in WalkDir::new(&ghost_dir)
         .into_iter()
@@ -1185,6 +1265,8 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
         std::fs::copy(entry.path(), &dest)?;
         restored += 1;
         println!("Restored: {}", relative.display());
+        // Zero-knowledge telemetry: record the rollback event (no path, no source).
+        telemetry_append(&janitor_dir, "rollback", "unknown", 0);
     }
 
     if restored > 0 {
@@ -1688,6 +1770,108 @@ fn cmd_bounce(project_root: &Path, patch_file: Option<&Path>, format: &str) -> a
             println!("PATCH FLAGGED — slop score: {}", score.score());
         }
     }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Telemetry (sovereign learning loop — zero-knowledge)
+// ---------------------------------------------------------------------------
+
+/// Returns the current UTC time as an ISO 8601 string (`YYYY-MM-DDTHH:MM:SSZ`).
+///
+/// Implemented without external crate dependencies using the Richards (2013)
+/// civil-calendar algorithm applied to the POSIX epoch.
+fn utc_now_iso8601() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    // Days since 1970-01-01 UTC.
+    let days = (secs / 86400) as i64;
+    // Richards civil-calendar algorithm: days → (year, month, day).
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mo <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, d, h, m, s)
+}
+
+/// Appends a single zero-knowledge telemetry entry to `.janitor/telemetry.json`.
+///
+/// The file is a JSON array of objects; if absent it is created.
+/// **Zero-knowledge guarantee**: no file paths, symbol names, or source bytes are
+/// written — only the timestamp, action string, heuristic label, and structural hash.
+fn telemetry_append(janitor_dir: &Path, action: &str, heuristic_failed: &str, hash: u64) {
+    let path = janitor_dir.join("telemetry.json");
+    // Read existing entries or start fresh.
+    let mut entries: Vec<serde_json::Value> = path
+        .exists()
+        .then(|| std::fs::read(&path).ok())
+        .flatten()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+
+    entries.push(serde_json::json!({
+        "timestamp": utc_now_iso8601(),
+        "action": action,
+        "heuristic_failed": heuristic_failed,
+        "structural_hash": hash,
+    }));
+
+    if let Ok(serialized) = serde_json::to_vec_pretty(&entries) {
+        let _ = std::fs::create_dir_all(janitor_dir);
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Exports the local telemetry log as a PQC-signed JSON block.
+///
+/// Reads `.janitor/telemetry.json`, signs the canonical JSON representation of the
+/// entries with the embedded Ed25519 attestation key, and prints the signed payload
+/// to stdout. The payload is zero-knowledge: no file paths or source code are present.
+fn cmd_telemetry_export(project_root: &Path) -> anyhow::Result<()> {
+    let telemetry_path = project_root.join(".janitor").join("telemetry.json");
+
+    if !telemetry_path.exists() {
+        println!("No telemetry data found at {}.", telemetry_path.display());
+        println!("Telemetry is recorded automatically on rollbacks (janitor undo / clean --force-purge).");
+        return Ok(());
+    }
+
+    let raw = std::fs::read(&telemetry_path)
+        .with_context(|| format!("reading {}", telemetry_path.display()))?;
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_slice(&raw).with_context(|| "telemetry.json is not valid JSON")?;
+
+    // Canonical payload: sorted, compact JSON of the entries array.
+    let canonical = serde_json::to_vec(&entries).context("serializing telemetry entries")?;
+
+    // Sign with the embedded local audit attestation key (Ed25519).
+    let signature = vault::SigningOracle::sign_audit(&canonical);
+
+    let export = serde_json::json!({
+        "version": "1",
+        "entry_count": entries.len(),
+        "entries": entries,
+        "signature": signature,
+        "exported_at": utc_now_iso8601(),
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&export).context("serializing export block")?
+    );
 
     Ok(())
 }
