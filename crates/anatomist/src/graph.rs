@@ -222,11 +222,12 @@ fn find_containing_entity(byte_offset: u32, entries: &[(u64, u32, u32)]) -> Opti
 pub fn build_reference_graph(
     project_root: &Path,
     host: &mut ParserHost,
+    exclude_segments: &[&str],
 ) -> Result<ReferenceGraph, AnatomistError> {
     let root = dunce::canonicalize(project_root)?;
-    let py_files = walk_py_files(&root)?;
-    let cpp_files = walk_cpp_files(&root)?;
-    let polyglot_files = walk_polyglot_files(&root)?;
+    let py_files = walk_py_files(&root, exclude_segments)?;
+    let cpp_files = walk_cpp_files(&root, exclude_segments)?;
+    let polyglot_files = walk_polyglot_files(&root, exclude_segments)?;
 
     let mut registry = SymbolRegistry::new();
     let mut graph = DiGraph::new();
@@ -615,12 +616,12 @@ pub fn build_reference_graph(
 }
 
 /// Walks a directory for `.py` files, skipping excluded directories.
-fn walk_py_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
+fn walk_py_files(root: &Path, exclude_segments: &[&str]) -> Result<Vec<PathBuf>, AnatomistError> {
     let mut files = Vec::new();
 
     for entry in WalkDir::new(root)
         .into_iter()
-        .filter_entry(|e| !is_excluded(e.path()))
+        .filter_entry(|e| !is_excluded(e.path()) && !is_user_excluded(e.path(), exclude_segments))
     {
         let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
         let path = entry.path();
@@ -634,12 +635,12 @@ fn walk_py_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
 
 /// Walks a directory for C++ source files (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`),
 /// skipping the same excluded directories as [`walk_py_files`].
-fn walk_cpp_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
+fn walk_cpp_files(root: &Path, exclude_segments: &[&str]) -> Result<Vec<PathBuf>, AnatomistError> {
     let mut files = Vec::new();
 
     for entry in WalkDir::new(root)
         .into_iter()
-        .filter_entry(|e| !is_excluded(e.path()))
+        .filter_entry(|e| !is_excluded(e.path()) && !is_user_excluded(e.path(), exclude_segments))
     {
         let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
         let path = entry.path();
@@ -659,12 +660,15 @@ fn walk_cpp_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
 /// skipping the same excluded directories as [`walk_py_files`].
 ///
 /// Excludes files already handled by [`walk_cpp_files`] and [`walk_py_files`].
-fn walk_polyglot_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
+fn walk_polyglot_files(
+    root: &Path,
+    exclude_segments: &[&str],
+) -> Result<Vec<PathBuf>, AnatomistError> {
     let mut files = Vec::new();
 
     for entry in WalkDir::new(root)
         .into_iter()
-        .filter_entry(|e| !is_excluded(e.path()))
+        .filter_entry(|e| !is_excluded(e.path()) && !is_user_excluded(e.path(), exclude_segments))
     {
         let entry = entry.map_err(|e| AnatomistError::IoError(e.into()))?;
         let path = entry.path();
@@ -682,7 +686,7 @@ fn walk_polyglot_files(root: &Path) -> Result<Vec<PathBuf>, AnatomistError> {
     Ok(files)
 }
 
-/// Returns `true` if the path should be excluded from walking.
+/// Returns `true` if the path should be excluded from walking (built-in set).
 fn is_excluded(path: &Path) -> bool {
     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
         matches!(
@@ -699,6 +703,25 @@ fn is_excluded(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+/// Returns `true` if the path's last component matches any user-supplied exclude segment.
+///
+/// Each pattern in `segments` is normalised by stripping trailing `/`, `/**`, and `/*`
+/// so that `thirdparty/`, `vendor/**`, and `vendor` all reduce to a plain directory name.
+/// The check fires when any **directory component** of the path equals the normalised name,
+/// so the entire subtree under that directory is skipped.
+fn is_user_excluded(path: &Path, segments: &[&str]) -> bool {
+    let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    segments.iter().any(|raw| {
+        let seg = raw
+            .trim_end_matches('/')
+            .trim_end_matches("/**")
+            .trim_end_matches("/*");
+        name == seg
+    })
 }
 
 /// Normalizes a path for use as a HashMap key.
@@ -719,7 +742,7 @@ mod tests {
         fs::create_dir_all(&tmp).ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -737,7 +760,7 @@ mod tests {
         fs::write(&test_py, "def foo():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -764,7 +787,7 @@ mod tests {
         .ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -790,7 +813,7 @@ mod tests {
         fs::write(&main, "from .utils import util\n\ndef run():\n    util()\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -817,7 +840,7 @@ mod tests {
         fs::write(&main, "import utils\n\ndef run():\n    utils.process()\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -843,7 +866,7 @@ mod tests {
         fs::write(&main, "from utils import func\n\ndef run():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -867,7 +890,7 @@ mod tests {
         fs::write(&test_py, "def foo():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -887,7 +910,7 @@ mod tests {
         fs::write(tmp.join("main.py"), "def run():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let result = build_reference_graph(&tmp, &mut host, &[]).unwrap();
         let orphans = result.find_orphan_files();
 
         assert!(orphans.iter().any(|p| p.ends_with("utils.py")));
@@ -910,7 +933,7 @@ mod tests {
         .ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let result = build_reference_graph(&tmp, &mut host, &[]).unwrap();
         let orphans = result.find_orphan_files();
 
         // helpers.py is referenced by app.py — not an orphan.
@@ -931,7 +954,7 @@ mod tests {
         fs::write(tmp.join("pkg/util.py"), "def fn():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let result = build_reference_graph(&tmp, &mut host, &[]).unwrap();
         let orphans = result.find_orphan_files();
 
         assert!(!orphans.iter().any(|p| p.ends_with("__init__.py")));
@@ -951,7 +974,7 @@ mod tests {
         fs::write(&good_py, "def bar():\n    pass\n").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host);
+        let result = build_reference_graph(&tmp, &mut host, &[]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -970,7 +993,7 @@ mod tests {
         fs::write(&rs_file, "pub fn hello() {} struct Foo {}").ok();
 
         let mut host = ParserHost::new().unwrap();
-        let result = build_reference_graph(&tmp, &mut host).unwrap();
+        let result = build_reference_graph(&tmp, &mut host, &[]).unwrap();
         eprintln!(
             "file_count={} symbol_count={}",
             result.stats.file_count, result.stats.symbol_count,

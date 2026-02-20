@@ -30,6 +30,13 @@ enum Commands {
         /// Suitable for automated GitHub Checks integration.
         #[arg(long, default_value = "text")]
         format: String,
+        /// Glob patterns for directories to exclude from scanning.
+        ///
+        /// Patterns are matched against directory name components of each file path.
+        /// Trailing `/`, `/**`, and `/*` are stripped before matching.
+        /// Example: `--exclude thirdparty/ --exclude generated/`
+        #[arg(long, default_values = ["thirdparty/", "vendor/", "node_modules/", "target/"])]
+        exclude: Vec<String>,
     },
     /// Detect (and optionally refactor) structurally-duplicate functions.
     Dedup {
@@ -47,6 +54,11 @@ enum Commands {
         /// Bypass the 90-day immaturity gate for recently modified files.
         #[arg(long)]
         override_tax: bool,
+        /// Glob patterns for directories to exclude from dedup analysis.
+        ///
+        /// Patterns are matched against directory name components of each file path.
+        #[arg(long, default_values = ["thirdparty/", "vendor/", "node_modules/", "target/"])]
+        exclude: Vec<String>,
     },
     /// Shadow tree management.
     Shadow {
@@ -81,6 +93,11 @@ enum Commands {
         /// Bypass the 90-day immaturity gate for recently modified files.
         #[arg(long)]
         override_tax: bool,
+        /// Glob patterns for directories to exclude from cleanup scanning.
+        ///
+        /// Patterns are matched against directory name components of each file path.
+        #[arg(long, default_values = ["thirdparty/", "vendor/", "node_modules/", "target/"])]
+        exclude: Vec<String>,
     },
     /// Analyse a unified diff patch for slop: dead-symbol additions and logic clones.
     ///
@@ -149,14 +166,29 @@ async fn main() -> anyhow::Result<()> {
             library,
             verbose,
             format,
-        } => cmd_scan(path, *library, *verbose, format)?,
+            exclude,
+        } => {
+            let segs: Vec<&str> = exclude.iter().map(String::as_str).collect();
+            cmd_scan(path, *library, *verbose, format, &segs)?;
+        }
         Commands::Dedup {
             path,
             apply,
             force_purge,
             token,
             override_tax,
-        } => cmd_dedup(path, *apply, *force_purge, token.as_deref(), *override_tax)?,
+            exclude,
+        } => {
+            let segs: Vec<&str> = exclude.iter().map(String::as_str).collect();
+            cmd_dedup(
+                path,
+                *apply,
+                *force_purge,
+                token.as_deref(),
+                *override_tax,
+                &segs,
+            )?;
+        }
         Commands::Shadow { cmd } => match cmd {
             ShadowCmd::Init { path } => cmd_shadow_init(path)?,
         },
@@ -168,14 +200,19 @@ async fn main() -> anyhow::Result<()> {
             token,
             test_command,
             override_tax,
-        } => cmd_clean(
-            path,
-            *force_purge,
-            *library,
-            token.as_deref(),
-            test_command.as_deref(),
-            *override_tax,
-        )?,
+            exclude,
+        } => {
+            let segs: Vec<&str> = exclude.iter().map(String::as_str).collect();
+            cmd_clean(
+                path,
+                *force_purge,
+                *library,
+                token.as_deref(),
+                test_command.as_deref(),
+                *override_tax,
+                &segs,
+            )?;
+        }
         Commands::Dashboard { path } => cmd_dashboard(path)?,
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
@@ -194,7 +231,13 @@ async fn main() -> anyhow::Result<()> {
 // scan
 // ---------------------------------------------------------------------------
 
-fn cmd_scan(project_root: &Path, library: bool, verbose: bool, format: &str) -> anyhow::Result<()> {
+fn cmd_scan(
+    project_root: &Path,
+    library: bool,
+    verbose: bool,
+    format: &str,
+    exclude_segments: &[&str],
+) -> anyhow::Result<()> {
     use anatomist::pipeline::ScanEvent;
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
@@ -243,6 +286,7 @@ fn cmd_scan(project_root: &Path, library: bool, verbose: bool, format: &str) -> 
             }
             _ => {}
         }),
+        exclude_segments,
     )?;
     // Ensure all bars are finished if pipeline returned early (no candidates).
     pb_graph.finish_and_clear();
@@ -372,6 +416,7 @@ fn cmd_dedup(
     force_purge: bool,
     token: Option<&str>,
     override_tax: bool,
+    exclude_segments: &[&str],
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost};
 
@@ -380,7 +425,7 @@ fn cmd_dedup(
     }
 
     // Collect all supported source files — polyglot, not Python-only.
-    let source_files = collect_source_files(path)?;
+    let source_files = collect_source_files(path, exclude_segments)?;
     if source_files.is_empty() {
         println!("No source files found at: {}", path.display());
         return Ok(());
@@ -412,9 +457,24 @@ fn cmd_dedup(
     }
 
     // Group by structural hash across all files.
+    // Performance Heuristic: skip entities from math/physics paths or bodies
+    // containing SIMD intrinsics — merging them breaks inlining and AVX optimisations.
     let mut hash_map: HashMap<u64, Vec<anatomist::Entity>> = HashMap::new();
     for entity in all_entities {
         if let Some(hash) = entity.structural_hash {
+            // Read entity source bytes for the SIMD intrinsic check (zero-copy mmap).
+            let entity_bytes: Vec<u8> = std::fs::File::open(&entity.file_path)
+                .ok()
+                .and_then(|f| unsafe { memmap2::Mmap::map(&f).ok() })
+                .map(|mmap| {
+                    let start = entity.start_byte as usize;
+                    let end = (entity.end_byte as usize).min(mmap.len());
+                    mmap[start..end].to_vec()
+                })
+                .unwrap_or_default();
+            if forge::should_skip_dedup(&entity.file_path, &entity_bytes) {
+                continue;
+            }
             hash_map.entry(hash).or_default().push(entity);
         }
     }
@@ -669,6 +729,7 @@ fn cmd_clean(
     token: Option<&str>,
     test_command: Option<&str>,
     override_tax: bool,
+    exclude_segments: &[&str],
 ) -> anyhow::Result<()> {
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -688,7 +749,7 @@ fn cmd_clean(
         );
         pb.set_message("Scanning for dead symbols...");
         pb.enable_steady_tick(Duration::from_millis(100));
-        let r = pipeline::run(project_root, &mut host, library, None)?;
+        let r = pipeline::run(project_root, &mut host, library, None, exclude_segments)?;
         pb.finish_and_clear();
         r
     };
@@ -1486,7 +1547,7 @@ fn are_contents_identical(members: &[anatomist::Entity]) -> bool {
 ///
 /// Covers Python, Rust, JS/TS, Go, and C/C++ so that cross-language structural
 /// clone detection works on polyglot repos.
-fn collect_source_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+fn collect_source_files(path: &Path, exclude_segments: &[&str]) -> anyhow::Result<Vec<PathBuf>> {
     use walkdir::WalkDir;
     const SKIP: &[&str] = &[
         "target",
@@ -1510,10 +1571,18 @@ fn collect_source_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| {
-            e.file_name()
-                .to_str()
-                .map(|n| !SKIP.contains(&n))
-                .unwrap_or(true)
+            let name = e.file_name().to_str().unwrap_or_default();
+            if SKIP.contains(&name) {
+                return false;
+            }
+            // User-supplied exclude segments (strip trailing / and glob suffixes).
+            !exclude_segments.iter().any(|raw| {
+                let seg = raw
+                    .trim_end_matches('/')
+                    .trim_end_matches("/**")
+                    .trim_end_matches("/*");
+                name == seg
+            })
         })
         .filter_map(|e| e.ok())
         .filter(|e| {

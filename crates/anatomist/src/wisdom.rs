@@ -227,6 +227,10 @@ static GLOBAL_SHIELD_NAMES: &[&str] = &[
     "_property_can_revert",
     "_get_property_revert",
     "_get_configuration_warnings",
+    // Godot reflection / scripting API virtual overrides (invoked via Object::get/set)
+    "_get",
+    "_set",
+    "_property_get_revert",
 ];
 
 // --- Byte pattern tables (compile-time constants) ---

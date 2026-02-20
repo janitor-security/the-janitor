@@ -106,11 +106,12 @@ pub fn run(
     host: &mut ParserHost,
     library_mode: bool,
     on_progress: Option<&dyn Fn(ScanEvent)>,
+    exclude_segments: &[&str],
 ) -> anyhow::Result<ScanResult> {
     let root = dunce::canonicalize(project_root)?;
 
     // Build cross-file reference graph (Pass 1: index, Pass 2: link edges).
-    let ref_graph = build_reference_graph(&root, host)?;
+    let ref_graph = build_reference_graph(&root, host, exclude_segments)?;
 
     if let Some(cb) = on_progress {
         cb(ScanEvent::GraphBuilt {
@@ -348,7 +349,7 @@ mod tests {
         fs::create_dir_all(&tmp).ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false, None).unwrap();
+        let result = run(&tmp, &mut host, false, None, &[]).unwrap();
         assert_eq!(result.total, 0);
         assert!(result.dead.is_empty());
 
@@ -368,7 +369,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false, None).unwrap();
+        let result = run(&tmp, &mut host, false, None, &[]).unwrap();
 
         // `helper` is called by `run`, so it is referenced — not dead.
         assert!(!result.dead.iter().any(|e| e.name == "helper"));
@@ -385,7 +386,7 @@ mod tests {
         fs::write(tmp.join("main.py"), b"# nothing uses utils\n").ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false, None).unwrap();
+        let result = run(&tmp, &mut host, false, None, &[]).unwrap();
 
         assert!(result.dead.iter().any(|e| e.name == "dead_code"));
 
@@ -404,7 +405,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false, None).unwrap();
+        let result = run(&tmp, &mut host, false, None, &[]).unwrap();
 
         assert!(!result.dead.iter().any(|e| e.name == "__init__"));
 
@@ -423,7 +424,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, true, None).unwrap();
+        let result = run(&tmp, &mut host, true, None, &[]).unwrap();
 
         assert!(!result.dead.iter().any(|e| e.name == "public_fn"));
         // _private is still a candidate (private even in library mode)
@@ -444,7 +445,7 @@ mod tests {
         .ok();
 
         let mut host = make_host();
-        let result = run(&tmp, &mut host, false, None).unwrap();
+        let result = run(&tmp, &mut host, false, None, &[]).unwrap();
 
         // All symbols in tests/ should be Directory-protected, not dead.
         assert!(result.dead.is_empty());

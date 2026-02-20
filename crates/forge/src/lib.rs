@@ -25,6 +25,60 @@ pub mod slop_filter;
 
 use tree_sitter::Node;
 
+// ---------------------------------------------------------------------------
+// Performance Heuristic: SIMD / math-path dedup skip
+// ---------------------------------------------------------------------------
+
+/// SIMD intrinsic byte patterns that indicate a function should not be deduplicated.
+///
+/// Merging SIMD-intrinsic functions breaks inlining and AVX/NEON optimisation
+/// opportunities — the compiler must see the full body to auto-vectorise.
+const SIMD_PATTERNS: &[&[u8]] = &[
+    b"_mm_",
+    b"_mm256_",
+    b"_mm512_",
+    b"__m128",
+    b"__m256",
+    b"__m512",
+    b"simd_",
+    b"__builtin_ia32",
+    b"__builtin_neon",
+    b"vcvt",
+    b"vdup",
+];
+
+/// Returns `true` when structural deduplication must be **skipped** for this entity.
+///
+/// Two independent guards are applied:
+///
+/// 1. **Path guard** — the file path contains a `/math/` or `/physics/` component.
+///    Math-heavy files contain hand-tuned SIMD or fused operations whose ordering
+///    matters for numerical precision and hardware throughput.
+///
+/// 2. **Intrinsic guard** — the entity's source bytes contain a known SIMD intrinsic
+///    prefix (Intel SSE/AVX/AVX-512 or GCC built-ins).  Merging such functions strips
+///    the inlining hint the compiler depends on to emit vectorised machine code.
+///
+/// # Arguments
+/// - `file_path`:     Normalized (UTF-8, forward-slash) path of the source file.
+/// - `entity_source`: Raw source bytes of the function/method body to inspect.
+pub fn should_skip_dedup(file_path: &str, entity_source: &[u8]) -> bool {
+    // Guard 1: path contains /math/ or /physics/
+    if file_path
+        .split('/')
+        .any(|seg| matches!(seg, "math" | "physics"))
+    {
+        return true;
+    }
+    // Guard 2: SIMD intrinsic patterns in the entity body.
+    for pattern in SIMD_PATTERNS {
+        if entity_source.windows(pattern.len()).any(|w| w == *pattern) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Node kinds that carry only naming information and must be erased
 /// during alpha-normalization.
 const SKIP_KINDS: &[&str] = &[
