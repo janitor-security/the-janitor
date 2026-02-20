@@ -1,9 +1,11 @@
 # The Janitor: Automated Dead Symbol Detection & Code Cleanup
-**Current Version:** v6.1.2
+**Current Version:** v6.1.3
 
 **Stop paying for code you don't use.**
 
 The Janitor creates a Shadow Tree to verify deletion safety, then surgically removes dead code at the symbol level — functions, classes, and entire orphan files — across Python, Rust, JavaScript/TypeScript, and C++ codebases.
+
+Don't guess your technical debt. The Janitor generates a verifiable **Code Health Badge** so your team can surgically monitor the decay of the monolith before it impacts production.
 
 ## How It Works
 
@@ -52,8 +54,8 @@ janitor clean ./src --force-purge
 | Tier | Cost | Includes |
 |------|------|----------|
 | **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Badge, Dashboard. No signed logs. No PQC attestation. |
-| **Lead Specialist** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
-| **Industrial Core** | **Custom** | For monoliths >1M LOC. SLA + On-Prem Token Server. |
+| **Lead Specialist** | **$4,900/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. Up to 10 seats. |
+| **Industrial Core** | **From $50,000/yr** | For monoliths >1M LOC. On-Prem Token Server + Keypair Rotation Protocol + Enterprise SLA. Unlimited seats. |
 
 [Get Certified → thejanitor.lemonsqueezy.com](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 

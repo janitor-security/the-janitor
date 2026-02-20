@@ -120,6 +120,55 @@ The `sha256_pre_cleanup` field captures the SHA-256 hash of the entire file *bef
 
 ---
 
+## Cryptographic Key Rotation & Token Revocation
+
+The signed attestation pipeline (Lead Specialist / Industrial Core) is protected by an **Ed25519 keypair embedded in the binary**. This section explains how token revocation works and how it satisfies change-management requirements.
+
+### How Tokens Are Verified
+
+A Lead Specialist token is a base64-encoded Ed25519 signature of the string `JANITOR_PURGE_AUTHORIZED`, signed by the private signing key held exclusively by thejanitor.app. The binary contains only the corresponding **verifying key** (32 bytes). Verification is a pure offline computation — no network call, no lookup table, no telemetry.
+
+### Token Revocation via Keypair Rotation
+
+Because each token is a deterministic function of the keypair, **revocation is achieved by rotating the keypair**:
+
+1. A new Ed25519 keypair is generated (`cargo run -p mint-token -- generate`).
+2. The new verifying key is embedded in a reissued binary (a new patch release).
+3. All existing tokens — signed against the old private key — are **cryptographically invalid** against the new verifying key. No database lookup, no revocation list, no network check is required.
+4. New tokens are issued to valid licensees via the standard token delivery process.
+
+This model has a clear, auditable change-management trail:
+- Each keypair rotation produces a new binary release (git tag, GitHub Release, signed binary hash).
+- The release commit records the rotation event in the changelog.
+- Licensees receive new tokens via the same channel as initial issuance.
+
+### Rotation Cadence & Emergency Rotation
+
+| Trigger | Response |
+|---------|----------|
+| Scheduled annual rotation | New binary released at license renewal |
+| Suspected token compromise | Emergency binary release; all licensees notified via sales@thejanitor.app |
+| Binary integrity failure | Binary replaced; SHA-256 hash published on GitHub Release |
+
+Industrial Core licensees receive a **contractual rotation SLA**: an emergency keypair rotation and new binary delivery within 4 hours of a confirmed compromise report.
+
+### Forensic Traceability
+
+Every physical excision event signed with a valid token includes a per-event Ed25519 signature in the audit log:
+
+```json
+{
+  "timestamp": "2026-02-19T10:00:00Z",
+  "file_path": "/abs/path/src/module.py",
+  "sha256_pre_cleanup": "a3b4c5d6...",
+  "attestation_signature": "<base64-ed25519-sig>"
+}
+```
+
+The `attestation_signature` field covers `{timestamp}{file_path}{sha256_pre_cleanup}`. Auditors can verify this signature independently using only the public verifying key embedded in the binary at the time of excision — no server access required.
+
+---
+
 ## Summary: What Can Go Wrong?
 
 | Failure Mode | What Happens |

@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.1.2 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.1.3 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -11,6 +11,8 @@
 Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect dead code.
 
 The consequence is **Code Bloat**: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.
+
+Don't guess your technical debt. The Janitor generates a verifiable **Code Health Badge** so your team can surgically monitor the decay of the monolith before it impacts production.
 
 ---
 
@@ -55,8 +57,8 @@ Symlink-based overlay of the source tree. Before any physical deletion, symlinks
 | Tier | Cost | Scope |
 |:-----|:-----|:------|
 | **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
-| **[Lead Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
-| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | For monoliths >1M LOC. SLA + On-Prem Token Server. |
+| **[Lead Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$4,900/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. Up to 10 seats. |
+| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **From $50,000/yr** | For monoliths >1M LOC. On-Prem Token Server + Keypair Rotation Protocol + Enterprise SLA. Unlimited seats. |
 
 [**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 

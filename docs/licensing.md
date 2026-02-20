@@ -54,8 +54,8 @@ A commercial license is required when **any of the following apply**:
 | Tier | Price | Who It's For |
 |------|-------|--------------|
 | **Junior Janitor** | **Free** | Individual developers. Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
-| **Lead Specialist** | **$499/yr** | Teams up to 5. All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
-| **Industrial Core** | **Custom** | Monoliths >1M LOC. SLA, on-prem token server, unlimited seats. |
+| **Lead Specialist** | **$4,900/yr** | Teams up to 10. All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
+| **Industrial Core** | **From $50,000/yr** | Monoliths >1M LOC. On-prem token server, keypair rotation protocol, enterprise SLA, unlimited seats. |
 
 [**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 

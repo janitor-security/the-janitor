@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -312,7 +312,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -344,7 +344,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -784,7 +784,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "blake3",
@@ -1000,7 +1000,7 @@ checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
 name = "lazarus"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1093,7 +1093,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "base64",
@@ -1271,7 +1271,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "oracle"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "common",
@@ -1634,7 +1634,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "junction",
@@ -1977,7 +1977,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "6.1.2"
+version = "6.1.3"
 
 [[package]]
 name = "subtle"
@@ -2379,7 +2379,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -2717,7 +2717,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.1.2"
+version = "6.1.3"
 dependencies = [
  "anyhow",
  "common",
