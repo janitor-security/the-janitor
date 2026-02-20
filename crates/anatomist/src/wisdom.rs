@@ -199,18 +199,34 @@ static PLUGIN_DIRS: &[&str] = &["spiders", "plugins", "commands", "handlers", "t
 ///
 /// Covers game-engine lifecycle methods (Unity, Godot), generic entry points, and
 /// framework-invoked hooks that are never explicitly called from user code.
+///
+/// **Godot C++ note**: `GDCLASS(ClassName, Parent)` registers lifecycle methods via
+/// function pointers — `_bind_methods`, `_notification`, etc. are stored in a
+/// `ClassInfo` struct and called indirectly. No string literal of the method name
+/// is emitted in the macro expansion, so grep_shield cannot protect them. They must
+/// be explicitly shielded here.
 static GLOBAL_SHIELD_NAMES: &[&str] = &[
+    // Universal entry points
     "main",
     "Main",
     "init",
     "update",
     "draw",
     "act",
+    // Unity lifecycle
     "Start",
     "FixedUpdate",
     "Awake",
     "OnEnable",
     "OnTriggerEnter",
+    // Godot C++ GDCLASS-registered methods (registered via function pointer, not string)
+    "_bind_methods",
+    "_notification",
+    "_get_property_list",
+    "_validate_property",
+    "_property_can_revert",
+    "_get_property_revert",
+    "_get_configuration_warnings",
 ];
 
 // --- Byte pattern tables (compile-time constants) ---

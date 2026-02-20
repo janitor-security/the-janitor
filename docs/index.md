@@ -1,8 +1,12 @@
 # The Janitor
 
-**v6.1.3 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.1.4 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
+
+> **Sonar takes your code to the cloud. The Janitor cleans it on your metal.**
+>
+> Every analysis runs locally. Your source code never leaves your machine.
 
 ---
 
@@ -13,6 +17,10 @@ Every codebase accumulates dead weight. Functions that were called once, classes
 The consequence is **Code Bloat**: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.
 
 Don't guess your technical debt. The Janitor generates a verifiable **Code Health Badge** so your team can surgically monitor the decay of the monolith before it impacts production.
+
+### Data Sovereignty
+
+Unlike cloud-based static analysis tools, The Janitor performs all operations — reference graph construction, structural clone detection, shadow-tree simulation — **offline, on your hardware**. Your source code is memory-mapped locally and never transmitted to any server. The signed attestation token is verified by a 32-byte public key embedded in the binary. No network call is made at any point in the pipeline.
 
 ---
 
