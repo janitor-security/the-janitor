@@ -455,6 +455,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cryptographic-key-rotation-token-revocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cryptographic Key Rotation &amp; Token Revocation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cryptographic Key Rotation &amp; Token Revocation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-tokens-are-verified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Tokens Are Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-revocation-via-keypair-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Revocation via Keypair Rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rotation-cadence-emergency-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rotation Cadence &amp; Emergency Rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forensic-traceability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forensic Traceability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary-what-can-go-wrong" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -993,6 +1054,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cryptographic-key-rotation-token-revocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cryptographic Key Rotation &amp; Token Revocation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cryptographic Key Rotation &amp; Token Revocation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-tokens-are-verified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Tokens Are Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-revocation-via-keypair-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Revocation via Keypair Rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rotation-cadence-emergency-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rotation Cadence &amp; Emergency Rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forensic-traceability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forensic Traceability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary-what-can-go-wrong" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1122,6 +1244,57 @@
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">]</span>
 </code></pre></div>
 <p>The <code>sha256_pre_cleanup</code> field captures the SHA-256 hash of the entire file <em>before</em> modification. This allows auditors to verify that the pre-cleanup state matches any backup copy, and provides a forensic trail for compliance reviews.</p>
+<hr />
+<h2 id="cryptographic-key-rotation-token-revocation">Cryptographic Key Rotation &amp; Token Revocation</h2>
+<p>The signed attestation pipeline (Lead Specialist / Industrial Core) is protected by an <strong>Ed25519 keypair embedded in the binary</strong>. This section explains how token revocation works and how it satisfies change-management requirements.</p>
+<h3 id="how-tokens-are-verified">How Tokens Are Verified</h3>
+<p>A Lead Specialist token is a base64-encoded Ed25519 signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>, signed by the private signing key held exclusively by thejanitor.app. The binary contains only the corresponding <strong>verifying key</strong> (32 bytes). Verification is a pure offline computation — no network call, no lookup table, no telemetry.</p>
+<h3 id="token-revocation-via-keypair-rotation">Token Revocation via Keypair Rotation</h3>
+<p>Because each token is a deterministic function of the keypair, <strong>revocation is achieved by rotating the keypair</strong>:</p>
+<ol>
+<li>A new Ed25519 keypair is generated (<code>cargo run -p mint-token -- generate</code>).</li>
+<li>The new verifying key is embedded in a reissued binary (a new patch release).</li>
+<li>All existing tokens — signed against the old private key — are <strong>cryptographically invalid</strong> against the new verifying key. No database lookup, no revocation list, no network check is required.</li>
+<li>New tokens are issued to valid licensees via the standard token delivery process.</li>
+</ol>
+<p>This model has a clear, auditable change-management trail:
+- Each keypair rotation produces a new binary release (git tag, GitHub Release, signed binary hash).
+- The release commit records the rotation event in the changelog.
+- Licensees receive new tokens via the same channel as initial issuance.</p>
+<h3 id="rotation-cadence-emergency-rotation">Rotation Cadence &amp; Emergency Rotation</h3>
+<table>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scheduled annual rotation</td>
+<td>New binary released at license renewal</td>
+</tr>
+<tr>
+<td>Suspected token compromise</td>
+<td>Emergency binary release; all licensees notified via sales@thejanitor.app</td>
+</tr>
+<tr>
+<td>Binary integrity failure</td>
+<td>Binary replaced; SHA-256 hash published on GitHub Release</td>
+</tr>
+</tbody>
+</table>
+<p>Industrial Core licensees receive a <strong>contractual rotation SLA</strong>: an emergency keypair rotation and new binary delivery within 4 hours of a confirmed compromise report.</p>
+<h3 id="forensic-traceability">Forensic Traceability</h3>
+<p>Every physical excision event signed with a valid token includes a per-event Ed25519 signature in the audit log:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-02-19T10:00:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/abs/path/src/module.py&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;sha256_pre_cleanup&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;a3b4c5d6...&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">&quot;attestation_signature&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;base64-ed25519-sig&gt;&quot;</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">}</span>
+</code></pre></div>
+<p>The <code>attestation_signature</code> field covers <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>. Auditors can verify this signature independently using only the public verifying key embedded in the binary at the time of excision — no server access required.</p>
 <hr />
 <h2 id="summary-what-can-go-wrong">Summary: What Can Go Wrong?</h2>
 <table>
