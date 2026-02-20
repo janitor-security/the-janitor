@@ -108,14 +108,21 @@ enum Commands {
     /// Analyse a unified diff patch for slop: dead-symbol additions and logic clones.
     ///
     /// Reads the patch from `--patch <file>` or from stdin.
-    /// Loads the symbol registry from `.janitor/symbols.rkyv` (run `janitor scan` first).
+    /// Loads the symbol registry from `--registry <file>` when provided, otherwise
+    /// falls back to `.janitor/symbols.rkyv` under the project root.
     /// Output: slop_score, dead_symbols_added, logic_clones_found, merkle_root.
     Bounce {
-        /// Project root (reads .janitor/symbols.rkyv for the registry).
+        /// Project root (reads .janitor/symbols.rkyv for the registry unless --registry is set).
         path: PathBuf,
         /// Path to unified diff patch file (reads stdin if omitted).
         #[arg(long)]
         patch: Option<PathBuf>,
+        /// Explicit path to the symbol registry (.rkyv file).
+        ///
+        /// Overrides the default `.janitor/symbols.rkyv` auto-discovery.
+        /// Required when calling from the Governor SaaS with a pre-generated registry.
+        #[arg(long)]
+        registry: Option<PathBuf>,
         /// Output format: `text` (default) or `json` for machine-readable output.
         ///
         /// JSON schema: `{ slop_score, dead_symbols_added, logic_clones_found, merkle_root }`.
@@ -248,8 +255,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Bounce {
             path,
             patch,
+            registry,
             format,
-        } => cmd_bounce(path, patch.as_deref(), format)?,
+        } => cmd_bounce(path, patch.as_deref(), registry.as_deref(), format)?,
         Commands::Mcp => mcp::serve().await?,
     }
 
@@ -1701,9 +1709,15 @@ fn apply_deletions(source: &[u8], mut ranges: Vec<(usize, usize)>) -> Vec<u8> {
 
 /// Analyse a unified diff patch for slop using the PatchBouncer.
 ///
-/// Loads the symbol registry from `.janitor/symbols.rkyv` (written by `janitor scan`).
+/// Loads the symbol registry from `registry_override` when provided, otherwise falls
+/// back to `.janitor/symbols.rkyv` under `project_root` (written by `janitor scan`).
 /// Reads the patch from `patch_file` or from stdin when `None`.
-fn cmd_bounce(project_root: &Path, patch_file: Option<&Path>, format: &str) -> anyhow::Result<()> {
+fn cmd_bounce(
+    project_root: &Path,
+    patch_file: Option<&Path>,
+    registry_override: Option<&Path>,
+    format: &str,
+) -> anyhow::Result<()> {
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::slop_filter::{PRBouncer, PatchBouncer};
     use std::io::Read as _;
@@ -1722,18 +1736,28 @@ fn cmd_bounce(project_root: &Path, patch_file: Option<&Path>, format: &str) -> a
     };
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
-    let rkyv_path = project_root.join(".janitor").join("symbols.rkyv");
+    // Explicit --registry path takes precedence over auto-discovery.
+    let rkyv_path = registry_override
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| project_root.join(".janitor").join("symbols.rkyv"));
     let registry: SymbolRegistry = if rkyv_path.exists() {
         let mapped = MappedRegistry::open(&rkyv_path)
             .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
         rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
             .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?
     } else {
-        eprintln!(
-            "warning: no symbol registry at {}. Run `janitor scan {}` first for full accuracy.",
-            rkyv_path.display(),
-            project_root.display()
-        );
+        if registry_override.is_some() {
+            eprintln!(
+                "warning: registry file not found: {}. Proceeding with empty registry (clone detection only).",
+                rkyv_path.display()
+            );
+        } else {
+            eprintln!(
+                "warning: no symbol registry at {}. Run `janitor scan {}` first for full accuracy.",
+                rkyv_path.display(),
+                project_root.display()
+            );
+        }
         SymbolRegistry::new()
     };
 

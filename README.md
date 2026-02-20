@@ -1,5 +1,5 @@
 # The Janitor: Automated Dead Symbol Detection & Code Cleanup
-**Current Version:** v6.1.6
+**Current Version:** v6.1.7
 
 **Stop paying for code you don't use.**
 
