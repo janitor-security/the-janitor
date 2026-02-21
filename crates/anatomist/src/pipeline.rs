@@ -361,7 +361,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_pipeline_ref");
         fs::create_dir_all(&tmp).ok();
 
-        fs::write(tmp.join("utils.py"), b"def helper():\n    pass\n").ok();
+        fs::write(tmp.join("utils.py"), b"def helper():\n    return True\n").ok();
         fs::write(
             tmp.join("main.py"),
             b"from utils import helper\ndef run():\n    helper()\n",
@@ -382,7 +382,7 @@ mod tests {
         let tmp = std::env::temp_dir().join("test_pipeline_dead");
         fs::create_dir_all(&tmp).ok();
 
-        fs::write(tmp.join("utils.py"), b"def dead_code():\n    pass\n").ok();
+        fs::write(tmp.join("utils.py"), b"def dead_code():\n    return 42\n").ok();
         fs::write(tmp.join("main.py"), b"# nothing uses utils\n").ok();
 
         let mut host = make_host();

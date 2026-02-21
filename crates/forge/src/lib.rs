@@ -63,12 +63,25 @@ const SIMD_PATTERNS: &[&[u8]] = &[
 /// - `file_path`:     Normalized (UTF-8, forward-slash) path of the source file.
 /// - `entity_source`: Raw source bytes of the function/method body to inspect.
 pub fn should_skip_dedup(file_path: &str, entity_source: &[u8]) -> bool {
-    // Guard 1: path contains /math/ or /physics/
+    // Guard 1: single path-segment guard — math/physics hot paths + Godot typedefs dir.
     if file_path
         .split('/')
-        .any(|seg| matches!(seg, "math" | "physics"))
+        .any(|seg| matches!(seg, "math" | "physics" | "typedefs"))
     {
         return true;
+    }
+    // Guard 1b: Godot core sub-module pair guard — two consecutive segments where the
+    // first is "core" and the second is a known highly-optimised module directory.
+    // Protects core/math (also caught above), core/templates (template metaprogramming),
+    // and core/variant (Variant type with platform-specific hot paths).
+    {
+        let mut prev: Option<&str> = None;
+        for seg in file_path.split('/') {
+            if prev == Some("core") && matches!(seg, "math" | "templates" | "variant") {
+                return true;
+            }
+            prev = Some(seg);
+        }
     }
     // Guard 2: SIMD intrinsic patterns in the entity body.
     for pattern in SIMD_PATTERNS {
