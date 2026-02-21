@@ -338,6 +338,8 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
     let has_asyncctx = flags & FLAG_ACTX != 0;
     let has_pydantic_imports = flags & FLAG_PYDA != 0;
     let is_init = file_path.ends_with("__init__.py");
+    let is_pyi = file_path.ends_with(".pyi");
+    let is_py_file = file_path.ends_with(".py") || is_pyi;
 
     // Plugin directory flag: file lives in a framework-managed directory.
     let is_plugin_dir = PLUGIN_DIRS
@@ -373,6 +375,14 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
         // they are never explicitly imported, so the reference graph has no edges to them.
         if is_plugin_dir && !entity.is_private() {
             entity.protected_by = Some(Protection::EntryPoint);
+            continue;
+        }
+
+        // 2a-stub. Type stub: .pyi files declare signatures only and must never be deleted.
+        // Also protect any Python function/class whose body is solely `...` or `pass` —
+        // these are abstract protocol methods or interface declarations in regular .py files.
+        if is_pyi || (is_py_file && has_stub_body(source, entity)) {
+            entity.protected_by = Some(Protection::WisdomRule);
             continue;
         }
 
@@ -530,6 +540,62 @@ fn entity_src<'a>(source: &'a [u8], entity: &Entity) -> &'a [u8] {
     } else {
         b""
     }
+}
+
+/// Returns `true` when a Python entity body consists only of `...` (Ellipsis)
+/// or `pass` statements, with an optional leading docstring.
+///
+/// Recognises:
+/// - One-liners: `def f() -> None: ...`
+/// - Indented stubs: `def f() -> None:\n    ...`
+/// - Docstring + stub: `def f():\n    """Docstring."""\n    ...`
+///
+/// Used to detect type-stub methods whose sole purpose is a signature declaration —
+/// abstract protocol methods, interface stubs, and forward-declaration bodies.
+fn has_stub_body(source: &[u8], entity: &Entity) -> bool {
+    let es = entity_src(source, entity);
+    // One-liner: no newline after the def/class header.
+    let body = match es.iter().position(|&b| b == b'\n') {
+        Some(i) => &es[i + 1..],
+        None => {
+            let t = es.trim_ascii();
+            return t.ends_with(b"...") || t.ends_with(b"pass");
+        }
+    };
+    // Collect non-empty, non-comment lines (stripped of leading/trailing whitespace).
+    let meaningful: Vec<&[u8]> = body
+        .split(|b: &u8| *b == b'\n')
+        .map(|line| line.trim_ascii())
+        .filter(|line| !line.is_empty() && !line.starts_with(b"#"))
+        .collect();
+    if meaningful.is_empty() {
+        return false;
+    }
+    // Optionally skip a leading docstring (triple-quoted string literal).
+    let mut start = 0usize;
+    let first = meaningful[0];
+    if first.starts_with(b"\"\"\"") || first.starts_with(b"'''") {
+        let q: &[u8] = if first.starts_with(b"\"\"\"") {
+            b"\"\"\""
+        } else {
+            b"'''"
+        };
+        if first.len() > 3 && first[3..].windows(3).any(|w| w == q) {
+            start = 1; // single-line docstring: `"""content"""`
+        } else {
+            // Multi-line docstring: advance until line containing closing triple-quote.
+            start = 1;
+            while start < meaningful.len() && !meaningful[start].windows(3).any(|w| w == q) {
+                start += 1;
+            }
+            start += 1;
+        }
+    }
+    // After the optional docstring, every remaining line must be `...` or `pass`.
+    start < meaningful.len()
+        && meaningful[start..]
+            .iter()
+            .all(|line| *line == b"..." || *line == b"pass")
 }
 
 /// Returns true if `needle` is a substring of `haystack`.
@@ -941,5 +1007,58 @@ mod tests {
         let mut entities = vec![make_entity("UserModel", vec![], None)];
         classify(&mut entities, source, "app/models.py");
         assert_eq!(entities[0].protected_by, None);
+    }
+
+    #[test]
+    fn test_pyi_file_protects_all_entities() {
+        // All entities in a .pyi stub file must be protected as WisdomRule.
+        let source = b"def connect(host: str, port: int) -> None: ...\n";
+        let mut entities = vec![make_entity("connect", vec![], None)];
+        classify(&mut entities, source, "network/client.pyi");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_stub_body_ellipsis_protects_in_py_file() {
+        // A .py function whose body is `...` is an abstract stub — protect it.
+        let source = b"def stub() -> None:\n    ...\n";
+        let mut e = make_entity("stub", vec![], None);
+        e.end_byte = source.len() as u32;
+        let mut entities = vec![e];
+        classify(&mut entities, source, "src/proto.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_stub_body_pass_protects_in_py_file() {
+        // A .py function whose body is `pass` is an abstract stub — protect it.
+        let source = b"def stub() -> None:\n    pass\n";
+        let mut e = make_entity("stub", vec![], None);
+        e.end_byte = source.len() as u32;
+        let mut entities = vec![e];
+        classify(&mut entities, source, "src/proto.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_real_body_not_stub() {
+        // A function with a real implementation must NOT get stub protection.
+        let source = b"def real(x: int) -> int:\n    return x + 1\n";
+        let mut e = make_entity("real", vec![], None);
+        e.end_byte = source.len() as u32;
+        let mut entities = vec![e];
+        classify(&mut entities, source, "src/utils.py");
+        assert_eq!(entities[0].protected_by, None);
+    }
+
+    #[test]
+    fn test_stub_body_with_docstring_protects() {
+        // Docstring + `...` body is still a valid type stub.
+        let source = b"def stub() -> None:\n    \"\"\"Stub method.\"\"\"\n    ...\n";
+        let mut e = make_entity("stub", vec![], None);
+        e.end_byte = source.len() as u32;
+        let mut entities = vec![e];
+        classify(&mut entities, source, "src/proto.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
     }
 }
