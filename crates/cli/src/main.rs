@@ -1083,10 +1083,10 @@ fn cmd_clean(
         println!("Removed {} symbols from {}", n, file_str);
     }
 
-    audit_log.flush()?;
+    audit_log.flush(token)?;
     if token.is_some() {
         println!(
-            "\u{1f6e1}\u{fe0f} INTEGRITY VERIFIED. PQC-Signed Audit Log generated at .janitor/audit_log.json."
+            "\u{1f6e1}\u{fe0f} INTEGRITY VERIFIED. Remotely-attested Audit Log generated at .janitor/audit_log.json."
         );
     } else {
         println!(
@@ -1859,11 +1859,10 @@ fn telemetry_append(janitor_dir: &Path, action: &str, heuristic_failed: &str, ha
     }
 }
 
-/// Exports the local telemetry log as a PQC-signed JSON block.
+/// Exports the local telemetry log as a JSON block.
 ///
-/// Reads `.janitor/telemetry.json`, signs the canonical JSON representation of the
-/// entries with the embedded Ed25519 attestation key, and prints the signed payload
-/// to stdout. The payload is zero-knowledge: no file paths or source code are present.
+/// Reads `.janitor/telemetry.json` and prints the entries to stdout.
+/// The payload is zero-knowledge: no file paths or source code are present.
 fn cmd_telemetry_export(project_root: &Path) -> anyhow::Result<()> {
     let telemetry_path = project_root.join(".janitor").join("telemetry.json");
 
@@ -1878,17 +1877,10 @@ fn cmd_telemetry_export(project_root: &Path) -> anyhow::Result<()> {
     let entries: Vec<serde_json::Value> =
         serde_json::from_slice(&raw).with_context(|| "telemetry.json is not valid JSON")?;
 
-    // Canonical payload: sorted, compact JSON of the entries array.
-    let canonical = serde_json::to_vec(&entries).context("serializing telemetry entries")?;
-
-    // Sign with the embedded local audit attestation key (Ed25519).
-    let signature = vault::SigningOracle::sign_audit(&canonical);
-
     let export = serde_json::json!({
         "version": "1",
         "entry_count": entries.len(),
         "entries": entries,
-        "signature": signature,
         "exported_at": utc_now_iso8601(),
     });
 

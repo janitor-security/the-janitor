@@ -19,6 +19,12 @@ pub enum ReaperError {
     ParseError(String),
     #[error("Aho-Corasick build error: {0}")]
     AcBuildError(#[from] aho_corasick::BuildError),
+    /// Remote attestation call to thejanitor.app failed.
+    ///
+    /// The audit log is NOT written when this error occurs — the caller must
+    /// surface this to the user and abort.
+    #[error("remote attestation failed: {0}")]
+    AttestError(String),
 }
 
 /// Ingests liveness signals from log files to determine symbol usage.

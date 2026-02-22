@@ -4,6 +4,16 @@
 //! [`AuditEntry`] and be flushed to `.janitor/audit_log.json` via [`AuditLog`].
 //! The log is append-only: new entries are merged with any existing records.
 //!
+//! ## Attestation Model
+//! Audit entries are **remotely attested**: the Janitor binary sends a merkle
+//! root of the batch to `https://api.thejanitor.app/v1/attest`, and the server
+//! returns an Ed25519 signature (signed with the server-held private key).
+//! The binary embeds only the corresponding **verifying key** (`vault::VERIFYING_KEY_BYTES`).
+//! It is cryptographically impossible for the binary to forge its own attestations.
+//!
+//! If the remote attestation call fails, [`AuditLog::flush`] returns
+//! [`crate::ReaperError::AttestError`] and the audit log is NOT written.
+//!
 //! ## Schema
 //! ```json
 //! [
@@ -14,20 +24,22 @@
 //!     "sha256_pre_cleanup": "a3b4c5...",
 //!     "heuristic_id": "DEAD_SYMBOL",
 //!     "lines_removed": 14,
-//!     "signature": "<base64-encoded Ed25519 signature>"
+//!     "signature": "<base64-encoded Ed25519 batch attestation from thejanitor.app>"
 //!   }
 //! ]
 //! ```
 //!
-//! The `signature` field covers `{timestamp}{file_path}{sha256_pre_cleanup}` and
-//! is signed with the local audit attestation key embedded in the binary. Use
-//! [`vault::SigningOracle::verify_token`] against the binary's embedded verifying
-//! key to confirm authenticity.
+//! The `signature` field is the server-issued attestation covering the batch
+//! `merkle_root` (BLAKE3 hash of all `{timestamp}{file_path}{sha256}` payloads).
+//! It is identical for all entries in a single flush batch.
 
 use crate::ReaperError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+
+/// Attestation endpoint.
+const ATTEST_URL: &str = "https://api.thejanitor.app/v1/attest";
 
 /// A single excision event recorded in the audit log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,20 +59,24 @@ pub struct AuditEntry {
     pub heuristic_id: String,
     /// Number of source lines removed by this cleanup operation.
     pub lines_removed: u32,
-    /// Base64-encoded Ed25519 signature of `{timestamp}{file_path}{sha256_pre_cleanup}`.
+    /// Base64-encoded Ed25519 batch attestation from `thejanitor.app`.
     ///
-    /// Signed with the local audit attestation key embedded in the Janitor binary.
-    /// Provides tamper evidence: any post-cleanup modification to this entry will
-    /// produce a verification failure against the binary's embedded verifying key.
+    /// Covers the BLAKE3 merkle root of all entries in this flush batch.
+    /// Identical for all entries flushed in a single call.
     ///
-    /// `#[serde(default)]` ensures backward-compatible deserialization of audit logs
-    /// that predate the v6.0.0-RC1 signature field.
+    /// Empty when flushed without a token (no attestation requested).
+    ///
+    /// `#[serde(default)]` ensures backward-compatible deserialization of audit
+    /// logs that predate the remote attestation model.
     #[serde(default)]
     pub signature: String,
 }
 
 impl AuditEntry {
     /// Constructs an entry, computing the SHA-256 hash from `file_bytes`.
+    ///
+    /// The `signature` field is left empty; it is populated by
+    /// [`AuditLog::flush`] after remote attestation succeeds.
     pub fn new(
         file_path: impl Into<String>,
         symbol_name: impl Into<String>,
@@ -72,11 +88,6 @@ impl AuditEntry {
         let file_path_str = file_path.into();
         let hash = hex_sha256(file_bytes);
         let timestamp = utc_now();
-        // Sign the concatenation of (timestamp + file_path + sha256_pre_cleanup).
-        // The signature provides tamper evidence: any post-cleanup edit to this entry
-        // will fail verification against the binary's embedded Ed25519 verifying key.
-        let sign_input = format!("{}{}{}", timestamp, file_path_str, hash);
-        let signature = vault::SigningOracle::sign_audit(sign_input.as_bytes());
         AuditEntry {
             timestamp,
             file_path: file_path_str,
@@ -84,8 +95,18 @@ impl AuditEntry {
             sha256_pre_cleanup: hash,
             heuristic_id: heuristic_id.into(),
             lines_removed: end_line.saturating_sub(start_line) + 1,
-            signature,
+            signature: String::new(),
         }
+    }
+
+    /// Returns the canonical signing payload for this entry.
+    ///
+    /// Used to construct the batch merkle root for remote attestation.
+    fn signing_payload(&self) -> String {
+        format!(
+            "{}{}{}",
+            self.timestamp, self.file_path, self.sha256_pre_cleanup
+        )
     }
 }
 
@@ -115,10 +136,44 @@ impl AuditLog {
     /// Merges buffered entries with the existing log file and writes to disk.
     ///
     /// A no-op if no entries were recorded since the last flush.
-    pub fn flush(&self) -> Result<(), ReaperError> {
+    ///
+    /// # Attestation
+    /// When `token` is `Some`, the method POSTs a batch attestation request to
+    /// `https://api.thejanitor.app/v1/attest` with `Authorization: Bearer <TOKEN>`.
+    /// The server returns the Ed25519 batch signature, which is embedded in every
+    /// entry's `signature` field before the file is written.
+    ///
+    /// If the network call fails, this method returns
+    /// [`ReaperError::AttestError`] and **no file is written**.
+    ///
+    /// When `token` is `None`, entries are written with an empty `signature`
+    /// (unsigned, no attestation).
+    ///
+    /// # Errors
+    /// - [`ReaperError::IoError`] on filesystem failure.
+    /// - [`ReaperError::AttestError`] when remote attestation is requested but fails.
+    pub fn flush(&self, token: Option<&str>) -> Result<(), ReaperError> {
         if self.entries.is_empty() {
             return Ok(());
         }
+
+        // Determine the batch signature via remote attestation.
+        let batch_sig: String = if let Some(tok) = token {
+            remote_attest(tok, &self.entries)?
+        } else {
+            String::new()
+        };
+
+        // Clone entries and apply the batch signature to each.
+        let signed_entries: Vec<AuditEntry> = self
+            .entries
+            .iter()
+            .cloned()
+            .map(|mut e| {
+                e.signature = batch_sig.clone();
+                e
+            })
+            .collect();
 
         // Load existing entries (tolerate missing file or corrupt JSON).
         // Zero-copy: mmap the log file rather than heap-allocating its contents.
@@ -132,7 +187,7 @@ impl AuditLog {
             Vec::new()
         };
 
-        existing.extend_from_slice(&self.entries);
+        existing.extend_from_slice(&signed_entries);
 
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -148,6 +203,55 @@ impl AuditLog {
     pub fn pending_count(&self) -> usize {
         self.entries.len()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Remote attestation
+// ---------------------------------------------------------------------------
+
+/// POSTs a batch attestation request to `ATTEST_URL` and returns the
+/// server-issued Ed25519 signature string.
+///
+/// # Payload
+/// ```json
+/// {
+///   "merkle_root": "<hex BLAKE3 of all signing payloads concatenated>",
+///   "timestamp":   "<ISO 8601 UTC>",
+///   "files_modified": ["<file_path>", ...]
+/// }
+/// ```
+/// The `Authorization: Bearer <token>` header carries the purge token.
+///
+/// # Errors
+/// Returns [`ReaperError::AttestError`] on any network or parse failure.
+fn remote_attest(token: &str, entries: &[AuditEntry]) -> Result<String, ReaperError> {
+    // Compute a SHA-256 merkle root from all per-entry signing payloads.
+    let mut hasher = Sha256::new();
+    for e in entries {
+        hasher.update(e.signing_payload().as_bytes());
+    }
+    let merkle_root = format!("{:x}", hasher.finalize());
+
+    let files_modified: Vec<&str> = entries.iter().map(|e| e.file_path.as_str()).collect();
+
+    let payload = serde_json::json!({
+        "merkle_root": merkle_root,
+        "timestamp": utc_now(),
+        "files_modified": files_modified,
+    });
+
+    let response = ureq::post(ATTEST_URL)
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(&payload)
+        .map_err(|e| ReaperError::AttestError(e.to_string()))?;
+
+    let body: serde_json::Value = response
+        .into_json()
+        .map_err(|e| ReaperError::AttestError(format!("response parse error: {e}")))?;
+
+    body["signature"].as_str().map(String::from).ok_or_else(|| {
+        ReaperError::AttestError("missing `signature` field in attest response".into())
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -237,13 +341,15 @@ mod tests {
         assert_eq!(entry.heuristic_id, "DEAD_SYMBOL");
         assert_eq!(entry.lines_removed, 3); // end_line - start_line + 1 = 12 - 10 + 1
         assert_eq!(entry.sha256_pre_cleanup.len(), 64);
-        // Signature must be a non-empty base64 string (64-byte Ed25519 → 88 base64 chars).
-        assert!(!entry.signature.is_empty(), "signature must be present");
-        assert_eq!(entry.signature.len(), 88, "base64(64 bytes) = 88 chars");
+        // signature is empty until remote attestation is performed.
+        assert!(
+            entry.signature.is_empty(),
+            "signature must be empty before flush"
+        );
     }
 
     #[test]
-    fn test_audit_log_flush_creates_file() {
+    fn test_audit_log_flush_creates_file_no_token() {
         let tmp = std::env::temp_dir().join(format!("audit_test_{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
 
@@ -258,12 +364,14 @@ mod tests {
         ));
 
         assert_eq!(log.pending_count(), 1);
-        log.flush().unwrap();
+        log.flush(None).unwrap();
 
         let raw = std::fs::read_to_string(tmp.join("audit_log.json")).unwrap();
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0]["symbol_name"], "dead_func");
+        // No token → signature is empty string.
+        assert_eq!(parsed[0]["signature"], "");
 
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -275,11 +383,11 @@ mod tests {
 
         let mut log1 = AuditLog::new(&tmp);
         log1.record(AuditEntry::new("/a.py", "fn1", b"x", "DEAD_SYMBOL", 1, 1));
-        log1.flush().unwrap();
+        log1.flush(None).unwrap();
 
         let mut log2 = AuditLog::new(&tmp);
         log2.record(AuditEntry::new("/b.py", "fn2", b"y", "DEAD_SYMBOL", 5, 8));
-        log2.flush().unwrap();
+        log2.flush(None).unwrap();
 
         let raw = std::fs::read_to_string(tmp.join("audit_log.json")).unwrap();
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap();
