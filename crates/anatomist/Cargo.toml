@@ -29,3 +29,6 @@ dunce.workspace = true
 petgraph.workspace = true
 walkdir.workspace = true
 aho-corasick.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+ureq.workspace = true

@@ -16,6 +16,7 @@ pub mod bridge;
 pub mod graph;
 pub mod heuristics;
 pub mod imports;
+pub mod induce;
 pub mod parser;
 pub mod path_util;
 pub mod pipeline;
