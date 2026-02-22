@@ -3,7 +3,7 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
 resolver = "2"
 
 [workspace.package]
-version = "6.1.8"
+version = "6.1.9"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
@@ -54,6 +54,9 @@ aho-corasick = "1.1"
 # JSON / hashing utilities
 serde_json = "1.0"
 sha2 = "0.10"
+
+# HTTP client (sync, used for remote audit attestation)
+ureq = { version = "2", features = ["json"] }
 
 # Progress reporting
 indicatif = "0.17"

@@ -113,7 +113,7 @@ fn tool_list() -> serde_json::Value {
             },
             {
                 "name": "janitor_clean",
-                "description": "Dry-run report of symbols eligible for removal. Equivalent to `janitor scan` without physical deletion.",
+                "description": "Dry-run report of symbols eligible for removal. Equivalent to `janitor scan` without physical deletion. Requires a valid bearer token.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -125,9 +125,13 @@ fn tool_list() -> serde_json::Value {
                             "type": "boolean",
                             "description": "Enable library mode.",
                             "default": false
+                        },
+                        "token": {
+                            "type": "string",
+                            "description": "Bearer token issued by thejanitor.app. Required for janitor_clean."
                         }
                     },
-                    "required": ["path"]
+                    "required": ["path", "token"]
                 }
             }
         ]
@@ -283,7 +287,36 @@ fn dispatch(req: Request) -> Response {
             let args = req.params.get("arguments").cloned().unwrap_or_default();
 
             match tool {
-                "janitor_scan" | "janitor_clean" => {
+                "janitor_scan" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    let library = args
+                        .get("library")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    match run_scan(&path, library) {
+                        Ok(v) => Response::ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
+                "janitor_clean" => {
+                    // Require a valid bearer token before running the clean report.
+                    let token = match args.get("token").and_then(|v| v.as_str()) {
+                        Some(t) => t.to_owned(),
+                        None => {
+                            return Response::err(
+                                req.id,
+                                -32602,
+                                "missing `token` argument — a valid bearer token is required for janitor_clean",
+                            )
+                        }
+                    };
+                    if let Err(e) = vault::SigningOracle::verify_token(&token) {
+                        return Response::err(req.id, -32602, format!("invalid token: {e}"));
+                    }
                     let path = match args.get("path").and_then(|v| v.as_str()) {
                         Some(p) => p.to_owned(),
                         None => return Response::err(req.id, -32602, "missing `path` argument"),
@@ -373,5 +406,53 @@ mod tests {
         let resp = dispatch(req);
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32601);
+    }
+
+    #[test]
+    fn test_janitor_clean_requires_token() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(10),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_clean",
+                "arguments": {
+                    "path": "/tmp/nonexistent"
+                    // token deliberately omitted
+                }
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(
+            resp.result.is_none(),
+            "janitor_clean without token must fail"
+        );
+        let err = resp.error.as_ref().unwrap();
+        assert_eq!(err.code, -32602, "must return invalid params error code");
+        assert!(
+            err.message.contains("token"),
+            "error message must mention `token`"
+        );
+    }
+
+    #[test]
+    fn test_janitor_clean_rejects_invalid_token() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(11),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_clean",
+                "arguments": {
+                    "path": "/tmp/nonexistent",
+                    "token": "not-a-valid-token"
+                }
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none(), "invalid token must be rejected");
+        let err = resp.error.as_ref().unwrap();
+        assert_eq!(err.code, -32602);
+        assert!(err.message.contains("invalid token"));
     }
 }

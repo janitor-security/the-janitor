@@ -11,7 +11,7 @@
 //!    [`SigningOracle::verify_token`] before any destructive operation.
 //!    An `Err` return is a hard gate — the operation must not proceed.
 
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use std::sync::OnceLock;
 
 /// The message that all purge tokens must be a valid signature of.
@@ -29,25 +29,6 @@ const PURGE_MESSAGE: &[u8] = b"JANITOR_PURGE_AUTHORIZED";
 const VERIFYING_KEY_BYTES: [u8; 32] = [
     0x9c, 0x3e, 0x68, 0x22, 0xae, 0x35, 0x6e, 0x6e, 0x9a, 0x10, 0x7c, 0x43, 0x2b, 0x88, 0xd0, 0xa6,
     0x00, 0x45, 0x8f, 0x72, 0x8c, 0xd2, 0x53, 0xc2, 0x81, 0x76, 0x82, 0x1b, 0x27, 0xc7, 0xab, 0x64,
-];
-
-/// Local audit attestation signing key seed.
-///
-/// This is the Ed25519 private key seed used to sign audit log entries produced
-/// by this Janitor binary. Its purpose is tamper evidence: any post-cleanup
-/// modification to a signed audit entry will fail verification against the
-/// embedded [`VERIFYING_KEY_BYTES`].
-///
-/// This key is **not** the commercial purge authorization key held at
-/// thejanitor.app. The signing key IS embedded in the binary — it is not
-/// secret. Its value is attestation (proving the entry was written by this
-/// binary), not access control.
-///
-/// Rotation: run `cargo run -p mint-token -- generate` and update both
-/// `VERIFYING_KEY_BYTES` and this constant together.
-const LOCAL_AUDIT_SIGNING_SEED: [u8; 32] = [
-    0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c, 0x41,
-    0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4, 0xeb, 0xe5,
 ];
 
 /// The number of seconds in 90 days (the symbol immaturity window).
@@ -136,21 +117,6 @@ impl SigningOracle {
             .map_err(|_| VaultError::InvalidSignature)
     }
 
-    /// Signs `msg` with the embedded local audit attestation key and returns a
-    /// base64-encoded Ed25519 signature.
-    ///
-    /// Used by [`reaper::audit::AuditEntry`] to sign each excision event.
-    /// The signature covers `{timestamp}{file_path}{sha256_pre_cleanup}` and
-    /// can be verified against the embedded [`VERIFYING_KEY_BYTES`].
-    ///
-    /// This is **not** a purge authorization signature. See [`LOCAL_AUDIT_SIGNING_SEED`].
-    pub fn sign_audit(msg: &[u8]) -> String {
-        use base64::Engine;
-        let sk = SigningKey::from_bytes(&LOCAL_AUDIT_SIGNING_SEED);
-        let sig = sk.sign(msg);
-        base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())
-    }
-
     /// Hard-gates cleanup of recently modified source files.
     ///
     /// Returns [`VaultError::ImmatureCode`] when `file_mtime_secs` is within the
@@ -187,6 +153,16 @@ mod tests {
     use base64::Engine;
     use ed25519_dalek::{Signature, Signer, SigningKey};
 
+    /// Test-only Ed25519 seed whose corresponding public key is `VERIFYING_KEY_BYTES`.
+    ///
+    /// **Never used in production code.** Used solely to mint test tokens and verify
+    /// that `SigningOracle::verify_token` accepts correctly-signed payloads.
+    const TEST_SIGNING_KEY_SEED: [u8; 32] = [
+        0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c,
+        0x41, 0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4,
+        0xeb, 0xe5,
+    ];
+
     fn make_token(seed: &[u8; 32], message: &[u8]) -> String {
         let sk = SigningKey::from_bytes(seed);
         let sig: Signature = sk.sign(message);
@@ -195,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_valid_token_accepted() {
-        let token = make_token(&LOCAL_AUDIT_SIGNING_SEED, PURGE_MESSAGE);
+        let token = make_token(&TEST_SIGNING_KEY_SEED, PURGE_MESSAGE);
         assert!(SigningOracle::verify_token(&token).is_ok());
     }
 
@@ -218,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_wrong_message_rejected() {
-        let token = make_token(&LOCAL_AUDIT_SIGNING_SEED, b"DIFFERENT_MESSAGE");
+        let token = make_token(&TEST_SIGNING_KEY_SEED, b"DIFFERENT_MESSAGE");
         assert!(matches!(
             SigningOracle::verify_token(&token),
             Err(VaultError::InvalidSignature)
@@ -233,33 +209,6 @@ mod tests {
             SigningOracle::verify_token(&token),
             Err(VaultError::InvalidSignature)
         ));
-    }
-
-    #[test]
-    fn test_sign_audit_produces_decodable_64_byte_signature() {
-        let msg = b"2026-01-01T00:00:00Z/path/to/file.pydeadbeef1234";
-        let sig_b64 = SigningOracle::sign_audit(msg);
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(&sig_b64)
-            .expect("must be valid base64");
-        assert_eq!(decoded.len(), 64, "Ed25519 signature must be 64 bytes");
-    }
-
-    #[test]
-    fn test_sign_audit_is_verifiable() {
-        // Signatures produced by sign_audit must verify against VERIFYING_KEY_BYTES.
-        let msg = b"audit-entry-payload";
-        let sig_b64 = SigningOracle::sign_audit(msg);
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(&sig_b64)
-            .unwrap();
-        let sig_bytes: [u8; 64] = decoded.as_slice().try_into().unwrap();
-        let sig = Signature::from_bytes(&sig_bytes);
-        let vk = get_verifying_key().expect("verifying key must initialise");
-        assert!(
-            vk.verify(msg, &sig).is_ok(),
-            "audit signature must verify against embedded verifying key"
-        );
     }
 
     #[test]
