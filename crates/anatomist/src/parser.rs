@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 use memmap2::MmapOptions;
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
+use crate::induce;
 use crate::path_util::normalize_path;
 use crate::{AnatomistError, Entity, EntityType, Heuristic};
 use forge::compute_structural_hash;
@@ -526,6 +527,8 @@ impl ParserHost {
 
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         match ext {
+            // Explicit Python arm — keeps the built-in 14-language list exhaustive.
+            "py" | "pyi" => self.dissect_impl(source, &normalized_path),
             "rs" => Self::extract_rust_entities(source, &normalized_path),
             "js" | "jsx" => Self::extract_js_entities(source, &normalized_path),
             "ts" => extract_named_entities(
@@ -551,7 +554,47 @@ impl ParserHost {
             "go" => Self::extract_go_entities(source, &normalized_path),
             "glsl" | "vert" | "frag" => Self::extract_glsl_entities(source, &normalized_path),
             "m" | "mm" => Self::extract_objc_entities(source, &normalized_path),
-            _ => self.dissect_impl(source, &normalized_path), // Python + unknown → Python pass
+            _ => {
+                // Unknown extension: attempt to learn via the Induction Bridge.
+                //
+                // 1. Look up the extension in the on-disk cache (.janitor/learned_wisdom.rkyv).
+                // 2. On cache miss, POST to the Governor API; persist the result if successful.
+                // 3. Use the returned `language_hint` to select an existing grammar.
+                // 4. If the API call fails or the hint is unsupported, skip the file (Ok(vec![])).
+                let janitor_dir = induce::find_janitor_dir(path);
+                let mut cache = janitor_dir
+                    .as_deref()
+                    .map(induce::load_cache)
+                    .unwrap_or_default();
+
+                let lang_hint: Option<String> = if let Some(entry) = cache.get(ext) {
+                    Some(entry.language_hint.clone())
+                } else if let Some(entry) = induce::induce(source, ext) {
+                    let hint = entry.language_hint.clone();
+                    cache.insert(ext.to_string(), entry);
+                    if let Some(dir) = &janitor_dir {
+                        induce::save_cache(dir, &cache);
+                    }
+                    Some(hint)
+                } else {
+                    None
+                };
+
+                match lang_hint.as_deref() {
+                    Some("python") => self.dissect_impl(source, &normalized_path),
+                    Some(hint) => {
+                        // Future: map additional hints to registered grammars.
+                        eprintln!(
+                            "induce: unsupported language_hint '{hint}' for .{ext} — skipping"
+                        );
+                        Ok(vec![])
+                    }
+                    None => {
+                        // API unavailable or timed out — skip this file gracefully.
+                        Ok(vec![])
+                    }
+                }
+            }
         }
     }
 

@@ -29,6 +29,13 @@ use tree_sitter::Node;
 // Performance Heuristic: SIMD / math-path dedup skip
 // ---------------------------------------------------------------------------
 
+/// C++ compile-time and inlining keywords that flag a function for dedup skip.
+///
+/// - `constexpr`: body must remain individually visible for constant folding.
+/// - `inline`: explicit inlining hint; merging strips it and forces a call indirection,
+///   regressing throughput on hot paths.
+const CPP_COMPILE_TIME_PATTERNS: &[&[u8]] = &[b"constexpr", b"inline"];
+
 /// SIMD intrinsic byte patterns that indicate a function should not be deduplicated.
 ///
 /// Merging SIMD-intrinsic functions breaks inlining and AVX/NEON optimisation
@@ -85,6 +92,15 @@ pub fn should_skip_dedup(file_path: &str, entity_source: &[u8]) -> bool {
     }
     // Guard 2: SIMD intrinsic patterns in the entity body.
     for pattern in SIMD_PATTERNS {
+        if entity_source.windows(pattern.len()).any(|w| w == *pattern) {
+            return true;
+        }
+    }
+    // Guard 3: C++ compile-time / inline-hint keywords in the entity body.
+    // `constexpr` functions are evaluated at compile time — constant folding requires the
+    // compiler to see the full body. `inline` carries an explicit inlining hint; merging
+    // identical inline bodies into one forces a call indirection on every call site.
+    for pattern in CPP_COMPILE_TIME_PATTERNS {
         if entity_source.windows(pattern.len()).any(|w| w == *pattern) {
             return true;
         }
@@ -260,5 +276,34 @@ mod tests {
         let h1 = body_hash("def foo(x):\n    return x * 2\n");
         let h2 = body_hash("def foo(x):\n    return x * 2\n");
         assert_eq!(h1, h2);
+    }
+
+    // --- Guard 3: constexpr / inline tests ---
+
+    #[test]
+    fn test_constexpr_body_skips_dedup() {
+        let src = b"constexpr int factorial(int n) { return n <= 1 ? 1 : n * factorial(n - 1); }";
+        assert!(
+            should_skip_dedup("src/math_utils.cpp", src),
+            "constexpr body must be skipped from dedup"
+        );
+    }
+
+    #[test]
+    fn test_inline_body_skips_dedup() {
+        let src = b"inline void swap(int& a, int& b) { int t = a; a = b; b = t; }";
+        assert!(
+            should_skip_dedup("src/utils.cpp", src),
+            "inline body must be skipped from dedup"
+        );
+    }
+
+    #[test]
+    fn test_plain_cpp_body_not_skipped_by_guard3() {
+        let src = b"int add(int a, int b) { return a + b; }";
+        assert!(
+            !should_skip_dedup("src/arithmetic.cpp", src),
+            "plain C++ body with no special keywords must not be skipped"
+        );
     }
 }

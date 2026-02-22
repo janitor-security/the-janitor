@@ -193,6 +193,19 @@ fn get_metaprog_ac() -> Option<&'static AhoCorasick> {
 /// (`PROTECTED_DIRS` in `pipeline.rs`) which marks the entire directory as `Directory`.
 static PLUGIN_DIRS: &[&str] = &["spiders", "plugins", "commands", "handlers", "tasks"];
 
+/// Build-infrastructure file names whose symbols must ALL be shielded as [`Protection::WisdomRule`].
+///
+/// Static analysis cannot prove liveness for these entry points:
+/// - `SConstruct` / `SConscript`: SCons build-system root scripts — symbols are invoked
+///   by the build system's own introspection, never from user Python imports.
+///   Fixes Godot PR 85683 false-positive blast (3,000+ dead-symbol scores on SCons scripts).
+/// - `setup.py`: setuptools/distutils packaging entry point.
+/// - `conftest.py`: pytest plugin loader — fixtures and session hooks are discovered
+///   dynamically by pytest's collection mechanism.
+///
+/// `.pyi` type-stub files are shielded via the suffix check in [`classify`].
+static BUILD_SCRIPT_NAMES: &[&str] = &["SConstruct", "SConscript", "setup.py", "conftest.py"];
+
 // --- Global shield: framework-agnostic lifecycle / entry-point names ---
 
 /// Names that are protected regardless of language or framework.
@@ -328,6 +341,23 @@ static METAPROG: &[&[u8]] = &[
 /// - `source`: Raw bytes of that file (used for byte-level pattern scanning).
 /// - `file_path`: Normalized file path (UTF-8, forward slashes).
 pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
+    // High-priority build-script / type-stub shield.
+    //
+    // Files that are build-system entry points or type-stub declarations cannot be
+    // statically proven live by the reference graph. Shield all their symbols up-front,
+    // before any pattern scan runs. Preserves any protection already set by the parser.
+    //
+    // Fixes: Godot PR 85683 — 3,000+ false-positive dead-symbol scores on SCons scripts.
+    let file_name = file_path.rsplit('/').next().unwrap_or(file_path);
+    if BUILD_SCRIPT_NAMES.contains(&file_name) || file_path.ends_with(".pyi") {
+        for entity in entities.iter_mut() {
+            if entity.protected_by.is_none() {
+                entity.protected_by = Some(Protection::WisdomRule);
+            }
+        }
+        return;
+    }
+
     // Pre-compute file-level flags — single combined Aho-Corasick pass over source.
     let flags = file_flags(source);
     let has_di = flags & FLAG_DI != 0;
@@ -338,8 +368,8 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
     let has_asyncctx = flags & FLAG_ACTX != 0;
     let has_pydantic_imports = flags & FLAG_PYDA != 0;
     let is_init = file_path.ends_with("__init__.py");
-    let is_pyi = file_path.ends_with(".pyi");
-    let is_py_file = file_path.ends_with(".py") || is_pyi;
+    // .pyi files are handled by the early-exit shield above; here we only see .py files.
+    let is_py_file = file_path.ends_with(".py");
 
     // Plugin directory flag: file lives in a framework-managed directory.
     let is_plugin_dir = PLUGIN_DIRS
@@ -378,10 +408,9 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
             continue;
         }
 
-        // 2a-stub. Type stub: .pyi files declare signatures only and must never be deleted.
-        // Also protect any Python function/class whose body is solely `...` or `pass` —
-        // these are abstract protocol methods or interface declarations in regular .py files.
-        if is_pyi || (is_py_file && has_stub_body(source, entity)) {
+        // 2a-stub. Abstract protocol stubs in .py files: body is solely `...` or `pass`.
+        // (.pyi files are fully shielded by the early-exit above and never reach this loop.)
+        if is_py_file && has_stub_body(source, entity) {
             entity.protected_by = Some(Protection::WisdomRule);
             continue;
         }
@@ -1060,5 +1089,52 @@ mod tests {
         let mut entities = vec![e];
         classify(&mut entities, source, "src/proto.py");
         assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    // --- Build-script shield tests ---
+
+    #[test]
+    fn test_sconstruct_all_symbols_shielded() {
+        // SConstruct is the SCons build root — all symbols must be WisdomRule.
+        // Regression: Godot PR 85683 produced 3,000+ false-positive dead-symbol scores.
+        let mut entities = vec![
+            make_entity("build_targets", vec![], None),
+            make_entity("_helper", vec![], None),
+        ];
+        classify(&mut entities, b"", "godot/SConstruct");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+        assert_eq!(entities[1].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_sconscript_all_symbols_shielded() {
+        let mut entities = vec![make_entity("env", vec![], None)];
+        classify(&mut entities, b"", "modules/gdscript/SConscript");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_setup_py_all_symbols_shielded() {
+        let mut entities = vec![make_entity("setup", vec![], None)];
+        classify(&mut entities, b"", "setup.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_conftest_py_all_symbols_shielded_by_classify() {
+        // classify() itself shields conftest.py symbols (independent of PytestFixtureHeuristic).
+        let mut entities = vec![make_entity("any_fn", vec![], None)];
+        classify(&mut entities, b"", "tests/conftest.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::WisdomRule));
+    }
+
+    #[test]
+    fn test_build_script_preserves_existing_protection() {
+        // Already-protected entities must not be overwritten by the build-script shield.
+        let mut entity = make_entity("fixture_db", vec![], None);
+        entity.protected_by = Some(Protection::PytestFixture);
+        let mut entities = vec![entity];
+        classify(&mut entities, b"", "conftest.py");
+        assert_eq!(entities[0].protected_by, Some(Protection::PytestFixture));
     }
 }
