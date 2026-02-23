@@ -1781,7 +1781,7 @@ fn cmd_bounce(
     if format == "json" {
         let json_out = serde_json::json!({
             "schema_version": "6.3.0",
-            "slop_score": score.score(),
+            "slop_score": score.score() as f64,
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
             "zombie_symbols_added": score.zombie_symbols_added,
