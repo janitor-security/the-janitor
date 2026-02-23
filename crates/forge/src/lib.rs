@@ -21,6 +21,7 @@
 //! // → same structural hash
 //! ```
 
+pub mod hashing;
 pub mod slop_filter;
 
 use tree_sitter::Node;

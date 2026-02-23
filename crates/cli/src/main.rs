@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
+mod daemon;
+
 #[derive(Parser)]
 #[command(name = "janitor")]
 #[command(about = "Code Integrity Protocol — Automated Dead Symbol Detection & Cleanup")]
@@ -158,6 +160,39 @@ enum Commands {
     /// Reads newline-delimited JSON-RPC 2.0 from stdin, responds on stdout.
     /// Designed for use as an MCP tool server by AI assistants.
     Mcp,
+    /// Launch the long-lived Janitor daemon (Unix Domain Socket server).
+    ///
+    /// Keeps the symbol registry resident in memory to eliminate process-spawn
+    /// overhead for high-frequency CI / pre-commit integrations.
+    ///
+    /// ## Protocol
+    /// Newline-delimited JSON. Send one `{"type":"Bounce","patch":"<diff>"}` per line.
+    /// Receive `{"type":"Report","slop_score":f64,"zombies":u32}` in response.
+    ///
+    /// ## Example
+    /// ```sh
+    /// janitor serve --socket /tmp/janitor.sock --registry .janitor/symbols.rkyv &
+    /// echo '{"type":"Bounce","patch":"..."}' | socat - UNIX-CONNECT:/tmp/janitor.sock
+    /// ```
+    ///
+    /// Graceful shutdown: send SIGINT (Ctrl-C).
+    #[cfg(unix)]
+    Serve {
+        /// Path to the Unix Domain Socket to bind.
+        ///
+        /// An existing stale socket at this path is removed automatically.
+        #[arg(long, default_value = "/tmp/janitor.sock")]
+        socket: String,
+        /// Path to the symbol registry file (`.rkyv`).
+        ///
+        /// Overrides the default `.janitor/symbols.rkyv` auto-discovery.
+        /// Required when the project root is not the current directory.
+        #[arg(long)]
+        registry: Option<String>,
+        /// Project root used for default registry discovery when `--registry` is not set.
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+    },
     /// Synchronise the local Wisdom Registry with The Governor.
     ///
     /// Downloads the latest `wisdom.rkyv` from `https://api.thejanitor.app/v1/wisdom.rkyv`
@@ -267,6 +302,19 @@ async fn main() -> anyhow::Result<()> {
             format,
         } => cmd_bounce(path, patch.as_deref(), registry.as_deref(), format)?,
         Commands::Mcp => mcp::serve().await?,
+        #[cfg(unix)]
+        Commands::Serve {
+            socket,
+            registry,
+            path,
+        } => {
+            use std::path::PathBuf as PB;
+            let registry_path: PB = registry
+                .as_deref()
+                .map(PB::from)
+                .unwrap_or_else(|| path.join(".janitor").join("symbols.rkyv"));
+            daemon::unix::serve(std::path::Path::new(socket), &registry_path).await?;
+        }
         Commands::UpdateWisdom { path } => cmd_update_wisdom(path)?,
     }
 
@@ -359,7 +407,7 @@ fn cmd_scan(
             .to_string();
 
         let json_out = serde_json::json!({
-            "schema_version": "6.3.0",
+            "schema_version": "6.4.0",
             "slop_score": slop_score,
             "dead_symbols": result.dead.iter().map(|e| serde_json::json!({
                 "id": e.qualified_name,
@@ -1780,7 +1828,7 @@ fn cmd_bounce(
 
     if format == "json" {
         let json_out = serde_json::json!({
-            "schema_version": "6.3.0",
+            "schema_version": "6.4.0",
             "slop_score": score.score() as f64,
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
