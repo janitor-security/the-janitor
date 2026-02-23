@@ -15,7 +15,8 @@
 //! SlopScore = (dead_symbols_added × 10) + (logic_clones_found × 5) + (zombie_symbols_added × 15)
 //! ```
 //! Dead-symbol additions (×10) penalise name-based re-introduction.
-//! Logic clones (×5) penalise structural duplication within the patch or against the registry.
+//! Logic clones (×5) penalise structural duplication within the patch (exact BLAKE3 or fuzzy
+//! SimHash in the Zombie band 0.85–0.95) or against the registry (Global Logic Clone).
 //! Zombie reintroductions (×15) carry the highest penalty: the body hash proves the function
 //! was copied verbatim from a previously-deleted dead symbol.
 
@@ -257,8 +258,8 @@ impl PRBouncer for PatchBouncer {
         let mut matches = cursor.matches(&query, tree.root_node(), source);
         let cap_names = query.capture_names();
 
-        // Collect (name, structural_hash) pairs for added functions.
-        let mut fn_hashes: Vec<(String, u64)> = Vec::new();
+        // Collect (name, blake3_hash, simhash) triples for all added functions.
+        let mut fn_data: Vec<(String, u64, u64)> = Vec::new();
         while let Some(m) = matches.next() {
             let name_cap = m
                 .captures
@@ -271,8 +272,9 @@ impl PRBouncer for PatchBouncer {
 
             if let (Some(name_c), Some(body_c)) = (name_cap, body_cap) {
                 if let Ok(name) = name_c.node.utf8_text(source) {
-                    let hash = crate::compute_structural_hash(body_c.node, source);
-                    fn_hashes.push((name.to_string(), hash));
+                    let blake3 = crate::compute_structural_hash(body_c.node, source);
+                    let simhash = crate::hashing::compute_simhash(body_c.node, source);
+                    fn_data.push((name.to_string(), blake3, simhash));
                 }
             }
         }
@@ -280,22 +282,51 @@ impl PRBouncer for PatchBouncer {
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =
             registry.entries.iter().map(|e| e.name.as_str()).collect();
-        let dead_symbols_added = fn_hashes
+        let dead_symbols_added = fn_data
             .iter()
-            .filter(|(name, _)| registry_names.contains(name.as_str()))
+            .filter(|(name, _, _)| registry_names.contains(name.as_str()))
             .count() as u32;
 
-        // Logic clones — structural hash collisions within added code.
+        // Exact logic clones — BLAKE3 hash collisions within added code.
         // For a group of N functions sharing the same hash, contribute N − 1.
         let mut hash_counts: HashMap<u64, u32> = HashMap::new();
-        for (_, hash) in &fn_hashes {
-            *hash_counts.entry(*hash).or_insert(0) += 1;
+        for (_, blake3, _) in &fn_data {
+            *hash_counts.entry(*blake3).or_insert(0) += 1;
         }
         let patch_internal_clones: u32 = hash_counts
             .values()
             .filter(|&&c| c > 1)
             .map(|&c| c - 1)
             .sum();
+
+        // Fuzzy near-clone detection via SimHash.
+        //
+        // For function pairs where BLAKE3 does NOT match (not already counted as an
+        // exact clone), compute the SimHash Hamming similarity. Pairs in the Zombie
+        // band (0.85 < similarity ≤ 0.95) are penalised as near-clone logic duplications.
+        // Pairs in the Refactor band (> 0.95) are ignored — they are trivially similar.
+        let n = fn_data.len();
+        let mut fuzzy_near_clones: u32 = 0;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let (_, b1, s1) = fn_data[i];
+                let (_, b2, s2) = fn_data[j];
+                if b1 == b2 {
+                    // Already counted as an exact clone — skip.
+                    continue;
+                }
+                if matches!(
+                    crate::hashing::classify_similarity(crate::hashing::compute_similarity(s1, s2)),
+                    crate::hashing::Similarity::Zombie
+                ) {
+                    fuzzy_near_clones += 1;
+                }
+            }
+        }
+
+        // Derive a (name, blake3_hash) view for the registry lookups below.
+        let fn_hashes: Vec<(String, u64)> =
+            fn_data.iter().map(|(n, b, _)| (n.clone(), *b)).collect();
 
         // Global registry hash checks: Zombie Reintroduction and Global Logic Clone.
         //
@@ -331,7 +362,7 @@ impl PRBouncer for PatchBouncer {
 
         Ok(SlopScore {
             dead_symbols_added,
-            logic_clones_found: patch_internal_clones + global_clone_count,
+            logic_clones_found: patch_internal_clones + fuzzy_near_clones + global_clone_count,
             zombie_symbols_added,
         })
     }
