@@ -26,7 +26,7 @@ enum Commands {
         verbose: bool,
         /// Output format: `text` (default) or `json` for machine-readable output.
         ///
-        /// JSON schema: `{ slop_score, dead_symbols: [{id, reason}], merkle_root }`.
+        /// JSON schema: `{ schema_version, slop_score, dead_symbols: [{id, structural_hash, reason, byte_range}], merkle_root }`.
         /// Suitable for automated GitHub Checks integration.
         #[arg(long, default_value = "text")]
         format: String,
@@ -110,7 +110,7 @@ enum Commands {
     /// Reads the patch from `--patch <file>` or from stdin.
     /// Loads the symbol registry from `--registry <file>` when provided, otherwise
     /// falls back to `.janitor/symbols.rkyv` under the project root.
-    /// Output: slop_score, dead_symbols_added, logic_clones_found, merkle_root.
+    /// Output: schema_version, slop_score, dead_symbols_added, logic_clones_found, zombie_symbols_added, merkle_root.
     Bounce {
         /// Project root (reads .janitor/symbols.rkyv for the registry unless --registry is set).
         path: PathBuf,
@@ -125,7 +125,7 @@ enum Commands {
         registry: Option<PathBuf>,
         /// Output format: `text` (default) or `json` for machine-readable output.
         ///
-        /// JSON schema: `{ slop_score, dead_symbols_added, logic_clones_found, merkle_root }`.
+        /// JSON schema: `{ schema_version, slop_score, dead_symbols_added, logic_clones_found, zombie_symbols_added, merkle_root }`.
         #[arg(long, default_value = "text")]
         format: String,
     },
@@ -359,10 +359,13 @@ fn cmd_scan(
             .to_string();
 
         let json_out = serde_json::json!({
+            "schema_version": "6.3.0",
             "slop_score": slop_score,
             "dead_symbols": result.dead.iter().map(|e| serde_json::json!({
                 "id": e.qualified_name,
+                "structural_hash": e.structural_hash.unwrap_or(0),
                 "reason": "DEAD_SYMBOL",
+                "byte_range": [e.start_byte, e.end_byte],
             })).collect::<Vec<_>>(),
             "merkle_root": merkle_root,
         });
@@ -1777,9 +1780,11 @@ fn cmd_bounce(
 
     if format == "json" {
         let json_out = serde_json::json!({
+            "schema_version": "6.3.0",
             "slop_score": score.score(),
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
+            "zombie_symbols_added": score.zombie_symbols_added,
             "merkle_root": merkle_root,
         });
         println!(
@@ -1794,6 +1799,7 @@ fn cmd_bounce(
         println!("| Slop score       : {:>20} |", score.score());
         println!("| Dead syms added  : {:>20} |", score.dead_symbols_added);
         println!("| Logic clones     : {:>20} |", score.logic_clones_found);
+        println!("| Zombie syms added: {:>20} |", score.zombie_symbols_added);
         println!("+------------------------------------------+");
         println!("  Merkle root: {}...", &merkle_root[..32]);
         println!();

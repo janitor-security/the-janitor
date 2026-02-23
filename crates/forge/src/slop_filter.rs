@@ -12,10 +12,12 @@
 //!
 //! ## Scoring Formula
 //! ```text
-//! SlopScore = (dead_symbols_added * 10) + (logic_clones_found * 5)
+//! SlopScore = (dead_symbols_added × 10) + (logic_clones_found × 5) + (zombie_symbols_added × 15)
 //! ```
-//! Dead-symbol additions are penalised more heavily (×10) than structural
-//! duplication (×5) because re-introducing dead code degrades signal quality.
+//! Dead-symbol additions (×10) penalise name-based re-introduction.
+//! Logic clones (×5) penalise structural duplication within the patch or against the registry.
+//! Zombie reintroductions (×15) carry the highest penalty: the body hash proves the function
+//! was copied verbatim from a previously-deleted dead symbol.
 
 use std::collections::{HashMap, HashSet};
 
@@ -32,7 +34,7 @@ use common::registry::SymbolRegistry;
 ///
 /// ## Formula
 /// ```text
-/// score = (dead_symbols_added × 10) + (logic_clones_found × 5)
+/// score = (dead_symbols_added × 10) + (logic_clones_found × 5) + (zombie_symbols_added × 15)
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SlopScore {
@@ -41,11 +43,19 @@ pub struct SlopScore {
     /// Signals that the patch re-introduces or duplicates a known symbol —
     /// a common source of dead code accumulation.
     pub dead_symbols_added: u32,
-    /// Number of structurally identical function pairs within the added code.
+    /// Number of structurally identical function pairs within the added code,
+    /// plus functions whose structural hash matches a live (protected) registry entry
+    /// (Global Logic Clones).
     ///
     /// Each "extra" clone beyond the first occurrence in a hash group counts
     /// as one clone (N functions sharing a hash → N−1 clones).
     pub logic_clones_found: u32,
+    /// Number of added functions whose structural body hash matches a *dead*
+    /// (unprotected) symbol in the registry.
+    ///
+    /// A zombie reintroduction proves the function body was copied from a previously
+    /// deleted symbol — the highest-severity slop category (weight ×15).
+    pub zombie_symbols_added: u32,
 }
 
 impl SlopScore {
@@ -54,12 +64,14 @@ impl SlopScore {
     /// Higher scores indicate lower patch quality. A score of zero means the
     /// patch passes all checks cleanly.
     pub fn score(&self) -> u32 {
-        self.dead_symbols_added * 10 + self.logic_clones_found * 5
+        self.dead_symbols_added * 10 + self.logic_clones_found * 5 + self.zombie_symbols_added * 15
     }
 
     /// Returns `true` when no slop was detected.
     pub fn is_clean(&self) -> bool {
-        self.dead_symbols_added == 0 && self.logic_clones_found == 0
+        self.dead_symbols_added == 0
+            && self.logic_clones_found == 0
+            && self.zombie_symbols_added == 0
     }
 }
 
@@ -279,15 +291,48 @@ impl PRBouncer for PatchBouncer {
         for (_, hash) in &fn_hashes {
             *hash_counts.entry(*hash).or_insert(0) += 1;
         }
-        let logic_clones_found: u32 = hash_counts
+        let patch_internal_clones: u32 = hash_counts
             .values()
             .filter(|&&c| c > 1)
             .map(|&c| c - 1)
             .sum();
 
+        // Global registry hash checks: Zombie Reintroduction and Global Logic Clone.
+        //
+        // Build a map: structural_hash → is_dead (protected_by is None).
+        // Skip entries with hash == 0 (classes / assignments carry no structural hash).
+        let mut registry_hash_index: HashMap<u64, bool> = HashMap::new();
+        for entry in &registry.entries {
+            if entry.structural_hash != 0 {
+                let is_dead = entry.protected_by.is_none();
+                registry_hash_index
+                    .entry(entry.structural_hash)
+                    .and_modify(|dead| {
+                        // If any entry sharing this hash is dead, treat the hash as dead.
+                        if is_dead {
+                            *dead = true;
+                        }
+                    })
+                    .or_insert(is_dead);
+            }
+        }
+
+        let mut zombie_symbols_added: u32 = 0;
+        let mut global_clone_count: u32 = 0;
+        for (_, hash) in &fn_hashes {
+            match registry_hash_index.get(hash) {
+                // Hash matches a dead (unprotected) symbol — Zombie Reintroduction.
+                Some(true) => zombie_symbols_added += 1,
+                // Hash matches a live (protected) symbol — Global Logic Clone.
+                Some(false) => global_clone_count += 1,
+                None => {}
+            }
+        }
+
         Ok(SlopScore {
             dead_symbols_added,
-            logic_clones_found,
+            logic_clones_found: patch_internal_clones + global_clone_count,
+            zombie_symbols_added,
         })
     }
 }
@@ -417,8 +462,135 @@ mod tests {
         let s = SlopScore {
             dead_symbols_added: 2,
             logic_clones_found: 3,
+            zombie_symbols_added: 0,
         };
         assert_eq!(s.score(), 2 * 10 + 3 * 5); // 35
+
+        // Zombie weight is ×15.
+        let z = SlopScore {
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 2,
+        };
+        assert_eq!(z.score(), 2 * 15); // 30
+        assert!(!z.is_clean());
+    }
+
+    #[test]
+    fn test_zombie_reintroduction_detected() {
+        // Compute the structural hash of the function body we are about to patch in.
+        let fn_src = "def zombie_fn():\n    return 42\n";
+        let lang: tree_sitter::Language = tree_sitter_python::LANGUAGE.into();
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&lang).unwrap();
+        let tree = parser.parse(fn_src.as_bytes(), None).unwrap();
+        let query = Query::new(
+            &lang,
+            "(function_definition name: (identifier) @fn.name body: (block) @fn.body)",
+        )
+        .unwrap();
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(&query, tree.root_node(), fn_src.as_bytes());
+        let cap_names = query.capture_names();
+        let mut body_hash = 0u64;
+        while let Some(m) = matches.next() {
+            if let Some(body_cap) = m
+                .captures
+                .iter()
+                .find(|c| cap_names[c.index as usize] == "fn.body")
+            {
+                body_hash = crate::compute_structural_hash(body_cap.node, fn_src.as_bytes());
+                break;
+            }
+        }
+        assert_ne!(
+            body_hash, 0,
+            "hash must be non-zero for this test to be meaningful"
+        );
+
+        // Registry entry: same hash, no protection → DEAD symbol.
+        let mut registry = SymbolRegistry::new();
+        registry.entries.push(SymbolEntry {
+            id: 1,
+            name: "deleted_helper".to_string(),
+            qualified_name: "deleted_helper".to_string(),
+            file_path: "old.py".to_string(),
+            start_byte: 0,
+            end_byte: 50,
+            start_line: 1,
+            end_line: 3,
+            entity_type: 0,
+            structural_hash: body_hash,
+            protected_by: None, // DEAD
+        });
+
+        let patch = make_patch("utils.py", fn_src);
+        let score = PatchBouncer.bounce(&patch, &registry).unwrap();
+        assert_eq!(
+            score.zombie_symbols_added, 1,
+            "zombie reintroduction must be detected"
+        );
+        assert_eq!(score.score(), 15, "zombie weight is ×15");
+        assert!(!score.is_clean());
+    }
+
+    #[test]
+    fn test_global_registry_clone_detected() {
+        use common::Protection;
+
+        // Same setup but registry entry is PROTECTED → Global Logic Clone, not zombie.
+        let fn_src = "def live_clone():\n    return 99\n";
+        let lang: tree_sitter::Language = tree_sitter_python::LANGUAGE.into();
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&lang).unwrap();
+        let tree = parser.parse(fn_src.as_bytes(), None).unwrap();
+        let query = Query::new(
+            &lang,
+            "(function_definition name: (identifier) @fn.name body: (block) @fn.body)",
+        )
+        .unwrap();
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(&query, tree.root_node(), fn_src.as_bytes());
+        let cap_names = query.capture_names();
+        let mut body_hash = 0u64;
+        while let Some(m) = matches.next() {
+            if let Some(body_cap) = m
+                .captures
+                .iter()
+                .find(|c| cap_names[c.index as usize] == "fn.body")
+            {
+                body_hash = crate::compute_structural_hash(body_cap.node, fn_src.as_bytes());
+                break;
+            }
+        }
+        assert_ne!(body_hash, 0);
+
+        let mut registry = SymbolRegistry::new();
+        registry.entries.push(SymbolEntry {
+            id: 2,
+            name: "live_helper".to_string(),
+            qualified_name: "live_helper".to_string(),
+            file_path: "existing.py".to_string(),
+            start_byte: 0,
+            end_byte: 50,
+            start_line: 1,
+            end_line: 3,
+            entity_type: 0,
+            structural_hash: body_hash,
+            protected_by: Some(Protection::Referenced), // ALIVE
+        });
+
+        let patch = make_patch("utils.py", fn_src);
+        let score = PatchBouncer.bounce(&patch, &registry).unwrap();
+        assert_eq!(
+            score.zombie_symbols_added, 0,
+            "protected entry must NOT be a zombie"
+        );
+        assert_eq!(
+            score.logic_clones_found, 1,
+            "protected hash match counts as global logic clone"
+        );
+        assert_eq!(score.score(), 5);
     }
 
     #[test]
