@@ -95,8 +95,8 @@ impl WisdomSet {
     }
 }
 
-// Helper for JSON deserialization of files like immortality_rules.json
-#[derive(Debug, SerdeDeserialize)]
+// Helper for JSON (de)serialization of files like immortality_rules.json
+#[derive(Debug, SerdeSerialize, SerdeDeserialize)]
 pub struct ImmortalityRulesWrapper {
     pub immortality_rules: Vec<ImmortalityRule>,
 }

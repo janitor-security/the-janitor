@@ -158,6 +158,14 @@ enum Commands {
     /// Reads newline-delimited JSON-RPC 2.0 from stdin, responds on stdout.
     /// Designed for use as an MCP tool server by AI assistants.
     Mcp,
+    /// Synchronise the local Wisdom Registry with The Governor.
+    ///
+    /// Downloads the latest `wisdom.rkyv` from `https://api.thejanitor.app/v1/wisdom.rkyv`
+    /// and overwrites `.janitor/wisdom.rkyv` in the project root.
+    UpdateWisdom {
+        /// Project root (writes .janitor/wisdom.rkyv).
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -259,6 +267,7 @@ async fn main() -> anyhow::Result<()> {
             format,
         } => cmd_bounce(path, patch.as_deref(), registry.as_deref(), format)?,
         Commands::Mcp => mcp::serve().await?,
+        Commands::UpdateWisdom { path } => cmd_update_wisdom(path)?,
     }
 
     Ok(())
@@ -1795,6 +1804,41 @@ fn cmd_bounce(
         }
     }
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// update-wisdom
+// ---------------------------------------------------------------------------
+
+/// Downloads the latest Wisdom Registry from The Governor and writes it to
+/// `<project_root>/.janitor/wisdom.rkyv`.
+///
+/// On any network or I/O failure the function returns an error — no partial
+/// write is left on disk (the download is buffered before overwriting).
+fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
+    use std::io::Read as _;
+    const WISDOM_URL: &str = "https://api.thejanitor.app/v1/wisdom.rkyv";
+
+    let response = ureq::get(WISDOM_URL)
+        .call()
+        .map_err(|e| anyhow::anyhow!("update-wisdom: GET {} failed: {}", WISDOM_URL, e))?;
+
+    let mut bytes: Vec<u8> = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| anyhow::anyhow!("update-wisdom: reading response body failed: {}", e))?;
+
+    let janitor_dir = project_root.join(".janitor");
+    std::fs::create_dir_all(&janitor_dir)
+        .with_context(|| format!("creating {}", janitor_dir.display()))?;
+
+    let wisdom_path = janitor_dir.join("wisdom.rkyv");
+    std::fs::write(&wisdom_path, &bytes)
+        .with_context(|| format!("writing {}", wisdom_path.display()))?;
+
+    println!("\u{1f9e0} Wisdom Registry synchronized with The Governor.");
     Ok(())
 }
 
