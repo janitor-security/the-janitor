@@ -30,3 +30,4 @@ dotenvy = "0.15"
 serde_json.workspace = true
 blake3.workspace = true
 indicatif.workspace = true
+ureq.workspace = true
