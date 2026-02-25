@@ -8,6 +8,6 @@ repository.workspace = true
 [dependencies]
 petgraph.workspace = true
 anyhow.workspace = true
-thiserror = "1.0"
+thiserror = "2.0"
 common = { path = "../common" }
 lazarus = { path = "../lazarus" }
