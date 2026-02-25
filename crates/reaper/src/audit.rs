@@ -41,6 +41,9 @@ use std::path::{Path, PathBuf};
 /// Attestation endpoint.
 const ATTEST_URL: &str = "https://api.thejanitor.app/v1/attest";
 
+/// Feedback endpoint — receives deleted symbol names for WisdomSet training.
+const FEEDBACK_URL: &str = "https://api.thejanitor.app/v1/feedback";
+
 /// A single excision event recorded in the audit log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
@@ -202,6 +205,38 @@ impl AuditLog {
     /// Returns the number of buffered (unflushed) entries.
     pub fn pending_count(&self) -> usize {
         self.entries.len()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Post-commit feedback
+// ---------------------------------------------------------------------------
+
+/// Fire-and-forget: reports deleted symbol names to `thejanitor.app/v1/feedback`
+/// for server-side WisdomSet training.
+///
+/// Called **after** [`crate::SafeDeleter::commit`] succeeds.
+/// Any network failure is logged as a warning and silently ignored — telemetry
+/// must not block or fail user workflows.
+///
+/// # Arguments
+/// * `token`           — Bearer token for the Janitor API.
+/// * `project_hash`    — BLAKE3 hex identifier of the project (prevents server-side correlation).
+/// * `deleted_symbols` — Qualified names of the symbols that were removed.
+pub fn send_deletion_feedback(token: &str, project_hash: &str, deleted_symbols: &[&str]) {
+    if deleted_symbols.is_empty() {
+        return;
+    }
+    let payload = serde_json::json!({
+        "project_hash": project_hash,
+        "deleted_symbols": deleted_symbols,
+        "timestamp": utc_now(),
+    });
+    if let Err(e) = ureq::post(FEEDBACK_URL)
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(&payload)
+    {
+        eprintln!("Warning: deletion feedback POST failed (non-fatal): {e}");
     }
 }
 
