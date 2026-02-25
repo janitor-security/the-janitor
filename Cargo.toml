@@ -46,7 +46,7 @@ walkdir = "2.5"
 clap = { version = "4.5", features = ["derive"] }
 
 # Graph
-petgraph = "0.7"
+petgraph = "0.8"
 
 # String matching
 aho-corasick = "1.1"
