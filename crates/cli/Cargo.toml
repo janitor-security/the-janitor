@@ -19,8 +19,6 @@ common = { path = "../common" }
 reaper = { path = "../reaper" }
 vault = { path = "../vault" }
 dashboard = { path = "../dashboard" }
-lazarus = { path = "../lazarus" }
-oracle = { path = "../oracle" }
 arc-swap.workspace = true
 memmap2.workspace = true
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

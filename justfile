@@ -69,6 +69,7 @@ release version: audit (bump-version version)
 		--title "v{{version}} - The Industrial Pivot" \
 		--notes-file README.md \
 		--latest
+	uv run --with mkdocs-material mkdocs gh-deploy --force
 	@echo "💀 Release v{{version}} deployed."
 
 # 5. DOCUMENTATION

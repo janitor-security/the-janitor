@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod otlp;
 pub mod safe_delete;
 pub mod test_fingerprint;
 

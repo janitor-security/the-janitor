@@ -1,9 +1,10 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes three tools over the MCP stdio JSON-RPC protocol:
-//! - `janitor_scan` — Run the 6-stage dead-symbol pipeline on a project path.
-//! - `janitor_dedup` — Detect structurally-cloned symbols in a project.
-//! - `janitor_clean` — Report dead symbols eligible for removal (dry-run).
+//! Exposes four tools over the MCP stdio JSON-RPC protocol:
+//! - `janitor_scan`      — Run the 6-stage dead-symbol pipeline on a project path.
+//! - `janitor_dedup`     — Detect structurally-cloned symbols in a project.
+//! - `janitor_clean`     — Report dead symbols eligible for removal (dry-run).
+//! - `janitor_dep_check` — Identify zombie dependencies (declared but never imported).
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -133,6 +134,20 @@ fn tool_list() -> serde_json::Value {
                     },
                     "required": ["path", "token"]
                 }
+            },
+            {
+                "name": "janitor_dep_check",
+                "description": "Scan manifest files (package.json, Cargo.toml, requirements.txt, pyproject.toml) and identify zombie dependencies — packages declared but never imported in any source file.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the project root."
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         ]
     })
@@ -182,6 +197,21 @@ fn load_cached_summary(rkyv_path: &Path) -> Result<serde_json::Value> {
     Ok(serde_json::json!({
         "source": "cache",
         "total": mapped.len(),
+    }))
+}
+
+/// Scan manifests and return zombie dependency report.
+fn run_dep_check(path: &str) -> Result<serde_json::Value> {
+    let root = Path::new(path);
+    anyhow::ensure!(root.is_dir(), "path is not a directory: {}", path);
+
+    let registry = anatomist::manifest::scan_manifests(root);
+    let zombies = anatomist::manifest::find_zombie_deps(root, &registry);
+
+    Ok(serde_json::json!({
+        "total_declared": registry.len(),
+        "zombie_count": zombies.len(),
+        "zombie_deps": zombies,
     }))
 }
 
@@ -342,6 +372,17 @@ fn dispatch(req: Request) -> Response {
                     }
                 }
 
+                "janitor_dep_check" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    match run_dep_check(&path) {
+                        Ok(v) => Response::ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
                 _ => Response::err(req.id, -32601, format!("unknown tool: {tool}")),
             }
         }
@@ -371,14 +412,15 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_three_tools() {
+    fn test_tools_list_contains_four_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 3);
+        assert_eq!(tools.len(), 4);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
         assert!(names.contains(&"janitor_clean"));
+        assert!(names.contains(&"janitor_dep_check"));
     }
 
     #[test]

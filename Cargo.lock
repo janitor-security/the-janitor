@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -38,7 +38,9 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
+ "toml",
  "tree-sitter",
  "tree-sitter-c",
  "tree-sitter-c-sharp",
@@ -326,7 +328,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -338,10 +340,8 @@ dependencies = [
  "dotenvy",
  "forge",
  "indicatif",
- "lazarus",
  "mcp",
  "memmap2",
- "oracle",
  "polyglot",
  "reaper",
  "rkyv",
@@ -362,7 +362,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -813,7 +813,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1167,20 +1167,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
-name = "lazarus"
-version = "6.5.0"
-dependencies = [
- "aho-corasick",
- "anyhow",
- "common",
- "flate2",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1307,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1366,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1500,17 +1486,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "oracle"
-version = "6.5.0"
-dependencies = [
- "anyhow",
- "common",
- "lazarus",
- "petgraph",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1680,7 +1655,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "tree-sitter",
  "tree-sitter-c",
@@ -1906,14 +1881,16 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
+ "flate2",
  "memmap2",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror 2.0.18",
  "ureq",
 ]
@@ -2157,6 +2134,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,7 +2155,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anyhow",
  "junction",
@@ -2311,10 +2297,6 @@ dependencies = [
  "quote",
  "syn 2.0.116",
 ]
-
-[[package]]
-name = "substrate"
-version = "6.5.0"
 
 [[package]]
 name = "subtle"
@@ -2543,6 +2525,47 @@ dependencies = [
  "quote",
  "syn 2.0.116",
 ]
+
+[[package]]
+name = "toml"
+version = "0.8.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_edit",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.22.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_write",
+ "winnow",
+]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tree-sitter"
@@ -2784,7 +2807,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3228,8 +3251,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
+name = "winnow"
+version = "0.7.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "wisdom-bake"
-version = "6.5.0"
+version = "6.6.0"
 dependencies = [
  "anyhow",
  "common",
