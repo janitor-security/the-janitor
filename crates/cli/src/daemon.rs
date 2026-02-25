@@ -3,6 +3,13 @@
 //! Eliminates process-spawn overhead for high-frequency CI integrations by keeping
 //! the parsed symbol registry resident in memory across multiple bounce requests.
 //!
+//! ## Architecture
+//! - **`HotRegistry`**: wraps `ArcSwap<Arc<SymbolRegistry>>` for lock-free reads
+//!   and atomic hot-swap reloads without blocking in-flight requests.
+//! - **`LshIndex`**: per-daemon MinHash index for cross-request PR collision detection.
+//!   Each `Bounce` request contributes a `PrDeltaSignature`; subsequent requests are
+//!   checked against prior ones to detect near-duplicate PRs.
+//!
 //! ## Protocol
 //! Newline-delimited JSON (ndjson). Each connection sends one or more request lines;
 //! the server replies with one response line per request.
@@ -14,14 +21,14 @@
 //!
 //! ### Response
 //! ```json
-//! {"type":"Report","slop_score":15.0,"zombies":1}
+//! {"type":"Report","slop_score":15.0,"zombies":1,"antipatterns":0}
 //! {"type":"Error","message":"..."}
 //! ```
 //!
 //! ## Lifecycle
-//! 1. Load `symbols.rkyv` once at startup into `Arc<RwLock<SymbolRegistry>>`.
+//! 1. Load `symbols.rkyv` once at startup into `HotRegistry`.
 //! 2. Accept connections on the UDS; spawn a task per connection.
-//! 3. Each task holds a read guard for the registry duration of each `Bounce` call.
+//! 3. Each task holds a lock-free guard via `HotRegistry::load()` (no blocking).
 //! 4. Graceful shutdown on SIGINT / SIGTERM — in-flight requests complete normally.
 //!
 //! ## Platform
@@ -34,11 +41,12 @@ pub mod unix {
     use std::sync::Arc;
 
     use anyhow::Result;
+    use arc_swap::ArcSwap;
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::{UnixListener, UnixStream};
-    use tokio::sync::RwLock;
 
     use common::registry::{MappedRegistry, SymbolRegistry};
+    use forge::pr_collider::LshIndex;
     use forge::slop_filter::{PRBouncer, PatchBouncer};
 
     // ---------------------------------------------------------------------------
@@ -63,9 +71,88 @@ pub mod unix {
             slop_score: f64,
             /// Number of zombie symbol reintroductions detected.
             zombies: u32,
+            /// Number of language-specific antipatterns detected (×50 each).
+            antipatterns: u32,
         },
         /// Error during request processing.
         Error { message: String },
+    }
+
+    // ---------------------------------------------------------------------------
+    // HotRegistry — lock-free atomic symbol registry
+    // ---------------------------------------------------------------------------
+
+    /// Lock-free symbol registry with atomic hot-swap capability.
+    ///
+    /// Wraps [`ArcSwap<Arc<SymbolRegistry>>`] so that:
+    /// - Reads are lock-free: `load()` returns a guard with no mutex acquisition.
+    /// - Reloads are atomic: `reload()` swaps the current registry with a freshly
+    ///   deserialised one; readers holding the old guard are unaffected.
+    ///
+    /// Uses `MappedRegistry::archived()` → `rkyv::access_unchecked` internally for
+    /// zero-copy deserialization on load.
+    pub struct HotRegistry {
+        inner: ArcSwap<SymbolRegistry>,
+        // Retained for `reload()` — hot-swap API wired up in a future release.
+        #[allow(dead_code)]
+        path: std::path::PathBuf,
+    }
+
+    impl HotRegistry {
+        /// Open and deserialise the registry at `path`.
+        ///
+        /// Uses `rkyv::access_unchecked` via [`MappedRegistry`] for zero-copy reads;
+        /// the resulting `SymbolRegistry` is heap-owned and held in the `ArcSwap`.
+        ///
+        /// # Errors
+        /// Returns `Err` if the file cannot be opened, the BLAKE3 checksum fails,
+        /// or rkyv deserialisation fails.
+        pub fn open(path: &Path) -> Result<Self> {
+            let registry = load_registry(path)?;
+            Ok(Self {
+                inner: ArcSwap::from_pointee(registry),
+                path: path.to_path_buf(),
+            })
+        }
+
+        /// Returns a lock-free guard holding a reference to the current registry.
+        ///
+        /// The guard keeps the `Arc<SymbolRegistry>` alive for its lifetime.
+        /// Concurrent [`reload`][Self::reload] calls are safe — readers hold the old
+        /// snapshot until the guard is dropped.
+        pub fn load(&self) -> arc_swap::Guard<Arc<SymbolRegistry>> {
+            self.inner.load()
+        }
+
+        /// Atomically reload the registry from disk.
+        ///
+        /// After this call, new `load()` calls return the updated registry.
+        /// In-flight requests holding the previous guard are unaffected.
+        ///
+        /// # Errors
+        /// Returns `Err` if the file cannot be re-opened or deserialization fails.
+        #[allow(dead_code)]
+        pub fn reload(&self) -> Result<()> {
+            let registry = load_registry(&self.path)?;
+            self.inner.store(Arc::new(registry));
+            Ok(())
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Daemon state
+    // ---------------------------------------------------------------------------
+
+    /// Shared daemon state — held in `Arc` and passed to every connection handler.
+    pub struct DaemonState {
+        /// Lock-free symbol registry (hot-swappable).
+        pub registry: HotRegistry,
+        /// Cross-request LSH index for near-duplicate PR detection.
+        ///
+        /// Each `Bounce` request inserts its `PrDeltaSignature` and queries for
+        /// prior near-duplicate patches.  Near-duplicate matches contribute to
+        /// `logic_clones_found` in the response score.
+        pub lsh_index: LshIndex,
     }
 
     // ---------------------------------------------------------------------------
@@ -74,7 +161,10 @@ pub mod unix {
 
     /// Load a `SymbolRegistry` from a `symbols.rkyv` file at `path`.
     ///
-    /// Uses the same `MappedRegistry` + rkyv zero-copy path as the CLI commands.
+    /// Uses the `MappedRegistry` mmap + rkyv zero-copy path:
+    /// - [`MappedRegistry::open`] verifies the BLAKE3 checksum and calls
+    ///   `rkyv::access_unchecked` internally.
+    /// - [`rkyv::deserialize`] produces a heap-owned `SymbolRegistry`.
     fn load_registry(path: &Path) -> Result<SymbolRegistry> {
         let mapped = MappedRegistry::open(path)
             .map_err(|e| anyhow::anyhow!("Cannot open registry at {}: {e}", path.display()))?;
@@ -89,14 +179,19 @@ pub mod unix {
     /// Start the Janitor daemon bound to `socket_path`.
     ///
     /// Loads the symbol registry from `registry_path` once at startup and shares
-    /// it across all connections via `Arc<RwLock<SymbolRegistry>>`.
+    /// it across all connections via [`HotRegistry`] (lock-free `ArcSwap`).
+    /// A per-daemon [`LshIndex`] accumulates `PrDeltaSignature` entries for
+    /// cross-request near-duplicate detection.
     ///
     /// Blocks until SIGINT or SIGTERM is received, then shuts down gracefully.
     ///
     /// # Errors
     /// Returns `Err` if the registry cannot be loaded or the socket cannot be bound.
     pub async fn serve(socket_path: &Path, registry_path: &Path) -> Result<()> {
-        let registry = Arc::new(RwLock::new(load_registry(registry_path)?));
+        let state = Arc::new(DaemonState {
+            registry: HotRegistry::open(registry_path)?,
+            lsh_index: LshIndex::new(),
+        });
 
         // Remove a stale socket file from a previous run.
         if socket_path.exists() {
@@ -116,8 +211,8 @@ pub mod unix {
                 result = listener.accept() => {
                     match result {
                         Ok((stream, _)) => {
-                            let reg = Arc::clone(&registry);
-                            tokio::spawn(handle_connection(stream, reg));
+                            let s = Arc::clone(&state);
+                            tokio::spawn(handle_connection(stream, s));
                         }
                         Err(e) => {
                             eprintln!("janitor daemon: accept error: {e}");
@@ -144,12 +239,12 @@ pub mod unix {
     ///
     /// Reads newline-delimited JSON requests until the client disconnects.
     /// Writes one JSON response per request.
-    async fn handle_connection(stream: UnixStream, registry: Arc<RwLock<SymbolRegistry>>) {
+    async fn handle_connection(stream: UnixStream, state: Arc<DaemonState>) {
         let (reader, mut writer) = stream.into_split();
         let mut lines = BufReader::new(reader).lines();
 
         while let Ok(Some(line)) = lines.next_line().await {
-            let response = process_request(&line, &registry).await;
+            let response = process_request(&line, &state).await;
             let mut json = match serde_json::to_string(&response) {
                 Ok(j) => j,
                 Err(e) => {
@@ -166,15 +261,33 @@ pub mod unix {
     }
 
     /// Parse and execute one daemon request, returning the appropriate response.
-    async fn process_request(line: &str, registry: &Arc<RwLock<SymbolRegistry>>) -> DaemonResponse {
+    ///
+    /// Uses a lock-free `HotRegistry::load()` guard for registry access.
+    /// After scoring, inserts a `PrDeltaSignature` for the patch into the `LshIndex`
+    /// and adds any cross-PR collision count to `logic_clones_found`.
+    async fn process_request(line: &str, state: &Arc<DaemonState>) -> DaemonResponse {
         match serde_json::from_str::<DaemonRequest>(line) {
             Ok(DaemonRequest::Bounce { patch }) => {
-                let reg = registry.read().await;
-                match PatchBouncer.bounce(&patch, &reg) {
-                    Ok(score) => DaemonResponse::Report {
-                        slop_score: score.score() as f64,
-                        zombies: score.zombie_symbols_added,
-                    },
+                // Lock-free read guard — no blocking.
+                let guard = state.registry.load();
+                let registry: &SymbolRegistry = &guard;
+
+                match PatchBouncer.bounce(&patch, registry) {
+                    Ok(mut score) => {
+                        // Cross-PR collision detection via LSH MinHash index.
+                        let sig =
+                            forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
+                        let near_matches = state.lsh_index.query(&sig, 0.8);
+                        score.logic_clones_found += near_matches.len() as u32;
+                        // Insert for future comparisons.
+                        state.lsh_index.insert(sig);
+
+                        DaemonResponse::Report {
+                            slop_score: score.score() as f64,
+                            zombies: score.zombie_symbols_added,
+                            antipatterns: score.antipatterns_found,
+                        }
+                    }
                     Err(e) => DaemonResponse::Error {
                         message: e.to_string(),
                     },

@@ -346,7 +346,7 @@ mod tests {
         fs::write(&file, b"x = 1\n").ok();
 
         let mut deleter = SafeDeleter::new(&tmp).unwrap();
-        let removed = deleter.delete_symbols(&file, &mut vec![]).unwrap();
+        let removed = deleter.delete_symbols(&file, &mut []).unwrap();
         assert_eq!(removed, 0);
         assert_eq!(deleter.backup_count(), 0);
 

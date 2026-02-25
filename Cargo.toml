@@ -3,7 +3,7 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
 resolver = "2"
 
 [workspace.package]
-version = "6.4.0"
+version = "6.5.0"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
@@ -57,6 +57,12 @@ sha2 = "0.10"
 
 # HTTP client (sync, used for remote audit attestation)
 ureq = { version = "2", features = ["json"] }
+
+# Lock-free atomic reference counting
+arc-swap = "1.7"
+
+# Git integration (C binding to libgit2 — requires libgit2-dev in build env)
+git2 = "0.19"
 
 # Progress reporting
 indicatif = "0.17"

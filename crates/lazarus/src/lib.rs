@@ -165,7 +165,7 @@ mod tests {
             // Write a newline or nothing? serde_json::Deserializer::from_reader can handle stream of JSON values.
             // But usually NDJSON has newlines. serde_json::Deserializer handles adjacent values too.
             // Let's add whitespace just in case.
-            write!(encoder, "\n")?;
+            writeln!(encoder)?;
         }
         encoder.finish()?;
 

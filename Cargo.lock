@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -110,6 +110,15 @@ name = "anyhow"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+
+[[package]]
+name = "arc-swap"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9f3647c145568cec02c42054e07bdf9a5a698e15b466fb2341bfc393cd24aa5"
+dependencies = [
+ "rustversion",
+]
 
 [[package]]
 name = "arrayref"
@@ -258,6 +267,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aebf35691d1bfb0ac386a69bac2fde4dd276fb618cf8bf4f5318fe285e821bb2"
 dependencies = [
  "find-msvc-tools",
+ "jobserver",
+ "libc",
  "shlex",
 ]
 
@@ -315,10 +326,11 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anatomist",
  "anyhow",
+ "arc-swap",
  "blake3",
  "clap",
  "common",
@@ -330,6 +342,7 @@ dependencies = [
  "mcp",
  "memmap2",
  "oracle",
+ "polyglot",
  "reaper",
  "rkyv",
  "serde",
@@ -349,7 +362,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -555,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -800,11 +813,13 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "blake3",
  "common",
+ "git2",
  "thiserror 2.0.18",
  "tree-sitter",
  "tree-sitter-c",
@@ -817,6 +832,7 @@ dependencies = [
  "tree-sitter-objc",
  "tree-sitter-python",
  "tree-sitter-rust",
+ "tree-sitter-typescript",
 ]
 
 [[package]]
@@ -872,6 +888,21 @@ dependencies = [
  "r-efi",
  "wasip2",
  "wasip3",
+]
+
+[[package]]
+name = "git2"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b903b73e45dc0c6c596f2d37eccece7c1c8bb6e4407b001096387c63d0d93724"
+dependencies = [
+ "bitflags 2.11.0",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "openssl-probe",
+ "openssl-sys",
+ "url",
 ]
 
 [[package]]
@@ -1089,6 +1120,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
+name = "jobserver"
+version = "0.1.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afb3de4395d6b3e67a780b6de64b51c978ecf11cb9a462c66be7d4ca9039d33"
+dependencies = [
+ "getrandom 0.3.4",
+ "libc",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1127,7 +1168,7 @@ checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
 name = "lazarus"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1156,6 +1197,46 @@ name = "libc"
 version = "0.2.182"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+
+[[package]]
+name = "libgit2-sys"
+version = "0.17.0+1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10472326a8a6477c3c20a64547b0059e4b0d086869eee31e6d7da728a8eb7224"
+dependencies = [
+ "cc",
+ "libc",
+ "libssh2-sys",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+]
+
+[[package]]
+name = "libssh2-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "220e4f05ad4a218192533b300327f5150e809b54c4ec83b5a1d91833601811b9"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
+name = "libz-sys"
+version = "1.1.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4735e9cbde5aac84a5ce588f6b23a90b9b0b528f6c5a8db8a4aff300463a0839"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "line-clipping"
@@ -1226,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1285,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1404,8 +1485,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "openssl-probe"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.111"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82cab2d520aa75e3c58898289429321eb788c3106963d0dc886ec7a5f4adc321"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "oracle"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "common",
@@ -1571,6 +1670,30 @@ checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
  "der",
  "spki",
+]
+
+[[package]]
+name = "pkg-config"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+
+[[package]]
+name = "polyglot"
+version = "6.5.0"
+dependencies = [
+ "tree-sitter",
+ "tree-sitter-c",
+ "tree-sitter-c-sharp",
+ "tree-sitter-cpp",
+ "tree-sitter-glsl",
+ "tree-sitter-go",
+ "tree-sitter-java",
+ "tree-sitter-javascript",
+ "tree-sitter-objc",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
 ]
 
 [[package]]
@@ -1783,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2046,7 +2169,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "junction",
@@ -2191,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "6.4.0"
+version = "6.5.0"
 
 [[package]]
 name = "subtle"
@@ -2661,12 +2784,18 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "base64",
  "ed25519-dalek",
  "thiserror 2.0.18",
 ]
+
+[[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
@@ -3100,7 +3229,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "common",

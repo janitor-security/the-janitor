@@ -112,24 +112,44 @@ enum Commands {
     /// Reads the patch from `--patch <file>` or from stdin.
     /// Loads the symbol registry from `--registry <file>` when provided, otherwise
     /// falls back to `.janitor/symbols.rkyv` under the project root.
-    /// Output: schema_version, slop_score, dead_symbols_added, logic_clones_found, zombie_symbols_added, merkle_root.
+    ///
+    /// **Git-native mode**: supply `--repo`, `--base`, and `--head` together to
+    /// analyse a PR directly from git OIDs without extracting a diff file.
+    /// Uses `shadow_git` to load changed blobs in-memory from the pack index.
+    ///
+    /// Output: schema_version, slop_score, dead_symbols_added, logic_clones_found,
+    /// zombie_symbols_added, antipatterns_found, merkle_root.
     Bounce {
         /// Project root (reads .janitor/symbols.rkyv for the registry unless --registry is set).
         path: PathBuf,
         /// Path to unified diff patch file (reads stdin if omitted).
+        ///
+        /// Mutually exclusive with `--repo/--base/--head`.
         #[arg(long)]
         patch: Option<PathBuf>,
         /// Explicit path to the symbol registry (.rkyv file).
         ///
         /// Overrides the default `.janitor/symbols.rkyv` auto-discovery.
-        /// Required when calling from the Governor SaaS with a pre-generated registry.
         #[arg(long)]
         registry: Option<PathBuf>,
         /// Output format: `text` (default) or `json` for machine-readable output.
         ///
-        /// JSON schema: `{ schema_version, slop_score, dead_symbols_added, logic_clones_found, zombie_symbols_added, merkle_root }`.
+        /// JSON schema: `{ schema_version, slop_score, dead_symbols_added,
+        /// logic_clones_found, zombie_symbols_added, antipatterns_found, merkle_root }`.
         #[arg(long, default_value = "text")]
         format: String,
+        /// Git repository root for git-native mode (`shadow_git` analysis).
+        ///
+        /// Requires `--base` and `--head`. When provided, the patch is loaded
+        /// directly from the pack index — no diff file needed.
+        #[arg(long)]
+        repo: Option<PathBuf>,
+        /// Base commit SHA (target-branch head) for git-native mode.
+        #[arg(long)]
+        base: Option<String>,
+        /// Head commit SHA (feature-branch head) for git-native mode.
+        #[arg(long)]
+        head: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -300,7 +320,18 @@ async fn main() -> anyhow::Result<()> {
             patch,
             registry,
             format,
-        } => cmd_bounce(path, patch.as_deref(), registry.as_deref(), format)?,
+            repo,
+            base,
+            head,
+        } => cmd_bounce(
+            path,
+            patch.as_deref(),
+            registry.as_deref(),
+            format,
+            repo.as_deref(),
+            base.as_deref(),
+            head.as_deref(),
+        )?,
         Commands::Mcp => mcp::serve().await?,
         #[cfg(unix)]
         Commands::Serve {
@@ -407,7 +438,7 @@ fn cmd_scan(
             .to_string();
 
         let json_out = serde_json::json!({
-            "schema_version": "6.4.0",
+            "schema_version": "6.5.0",
             "slop_score": slop_score,
             "dead_symbols": result.dead.iter().map(|e| serde_json::json!({
                 "id": e.qualified_name,
@@ -1767,36 +1798,30 @@ fn apply_deletions(source: &[u8], mut ranges: Vec<(usize, usize)>) -> Vec<u8> {
 // bounce
 // ---------------------------------------------------------------------------
 
-/// Analyse a unified diff patch for slop using the PatchBouncer.
+/// Analyse a unified diff patch (or a git PR via OIDs) for slop.
 ///
-/// Loads the symbol registry from `registry_override` when provided, otherwise falls
-/// back to `.janitor/symbols.rkyv` under `project_root` (written by `janitor scan`).
-/// Reads the patch from `patch_file` or from stdin when `None`.
+/// **Patch mode** (`--patch` / stdin): Loads patch from file or stdin, runs
+/// `PatchBouncer` analysis.
+///
+/// **Git-native mode** (`--repo --base --head`): Loads changed blobs directly
+/// from the git pack index via `shadow_git::simulate_merge`, no diff file needed.
+///
+/// Loads the symbol registry from `registry_override` or `.janitor/symbols.rkyv`.
+#[allow(clippy::too_many_arguments)]
 fn cmd_bounce(
     project_root: &Path,
     patch_file: Option<&Path>,
     registry_override: Option<&Path>,
     format: &str,
+    repo: Option<&Path>,
+    base: Option<&str>,
+    head: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::registry::{MappedRegistry, SymbolRegistry};
-    use forge::slop_filter::{PRBouncer, PatchBouncer};
+    use forge::slop_filter::{bounce_git, PRBouncer, PatchBouncer};
     use std::io::Read as _;
 
-    // Load patch content.
-    let patch = match patch_file {
-        Some(pf) => std::fs::read_to_string(pf)
-            .with_context(|| format!("reading patch file: {}", pf.display()))?,
-        None => {
-            let mut s = String::new();
-            std::io::stdin()
-                .read_to_string(&mut s)
-                .context("reading patch from stdin")?;
-            s
-        }
-    };
-
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
-    // Explicit --registry path takes precedence over auto-discovery.
     let rkyv_path = registry_override
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| project_root.join(".janitor").join("symbols.rkyv"));
@@ -1808,7 +1833,7 @@ fn cmd_bounce(
     } else {
         if registry_override.is_some() {
             eprintln!(
-                "warning: registry file not found: {}. Proceeding with empty registry (clone detection only).",
+                "warning: registry file not found: {}. Proceeding with empty registry.",
                 rkyv_path.display()
             );
         } else {
@@ -1821,18 +1846,42 @@ fn cmd_bounce(
         SymbolRegistry::new()
     };
 
-    let score = PatchBouncer.bounce(&patch, &registry)?;
-
-    // Merkle root: BLAKE3 over the raw patch bytes — ties the score to this specific diff.
-    let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
+    // Determine analysis mode and compute score + merkle root.
+    let (score, merkle_root) = match (repo, base, head) {
+        (Some(repo_path), Some(base_sha), Some(head_sha)) => {
+            // Git-native mode: shadow_git blob extraction.
+            let score = bounce_git(repo_path, base_sha, head_sha, &registry)?;
+            let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
+            let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
+            (score, merkle_root)
+        }
+        _ => {
+            // Patch mode: read diff from file or stdin.
+            let patch = match patch_file {
+                Some(pf) => std::fs::read_to_string(pf)
+                    .with_context(|| format!("reading patch file: {}", pf.display()))?,
+                None => {
+                    let mut s = String::new();
+                    std::io::stdin()
+                        .read_to_string(&mut s)
+                        .context("reading patch from stdin")?;
+                    s
+                }
+            };
+            let score = PatchBouncer.bounce(&patch, &registry)?;
+            let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
+            (score, merkle_root)
+        }
+    };
 
     if format == "json" {
         let json_out = serde_json::json!({
-            "schema_version": "6.4.0",
+            "schema_version": "6.5.0",
             "slop_score": score.score() as f64,
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
             "zombie_symbols_added": score.zombie_symbols_added,
+            "antipatterns_found": score.antipatterns_found,
             "merkle_root": merkle_root,
         });
         println!(
@@ -1848,6 +1897,7 @@ fn cmd_bounce(
         println!("| Dead syms added  : {:>20} |", score.dead_symbols_added);
         println!("| Logic clones     : {:>20} |", score.logic_clones_found);
         println!("| Zombie syms added: {:>20} |", score.zombie_symbols_added);
+        println!("| Antipatterns     : {:>20} |", score.antipatterns_found);
         println!("+------------------------------------------+");
         println!("  Merkle root: {}...", &merkle_root[..32]);
         println!();

@@ -4,23 +4,32 @@
 //! [`PatchBouncer`] is the default implementation: it parses a unified diff,
 //! extracts added source for the detected language, and uses structural hashing
 //! to detect duplication and re-introduction of known symbols.
+//! [`GitBouncer`] is an alternative that drives analysis from git OIDs via
+//! [`shadow_git::simulate_merge`], loading changed blobs from the pack index
+//! without a working-directory checkout.
 //!
 //! ## Language Detection
 //! The patch language is detected from the `+++ b/<path>` header line by
 //! extension. Supported: `.py`, `.rs`, `.cpp/.cxx/.cc/.h/.hpp`, `.c`,
 //! `.java`, `.cs`, `.go`, `.js/.jsx`, `.glsl/.vert/.frag`.
+//! For unsupported extensions, [`agnostic_shield`] classifies the added bytes
+//! to detect embedded binary blobs.
 //!
 //! ## Scoring Formula
 //! ```text
-//! SlopScore = (dead_symbols_added × 10) + (logic_clones_found × 5) + (zombie_symbols_added × 15)
+//! SlopScore = (dead_symbols_added × 10) + (logic_clones_found × 5)
+//!           + (zombie_symbols_added × 15) + (antipatterns_found × 50)
 //! ```
 //! Dead-symbol additions (×10) penalise name-based re-introduction.
 //! Logic clones (×5) penalise structural duplication within the patch (exact BLAKE3 or fuzzy
 //! SimHash in the Zombie band 0.85–0.95) or against the registry (Global Logic Clone).
 //! Zombie reintroductions (×15) carry the highest penalty: the body hash proves the function
 //! was copied verbatim from a previously-deleted dead symbol.
+//! Antipatterns (×50) penalise language-specific slop detected by [`slop_hunter`]:
+//! hallucinated imports, vacuous unsafe blocks, goroutine closure traps.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use anyhow::Result;
 use tree_sitter::{Language, Query, StreamingIterator};
@@ -35,7 +44,8 @@ use common::registry::SymbolRegistry;
 ///
 /// ## Formula
 /// ```text
-/// score = (dead_symbols_added × 10) + (logic_clones_found × 5) + (zombie_symbols_added × 15)
+/// score = (dead_symbols_added × 10) + (logic_clones_found × 5)
+///       + (zombie_symbols_added × 15) + (antipatterns_found × 50)
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SlopScore {
@@ -57,6 +67,13 @@ pub struct SlopScore {
     /// A zombie reintroduction proves the function body was copied from a previously
     /// deleted symbol — the highest-severity slop category (weight ×15).
     pub zombie_symbols_added: u32,
+    /// Number of language-specific antipatterns detected by [`crate::slop_hunter`]:
+    /// hallucinated imports, vacuous unsafe blocks, goroutine closure traps, etc.
+    ///
+    /// Each antipattern carries a weight of ×50 — the highest per-item penalty —
+    /// because these patterns indicate systemic slop that structural hashing cannot
+    /// catch (e.g. an import that is syntactically valid but semantically dead).
+    pub antipatterns_found: u32,
 }
 
 impl SlopScore {
@@ -65,7 +82,10 @@ impl SlopScore {
     /// Higher scores indicate lower patch quality. A score of zero means the
     /// patch passes all checks cleanly.
     pub fn score(&self) -> u32 {
-        self.dead_symbols_added * 10 + self.logic_clones_found * 5 + self.zombie_symbols_added * 15
+        self.dead_symbols_added * 10
+            + self.logic_clones_found * 5
+            + self.zombie_symbols_added * 15
+            + self.antipatterns_found * 50
     }
 
     /// Returns `true` when no slop was detected.
@@ -73,6 +93,7 @@ impl SlopScore {
         self.dead_symbols_added == 0
             && self.logic_clones_found == 0
             && self.zombie_symbols_added == 0
+            && self.antipatterns_found == 0
     }
 }
 
@@ -224,8 +245,28 @@ impl PRBouncer for PatchBouncer {
         let ext = extract_patch_ext(patch);
         let cfg = match lang_for_ext(ext) {
             Some(c) => c,
-            // Unknown / unsupported language — skip scoring, not an error.
-            None => return Ok(SlopScore::default()),
+            None => {
+                // Unknown / unsupported language — run agnostic shield on added bytes.
+                let added: String = patch
+                    .lines()
+                    .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                    .map(|l| &l[1..])
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !added.trim().is_empty() {
+                    use crate::agnostic_shield::{ByteLatticeAnalyzer, TextClass};
+                    if matches!(
+                        ByteLatticeAnalyzer::classify(added.as_bytes()),
+                        TextClass::AnomalousBlob
+                    ) {
+                        return Ok(SlopScore {
+                            antipatterns_found: 1,
+                            ..SlopScore::default()
+                        });
+                    }
+                }
+                return Ok(SlopScore::default());
+            }
         };
 
         // Reconstruct added source from `+` diff lines.
@@ -278,6 +319,9 @@ impl PRBouncer for PatchBouncer {
                 }
             }
         }
+
+        // Language-specific antipattern detection via slop_hunter.
+        let antipatterns_found = crate::slop_hunter::find_slop(ext, source).len() as u32;
 
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =
@@ -364,8 +408,81 @@ impl PRBouncer for PatchBouncer {
             dead_symbols_added,
             logic_clones_found: patch_internal_clones + fuzzy_near_clones + global_clone_count,
             zombie_symbols_added,
+            antipatterns_found,
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// GitBouncer — shadow_git-backed PR analysis
+// ---------------------------------------------------------------------------
+
+/// Analyse a pull request's changes against `registry` by loading changed blobs
+/// directly from the git pack index via [`shadow_git::simulate_merge`].
+///
+/// Unlike [`PatchBouncer`] which requires a pre-extracted unified diff, `bounce_git`
+/// accepts repository coordinates and loads each changed file as an in-memory
+/// blob, then synthesises a virtual patch per file and runs the full slop pipeline
+/// over it.
+///
+/// # Arguments
+/// - `repo_path`: Filesystem path to the git repository root.
+/// - `base_sha`: 40-hex OID of the base (target-branch head) commit.
+/// - `head_sha`: 40-hex OID of the head (feature-branch head) commit.
+/// - `registry`: Symbol registry for dead-symbol and zombie checks.
+///
+/// # Errors
+/// Returns `Err` if the repository cannot be opened, the OIDs are invalid, or
+/// libgit2 cannot read a blob from the pack.
+pub fn bounce_git(
+    repo_path: &Path,
+    base_sha: &str,
+    head_sha: &str,
+    registry: &SymbolRegistry,
+) -> Result<SlopScore> {
+    let repo = git2::Repository::open(repo_path).map_err(|e| {
+        anyhow::anyhow!("bounce_git: cannot open repo {}: {e}", repo_path.display())
+    })?;
+
+    let base_oid = git2::Oid::from_str(base_sha)
+        .map_err(|e| anyhow::anyhow!("bounce_git: invalid base SHA '{base_sha}': {e}"))?;
+    let head_oid = git2::Oid::from_str(head_sha)
+        .map_err(|e| anyhow::anyhow!("bounce_git: invalid head SHA '{head_sha}': {e}"))?;
+
+    let snapshot = crate::shadow_git::simulate_merge(&repo, base_oid, head_oid)
+        .map_err(|e| anyhow::anyhow!("bounce_git: merge simulation failed: {e}"))?;
+
+    let mut total = SlopScore::default();
+
+    for (path, blob_bytes) in &snapshot.blobs {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+        // Synthesise a virtual unified diff from the blob content.
+        let added_lines: String = std::str::from_utf8(blob_bytes)
+            .unwrap_or("")
+            .lines()
+            .map(|l| format!("+{l}\n"))
+            .collect();
+
+        if added_lines.is_empty() {
+            continue;
+        }
+
+        let fake_patch = format!(
+            "--- a/{path}\n+++ b/{path}\n@@ -0,0 +1 @@\n{added_lines}",
+            path = path.display()
+        );
+
+        if let Ok(score) = PatchBouncer.bounce(&fake_patch, registry) {
+            total.dead_symbols_added += score.dead_symbols_added;
+            total.logic_clones_found += score.logic_clones_found;
+            total.zombie_symbols_added += score.zombie_symbols_added;
+            total.antipatterns_found += score.antipatterns_found;
+            let _ = ext; // used indirectly through fake_patch header
+        }
+    }
+
+    Ok(total)
 }
 
 // ---------------------------------------------------------------------------
@@ -494,6 +611,7 @@ mod tests {
             dead_symbols_added: 2,
             logic_clones_found: 3,
             zombie_symbols_added: 0,
+            antipatterns_found: 0,
         };
         assert_eq!(s.score(), 2 * 10 + 3 * 5); // 35
 
@@ -502,9 +620,20 @@ mod tests {
             dead_symbols_added: 0,
             logic_clones_found: 0,
             zombie_symbols_added: 2,
+            antipatterns_found: 0,
         };
         assert_eq!(z.score(), 2 * 15); // 30
         assert!(!z.is_clean());
+
+        // Antipattern weight is ×50.
+        let a = SlopScore {
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            antipatterns_found: 1,
+        };
+        assert_eq!(a.score(), 50);
+        assert!(!a.is_clean());
     }
 
     #[test]

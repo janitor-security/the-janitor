@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.4.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.5.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 

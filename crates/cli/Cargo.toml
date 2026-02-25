@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anatomist = { path = "../anatomist" }
 forge = { path = "../forge" }
+polyglot = { path = "../polyglot" }
 mcp = { path = "../mcp" }
 shadow = { path = "../shadow" }
 common = { path = "../common" }
@@ -20,6 +21,7 @@ vault = { path = "../vault" }
 dashboard = { path = "../dashboard" }
 lazarus = { path = "../lazarus" }
 oracle = { path = "../oracle" }
+arc-swap.workspace = true
 memmap2.workspace = true
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
 clap.workspace = true

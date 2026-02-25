@@ -21,8 +21,12 @@
 //! // → same structural hash
 //! ```
 
+pub mod agnostic_shield;
 pub mod hashing;
+pub mod pr_collider;
+pub mod shadow_git;
 pub mod slop_filter;
+pub mod slop_hunter;
 
 use tree_sitter::Node;
 
