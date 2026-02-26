@@ -371,10 +371,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-guerrilla-record-godot-4-c" class="md-nav__link">
+  <a href="#the-godot-record-c-at-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Guerrilla Record — Godot 4 (C++)
+        The Godot Record — C++ at Scale
       
     </span>
   </a>
@@ -516,6 +516,34 @@
     
   
     Godot Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../godot_slop_audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Godot Slop Audit
   
 
     
@@ -891,10 +919,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-guerrilla-record-godot-4-c" class="md-nav__link">
+  <a href="#the-godot-record-c-at-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The Guerrilla Record — Godot 4 (C++)
+        The Godot Record — C++ at Scale
       
     </span>
   </a>
@@ -955,8 +983,8 @@
 
 
 <h1 id="benchmarks-15-repo-omni-gauntlet">Benchmarks — 15-Repo Omni-Gauntlet</h1>
-<p>Results from v6.0.0. All repos scanned with <code>janitor scan --library</code>.
-<strong>Hardware</strong>: 8-core CPU, 8 GB RAM, Linux/WSL2. Single thread per scan.</p>
+<p>Results from <strong>v6.7.0</strong>. All repos scanned with <code>janitor scan</code> (default mode — no <code>--library</code> flag).
+<strong>Hardware</strong>: AMD64 / WSL2, Linux 6.6.87. Single-threaded scan per repo.</p>
 <hr />
 <h2 id="industrial-kill-table">Industrial Kill Table</h2>
 <table>
@@ -975,185 +1003,194 @@
 <tr>
 <td style="text-align: left;">doom</td>
 <td style="text-align: left;">C</td>
-<td style="text-align: left;">~8,200</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">18 MB</td>
-<td style="text-align: left;">1.2 s</td>
+<td style="text-align: left;">759</td>
+<td style="text-align: left;">757</td>
+<td style="text-align: left;"><strong>99.7%</strong></td>
+<td style="text-align: left;">17 MB</td>
+<td style="text-align: left;">1.0 s</td>
 </tr>
 <tr>
-<td style="text-align: left;">fastapi</td>
-<td style="text-align: left;">Python</td>
-<td style="text-align: left;">~4,100</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">8 MB</td>
-<td style="text-align: left;">0.9 s</td>
+<td style="text-align: left;">FreeCol</td>
+<td style="text-align: left;">Java</td>
+<td style="text-align: left;">13,711</td>
+<td style="text-align: left;">11,904</td>
+<td style="text-align: left;"><strong>86.8%</strong></td>
+<td style="text-align: left;">27 MB</td>
+<td style="text-align: left;">3.6 s</td>
 </tr>
 <tr>
-<td style="text-align: left;">hugo</td>
-<td style="text-align: left;">Go</td>
-<td style="text-align: left;">~12,400</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">22 MB</td>
-<td style="text-align: left;">2.1 s</td>
-</tr>
-<tr>
-<td style="text-align: left;">lodash</td>
-<td style="text-align: left;">JS</td>
-<td style="text-align: left;">~3,800</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">6 MB</td>
-<td style="text-align: left;">0.7 s</td>
+<td style="text-align: left;">Mindustry</td>
+<td style="text-align: left;">Java</td>
+<td style="text-align: left;">10,964</td>
+<td style="text-align: left;">8,071</td>
+<td style="text-align: left;"><strong>73.6%</strong></td>
+<td style="text-align: left;">25 MB</td>
+<td style="text-align: left;">3.2 s</td>
 </tr>
 <tr>
 <td style="text-align: left;">veloren</td>
 <td style="text-align: left;">Rust</td>
-<td style="text-align: left;">~28,000</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">55 MB</td>
-<td style="text-align: left;">4.8 s</td>
+<td style="text-align: left;">12,130</td>
+<td style="text-align: left;">8,856</td>
+<td style="text-align: left;"><strong>73.0%</strong></td>
+<td style="text-align: left;">28 MB</td>
+<td style="text-align: left;">6.8 s</td>
 </tr>
 <tr>
-<td style="text-align: left;">axios</td>
-<td style="text-align: left;">JS/TS</td>
-<td style="text-align: left;">~2,100</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">5 MB</td>
+<td style="text-align: left;">hugo</td>
+<td style="text-align: left;">Go</td>
+<td style="text-align: left;">9,737</td>
+<td style="text-align: left;">7,058</td>
+<td style="text-align: left;"><strong>72.5%</strong></td>
+<td style="text-align: left;">33 MB</td>
+<td style="text-align: left;">3.9 s</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>godot</strong></td>
+<td style="text-align: left;"><strong>C++</strong></td>
+<td style="text-align: left;"><strong>22,747</strong></td>
+<td style="text-align: left;"><strong>16,195</strong></td>
+<td style="text-align: left;"><strong>71.2%</strong></td>
+<td style="text-align: left;"><strong>58 MB</strong></td>
+<td style="text-align: left;"><strong>33 s</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">lodash</td>
+<td style="text-align: left;">JS</td>
+<td style="text-align: left;">1,870</td>
+<td style="text-align: left;">1,190</td>
+<td style="text-align: left;"><strong>63.6%</strong></td>
+<td style="text-align: left;">39 MB</td>
+<td style="text-align: left;">1.1 s</td>
+</tr>
+<tr>
+<td style="text-align: left;">black</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">2,512</td>
+<td style="text-align: left;">473</td>
+<td style="text-align: left;"><strong>18.8%</strong></td>
+<td style="text-align: left;">79 MB</td>
+<td style="text-align: left;">9.8 s</td>
+</tr>
+<tr>
+<td style="text-align: left;">rich</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">2,089</td>
+<td style="text-align: left;">357</td>
+<td style="text-align: left;"><strong>17.1%</strong></td>
+<td style="text-align: left;">16 MB</td>
+<td style="text-align: left;">2.0 s</td>
+</tr>
+<tr>
+<td style="text-align: left;">starlette</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">1,633</td>
+<td style="text-align: left;">148</td>
+<td style="text-align: left;"><strong>9.1%</strong></td>
+<td style="text-align: left;">12 MB</td>
+<td style="text-align: left;">0.9 s</td>
+</tr>
+<tr>
+<td style="text-align: left;">scrapy</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">6,554</td>
+<td style="text-align: left;">578</td>
+<td style="text-align: left;"><strong>8.8%</strong></td>
+<td style="text-align: left;">18 MB</td>
+<td style="text-align: left;">3.4 s</td>
+</tr>
+<tr>
+<td style="text-align: left;">flask</td>
+<td style="text-align: left;">Python</td>
+<td style="text-align: left;">1,619</td>
+<td style="text-align: left;">135</td>
+<td style="text-align: left;"><strong>8.3%</strong></td>
+<td style="text-align: left;">12 MB</td>
 <td style="text-align: left;">0.6 s</td>
 </tr>
 <tr>
 <td style="text-align: left;">requests</td>
 <td style="text-align: left;">Python</td>
-<td style="text-align: left;">~1,200</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">4 MB</td>
-<td style="text-align: left;">0.5 s</td>
-</tr>
-<tr>
-<td style="text-align: left;">flask</td>
-<td style="text-align: left;">Python</td>
-<td style="text-align: left;">~2,800</td>
-<td style="text-align: left;">~28</td>
-<td style="text-align: left;"><strong>~1%</strong></td>
-<td style="text-align: left;">5 MB</td>
-<td style="text-align: left;">0.6 s</td>
-</tr>
-<tr>
-<td style="text-align: left;">starlette</td>
-<td style="text-align: left;">Python</td>
-<td style="text-align: left;">~3,600</td>
-<td style="text-align: left;">~36</td>
-<td style="text-align: left;"><strong>~1%</strong></td>
-<td style="text-align: left;">6 MB</td>
-<td style="text-align: left;">0.7 s</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>godot</strong></td>
-<td style="text-align: left;"><strong>C++</strong></td>
-<td style="text-align: left;"><strong>77,056</strong></td>
-<td style="text-align: left;"><strong>~2,466</strong></td>
-<td style="text-align: left;"><strong>~3.2%</strong></td>
-<td style="text-align: left;"><strong>157 MB</strong></td>
-<td style="text-align: left;"><strong>55 s</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;">black</td>
-<td style="text-align: left;">Python</td>
-<td style="text-align: left;">~8,200</td>
-<td style="text-align: left;">~246</td>
-<td style="text-align: left;"><strong>~3%</strong></td>
+<td style="text-align: left;">756</td>
+<td style="text-align: left;">81</td>
+<td style="text-align: left;"><strong>10.7%</strong></td>
 <td style="text-align: left;">12 MB</td>
-<td style="text-align: left;">1.5 s</td>
+<td style="text-align: left;">0.4 s</td>
 </tr>
 <tr>
-<td style="text-align: left;">rich (master)</td>
+<td style="text-align: left;">fastapi</td>
 <td style="text-align: left;">Python</td>
-<td style="text-align: left;">~9,800</td>
-<td style="text-align: left;">~294</td>
-<td style="text-align: left;"><strong>~3%</strong></td>
-<td style="text-align: left;">14 MB</td>
-<td style="text-align: left;">1.8 s</td>
+<td style="text-align: left;">5,407</td>
+<td style="text-align: left;">99</td>
+<td style="text-align: left;"><strong>1.8%</strong></td>
+<td style="text-align: left;">19 MB</td>
+<td style="text-align: left;">4.8 s</td>
 </tr>
 <tr>
-<td style="text-align: left;">scrapy</td>
-<td style="text-align: left;">Python</td>
-<td style="text-align: left;">6,502</td>
-<td style="text-align: left;">545</td>
-<td style="text-align: left;"><strong>~4%</strong></td>
-<td style="text-align: left;">10 MB</td>
-<td style="text-align: left;">1.3 s</td>
-</tr>
-<tr>
-<td style="text-align: left;">Mindustry</td>
-<td style="text-align: left;">Java</td>
-<td style="text-align: left;">10,833</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">20 MB</td>
-<td style="text-align: left;">2.3 s</td>
-</tr>
-<tr>
-<td style="text-align: left;">FreeCol</td>
-<td style="text-align: left;">Java</td>
-<td style="text-align: left;">13,666</td>
-<td style="text-align: left;">0</td>
-<td style="text-align: left;"><strong>0%</strong></td>
-<td style="text-align: left;">24 MB</td>
-<td style="text-align: left;">2.8 s</td>
+<td style="text-align: left;">axios</td>
+<td style="text-align: left;">JS/TS</td>
+<td style="text-align: left;">248</td>
+<td style="text-align: left;">11</td>
+<td style="text-align: left;"><strong>4.4%</strong></td>
+<td style="text-align: left;">13 MB</td>
+<td style="text-align: left;">0.4 s</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total corpus</strong>: ~190,000 symbols across 5 M+ LOC
-<strong>Average dead rate (library mode)</strong>: <strong>~1.1%</strong> (framework-heavy repos correctly protected at 0%)
+<p><strong>Total corpus</strong>: 92,736 symbols across 15 repos
+<strong>Total dead symbols found</strong>: 55,913 (60.3% average)
 <strong>OOM events</strong>: 0 / 15</p>
-<hr />
-<h2 id="the-guerrilla-record-godot-4-c">The Guerrilla Record — Godot 4 (C++)</h2>
 <blockquote>
-<p><strong>77,056 entities. 157 MB peak RSS. 55 seconds. Zero panics.</strong></p>
+<p><strong>Note</strong>: Default scan mode (no <code>--library</code>) is used here for maximum signal: all unreferenced
+internal symbols are candidates. Use <code>--library</code> when scanning a library you publish as an API —
+it promotes all <code>pub</code> symbols to <code>Protection::LibraryMode</code>, dropping the dead rate to near-zero
+for framework-heavy repos (fastapi, starlette, flask).</p>
 </blockquote>
-<p>Godot is the stress test. The engine spans 1,200+ files, mixes C++, GLSL, and Objective-C,
+<hr />
+<h2 id="the-godot-record-c-at-scale">The Godot Record — C++ at Scale</h2>
+<blockquote>
+<p><strong>22,747 entities. 58 MB peak RSS. 33 seconds. Zero panics.</strong></p>
+</blockquote>
+<p>Godot is the stress anchor. The engine spans 1,200+ files, mixes C++, GLSL, and Objective-C,
 and contains complex template hierarchies, <code>#include</code> networks, and shader pipelines.
 The Janitor processes the entire symbol graph in a single streaming pass with constant memory
-per file — peak RSS never grew beyond 157 MB, well inside CI runner constraints.</p>
+per file — peak RSS stabilised at 58 MB, well inside CI runner constraints.</p>
 <ul>
 <li>0 panics on <code>.glsl</code> and <code>.mm</code> (Objective-C) files</li>
 <li>0 false positives on engine lifecycle callbacks (<code>_ready</code>, <code>_process</code>, <code>_physics_process</code>)</li>
-<li>3.2% dead: internal helpers with no upward references — expected in a codebase of this size</li>
+<li>71.2% dead in default mode: internal helpers with no upward references</li>
+<li>In <code>--library</code> mode (all <code>pub</code> symbols protected), the dead rate drops to structural cruft only</li>
 </ul>
-<p>The Godot result closes the case on <strong>O(1) memory stability</strong> for polyglot C++ codebases.</p>
+<p>The Godot result confirms <strong>O(1) memory stability</strong> for polyglot C++ codebases at production scale.</p>
 <hr />
 <h2 id="pr-veto-the-godot-logic-clone-intercept">PR Veto: The Godot Logic-Clone Intercept</h2>
 <p>The <code>janitor bounce</code> command operates as a GitHub Checks gate before merge. The following
 artifact was produced by intercepting a mock PR to Godot that added a structural clone of
 <code>Vector3::dot</code> under a different name and variable set:</p>
-<p><strong>Patch</strong>: <a href="https://github.com/GhrammR/the-janitor/blob/main/gauntlet/godot/slop_pr.patch"><code>gauntlet/godot/slop_pr.patch</code></a></p>
-<p><strong>Veto Report</strong> (<code>janitor bounce . --patch gauntlet/godot/slop_pr.patch --format json</code>):</p>
+<p><strong>Veto Report</strong> (<code>janitor bounce . --patch slop_pr.patch --format json</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;dead_symbols_added&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;logic_clones_found&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;merkle_root&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;265b80e3666342e7d48329cafbe6b866937669a0e7a0b17eaab1ce2001a8cd33&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;slop_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;schema_version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;6.5.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;dead_symbols_added&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;logic_clones_found&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;zombie_symbols_added&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;antipatterns_found&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;merkle_root&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;265b80e3666342e7d48329cafbe6b866937669a0e7a0b17eaab1ce2001a8cd33&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">&quot;slop_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">}</span>
 </code></pre></div>
 <p>The patch introduced <code>vec3_dot_physics</code> — identically structured to <code>vec3_dot</code> after
-alpha-normalization (parameter names <code>x, y, z, px, py, pz</code> → <code>ax, ay, az, bx, by, bz</code>
-produce the same BLAKE3 structural hash). Score 5 = 1 logic clone × 5. <strong>PR blocked.</strong></p>
-<p>This is the commercial value proposition: the SlopFilter catches what code review misses.</p>
+alpha-normalization. Score 5 = 1 logic clone × 5. <strong>PR blocked.</strong></p>
 <hr />
 <h2 id="methodology">Methodology</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">for</span><span class="w"> </span>repo<span class="w"> </span><span class="k">in</span><span class="w"> </span>doom<span class="w"> </span>fastapi<span class="w"> </span>hugo<span class="w"> </span>lodash<span class="w"> </span>veloren<span class="w"> </span>axios<span class="w"> </span>requests<span class="w"> </span>flask<span class="w"> </span>starlette<span class="w"> </span>godot<span class="w"> </span>black<span class="w"> </span>rich<span class="w"> </span>scrapy<span class="w"> </span>mindustry<span class="w"> </span>freecol<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>/usr/bin/time<span class="w"> </span>-v<span class="w"> </span>janitor<span class="w"> </span>scan<span class="w"> </span>~/dev/gauntlet/<span class="nv">$repo</span><span class="w"> </span>--library<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;dead|Maximum resident|Elapsed&quot;</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">done</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Gauntlet runner (tools/run_gauntlet.sh)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">for</span><span class="w"> </span>repo<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nv">$GAUNTLET_DIR</span>/*/<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>/usr/bin/time<span class="w"> </span>-v<span class="w"> </span>janitor<span class="w"> </span>scan<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$repo</span><span class="s2">&quot;</span><span class="w"> </span><span class="m">2</span>&gt;time.log<span class="w"> </span>&gt;scan.log
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="c1"># parse Total/Dead from scan.log, RSS/Elapsed from time.log</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">done</span>
 </code></pre></div>
-<p>All scans run cold (no <code>.janitor/symbols.rkyv</code> cache). Peak RSS from <code>Maximum resident set size</code>.
-Scan time from <code>Elapsed (wall clock) time</code>.</p>
+<p>All scans run cold (no <code>.janitor/symbols.rkyv</code> cache from a prior run). Peak RSS from
+<code>Maximum resident set size (kbytes)</code> in GNU <code>time -v</code> output. Scan time from
+<code>Elapsed (wall clock) time</code>.</p>
 <hr />
 <h2 id="language-support-matrix">Language Support Matrix</h2>
 <table>
