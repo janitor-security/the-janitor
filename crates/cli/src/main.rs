@@ -5,6 +5,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 mod daemon;
+mod report;
 
 #[derive(Parser)]
 #[command(name = "janitor")]
@@ -150,6 +151,17 @@ enum Commands {
         /// Head commit SHA (feature-branch head) for git-native mode.
         #[arg(long)]
         head: Option<String>,
+        /// PR number to associate with this bounce run (stored in bounce_log.ndjson).
+        ///
+        /// Used by `janitor report` to identify PRs in the Slop Top 50 and clone tables.
+        /// Optional — bounce analysis proceeds without it.
+        #[arg(long)]
+        pr_number: Option<u64>,
+        /// PR author handle to associate with this bounce run (stored in bounce_log.ndjson).
+        ///
+        /// Used by `janitor report` for attribution in the intelligence report.
+        #[arg(long)]
+        author: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -212,6 +224,28 @@ enum Commands {
         /// Project root used for default registry discovery when `--registry` is not set.
         #[arg(long, default_value = ".")]
         path: PathBuf,
+    },
+    /// Generate an intelligence report from historical bounce results.
+    ///
+    /// Reads `.janitor/bounce_log.ndjson` — populated by each `janitor bounce`
+    /// invocation — and produces three sections:
+    ///
+    /// - **Slop Top 50**: PRs ranked by composite SlopScore.
+    /// - **Structural Clones**: near-duplicate PR pairs detected via 64-hash MinHash LSH.
+    /// - **Zombie Dependencies**: PRs that introduced packages never imported in source.
+    Report {
+        /// Path to the target repository (reads `<repo>/.janitor/bounce_log.ndjson`).
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        /// Number of PRs to include in the Slop Top list.
+        #[arg(long, default_value = "50")]
+        top: usize,
+        /// Output format: `markdown` (default) or `json`.
+        #[arg(long, default_value = "markdown")]
+        format: String,
+        /// Write the report to this file instead of stdout.
+        #[arg(long)]
+        out: Option<PathBuf>,
     },
     /// Synchronise the local Wisdom Registry with The Governor.
     ///
@@ -323,6 +357,8 @@ async fn main() -> anyhow::Result<()> {
             repo,
             base,
             head,
+            pr_number,
+            author,
         } => cmd_bounce(
             path,
             patch.as_deref(),
@@ -331,7 +367,15 @@ async fn main() -> anyhow::Result<()> {
             repo.as_deref(),
             base.as_deref(),
             head.as_deref(),
+            *pr_number,
+            author.as_deref(),
         )?,
+        Commands::Report {
+            repo,
+            top,
+            format,
+            out,
+        } => cmd_report(repo, *top, format, out.as_deref())?,
         Commands::Mcp => mcp::serve().await?,
         #[cfg(unix)]
         Commands::Serve {
@@ -1816,6 +1860,8 @@ fn cmd_bounce(
     repo: Option<&Path>,
     base: Option<&str>,
     head: Option<&str>,
+    pr_number: Option<u64>,
+    author: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::slop_filter::{bounce_git, PRBouncer, PatchBouncer};
@@ -1846,14 +1892,16 @@ fn cmd_bounce(
         SymbolRegistry::new()
     };
 
-    // Determine analysis mode and compute score + merkle root.
-    let (score, merkle_root) = match (repo, base, head) {
+    // Determine analysis mode and compute score + merkle root + MinHash sketch.
+    let (score, merkle_root, min_hashes_vec) = match (repo, base, head) {
         (Some(repo_path), Some(base_sha), Some(head_sha)) => {
             // Git-native mode: shadow_git blob extraction.
             let score = bounce_git(repo_path, base_sha, head_sha, &registry)?;
             let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
             let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
-            (score, merkle_root)
+            // Derive MinHash from the deterministic merkle key (no raw patch in git mode).
+            let sig = forge::pr_collider::PrDeltaSignature::from_bytes(merkle_root.as_bytes());
+            (score, merkle_root, sig.min_hashes.to_vec())
         }
         _ => {
             // Patch mode: read diff from file or stdin.
@@ -1870,7 +1918,8 @@ fn cmd_bounce(
             };
             let score = PatchBouncer.bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
-            (score, merkle_root)
+            let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
+            (score, merkle_root, sig.min_hashes.to_vec())
         }
     };
 
@@ -1906,6 +1955,86 @@ fn cmd_bounce(
         } else {
             println!("PATCH FLAGGED — slop score: {}", score.score());
         }
+    }
+
+    // Persist to bounce_log.ndjson for `janitor report` aggregation.
+    // Run zombie-dep scan on the project root (best-effort; errors are suppressed).
+    let zombie_deps = {
+        let dep_registry = anatomist::manifest::scan_manifests(project_root);
+        anatomist::manifest::find_zombie_deps(project_root, &dep_registry)
+    };
+    let janitor_dir = project_root.join(".janitor");
+    let log_entry = report::BounceLogEntry {
+        pr_number,
+        author: author.map(|s| s.to_owned()),
+        timestamp: utc_now_iso8601(),
+        slop_score: score.score(),
+        dead_symbols_added: score.dead_symbols_added,
+        logic_clones_found: score.logic_clones_found,
+        zombie_symbols_added: score.zombie_symbols_added,
+        antipatterns_found: score.antipatterns_found,
+        min_hashes: min_hashes_vec,
+        zombie_deps,
+    };
+    report::append_bounce_log(&janitor_dir, &log_entry);
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// report
+// ---------------------------------------------------------------------------
+
+/// Generate an intelligence report from historical bounce results.
+///
+/// Reads `.janitor/bounce_log.ndjson` and renders three sections:
+/// Slop Top 50, Structural Clones, and Zombie Dependencies.
+fn cmd_report(repo: &Path, top: usize, format: &str, out: Option<&Path>) -> anyhow::Result<()> {
+    let janitor_dir = repo.join(".janitor");
+    let entries = report::load_bounce_log(&janitor_dir);
+
+    if entries.is_empty() {
+        eprintln!(
+            "No bounce log found at {}.",
+            janitor_dir.join("bounce_log.ndjson").display()
+        );
+        eprintln!("Run `janitor bounce --pr-number <N> --author <handle> <path>` to populate.");
+        if format == "json" {
+            let empty = report::render_json(
+                &report::aggregate(Vec::new(), top),
+                &repo.display().to_string(),
+            );
+            println!("{}", serde_json::to_string_pretty(&empty)?);
+        }
+        return Ok(());
+    }
+
+    let repo_name = repo
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| repo.display().to_string());
+
+    let data = report::aggregate(entries, top);
+
+    let content = if format == "json" {
+        serde_json::to_string_pretty(&report::render_json(&data, &repo_name))
+            .context("serializing report JSON")?
+    } else {
+        report::render_markdown(&data, &repo_name)
+    };
+
+    match out {
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
+            }
+            std::fs::write(path, content.as_bytes())
+                .with_context(|| format!("writing report to {}", path.display()))?;
+            println!("Report written: {}", path.display());
+        }
+        None => print!("{}", content),
     }
 
     Ok(())
@@ -1952,9 +2081,10 @@ fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
 
 /// Returns the current UTC time as an ISO 8601 string (`YYYY-MM-DDTHH:MM:SSZ`).
 ///
+/// Used in the CLI telemetry path and by [`daemon::unix`] for bounce-log timestamps.
 /// Implemented without external crate dependencies using the Richards (2013)
 /// civil-calendar algorithm applied to the POSIX epoch.
-fn utc_now_iso8601() -> String {
+pub(crate) fn utc_now_iso8601() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -1,6 +1,6 @@
 # The Janitor
 
-**v6.6.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
+**v6.7.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
 
 *"Code is Liability. Precision is the Cure."*
 
@@ -65,8 +65,8 @@ Symlink-based overlay of the source tree. Before any physical deletion, symlinks
 | Tier | Cost | Scope |
 |:-----|:-----|:------|
 | **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
-| **[Lead Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$4,900/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. Up to 10 seats. |
-| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **From $50,000/yr** | For monoliths >1M LOC. On-Prem Token Server + Keypair Rotation Protocol + Enterprise SLA. Unlimited seats. |
+| **[Team Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. Up to 10 seats. |
+| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | For monoliths >1M LOC. On-Prem Token Server + Keypair Rotation Protocol + Enterprise SLA. Unlimited seats. |
 
 [**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 
@@ -88,7 +88,7 @@ just build
 Or with audit verification:
 
 ```sh
-just audit   # fmt + clippy + check + 103 tests
+just audit   # fmt + clippy + check + 187 tests
 just build
 ```
 
@@ -132,6 +132,12 @@ janitor undo <path>
 
 # Load .janitor/symbols.rkyv and launch TUI dashboard (free)
 janitor dashboard <path>
+
+# Aggregate historical bounce activity into a Slop / Clones / Zombies report (free)
+janitor report [--repo <path>] [--top <n>] [--format markdown|json]
+
+# Start long-lived daemon on a Unix socket for low-latency CI integrations (free)
+janitor serve [--socket <path>] [--registry <file>]
 ```
 
 ---

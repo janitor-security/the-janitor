@@ -153,6 +153,12 @@ pub mod unix {
         /// prior near-duplicate patches.  Near-duplicate matches contribute to
         /// `logic_clones_found` in the response score.
         pub lsh_index: LshIndex,
+        /// Absolute path to the `.janitor/` directory.
+        ///
+        /// Used by `process_request` to append each bounce result to
+        /// `bounce_log.ndjson` so that `janitor report` can aggregate
+        /// daemon-served bounce activity alongside CLI invocations.
+        pub janitor_dir: std::path::PathBuf,
     }
 
     // ---------------------------------------------------------------------------
@@ -188,9 +194,14 @@ pub mod unix {
     /// # Errors
     /// Returns `Err` if the registry cannot be loaded or the socket cannot be bound.
     pub async fn serve(socket_path: &Path, registry_path: &Path) -> Result<()> {
+        let janitor_dir = registry_path
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .to_path_buf();
         let state = Arc::new(DaemonState {
             registry: HotRegistry::open(registry_path)?,
             lsh_index: LshIndex::new(),
+            janitor_dir,
         });
 
         // Remove a stale socket file from a previous run.
@@ -280,7 +291,24 @@ pub mod unix {
                         let near_matches = state.lsh_index.query(&sig, 0.8);
                         score.logic_clones_found += near_matches.len() as u32;
                         // Insert for future comparisons.
-                        state.lsh_index.insert(sig);
+                        state.lsh_index.insert(sig.clone());
+
+                        // Persist to bounce_log.ndjson for `janitor report` aggregation.
+                        // Daemon connections have no PR-number / author context — those
+                        // fields are None.  Best-effort: I/O errors are silently dropped.
+                        let log_entry = crate::report::BounceLogEntry {
+                            pr_number: None,
+                            author: None,
+                            timestamp: crate::utc_now_iso8601(),
+                            slop_score: score.score(),
+                            dead_symbols_added: score.dead_symbols_added,
+                            logic_clones_found: score.logic_clones_found,
+                            zombie_symbols_added: score.zombie_symbols_added,
+                            antipatterns_found: score.antipatterns_found,
+                            min_hashes: sig.min_hashes.to_vec(),
+                            zombie_deps: Vec::new(),
+                        };
+                        crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 
                         DaemonResponse::Report {
                             slop_score: score.score() as f64,

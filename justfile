@@ -64,17 +64,17 @@ release version: audit (bump-version version)
 	git add .
 	git commit -m "chore: release v{{version}}"
 	git tag v{{version}}
-	git push origin main --tags
+	git push origin HEAD:main --tags
 	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
 		--title "v{{version}} - The Industrial Pivot" \
 		--notes-file README.md \
 		--latest
-	uv run --with mkdocs-material mkdocs gh-deploy --force
+	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 	@echo "💀 Release v{{version}} deployed."
 
 # 5. DOCUMENTATION
 deploy-docs:
-	uv run --with mkdocs-material mkdocs gh-deploy --force
+	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 
 # 6. WINDOWS SYNC
 sync:

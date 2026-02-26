@@ -58,6 +58,9 @@
 *.pfx
 *.token
 *.seed
+# Belt-and-suspenders explicit entries (also covered by *.key / *.json patterns above).
+governor.key
+credentials.json
 secrets/
 /crates/vault/secrets/
 /crates/common/attestations/local/
@@ -171,6 +174,35 @@ $RECYCLE.BIN/
 # ------------------------------------------------------------------------------
 *.log
 *.log.*
+
+
+# ------------------------------------------------------------------------------
+# 13. DATABASES & PERSISTENT STATE FILES
+# SQLite artefacts from any runtime component (Governor, legacy janitor state).
+# ------------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+
+# ------------------------------------------------------------------------------
+# 14. SOCKETS & IPC
+# Unix domain sockets created by `janitor serve` and the Governor daemon.
+# These are ephemeral; they must never be committed.
+# ------------------------------------------------------------------------------
+*.sock
+
+
+# ------------------------------------------------------------------------------
+# 15. GOVERNOR / THE JANITOR RUNTIME ARTEFACTS
+# /bonds/         — Governor bond state written at runtime.
+# /integrity.jsonl — append-only integrity log (runtime, not source).
+# Neither belongs in source control.
+# ------------------------------------------------------------------------------
+/bonds/
+/integrity.jsonl
 
 
 # ------------------------------------------------------------------------------
