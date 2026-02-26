@@ -1,5 +1,5 @@
 # The Janitor: Automated Dead Symbol Detection & Code Cleanup
-**Current Version:** v6.6.0
+**Current Version:** v6.7.0
 
 **Stop paying for code you don't use.**
 
@@ -46,6 +46,23 @@ janitor clean ./src --force-purge
 - Qt auto-connection slots, ORM lifecycle methods
 - Plugin directories (Scrapy, Celery, Django management commands)
 - Grep shield: Aho-Corasick scan of all non-Python files
+
+## Runtime Architecture
+
+The Janitor is a deterministic static-analysis engine with no AI inference at runtime.
+
+| Subsystem | Technology | Property |
+|-----------|-----------|---------|
+| **AST Engine** | Tree-sitter (9 grammars) | O(n) CST construction; byte-range precision per token |
+| **Reference Graph** | Petgraph directed digraph | Topological dead-symbol filter; in-degree = 0 → candidate |
+| **Pattern Matching** | Aho-Corasick (single automaton per pattern group) | O(n+m) multi-pattern scan; zero allocation in hot path |
+| **Registry Persistence** | rkyv zero-copy serialization + memmap2 | mmap-direct deserialization; no heap allocation for reads |
+| **Structural Hashing** | BLAKE3 (alpha-normalized AST over function body) | Logic-clone detection across identifier rename boundaries |
+| **Fuzzy Dedup** | AstSimHasher (SimHash over CST token features) | Sub-millisecond pairwise comparison; classified as `Refactor`, `Zombie`, or `NewCode` |
+| **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
+| **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
+| **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; test suite runs against simulated state |
+| **Audit Attestation** | Ed25519 remote signing | Binary carries only `VERIFYING_KEY_BYTES`; no private key material embedded |
 
 ## Pricing
 

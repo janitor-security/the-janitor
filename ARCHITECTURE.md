@@ -1,7 +1,7 @@
-# ARCHITECTURE.md (formerly SOVEREIGN.md)
-**VERSION:** 6.6.0
-**DATE:** 2026-02-19
-**CONTEXT:** v6.0.0-RC1 — Machine-Readable Interface (`--format json` on `scan`/`bounce`); Signed Audit Logs (Ed25519 per-entry attestation); 90-Day Immaturity Hard-Gate (`enforce_maturity` + `--override-tax`); Hardened Dependabot (rebase-strategy + commit-message prefix)
+# ARCHITECTURE.md
+**VERSION:** v6.7.0
+**DATE:** 2026-02-25
+**CONTEXT:** v6.6.0 — Sovereign Unification (polyglot grammar registry, MinHash LSH PR-collision index, shadow-git merge simulation, slop antipattern detection); Legacy Autopsy (dependency manifest scanning, `janitor_dep_check` MCP tool, OTLP log ingest); remote Ed25519 audit attestation; rkyv zero-copy registry persistence throughout
 
 ---
 
@@ -160,9 +160,13 @@ def _calculate_tax_us_impl(amount, rate):
 |-----------|--------------|
 | `janitor scan` | Free |
 | `janitor dedup` (report only) | Free |
-| `janitor dedup --apply` | Token required |
-| `janitor clean` | Token required |
+| `janitor dedup --apply --force-purge` | Free |
+| `janitor clean --force-purge` | Free |
+| `janitor bounce` | Free |
 | `janitor dashboard` | Free |
+| `janitor dep-check` | Free |
+| `janitor clean --token <tok>` | Lead Specialist |
+| Signed `audit_log.json` (remote attestation) | Lead Specialist |
 
 ### 6.3 Price Table
 
@@ -227,11 +231,12 @@ Polyglot patch quality gate for pull request automation.
 
 ### 8.3 Signed Audit Logs
 
-Every `AuditEntry` in `.janitor/audit_log.json` now carries a `signature` field.
+Every `AuditEntry` in `.janitor/audit_log.json` carries a `signature` field produced by remote attestation.
 
-- **Algorithm**: Ed25519 sign of `{timestamp}{file_path}{sha256_pre_cleanup}`.
-- **Key**: `LOCAL_AUDIT_SIGNING_SEED` embedded in the binary (distinct from purge authorization key).
+- **Algorithm**: Ed25519 signature over `{timestamp}{file_path}{sha256_pre_cleanup}`.
+- **Attestation model**: `AuditLog::flush(token)` transmits the completed log to `https://api.thejanitor.app/v1/attest`. The attestation server signs with the master key. The binary embeds only `VERIFYING_KEY_BYTES` (public key); no private signing material is present in the distributed binary.
 - **Verification**: `vault::SigningOracle::verify_token` against embedded `VERIFYING_KEY_BYTES`.
+- **Failure mode**: Network error or invalid token → `audit_log.json` is not written. Zero residue on attestation failure.
 - **Backward compat**: `#[serde(default)]` ensures old log entries deserialize without error.
 
 ### 8.4 90-Day Immaturity Hard-Gate
@@ -253,16 +258,21 @@ Pass `--override-tax` to both commands to bypass the gate when deliberate.
 | **3** | Dead Symbol Pipeline: 6-stage gate, WisdomRegistry | **[COMPLETE]** |
 | **3.5** | Polyglot: Rust, JS, TS, C++ parsers; plugin shield | **[COMPLETE]** |
 | **3.6** | C++ Integration: `#include` edges, C++ entity extraction | **[COMPLETE]** |
-| **3.7** | Omni-Polyglot: C, Java, C#, Go parsers; polyglot graph walker; global shield | **[COMPLETE] ★ Historical Landmark: Proven O(1) Stability (Godot Siege — 77 k entities, 157MB RAM)** |
+| **3.7** | Omni-Polyglot: C, Java, C#, Go parsers; polyglot graph walker; global shield | **[COMPLETE] ★ O(1) Stability proven at scale (Godot Siege — 77k entities, 157MB RAM)** |
 | **4** | Reaper: UTF-8 SafeDeleter, test fingerprinting | **[COMPLETE]** |
 | **5** | Forge: BLAKE3 structural hashing, Safe Proxy Pattern | **[COMPLETE]** |
 | **6** | Shadow: symlink overlay, Ghost Protocol, shadow simulation | **[COMPLETE]** |
-| **7** | Vault: Ed25519 token gate, TUI dashboard, ARCHITECTURE.md refresh | **[COMPLETE]** |
-| **8** | Machine Interface: `--format json`, `bounce` command, signed audit logs, 90-day gate | **[COMPLETE]** |
+| **7** | Vault: Ed25519 token gate, TUI dashboard | **[COMPLETE]** |
+| **8** | Machine Interface: `--format json`, `bounce`, signed audit logs, 90-day gate | **[COMPLETE]** |
+| **9** | Induction Bridge: remote extension inference, learned wisdom cache | **[COMPLETE]** — v6.2.0 |
+| **10** | SimHash Fuzzy Clone Detection: AstSimHasher, Similarity classification | **[COMPLETE]** — v6.4.0 |
+| **11** | Sovereign Unification: polyglot grammar registry, MinHash LSH, shadow-git, slop hunter | **[COMPLETE]** — v6.5.0 |
+| **12** | MCP Server: JSON-RPC 2.0 stdio interface, 4 tools, token gate | **[COMPLETE]** — v6.5.0 |
+| **13** | Legacy Autopsy: dependency manifest scanner, OTLP ingest consolidation | **[COMPLETE]** — v6.6.0 |
 
 ---
 
-## X. RESOURCE-EFFICIENT ARCHITECTURE
+## X. RESOURCE-EFFICIENT ARCHITECTURE (INVARIANTS)
 
 Engineering constraints for correctness and low memory overhead.
 
@@ -276,5 +286,91 @@ Engineering constraints for correctness and low memory overhead.
 
 ---
 
+## XI. POLYGLOT GRAMMAR REGISTRY (`crates/polyglot`)
+
+**Status**: **[COMPLETE]** — v6.5.0
+
+- `LazyGrammarRegistry::get(ext: &str) -> Option<Language>` — single dispatch point for all grammar access.
+- Module-level `OnceLock<Language>` statics: 12 grammars initialized at first parse, never reloaded. Zero heap allocation on subsequent calls.
+- Extensions covered: `py`, `rs`, `js`/`jsx`/`mjs`/`cjs`, `ts`/`tsx`, `c`, `cpp`/`cc`/`cxx`, `java`, `cs`, `go`, `glsl`, `m`.
+
+---
+
+## XII. FUZZY CLONE DETECTION: ASTSIMASHER (`crates/forge`)
+
+**Status**: **[COMPLETE]** — v6.4.0
+
+- **Trait**: `FuzzyHash { fuzzy_hash(node, source) -> u64; similarity(a, b) -> f64; classify(a, b) -> Similarity }`
+- **Struct**: `AstSimHasher` — SimHash over CST token feature vectors extracted from tree-sitter nodes.
+- **Classification thresholds**:
+
+| Range | Class | Action |
+|-------|-------|--------|
+| `> 0.95` | `Similarity::Refactor` | Suppressed — rename-only diff, no penalty |
+| `0.85–0.95` | `Similarity::Zombie` | Penalised in slop score (×15); logic clone boundary |
+| `≤ 0.85` | `Similarity::NewCode` | Admitted without penalty |
+
+---
+
+## XIII. PR QUALITY GATE: SLOP BOUNCER & PR COLLIDER (`crates/forge`)
+
+**Status**: **[COMPLETE]** — v6.5.0
+
+### 13.1 Slop Score
+
+`SlopScore { dead_symbols_added, logic_clones_found, zombie_symbols_added, antipatterns_found }`
+
+```
+score() = dead_symbols_added   × 10
+        + logic_clones_found   ×  5
+        + zombie_symbols_added × 15
+        + antipatterns_found   × 50
+```
+
+### 13.2 PR Collider (`LshIndex`)
+
+- **Signature**: `PrDeltaSignature` — 64 MinHash values over byte 3-grams of the unified diff.
+- **Index**: `LshIndex` — 8 bands × 8 rows stored in `ArcSwap<HashMap>` for lock-free concurrent reads during daemon operation.
+- **Usage**: `janitor bounce --repo <path> --base <sha> --head <sha>` — shadow-git merge simulation → diff synthesis → aggregate slop score.
+
+### 13.3 Slop Hunter (`find_slop`)
+
+Antipattern detection per language via direct AST walk:
+
+| Language | Detected Pattern |
+|----------|-----------------|
+| Python | Import inside function body, imported name never used in that scope |
+| Rust | `unsafe` block containing no pointer dereference, FFI call, or inline assembly |
+| Go | Goroutine closure capturing loop variable by reference |
+
+---
+
+## XIV. MCP SERVER: JSON-RPC 2.0 STDIO INTERFACE (`crates/mcp`)
+
+**Status**: **[COMPLETE]** — v6.5.0
+
+Four tools exposed over the MCP protocol:
+
+| Tool | Auth | Returns |
+|------|------|---------|
+| `janitor_scan` | Free | `dead_symbols`, `slop_score`, `merkle_root` |
+| `janitor_dedup` | Free | Structural clone groups with `structural_hash` |
+| `janitor_clean` | Lead Specialist token | Shadow simulate → delete → remote attest |
+| `janitor_dep_check` | Free | `zombie_deps[]`, `total_declared`, `zombie_count` |
+
+---
+
+## XV. DEPENDENCY MANIFEST SCANNER (`crates/anatomist`)
+
+**Status**: **[COMPLETE]** — v6.6.0
+
+- `scan_manifests(root: &Path) -> DependencyRegistry` — WalkDir depth-3; skips `node_modules`, `target`, `__pycache__`, `.venv`.
+- `find_zombie_deps(root: &Path, registry: &DependencyRegistry) -> Vec<String>` — single-pass AhoCorasick scan of all source files; reports declared dependencies whose package names appear in zero source files.
+- **Parsers**: `package.json` (serde_json), `Cargo.toml` (toml crate), `requirements.txt` (line-by-line with extras/markers stripped), `pyproject.toml` (PEP 621 `[project.dependencies]` + Poetry `[tool.poetry.dependencies]`).
+- **Registry**: `DependencyRegistry` — rkyv zero-copy serializable; entries carry `DependencyEntry { name, version, ecosystem: Npm|Cargo|Pip, dev: bool }`.
+- **ROI**: Zombie dependency elimination reduces `node_modules` / `Cargo.lock` attack surface and cuts CI cache size without manual manifest audits.
+
+---
+
 **THE CODE IS THE ASSET. THE JANITOR IS THE FIDUCIARY.**
-**VERSION: 6.6.0**
+**VERSION: v6.7.0**

@@ -25,11 +25,12 @@ nav:
   - Pricing: pricing.md
   - Case Studies:
     - Godot Engine: case-studies/godot.md
+    - Godot Slop Audit: godot_slop_audit.md
   - Governance:
     - Licensing (BUSL-1.1): licensing.md
     - Token Gate: sovereignty/tokens.md
   - Legal:
-    - Terms of Service: terms.md
+    - Terms & Conditions: terms.md
     - Privacy Policy: privacy.md
   - Archive:
     - Legacy (Python v4): archive/legacy.md

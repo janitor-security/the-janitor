@@ -1,6 +1,6 @@
-# Terms of Service
+# Terms & Conditions
 
-**Effective Date:** 2026-02-19
+**Effective Date:** 2026-02-25
 **Entity:** The Janitor (operated by GhrammR)
 **Contact:** legal@thejanitor.app
 
@@ -8,21 +8,46 @@
 
 ## 1. Acceptance of Terms
 
-By downloading, installing, or using The Janitor binary or any associated tooling ("the Software"), you agree to these Terms of Service ("Terms"). If you do not agree, do not use the Software.
+By downloading, installing, or using The Janitor binary, The Governor API, or any associated tooling ("the Software"), you agree to these Terms & Conditions ("Terms"). If you do not agree, do not use the Software.
 
 ---
 
-## 2. Nature of the Product
+## 2. Nature of Business
 
-**The Janitor is a software product, not a service.**
+**The Janitor is a Software-as-a-Service (SaaS) and downloadable digital product provider.**
 
-The Janitor provides automated software logic in the form of a compiled binary executable. You run the Software locally on your own hardware. No custom services, consulting, professional services, managed services, or human-assisted code review are provided under any tier.
+We develop, publish, and license automated software-analysis tooling delivered as compiled binary executables and token-gated SaaS subscriptions. All tiers — Junior Janitor (free), Lead Specialist, and Industrial Core — are self-serve digital products transacted electronically via our payment processor (Lemon Squeezy).
 
-All analysis, dead symbol detection, structural clone detection, shadow-tree simulation, and code cleanup operations are performed automatically and locally by the Software on your machine. The Janitor does not receive, transmit, store, or process your source code on any remote server.
+No physical goods, physical media, or in-person services are sold or delivered.
 
 ---
 
-## 3. License
+## 3. No Custom Services
+
+**We do not provide custom software development, consulting, or agency services. All software is provided "as-is" as a self-serve digital product.**
+
+The Janitor does not accept statements of work, professional-services engagements, retainer agreements, or any arrangement in which we develop, review, or modify code on behalf of a customer. Purchasing any tier grants a license to use the Software; it does not create an employment, contractor, or consulting relationship of any kind.
+
+Support is limited to documentation, community channels, and the tier SLA defined in §12 (Industrial Core only). No human-assisted code review, manual audit, or bespoke integration work is included in or available under any tier.
+
+---
+
+## 4. Nature of the Product
+
+The Janitor performs automated dead-symbol detection, structural clone analysis, shadow-tree simulation, and code cleanup operations. All analysis runs locally on your hardware. The Janitor does not receive, transmit, store, or process your source code on any remote server.
+
+Remote network calls are limited to:
+
+- **Token verification**: a single POST to `https://api.thejanitor.app/v1/verify` when `--token` is supplied.
+- **Audit attestation**: a POST to `https://api.thejanitor.app/v1/attest` when a signed audit log is requested (Lead Specialist / Industrial Core tiers).
+- **Wisdom synchronisation**: a GET from `https://api.thejanitor.app/v1/wisdom.rkyv` when `janitor update-wisdom` is invoked.
+- **Anonymous telemetry**: a minimal zero-knowledge hash submitted on rollback events (opt-out: delete `.janitor/telemetry.json`).
+
+No source file contents, file paths, or symbol names are transmitted in any of the above calls.
+
+---
+
+## 5. License
 
 The Software is licensed under the **Business Source License 1.1 (BUSL-1.1)**, the full text of which is available at [https://spdx.org/licenses/BUSL-1.1.html](https://spdx.org/licenses/BUSL-1.1.html) and in the `LICENSE` file distributed with the Software.
 
@@ -36,7 +61,7 @@ The Junior Janitor tier (scan, clean, dedup, badge, dashboard — without signed
 
 ---
 
-## 4. Digital License Keys (Tokens)
+## 6. Digital License Keys (Tokens)
 
 Lead Specialist and Industrial Core tiers grant a **digital license key** ("token") that unlocks the signed attestation pipeline within the Software. Tokens are:
 
@@ -49,7 +74,7 @@ Tokens are delivered electronically upon purchase. There is no physical componen
 
 ---
 
-## 5. Permitted Use
+## 7. Permitted Use
 
 You may use the Software to:
 
@@ -59,7 +84,7 @@ You may use the Software to:
 
 ---
 
-## 6. Prohibited Use
+## 8. Prohibited Use
 
 You may not:
 
@@ -70,39 +95,61 @@ You may not:
 
 ---
 
-## 7. No Warranty
+## 9. No Warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH YOU.
 
 The Software modifies source files. You are solely responsible for maintaining version control and backups. The shadow-tree simulation and ghost-backup protocol are provided as a safety mechanism but do not constitute a warranty against data loss.
 
----
-
-## 8. Limitation of Liability
-
-TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE JANITOR OR ITS CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, LOSS OF PROFITS, DATA, OR BUSINESS INTERRUPTION) ARISING OUT OF OR IN CONNECTION WITH THE USE OR INABILITY TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+Automated static analysis is inherently probabilistic. The Janitor cannot guarantee zero false positives or zero false negatives. All cleanup operations should be reviewed by a qualified engineer before deployment to production environments.
 
 ---
 
-## 9. Indemnification
+## 10. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE JANITOR OR ITS CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, LOSS OF PROFITS, LOSS OF DATA, CODEBASE CORRUPTION, BUILD FAILURES, PRODUCTION OUTAGES, OR BUSINESS INTERRUPTION) ARISING OUT OF OR IN CONNECTION WITH THE USE OR INABILITY TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+IN NO EVENT SHALL THE AGGREGATE LIABILITY OF THE JANITOR TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THESE TERMS OR THE SOFTWARE EXCEED THE GREATER OF (A) THE TOTAL FEES YOU PAID FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR (B) ONE HUNDRED US DOLLARS (USD $100).
+
+---
+
+## 11. Indemnification
 
 You agree to indemnify and hold harmless The Janitor and its contributors from any claims, damages, or expenses (including reasonable legal fees) arising from your use of the Software in violation of these Terms or applicable law.
 
 ---
 
-## 10. Governing Law
+## 12. Support & SLA
+
+| Tier | Support | SLA |
+|------|---------|-----|
+| **Junior Janitor** (Free) | Documentation + community channels | None |
+| **Lead Specialist** | Email (legal@thejanitor.app) | Best-effort, 5 business days |
+| **Industrial Core** | Dedicated channel | Defined in enterprise agreement |
+
+Support covers questions about Software behaviour. It does not include custom development, integration consulting, or code review services (see §3).
+
+---
+
+## 13. Refund Policy
+
+Digital license tokens are non-refundable once issued, as delivery and activation are instantaneous. If you believe you were charged in error, contact **legal@thejanitor.app** within 30 days of purchase. Refund eligibility is determined solely at our discretion in accordance with the policies of our payment processor (Lemon Squeezy).
+
+---
+
+## 14. Governing Law
 
 These Terms are governed by and construed in accordance with applicable law. Any disputes shall be resolved in the jurisdiction of the operator's registered domicile.
 
 ---
 
-## 11. Changes to Terms
+## 15. Changes to Terms
 
 These Terms may be updated. The Effective Date at the top of this document will reflect the most recent revision. Continued use of the Software after a revision constitutes acceptance of the updated Terms.
 
 ---
 
-## 12. Contact
+## 16. Contact
 
 License questions: **legal@thejanitor.app**
 Commercial inquiries: **sales@thejanitor.app**
