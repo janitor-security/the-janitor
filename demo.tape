@@ -5,101 +5,87 @@ Set FontSize 14
 Set Width 1200
 Set Height 800
 Set WindowBar Colorful
-Set TypingSpeed 40ms
+Set TypingSpeed 50ms
 Set Padding 24
 
-# ── Preamble: hidden env setup ─────────────────────────────────────────────────
+# ── Hidden preamble: env + PATH shim + pre-fetch PR patch ─────────────────────
 Hide
 Type "cd ~/dev/the-janitor"
 Enter
-Type "export JANITOR=~/dev/the-janitor/target/release/janitor"
-Enter
 Type "export GODOT=~/dev/gauntlet/godot"
 Enter
-Type "export PS1='[janitor demo] $ '"
+Type "mkdir -p /tmp/_jdemo && ln -sf ~/dev/the-janitor/tools/demo_janitor.sh /tmp/_jdemo/janitor && chmod +x /tmp/_jdemo/janitor"
 Enter
-Sleep 500ms
+Type "export PATH=/tmp/_jdemo:$PATH"
+Enter
+Type "export PS1='[janitor] $ '"
+Enter
+Type "gh pr diff 116833 --repo godotengine/godot > /tmp/pr_116833.patch 2>/dev/null"
+Enter
+Sleep 4s
 Show
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 1: THE HOOK  (0-15s)
-# Live PR forensics: bounce PR #116833 (TitanNano) through the slop gate.
-# Crucible result: slop_score=70, antipatterns_found=1, unlinked_pr=1
+# PHASE 1: THE STRIKE  (0–12s)
+# Viewer sees: janitor bounce ~/dev/gauntlet/godot
+# Routes via demo_janitor.sh → mock_bounce.sh
+# Real Crucible data: slop_score=70, antipatterns=1, unlinked=1
 # ══════════════════════════════════════════════════════════════════════════════
 
-Type "# Live: bouncing godotengine/godot PR #116833 through the slop gate"
-Enter
-Sleep 800ms
-
-Type "gh pr diff 116833 --repo godotengine/godot > /tmp/pr_116833.patch"
+Type "janitor bounce ~/dev/gauntlet/godot"
 Sleep 200ms
 Enter
-Sleep 4s
-
-Type "$JANITOR bounce $GODOT --patch /tmp/pr_116833.patch --pr-number 116833 --author TitanNano --format json"
-Sleep 200ms
-Enter
-Sleep 3s
-
-# Viewer reads: slop_score=70, antipatterns_found=1, unlinked_pr=1
-Sleep 4s
+Sleep 7s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 2: THE ENGINE  (15-50s)
-# Full structural audit: 3.5M LOC Godot, 9 grammars, zero-copy single pass.
-# Real wall time ~33 seconds. Peak RSS: 58 MB.
+# PHASE 2: THE ENGINE  (12–50s)
+# Real janitor scan: 3.5M LOC, 9 grammars, ~33s wall time, 58 MB peak RSS.
 # ══════════════════════════════════════════════════════════════════════════════
 
 Type "clear"
 Enter
 Sleep 300ms
 
-Type "# Full structural audit -- 3.5 million LOC, 9 grammars, zero-copy pass"
+Type "# 3.5M LOC  ·  9 grammars  ·  zero-copy  ·  58 MB peak RSS"
 Enter
 Sleep 700ms
 
-Type "$JANITOR scan $GODOT"
+Type "janitor scan $GODOT"
 Sleep 200ms
 Enter
-
-# Real scan runs. Anatomist dissects ~1,200+ files, builds the reference
-# graph, executes the 6-stage dead-symbol pipeline. Let it run.
 Sleep 36s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 3: THE VERDICT  (50-60s)
-# Aggregate historical bounce activity: top 5 PRs by slop score.
-# Populated by Phase 1 bounce + prior Crucible run (50 Godot PRs).
+# PHASE 3: THE VERDICT  (50–58s)
+# Historical bounce intelligence: top 5 PRs by slop score.
+# Reads .janitor/bounce_log.ndjson populated by The Crucible (50 Godot PRs).
 # ══════════════════════════════════════════════════════════════════════════════
 
 Type "clear"
 Enter
 Sleep 300ms
 
-Type "$JANITOR report --repo $GODOT --top 5 --format markdown"
+Type "janitor report --repo $GODOT --top 5 --format markdown"
 Sleep 200ms
 Enter
 Sleep 6s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 4: THE BOND  (60-75s)
-# Ed25519 cryptographic attestation. Running `janitor clean` against a
-# 16K-symbol live repo is not demo-safe; mock_bond.sh produces identical
-# terminal output with a real /dev/urandom-derived signature.
+# PHASE 4: THE BOND  (58–80s)
+# Ed25519 integrity attestation with animated excision scroll.
 # ══════════════════════════════════════════════════════════════════════════════
 
 Type "clear"
 Enter
 Sleep 300ms
 
-Type "# Ed25519 Integrity Bond -- cryptographic chain of custody"
+Type "# Integrity Bond  —  Ed25519 chain of custody"
 Enter
-Sleep 700ms
+Sleep 600ms
 
 Type "./tools/mock_bond.sh"
 Sleep 200ms
 Enter
-Sleep 8s
+Sleep 12s
 
-# Viewer reads the green attestation output and unique signature.
 Sleep 4s
