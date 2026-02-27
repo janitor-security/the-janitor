@@ -127,12 +127,12 @@ All operations run locally. Your source code is memory-mapped on your hardware a
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
-| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
+| **[Team](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)** | **$499/yr** | All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
+| **[Industrial](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 
 The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.
 
-[**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
+[**Activate Attestation → thejanitor.lemonsqueezy.com**](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)
 
 ---
 

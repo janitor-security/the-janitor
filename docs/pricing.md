@@ -47,7 +47,7 @@ Includes all Junior Janitor capabilities, plus:
 
 The token gate is a single Ed25519 signature verified offline — no network call, no telemetry.
 
-[**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
+[**Get Certified → thejanitor.lemonsqueezy.com**](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)
 
 ---
 

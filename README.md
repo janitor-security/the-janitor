@@ -1,10 +1,7 @@
 # The Janitor: Structural Firewall for AI-Generated Code
 **v6.8.0 — Rust-Native. Zero-Copy. Enforcement at the Gate.**
 
-<video autoplay loop muted playsinline width="100%">
-  <source src="https://thejanitor.app/assets/janitor_demo.mp4" type="video/mp4">
-  <a href="https://thejanitor.app/assets/janitor_demo.mp4">Watch the demo</a>
-</video>
+🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
 ---
 
@@ -111,10 +108,10 @@ janitor clean ./src --force-purge --token $JANITOR_TOKEN
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
-| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
+| **[Team](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)** | **$499/yr** | All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
+| **[Industrial](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 
-[**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
+[**Activate Attestation → thejanitor.lemonsqueezy.com**](INSERT_REAL_LEMONSQUEEZY_LINK_HERE)
 
 ## CI Integration
 
@@ -193,4 +190,4 @@ chmod +x janitor && sudo mv janitor /usr/local/bin/
 
 **Business Source License 1.1 (BUSL-1.1)** — Source Available. Converts to MIT on 2030-02-15.
 
-Scan, cleanup, dedup, bounce, and dashboard are permanently free. Integrity attestation requires a [Team token](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key).
+Scan, cleanup, dedup, bounce, and dashboard are permanently free. Integrity attestation requires a [Team token](INSERT_REAL_LEMONSQUEEZY_LINK_HERE).
