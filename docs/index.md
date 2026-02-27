@@ -1,36 +1,94 @@
+<video autoplay loop muted playsinline style="width: 100%; border-radius: 8px; border: 1px solid #333;">
+  <source src="assets/janitor_demo.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
 # The Janitor
 
-**v6.8.0 — Rust-Native. Zero-Copy. Polyglot Dead Symbol Excision.**
-
-*"Code is Liability. Precision is the Cure."*
-
-> **Sonar takes your code to the cloud. The Janitor cleans it on your metal.**
->
-> Every analysis runs locally. Your source code never leaves your machine.
+**v6.8.0 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.**
 
 ---
 
-## I. THE PROBLEM: CODE BLOAT
+> **Sonar finds style violations.**
+> **The Janitor enforces structural integrity.**
 
-Every codebase accumulates dead weight. Functions that were called once, classes that were subclassed by a deleted module, utilities from a refactoring that never shipped. Traditional linters flag style violations. They do not detect dead code.
-
-The consequence is **Code Bloat**: dead symbols that occupy binary space, extend build times, inflate cognitive load, and survive code review because no tool has the reference resolution to prove they are unreachable.
-
-Don't guess your technical debt. The Janitor generates a verifiable **Code Health Badge** so your team can surgically monitor the decay of the monolith before it impacts production.
-
-### Data Sovereignty
-
-Unlike cloud-based static analysis tools, The Janitor performs all operations — reference graph construction, structural clone detection, shadow-tree simulation — **offline, on your hardware**. Your source code is memory-mapped locally and never transmitted to any server. The signed attestation token is verified by a 32-byte public key embedded in the binary. No network call is made at any point in the pipeline.
+> *82% of open Godot Engine pull requests contain no issue link. 20% introduce language antipatterns. Zero comment scanners caught it. The Janitor did — across 50 live PRs, in under 90 seconds.*
 
 ---
 
-## II. THE CURE: THE TECHNICAL STACK
+## THE CRISIS
 
-The Janitor is not a linter. It is a surgical instrument.
+The Veracode 2025 State of Software Security report established the baseline: AI-assisted code contains **36% more high-severity vulnerabilities** than human-written equivalents. The 2026 addendum refined it further — remediation rates for AI-introduced flaws are declining, because human reviewers cannot process the volume.
+
+Your engineers are merging Copilot output. Your linter passes it. Your SAST tool uploads it to a cloud pipeline and returns a report three minutes later. By then, the PR is merged.
+
+The threat model has changed. Your enforcement layer has not.
+
+---
+
+## THE ENFORCEMENT LAYER
+
+The Janitor is not a linter. It is not a SAST scanner. It is a **structural enforcement layer** that runs on your hardware, in your pipeline, on every pull request — before the merge button is available.
+
+Three capabilities your current toolchain cannot replicate:
+
+### Zero-Copy Execution
+
+Every analysis — reference graph construction, dead symbol detection, structural clone hashing — executes via **memory-mapped file access**. Your source code is never copied to heap, never serialized, never transmitted. No network call is made at any point in the dead-symbol pipeline. The analysis surface is your local machine. There is no exfiltration vector to audit.
+
+**Benchmark:** Scanned the Godot Engine — **3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python** — in **33 seconds**, consuming **58 MB of peak RAM**. On a standard CI runner. With zero OOM events and zero panics.
+
+Sonar's cloud pipeline cannot run in your air-gap. The Janitor runs everywhere.
+
+### Zombie Dependency Detection
+
+AI code generators hallucinate package imports. A Copilot-generated function adds `import requests` at the module level and uses it exactly once — inside a conditional branch that never executes in production. Standard linters do not detect this. Import graphs do not resolve it. Dependency reviewers do not see it.
+
+The Janitor scans **`package.json`, `Cargo.toml`, `requirements.txt`, `spin.toml` (Fermyon WASM), and `wrangler.toml` (Cloudflare Workers)** against the live symbol reference graph. A package that appears in your manifest but never appears in a reachable import path is a **zombie dependency** — declared, installed, and billing you in attack surface.
+
+Every PR that introduces a zombie dependency is flagged before merge.
+
+### Cryptographic Integrity Bonds
+
+Every cleanup operation can be sealed with an **Ed25519 attestation** — a per-event cryptographic signature covering `{timestamp}{file_path}{sha256_pre_cleanup}`. The verifying key (32 bytes) is embedded in the binary. Verification is a pure offline computation.
+
+The result is a `audit_log.json` that can be presented to a SOC 2 auditor, a regulator, or an incident response team as a chain of custody for every line of code removed from production. Not a log. A bond.
+
+---
+
+## THE PR GATE: LIVE RESULTS
+
+The `janitor bounce` command intercepts pull requests at the diff level and scores them across four dimensions:
+
+| Signal | Weight | What It Catches |
+|:-------|:------:|:----------------|
+| Dead symbols introduced | ×10 | Functions with no call sites entering the codebase |
+| Logic clones detected | ×5 | Structurally identical implementations under different names |
+| Zombie symbols reintroduced | ×15 | Previously-deleted symbols returning via AI-assisted copy-paste |
+| Language antipatterns | ×50 | Hallucinated imports, vacuous unsafe blocks, goroutine closure traps |
+
+**Social Forensics** runs on top: every added comment line is scanned for AI-ism phrases (`"Note that"`, `"It's worth mentioning"`, `"As an AI"`) and corporate-speak markers via a zero-allocation AhoCorasick automaton. PR bodies are scanned for issue link compliance (`Closes #N`, `Fixes #N`).
+
+**Live Godot Engine audit — 50 open PRs, February 2026:**
+
+```
+PRs analyzed          : 50
+Unlinked PRs          : 41  (82% — no Closes/Fixes #N)
+Antipatterns flagged  : 10
+AI comment violations : 0   (Godot contributors are clean)
+Logic clones          : 2 PRs
+Highest slop score    : 70  (PR #116833 — TitanNano)
+```
+
+These are real, open, unmerged pull requests against a 3.5M LOC production codebase. The gate works.
+
+---
+
+## THE TECHNICAL STACK
 
 ### The Anatomist
 
-Parses source code via zero-copy Tree-sitter CSTs across **9 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, and Python**. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage (`#include`, `import`, `use`, `require`).
+Parses via zero-copy Tree-sitter CSTs across **9 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python**. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
 
 ### The 6-Stage Dead Symbol Pipeline
 
@@ -39,110 +97,106 @@ Parses source code via zero-copy Tree-sitter CSTs across **9 grammars: C, C++, R
 | 0 | Directory exclusion (`tests/`, `migrations/`, `venv/`) | `Protection::Directory` |
 | 1 | Reference graph: in-degree > 0 | `Protection::Referenced` |
 | 2+4 | Heuristic wisdom + `__all__` exports | Various |
-| 3 | Library mode: all public symbols | `Protection::LibraryMode` |
+| 3 | Library mode: all public symbols protected | `Protection::LibraryMode` |
 | 5 | Aho-Corasick scan of non-`.py` files | `Protection::GrepShield` |
 
-Anything that survives all five gates is a confirmed dead symbol.
-
-### The Reaper
-
-Executes surgical byte-range deletion. Sorts targets **descending by `start_byte`** (bottom-to-top splice) to preserve upstream offsets. UTF-8 hardened via `str::is_char_boundary()`. Atomic backup to `.janitor/ghost/` before first write.
+Anything that survives all five gates is a confirmed dead symbol. No false positives from GDCLASS registration macros, function pointer dispatch, or runtime-registered plugins.
 
 ### The Forge
 
-Alpha-normalized BLAKE3 structural hashing detects duplicate functions with identical logic but different names. Injects Safe Proxy Pattern: duplicate bodies become one-line wrappers delegating to a shared canonical implementation.
+BLAKE3 structural hashing with alpha-normalization detects logic clones — functions with identical structure and different names. Chemotaxis ordering prioritizes high-calorie files (`.rs`, `.py`, `.go`, `.ts`) in the analysis pass. The `slop_hunter` detects language-specific antipatterns via Tree-sitter AST walks: hallucinated Python imports, vacuous Rust `unsafe` blocks, goroutine closure traps.
 
-### The Shadow
+### The Reaper
 
-Symlink-based overlay of the source tree. Before any physical deletion, symlinks for dead-symbol files are unmapped and `pytest` is run in the shadow tree. Physical deletion proceeds only on a passing test suite; symlinks are restored on failure.
+Surgical byte-range deletion. Sorted bottom-to-top by `start_byte` to preserve upstream offsets. UTF-8 hardened via `str::is_char_boundary()`. Atomic backup to `.janitor/ghost/` before first write. Rollback via `janitor undo` restores exact pre-deletion state.
 
----
+### The Daemon
 
-## III. THE ECONOMICS: UTILITY PRICING
+A long-lived Unix Domain Socket server keeps the symbol registry memory-resident across CI requests. Eliminates process-spawn overhead for high-frequency pipelines. The **Physarum Protocol** — named for *Physarum polycephalum*, slime mould that modulates nutrient flow under environmental pressure — governs backpressure: RAM ≤ 75% = full throughput; 75–90% = throttle to 2 concurrent analyses; > 90% = hold and retry.
 
-**Automated Cleanup is Free. Integrity Proof is the Standard.**
+### Data Sovereignty
 
-| Tier | Cost | Scope |
-|:-----|:-----|:------|
-| **Junior Janitor** | **Free** | Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
-| **[Team Specialist](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. Up to 10 seats. |
-| **[Industrial Core](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | For monoliths >1M LOC. On-Prem Token Server + Keypair Rotation Protocol + Enterprise SLA. Unlimited seats. |
-
-[**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
+All operations run locally. Your source code is memory-mapped on your hardware and never transmitted. The signed attestation token is verified by a 32-byte public key embedded in the binary. No telemetry. No cloud dependency. No exfiltration surface.
 
 ---
 
-## IV. INSTALLATION
+## ECONOMICS
 
-### From Source (Recommended)
+**The enforcement is free. The attestation is the product.**
 
-Requires: **Rust 1.82+**, `just`.
+| Tier | Cost | What You Get |
+|:-----|:-----|:-------------|
+| **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
+| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **$499/yr** | All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
+| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
+
+The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.
+
+[**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
+
+---
+
+## INSTALLATION
+
+**From source (Rust 1.82+, `just` required):**
 
 ```sh
 git clone https://github.com/GhrammR/the-janitor
 cd the-janitor
 just build
-# Binary at: target/release/janitor
+# Binary: target/release/janitor
 ```
 
-Or with audit verification:
+**Pre-built binary:**
 
 ```sh
-just audit   # fmt + clippy + check + 187 tests
-just build
-```
-
-### Pre-built Binary
-
-Download the stripped release binary from [Releases](https://github.com/GhrammR/the-janitor/releases).
-
-```sh
-chmod +x janitor
-sudo mv janitor /usr/local/bin/
+# Download from Releases, then:
+chmod +x janitor && sudo mv janitor /usr/local/bin/
 ```
 
 ---
 
-## V. COMMANDS
+## COMMANDS
 
 ```sh
-# Detect dead symbols (free)
-janitor scan <path> [--library] [--verbose]
+# Structural dead symbol audit
+janitor scan <path> [--library] [--format json]
 
-# Machine-readable dead-code report for CI/GitHub Checks (free)
-janitor scan <path> --format json
+# PR enforcement gate — score a diff against the registry
+janitor bounce <path> --patch <file> --pr-number <n> --author <handle> --pr-body "$BODY" --format json
 
-# Score a pull request patch for dead symbol reintroductions (free)
-janitor bounce <path> [--patch <file>] [--format json]
+# Zombie dependency detection across npm / cargo / pip / spin / wrangler
+janitor scan <path> --format json  # zombie_deps in output
 
-# Find structurally duplicate functions (free, report only)
+# Structural clone detection
 janitor dedup <path>
 
-# Apply Safe Proxy deduplication (free, explicit flag required)
+# Safe Proxy deduplication (explicit flag required)
 janitor dedup <path> --apply --force-purge
 
-# Shadow-simulate deletion + test, then physically remove dead symbols (free)
-janitor clean <path> --force-purge
+# Shadow-simulate deletion → test suite → physical removal
+janitor clean <path> --force-purge --token <attestation-token>
 
-# Generate a code health badge (free)
-janitor badge <path>
-
-# Undo last cleanup (git stash or ghost restore)
-janitor undo <path>
-
-# Load .janitor/symbols.rkyv and launch TUI dashboard (free)
-janitor dashboard <path>
-
-# Aggregate historical bounce activity into a Slop / Clones / Zombies report (free)
+# Generate historical slop / clone / zombie intelligence report
 janitor report [--repo <path>] [--top <n>] [--format markdown|json]
 
-# Start long-lived daemon on a Unix socket for low-latency CI integrations (free)
+# Long-lived daemon for low-latency CI (Unix socket, Physarum backpressure)
 janitor serve [--socket <path>] [--registry <file>]
+
+# Ratatui TUI dashboard
+janitor dashboard <path>
 ```
+
+---
+
+## THE PROOF
+
+> **3.5 million lines. 33 seconds. 58 megabytes. Zero panics.**
+>
+> [Read the Godot Engine Autopsy →](case-studies/godot.md)
 
 ---
 
 > See [Safety Guarantees](safety.md) for the Shadow Tree isolation and atomic rollback protocol.
-> See [Licensing](licensing.md) for the BUSL-1.1 terms and commercial tier details.
+> See [Licensing](licensing.md) for BUSL-1.1 terms and commercial tier details.
 > See [Terms of Service](terms.md) · [Privacy Policy](privacy.md) for legal and data handling.
-> Pre-v5 Python implementation history: [Archive](archive/legacy.md).
