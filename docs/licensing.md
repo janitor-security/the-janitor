@@ -15,7 +15,7 @@ BUSL-1.1 is a **source-available license** that distinguishes between:
 
 ---
 
-## What Is Free (Junior Janitor)
+## What Is Free
 
 The following are always free, for individuals and organizations of any size:
 
@@ -33,7 +33,7 @@ The following are always free, for individuals and organizations of any size:
 
 ---
 
-## What Requires a License (Lead Specialist / Industrial Core)
+## What Requires a License (Team / Industrial Core)
 
 A commercial license is required when **any of the following apply**:
 
@@ -53,9 +53,9 @@ A commercial license is required when **any of the following apply**:
 
 | Tier | Price | Who It's For |
 |------|-------|--------------|
-| **Junior Janitor** | **Free** | Individual developers. Unlimited Scan, Cleanup, Dedup, Dashboard. No signed logs. No PQC attestation. |
-| **Lead Specialist** | **$4,900/yr** | Teams up to 10. All free features + PQC-Signed Audit Logs + Sovereign Status Badges + CI/CD Compliance Attestation. |
-| **Industrial Core** | **From $50,000/yr** | Monoliths >1M LOC. On-prem token server, keypair rotation protocol, enterprise SLA, unlimited seats. |
+| **Free** | **$0** | Individual developers. Unlimited Scan, Cleanup, Dedup, Bounce, Dashboard. No signed logs. |
+| **Team** | **$499/yr** | Teams up to 25. All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. |
+| **Industrial** | **Custom** | Monoliths >1M LOC. On-prem token server, keypair rotation protocol, SOC 2 audit support, enterprise SLA, unlimited seats. |
 
 [**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key)
 

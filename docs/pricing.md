@@ -8,7 +8,7 @@ The Janitor separates the **action** (dead code removal) from the **verified pro
 
 ## Tiers
 
-### Junior Janitor — Free
+### Free Tier
 
 **For individual developers and open-source projects.**
 
@@ -70,7 +70,7 @@ Includes all Team Specialist capabilities, plus:
 
 ## What the Token Does
 
-A Lead Specialist or Industrial Core token is a **base64-encoded Ed25519 signature** of the string
+A Team or Industrial Core token is a **base64-encoded Ed25519 signature** of the string
 `JANITOR_PURGE_AUTHORIZED`. The binary embeds only the verifying key (32 bytes) — no network call
 is made at verification time.
 
@@ -104,7 +104,7 @@ Tokens are deterministic for a given keypair — the same key always produces th
 **Does the tool phone home?**
 No. Token verification, audit log signing, and all analysis are fully offline computations. No telemetry is collected.
 
-**Can I use the Junior Janitor tier commercially?**
+**Can I use the Free tier commercially?**
 Yes. Running `janitor scan`, `janitor clean`, and `janitor dedup` on a commercial codebase is free. The BUSL-1.1 commercial restriction applies when you embed The Janitor as part of a paid SaaS product or issue attestations to your own paying customers. See [Licensing](licensing.md) for details.
 
 **When does the license convert to MIT?**
