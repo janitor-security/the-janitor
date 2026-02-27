@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# tools/mock_bond.sh — Ed25519 attestation with animated file-scan for VHS demo.
+# tools/mock_bond.sh — Governor bond display with animated file-scan for VHS demo.
 #
 # Simulates: janitor clean ~/dev/gauntlet/godot --force-purge --token $JANITOR_TOKEN
-# Animated scroll shows real Godot source paths being excised.
+#
+# The bond is issued by The Governor (GitHub App SaaS layer), which implements
+# ML-DSA-65 (FIPS 204) via the-governor/src/compliance/pqc.rs. The local
+# janitor binary verifies the token and writes the audit log; The Governor
+# countersigns the CBOM with its ML-DSA-65 identity key.
 
 set -euo pipefail
 
@@ -12,7 +16,7 @@ YLW=$'\033[33m'
 BLD=$'\033[1m'
 NC=$'\033[0m'
 
-# Real Godot source paths — used in the animated excision scroll
+# Real Godot source paths for the animated excision scroll
 PATHS=(
   "core/math/vector3.cpp"
   "core/math/transform_3d.cpp"
@@ -68,32 +72,38 @@ while [ "$SECONDS" -lt "$END" ]; do
   I=$((I + 1))
   sleep 0.09
 done
-printf "\r  %-75s\n" ""   # erase the scroll line
+printf "\r  %-75s\n" ""
 # ── End scroll ────────────────────────────────────────────────────────────────
 
 sleep 0.3
 printf "  %s[shadow tree ]%s  Running test suite in isolation...\n" "$DIM" "$NC"
 sleep 1.6
-
 printf "  %s[PASS         ]%s  Shadow test suite clean. Proceeding to bond issuance.\n" \
   "$GRN" "$NC"
 sleep 0.5
 
-printf "  %s[INTEGRITY BOND]%s  Ed25519 audit log sealed\n" "$GRN" "$NC"
-sleep 0.4
-
-# Generate a deterministic-looking 8-char hex for the bond filename
+# ── Governor bond — ML-DSA-65 (FIPS 204) ──────────────────────────────────────
 HASH=$(od -An -N4 -tx4 /dev/urandom | tr -d ' \n')
-printf "  %s[INTEGRITY BOND]%s  .janitor/bonds/116833_%s.json  —  7812 entries  SHA-256 chained\n" \
-  "$GRN" "$NC" "${HASH:0:8}"
+BOND_FILE="bonds/116833_${HASH:0:8}.json"
+
+printf "  %s[GOVERNOR BOND]%s  Contacting The Governor attestation service...\n" \
+  "$GRN" "$NC"
+sleep 0.6
+
+printf "  %s[GOVERNOR BOND]%s  ML-DSA-65 (FIPS 204) signature computed\n" \
+  "$GRN" "$NC"
 sleep 0.4
 
-SIG=$(head -c 48 /dev/urandom | base64 | tr -d '\n=' | cut -c1-88)
-printf "  %s[INTEGRITY BOND]%s  Signature: %s%s%s\n" "$GRN" "$NC" "$BLD" "$SIG" "$NC"
+printf "  %s[GOVERNOR BOND]%s  CycloneDX CBOM written: .janitor/%s\n" \
+  "$GRN" "$NC" "$BOND_FILE"
+sleep 0.4
+
+SIG=$(head -c 96 /dev/urandom | base64 | tr -d '\n=' | cut -c1-128)
+printf "  %s[GOVERNOR BOND]%s  Sig: %s%s%s\n" "$GRN" "$NC" "$BLD" "$SIG" "$NC"
 sleep 0.3
 
 echo ""
 printf "  %s%s RECLAMATION COMPLETE.%s  7,812 dead symbols excised.\n" \
   "$BLD" "$GRN" "$NC"
-printf "                          Bond: .janitor/bonds/116833_%.8s.json\n" "$HASH"
+printf "                          CBOM: .janitor/%s\n" "$BOND_FILE"
 echo ""
