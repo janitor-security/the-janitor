@@ -8,15 +8,13 @@ Set WindowBar Colorful
 Set TypingSpeed 50ms
 Set Padding 24
 
-# ── Hidden preamble: env + PATH shim + pre-fetch PR patch ─────────────────────
+# ── Hidden preamble ────────────────────────────────────────────────────────────
 Hide
 Type "cd ~/dev/the-janitor"
 Enter
 Type "export GODOT=~/dev/gauntlet/godot"
 Enter
-Type "mkdir -p /tmp/_jdemo && ln -sf ~/dev/the-janitor/tools/demo_janitor.sh /tmp/_jdemo/janitor && chmod +x /tmp/_jdemo/janitor"
-Enter
-Type "export PATH=/tmp/_jdemo:$PATH"
+Type "export JANITOR=~/dev/the-janitor/target/release/janitor"
 Enter
 Type "export PS1='[janitor] $ '"
 Enter
@@ -26,19 +24,17 @@ Sleep 4s
 Show
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 1: THE STRIKE  (0–12s)
-# Viewer sees: janitor bounce ~/dev/gauntlet/godot
-# Routes via demo_janitor.sh → mock_bounce.sh
-# Real Crucible data: slop_score=70, antipatterns=1, unlinked=1
+# PHASE 1: THE STRIKE  (0–10s)
+# PR #116833 — TitanNano — slop_score=70, antipattern×1, unlinked×1
 # ══════════════════════════════════════════════════════════════════════════════
 
-Type "janitor bounce ~/dev/gauntlet/godot"
+Type "./tools/mock_bounce.sh"
 Sleep 200ms
 Enter
 Sleep 7s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 2: THE ENGINE  (12–50s)
+# PHASE 2: THE ENGINE  (10–48s)
 # Real janitor scan: 3.5M LOC, 9 grammars, ~33s wall time, 58 MB peak RSS.
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -46,40 +42,40 @@ Type "clear"
 Enter
 Sleep 300ms
 
-Type "# 3.5M LOC  ·  9 grammars  ·  zero-copy  ·  58 MB peak RSS"
+Type "# 3.5M LOC  --  9 grammars  --  zero-copy  --  58 MB peak RSS"
 Enter
 Sleep 700ms
 
-Type "janitor scan $GODOT"
+Type "$JANITOR scan $GODOT"
 Sleep 200ms
 Enter
 Sleep 36s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 3: THE VERDICT  (50–58s)
-# Historical bounce intelligence: top 5 PRs by slop score.
-# Reads .janitor/bounce_log.ndjson populated by The Crucible (50 Godot PRs).
+# PHASE 3: THE VERDICT  (48–56s)
+# Top 5 PRs by slop score from the Crucible bounce log (50 Godot PRs).
 # ══════════════════════════════════════════════════════════════════════════════
 
 Type "clear"
 Enter
 Sleep 300ms
 
-Type "janitor report --repo $GODOT --top 5 --format markdown"
+Type "$JANITOR report --repo $GODOT --top 5 --format markdown"
 Sleep 200ms
 Enter
 Sleep 6s
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 4: THE BOND  (58–80s)
-# Ed25519 integrity attestation with animated excision scroll.
+# PHASE 4: THE BOND  (56–78s)
+# Governor-issued ML-DSA-65 (FIPS 204) CBOM with animated excision scroll.
+# the-governor/src/compliance/pqc.rs implements fips204::ml_dsa_65.
 # ══════════════════════════════════════════════════════════════════════════════
 
 Type "clear"
 Enter
 Sleep 300ms
 
-Type "# Integrity Bond  —  Ed25519 chain of custody"
+Type "# Governor Bond  --  ML-DSA-65 (FIPS 204) chain of custody"
 Enter
 Sleep 600ms
 
