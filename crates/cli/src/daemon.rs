@@ -39,15 +39,23 @@
 pub mod unix {
     use std::path::Path;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use anyhow::Result;
     use arc_swap::ArcSwap;
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::{UnixListener, UnixStream};
+    use tokio::sync::Semaphore;
 
+    use common::physarum::{Pulse, SystemHeart};
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::pr_collider::LshIndex;
     use forge::slop_filter::{PRBouncer, PatchBouncer};
+
+    /// Max concurrent bounce tasks in [`Pulse::Flow`] mode.
+    const FLOW_CONCURRENCY: usize = 4;
+    /// Max concurrent bounce tasks in [`Pulse::Constrict`] mode.
+    const CONSTRICT_CONCURRENCY: usize = 2;
 
     // ---------------------------------------------------------------------------
     // Protocol types
@@ -159,6 +167,14 @@ pub mod unix {
         /// `bounce_log.ndjson` so that `janitor report` can aggregate
         /// daemon-served bounce activity alongside CLI invocations.
         pub janitor_dir: std::path::PathBuf,
+        /// Physarum Protocol — OS memory pressure monitor.
+        ///
+        /// Sampled before each new connection is handed off to a task.
+        pub heart: SystemHeart,
+        /// Concurrency gate for [`Pulse::Flow`] mode — [`FLOW_CONCURRENCY`] permits.
+        pub flow_semaphore: Arc<Semaphore>,
+        /// Concurrency gate for [`Pulse::Constrict`] mode — [`CONSTRICT_CONCURRENCY`] permits.
+        pub constrict_semaphore: Arc<Semaphore>,
     }
 
     // ---------------------------------------------------------------------------
@@ -202,6 +218,9 @@ pub mod unix {
             registry: HotRegistry::open(registry_path)?,
             lsh_index: LshIndex::new(),
             janitor_dir,
+            heart: SystemHeart::new(),
+            flow_semaphore: Arc::new(Semaphore::new(FLOW_CONCURRENCY)),
+            constrict_semaphore: Arc::new(Semaphore::new(CONSTRICT_CONCURRENCY)),
         });
 
         // Remove a stale socket file from a previous run.
@@ -223,7 +242,35 @@ pub mod unix {
                     match result {
                         Ok((stream, _)) => {
                             let s = Arc::clone(&state);
-                            tokio::spawn(handle_connection(stream, s));
+                            tokio::spawn(async move {
+                                // ── Physarum Protocol: backpressure ──────────
+                                // If memory pressure is critical, hold the
+                                // connection open and retry every 500 ms until
+                                // the system digests current load.  The client
+                                // socket stays alive; the task simply parks.
+                                while let Pulse::Stop = s.heart.beat() {
+                                    eprintln!(
+                                        "janitor daemon: memory pressure STOP — \
+                                         holding request (500 ms)"
+                                    );
+                                    tokio::time::sleep(Duration::from_millis(500)).await;
+                                }
+                                // Acquire a concurrency permit proportional to
+                                // current pressure before entering the handler.
+                                // `acquire_owned` takes `Arc<Self>` by value —
+                                // clone the Arc cheaply to pass ownership.
+                                let _permit = match s.heart.beat() {
+                                    Pulse::Constrict => Arc::clone(&s.constrict_semaphore)
+                                        .acquire_owned()
+                                        .await
+                                        .ok(),
+                                    _ => Arc::clone(&s.flow_semaphore)
+                                        .acquire_owned()
+                                        .await
+                                        .ok(),
+                                };
+                                handle_connection(stream, s).await;
+                            });
                         }
                         Err(e) => {
                             eprintln!("janitor daemon: accept error: {e}");

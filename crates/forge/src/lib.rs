@@ -23,6 +23,7 @@
 
 pub mod agnostic_shield;
 pub mod hashing;
+pub mod metadata;
 pub mod pr_collider;
 pub mod shadow_git;
 pub mod slop_filter;

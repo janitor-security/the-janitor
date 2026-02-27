@@ -30,6 +30,8 @@ const NPM_MANIFEST: &str = "package.json";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 const PIP_REQUIREMENTS: &str = "requirements.txt";
 const PIP_PYPROJECT: &str = "pyproject.toml";
+const SPIN_MANIFEST: &str = "spin.toml";
+const WRANGLER_MANIFEST: &str = "wrangler.toml";
 
 /// Scans `project_root` for manifest files and builds a `DependencyRegistry`.
 ///
@@ -74,6 +76,8 @@ pub fn scan_manifests(project_root: &Path) -> DependencyRegistry {
             CARGO_MANIFEST => parse_cargo_toml(path, &mut registry),
             PIP_REQUIREMENTS => parse_requirements_txt(path, &mut registry),
             PIP_PYPROJECT => parse_pyproject_toml(path, &mut registry),
+            SPIN_MANIFEST => parse_spin_toml(path, &mut registry),
+            WRANGLER_MANIFEST => parse_wrangler_toml(path, &mut registry),
             _ => {}
         }
     }
@@ -135,7 +139,12 @@ pub fn find_zombie_deps(project_root: &Path, registry: &DependencyRegistry) -> V
             .unwrap_or_default();
         if matches!(
             filename,
-            NPM_MANIFEST | CARGO_MANIFEST | PIP_REQUIREMENTS | PIP_PYPROJECT
+            NPM_MANIFEST
+                | CARGO_MANIFEST
+                | PIP_REQUIREMENTS
+                | PIP_PYPROJECT
+                | SPIN_MANIFEST
+                | WRANGLER_MANIFEST
         ) {
             continue;
         }
@@ -390,6 +399,140 @@ fn parse_pyproject_toml(path: &Path, registry: &mut DependencyRegistry) {
     }
 }
 
+/// Parse `spin.toml` — Fermyon Spin WebAssembly application manifest.
+///
+/// Extracts WASI interface dependency identifiers from
+/// `[component.<id>.dependencies]` tables.  These strings (e.g. `"wasi:http"`)
+/// must appear in the component source code to be considered live.
+fn parse_spin_toml(path: &Path, registry: &mut DependencyRegistry) {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(val) = toml::from_str::<toml::Value>(&content) else {
+        return;
+    };
+
+    // Spin v2: [component.<id>.dependencies] is a table of WASI interface → version.
+    if let Some(components) = val.get("component").and_then(|c| c.as_table()) {
+        for (_id, component_val) in components {
+            if let Some(deps) = component_val.get("dependencies").and_then(|d| d.as_table()) {
+                for (iface, spec) in deps {
+                    // Strip version suffix: "wasi:http@0.2.0" → "wasi:http".
+                    let name = iface.split('@').next().unwrap_or(iface).trim().to_owned();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    let version = match spec {
+                        toml::Value::String(s) => s.clone(),
+                        toml::Value::Table(t) => t
+                            .get("target")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("*")
+                            .to_owned(),
+                        _ => "*".to_owned(),
+                    };
+                    registry.insert(DependencyEntry {
+                        name,
+                        version,
+                        ecosystem: DependencyEcosystem::Wasm,
+                        dev: false,
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Parse `wrangler.toml` — Cloudflare Workers deployment manifest.
+///
+/// Extracts `binding` names from every binding-array section:
+/// `[[kv_namespaces]]`, `[[d1_databases]]`, `[[r2_buckets]]`,
+/// `[[services]]`, `[[analytics_engine_datasets]]`,
+/// `[[dispatch_namespaces]]`, `[[durable_objects.bindings]]`, and `[vars]`.
+///
+/// Binding names must appear as-is in the worker's JS/TS source code
+/// (typically as `env.BINDING_NAME`) to be considered live.
+fn parse_wrangler_toml(path: &Path, registry: &mut DependencyRegistry) {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(val) = toml::from_str::<toml::Value>(&content) else {
+        return;
+    };
+
+    /// Extract `binding` keys from an array-of-tables section.
+    fn extract_bindings(
+        val: &toml::Value,
+        section: &str,
+        binding_key: &str,
+        registry: &mut DependencyRegistry,
+    ) {
+        if let Some(arr) = val.get(section).and_then(|v| v.as_array()) {
+            for entry in arr {
+                if let Some(b) = entry.get(binding_key).and_then(|b| b.as_str()) {
+                    registry.insert(DependencyEntry {
+                        name: b.to_owned(),
+                        version: "*".to_owned(),
+                        ecosystem: DependencyEcosystem::CloudflareBinding,
+                        dev: false,
+                    });
+                }
+            }
+        }
+    }
+
+    // Top-level array-of-table binding sections (binding key = "binding").
+    for section in &[
+        "kv_namespaces",
+        "d1_databases",
+        "r2_buckets",
+        "services",
+        "analytics_engine_datasets",
+        "dispatch_namespaces",
+    ] {
+        extract_bindings(&val, section, "binding", registry);
+    }
+
+    // Durable Objects use "name" instead of "binding".
+    if let Some(dos) = val
+        .get("durable_objects")
+        .and_then(|d| d.get("bindings"))
+        .and_then(|b| b.as_array())
+    {
+        for entry in dos {
+            if let Some(b) = entry.get("name").and_then(|b| b.as_str()) {
+                registry.insert(DependencyEntry {
+                    name: b.to_owned(),
+                    version: "*".to_owned(),
+                    ecosystem: DependencyEcosystem::CloudflareBinding,
+                    dev: false,
+                });
+            }
+        }
+    }
+
+    // [vars] — plain environment variables exposed as `env.KEY`.
+    if let Some(vars) = val.get("vars").and_then(|v| v.as_table()) {
+        for (key, _) in vars {
+            registry.insert(DependencyEntry {
+                name: key.to_owned(),
+                version: "*".to_owned(),
+                ecosystem: DependencyEcosystem::CloudflareBinding,
+                dev: false,
+            });
+        }
+    }
+
+    // [env.<name>] nested environment overrides may repeat binding declarations.
+    if let Some(envs) = val.get("env").and_then(|e| e.as_table()) {
+        for (_, env_val) in envs {
+            for section in &["kv_namespaces", "d1_databases", "r2_buckets"] {
+                extract_bindings(env_val, section, "binding", registry);
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -461,6 +604,70 @@ tempfile = "3"
             .find(|e| e.name == "tempfile")
             .unwrap();
         assert!(tempfile_entry.dev);
+    }
+
+    #[test]
+    fn test_parse_spin_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = r#"
+spin_manifest_version = 2
+
+[application]
+name = "hello"
+
+[component.hello]
+source = "target/wasm32-wasi/release/hello.wasm"
+
+[component.hello.dependencies]
+"wasi:http@0.2.0" = { target = "0.2.0" }
+"fermyon:spin@2" = { target = "2.0.0" }
+"#;
+        std::fs::write(dir.path().join("spin.toml"), content).unwrap();
+        let registry = scan_manifests(dir.path());
+        let names: Vec<&str> = registry.entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"wasi:http"), "should strip @version suffix");
+        assert!(names.contains(&"fermyon:spin"));
+        assert!(registry
+            .entries
+            .iter()
+            .all(|e| e.ecosystem == DependencyEcosystem::Wasm));
+    }
+
+    #[test]
+    fn test_parse_wrangler_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = r#"
+name = "my-worker"
+main = "src/index.js"
+
+[[kv_namespaces]]
+binding = "MY_KV"
+id = "abc123"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-db"
+database_id = "def456"
+
+[durable_objects]
+[[durable_objects.bindings]]
+name = "MY_DO"
+class_name = "MyDurableObject"
+
+[vars]
+API_URL = "https://example.com"
+"#;
+        std::fs::write(dir.path().join("wrangler.toml"), content).unwrap();
+        let registry = scan_manifests(dir.path());
+        let names: Vec<&str> = registry.entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"MY_KV"), "kv binding");
+        assert!(names.contains(&"DB"), "d1 binding");
+        assert!(names.contains(&"MY_DO"), "durable object binding");
+        assert!(names.contains(&"API_URL"), "var binding");
+        assert!(registry
+            .entries
+            .iter()
+            .all(|e| e.ecosystem == DependencyEcosystem::CloudflareBinding));
     }
 
     #[test]

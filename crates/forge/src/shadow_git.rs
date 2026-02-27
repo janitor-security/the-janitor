@@ -22,6 +22,20 @@ use git2::{Oid, Repository};
 use thiserror::Error;
 
 // ---------------------------------------------------------------------------
+// Chemotaxis constants
+// ---------------------------------------------------------------------------
+
+/// High-calorie slop-vector extensions — processed first in priority ordering.
+///
+/// These file types carry the densest signal for structural analysis:
+/// compiled languages (.rs, .go), scripting (.py, .js, .ts), and typed
+/// supersets (.tsx, .jsx).  Low-calorie files (.md, .txt, config blobs) are
+/// deferred to the end of the processing queue.
+const SLOP_VECTOR_PRIORITY: &[&str] = &[
+    "rs", "py", "go", "js", "ts", "tsx", "jsx", "cs", "java", "cpp", "cc", "cxx", "c",
+];
+
+// ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
@@ -34,6 +48,32 @@ pub struct MergeSnapshot {
     pub deleted: Vec<PathBuf>,
     /// Total bytes loaded across all blobs.
     pub total_bytes: usize,
+}
+
+impl MergeSnapshot {
+    /// Iterate blobs in **chemotaxis order**: high-calorie slop vectors first.
+    ///
+    /// Files whose extension appears in [`SLOP_VECTOR_PRIORITY`] are returned
+    /// before all others, allowing the bounce pipeline to surface structural
+    /// violations early and abort cheaply when a score ceiling is exceeded.
+    ///
+    /// Within each priority tier, paths are sorted lexicographically for
+    /// determinism across runs.
+    pub fn iter_by_priority(&self) -> Vec<(&PathBuf, &Vec<u8>)> {
+        let mut pairs: Vec<(&PathBuf, &Vec<u8>)> = self.blobs.iter().collect();
+        pairs.sort_by(|(a, _), (b, _)| {
+            let priority = |p: &PathBuf| -> u8 {
+                let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if SLOP_VECTOR_PRIORITY.contains(&ext) {
+                    0
+                } else {
+                    1
+                }
+            };
+            priority(a).cmp(&priority(b)).then_with(|| a.cmp(b))
+        });
+        pairs
+    }
 }
 
 /// Errors from [`simulate_merge`].

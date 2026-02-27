@@ -26,3 +26,6 @@ dunce.workspace = true
 
 # Checksum (registry integrity)
 blake3.workspace = true
+
+# System introspection (Physarum Protocol memory backpressure)
+sysinfo.workspace = true
