@@ -59,7 +59,7 @@ flate2 = "1.0"
 toml = "0.8"
 
 # HTTP client (sync, used for remote audit attestation)
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "3", features = ["json"] }
 
 # Lock-free atomic reference counting
 arc-swap = "1.7"
