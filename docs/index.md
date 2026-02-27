@@ -1,5 +1,5 @@
 <video autoplay loop muted playsinline style="width: 100%; border-radius: 8px; border: 1px solid #333;">
-  <source src="assets/janitor_demo.mp4" type="video/mp4">
+  <source src="/assets/janitor_demo.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
