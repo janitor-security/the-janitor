@@ -162,6 +162,19 @@ enum Commands {
         /// Used by `janitor report` for attribution in the intelligence report.
         #[arg(long)]
         author: Option<String>,
+        /// PR body text for metadata analysis (optional).
+        ///
+        /// When supplied, The Janitor checks for:
+        ///   - Banned phrases (AI-isms, profanity) in added comment lines.
+        ///   - Missing issue link (`Closes #N` / `Fixes #N`) → +20 SlopScore.
+        ///
+        /// Typical CI usage: `--pr-body "$PR_BODY"` (GitHub Actions exposes
+        /// `${{ github.event.pull_request.body }}`).
+        ///
+        /// `allow_hyphen_values` permits bodies that start with `-` (common in
+        /// Markdown bullet-list PR descriptions).
+        #[arg(long, allow_hyphen_values = true)]
+        pr_body: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -359,6 +372,7 @@ async fn main() -> anyhow::Result<()> {
             head,
             pr_number,
             author,
+            pr_body,
         } => cmd_bounce(
             path,
             patch.as_deref(),
@@ -369,6 +383,7 @@ async fn main() -> anyhow::Result<()> {
             head.as_deref(),
             *pr_number,
             author.as_deref(),
+            pr_body.as_deref(),
         )?,
         Commands::Report {
             repo,
@@ -1862,6 +1877,7 @@ fn cmd_bounce(
     head: Option<&str>,
     pr_number: Option<u64>,
     author: Option<&str>,
+    pr_body: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::slop_filter::{bounce_git, PRBouncer, PatchBouncer};
@@ -1916,21 +1932,34 @@ fn cmd_bounce(
                     s
                 }
             };
-            let score = PatchBouncer.bounce(&patch, &registry)?;
+            let mut score = PatchBouncer.bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
+
+            // Comment & PR metadata analysis (patch surface).
+            let scanner = forge::metadata::CommentScanner::new();
+            let comment_violations = scanner.scan_patch(&patch);
+            score.comment_violations = comment_violations.len() as u32;
+            if let Some(body) = pr_body {
+                if scanner.is_pr_unlinked(body) {
+                    score.unlinked_pr = 1;
+                }
+            }
+
             (score, merkle_root, sig.min_hashes.to_vec())
         }
     };
 
     if format == "json" {
         let json_out = serde_json::json!({
-            "schema_version": "6.5.0",
+            "schema_version": "6.8.0",
             "slop_score": score.score() as f64,
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
             "zombie_symbols_added": score.zombie_symbols_added,
             "antipatterns_found": score.antipatterns_found,
+            "comment_violations": score.comment_violations,
+            "unlinked_pr": score.unlinked_pr,
             "merkle_root": merkle_root,
         });
         println!(
@@ -1947,6 +1976,8 @@ fn cmd_bounce(
         println!("| Logic clones     : {:>20} |", score.logic_clones_found);
         println!("| Zombie syms added: {:>20} |", score.zombie_symbols_added);
         println!("| Antipatterns     : {:>20} |", score.antipatterns_found);
+        println!("| Comment violations: {:>19} |", score.comment_violations);
+        println!("| Unlinked PR      : {:>20} |", score.unlinked_pr);
         println!("+------------------------------------------+");
         println!("  Merkle root: {}...", &merkle_root[..32]);
         println!();
@@ -1985,29 +2016,19 @@ fn cmd_bounce(
 // report
 // ---------------------------------------------------------------------------
 
-/// Generate an intelligence report from historical bounce results.
+/// Generate an intelligence report from historical bounce results or a live scan.
 ///
-/// Reads `.janitor/bounce_log.ndjson` and renders three sections:
-/// Slop Top 50, Structural Clones, and Zombie Dependencies.
+/// Primary mode: reads `.janitor/bounce_log.ndjson` and renders Slop Top 50,
+/// Structural Clones, and Zombie Dependencies.
+///
+/// Fallback (no bounce log): runs the anatomist pipeline directly and renders
+/// a dead-symbol audit ranked by byte size descending.
 fn cmd_report(repo: &Path, top: usize, format: &str, out: Option<&Path>) -> anyhow::Result<()> {
+    use anatomist::pipeline::ScanEvent;
+    use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
+
     let janitor_dir = repo.join(".janitor");
     let entries = report::load_bounce_log(&janitor_dir);
-
-    if entries.is_empty() {
-        eprintln!(
-            "No bounce log found at {}.",
-            janitor_dir.join("bounce_log.ndjson").display()
-        );
-        eprintln!("Run `janitor bounce --pr-number <N> --author <handle> <path>` to populate.");
-        if format == "json" {
-            let empty = report::render_json(
-                &report::aggregate(Vec::new(), top),
-                &repo.display().to_string(),
-            );
-            println!("{}", serde_json::to_string_pretty(&empty)?);
-        }
-        return Ok(());
-    }
 
     let repo_name = repo
         .canonicalize()
@@ -2015,13 +2036,82 @@ fn cmd_report(repo: &Path, top: usize, format: &str, out: Option<&Path>) -> anyh
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_else(|| repo.display().to_string());
 
-    let data = report::aggregate(entries, top);
+    let content = if entries.is_empty() {
+        // ── Scan-mode fallback ────────────────────────────────────────────
+        eprintln!(
+            "No bounce log found — running live scan on `{}`...",
+            repo.display()
+        );
 
-    let content = if format == "json" {
-        serde_json::to_string_pretty(&report::render_json(&data, &repo_name))
-            .context("serializing report JSON")?
+        let mut host = ParserHost::new()?;
+        host.register_heuristic(Box::new(PytestFixtureHeuristic));
+
+        let result = pipeline::run(
+            repo,
+            &mut host,
+            false,
+            Some(&|event| match event {
+                ScanEvent::GraphBuilt { files, symbols } => {
+                    eprintln!("  Dissected {} files, {} symbols", files, symbols);
+                }
+                ScanEvent::StageComplete(4) => {
+                    eprintln!("  Dependencies resolved");
+                }
+                ScanEvent::StageComplete(5) => {
+                    eprintln!("  Slop filtered");
+                }
+                _ => {}
+            }),
+            &[],
+        )?;
+
+        eprintln!(
+            "Scan complete: {} dead / {} total ({} orphan files)",
+            result.dead.len(),
+            result.total,
+            result.orphan_files.len()
+        );
+
+        // Convert entities → DeadSymbolEntry, rank by byte size descending.
+        let mut dead_entries: Vec<report::DeadSymbolEntry> = result
+            .dead
+            .iter()
+            .map(|e| report::DeadSymbolEntry {
+                qualified_name: e.qualified_name.clone(),
+                file_path: e.file_path.clone(),
+                start_line: e.start_line,
+                byte_size: e.end_byte.saturating_sub(e.start_byte),
+            })
+            .collect();
+        dead_entries.sort_unstable_by(|a, b| b.byte_size.cmp(&a.byte_size));
+
+        if format == "json" {
+            serde_json::to_string_pretty(&report::render_scan_json(
+                &dead_entries,
+                result.total,
+                &result.orphan_files,
+                &repo_name,
+                top,
+            ))
+            .context("serializing scan report JSON")?
+        } else {
+            report::render_scan_markdown(
+                &dead_entries,
+                result.total,
+                &result.orphan_files,
+                &repo_name,
+                top,
+            )
+        }
     } else {
-        report::render_markdown(&data, &repo_name)
+        // ── Bounce-log mode ───────────────────────────────────────────────
+        let data = report::aggregate(entries, top);
+        if format == "json" {
+            serde_json::to_string_pretty(&report::render_json(&data, &repo_name))
+                .context("serializing report JSON")?
+        } else {
+            report::render_markdown(&data, &repo_name)
+        }
     };
 
     match out {

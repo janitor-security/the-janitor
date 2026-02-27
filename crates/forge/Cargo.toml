@@ -24,3 +24,4 @@ arc-swap.workspace = true
 git2.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+aho-corasick.workspace = true

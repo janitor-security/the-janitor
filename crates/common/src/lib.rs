@@ -1,4 +1,5 @@
 pub mod deps;
+pub mod physarum;
 pub mod registry;
 pub mod wisdom;
 

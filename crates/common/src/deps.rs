@@ -24,6 +24,10 @@ pub enum DependencyEcosystem {
     Cargo = 1,
     /// Python / pip (`requirements.txt`, `pyproject.toml`).
     Pip = 2,
+    /// WebAssembly WASI interface (`spin.toml`).
+    Wasm = 3,
+    /// Cloudflare Workers binding (`wrangler.toml`).
+    CloudflareBinding = 4,
 }
 
 impl std::fmt::Display for DependencyEcosystem {
@@ -32,6 +36,8 @@ impl std::fmt::Display for DependencyEcosystem {
             DependencyEcosystem::Npm => f.write_str("npm"),
             DependencyEcosystem::Cargo => f.write_str("cargo"),
             DependencyEcosystem::Pip => f.write_str("pip"),
+            DependencyEcosystem::Wasm => f.write_str("wasm"),
+            DependencyEcosystem::CloudflareBinding => f.write_str("cloudflare"),
         }
     }
 }

@@ -44,8 +44,12 @@ use common::registry::SymbolRegistry;
 ///
 /// ## Formula
 /// ```text
-/// score = (dead_symbols_added × 10) + (logic_clones_found × 5)
-///       + (zombie_symbols_added × 15) + (antipatterns_found × 50)
+/// score = (dead_symbols_added  × 10)
+///       + (logic_clones_found  ×  5)
+///       + (zombie_symbols_added × 15)
+///       + (antipatterns_found  × 50)
+///       + (comment_violations  ×  5)
+///       + (unlinked_pr         × 20)
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SlopScore {
@@ -74,6 +78,17 @@ pub struct SlopScore {
     /// because these patterns indicate systemic slop that structural hashing cannot
     /// catch (e.g. an import that is syntactically valid but semantically dead).
     pub antipatterns_found: u32,
+    /// Number of banned phrases (AI-isms, profanity) found in added comment lines.
+    ///
+    /// Detected by [`crate::metadata::CommentScanner::scan_patch`].
+    /// Each violation carries a weight of ×5.
+    pub comment_violations: u32,
+    /// 1 if the PR body contains no issue link (`Closes #N`, `Fixes #N`, etc.),
+    /// 0 otherwise.
+    ///
+    /// Detected by [`crate::metadata::CommentScanner::is_pr_unlinked`].
+    /// Carries a fixed penalty of ×20 when set.
+    pub unlinked_pr: u32,
 }
 
 impl SlopScore {
@@ -86,6 +101,8 @@ impl SlopScore {
             + self.logic_clones_found * 5
             + self.zombie_symbols_added * 15
             + self.antipatterns_found * 50
+            + self.comment_violations * 5
+            + self.unlinked_pr * 20
     }
 
     /// Returns `true` when no slop was detected.
@@ -94,6 +111,8 @@ impl SlopScore {
             && self.logic_clones_found == 0
             && self.zombie_symbols_added == 0
             && self.antipatterns_found == 0
+            && self.comment_violations == 0
+            && self.unlinked_pr == 0
     }
 }
 
@@ -409,6 +428,7 @@ impl PRBouncer for PatchBouncer {
             logic_clones_found: patch_internal_clones + fuzzy_near_clones + global_clone_count,
             zombie_symbols_added,
             antipatterns_found,
+            ..SlopScore::default()
         })
     }
 }
@@ -454,7 +474,9 @@ pub fn bounce_git(
 
     let mut total = SlopScore::default();
 
-    for (path, blob_bytes) in &snapshot.blobs {
+    // Chemotaxis: process high-calorie slop vectors (.rs, .py, .js, .ts, .go)
+    // before low-calorie files (.md, .txt) so structural violations surface early.
+    for (path, blob_bytes) in snapshot.iter_by_priority() {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         // Synthesise a virtual unified diff from the blob content.
@@ -610,30 +632,41 @@ mod tests {
         let s = SlopScore {
             dead_symbols_added: 2,
             logic_clones_found: 3,
-            zombie_symbols_added: 0,
-            antipatterns_found: 0,
+            ..SlopScore::default()
         };
         assert_eq!(s.score(), 2 * 10 + 3 * 5); // 35
 
         // Zombie weight is ×15.
         let z = SlopScore {
-            dead_symbols_added: 0,
-            logic_clones_found: 0,
             zombie_symbols_added: 2,
-            antipatterns_found: 0,
+            ..SlopScore::default()
         };
         assert_eq!(z.score(), 2 * 15); // 30
         assert!(!z.is_clean());
 
         // Antipattern weight is ×50.
         let a = SlopScore {
-            dead_symbols_added: 0,
-            logic_clones_found: 0,
-            zombie_symbols_added: 0,
             antipatterns_found: 1,
+            ..SlopScore::default()
         };
         assert_eq!(a.score(), 50);
         assert!(!a.is_clean());
+
+        // Comment violation weight is ×5.
+        let c = SlopScore {
+            comment_violations: 2,
+            ..SlopScore::default()
+        };
+        assert_eq!(c.score(), 2 * 5); // 10
+        assert!(!c.is_clean());
+
+        // Unlinked PR weight is ×20.
+        let u = SlopScore {
+            unlinked_pr: 1,
+            ..SlopScore::default()
+        };
+        assert_eq!(u.score(), 20);
+        assert!(!u.is_clean());
     }
 
     #[test]
