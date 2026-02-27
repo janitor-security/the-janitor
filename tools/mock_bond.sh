@@ -70,7 +70,7 @@ while [ "$SECONDS" -lt "$END" ]; do
   IDX=$((I % ${#PATHS[@]}))
   printf "\r  %s  ↳ %-68s%s" "$DIM" "${PATHS[$IDX]}" "$NC"
   I=$((I + 1))
-  sleep 0.09
+  sleep 0.05
 done
 printf "\r  %-75s\n" ""
 # ── End scroll ────────────────────────────────────────────────────────────────

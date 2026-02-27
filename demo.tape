@@ -82,6 +82,4 @@ Sleep 600ms
 Type "./tools/mock_bond.sh"
 Sleep 200ms
 Enter
-Sleep 12s
-
-Sleep 4s
+Sleep 15s
