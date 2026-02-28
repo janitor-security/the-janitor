@@ -18,3 +18,4 @@ tree-sitter-javascript.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter-glsl.workspace = true
 tree-sitter-objc.workspace = true
+tree-sitter-yaml.workspace = true

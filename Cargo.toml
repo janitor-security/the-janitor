@@ -37,6 +37,7 @@ tree-sitter-c-sharp = "0.23"
 tree-sitter-go = "0.23"
 tree-sitter-glsl = "0.2.0"
 tree-sitter-objc = "3.0.2"
+tree-sitter-yaml = "0.7.2"
 
 # File System & Path Utilities
 memmap2 = "0.9"

@@ -1,0 +1,57 @@
+name: Janitor PR Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  slop-gate:
+    name: Structural Firewall
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR diff
+        run: |
+          gh pr diff "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            > /tmp/pr.patch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Janitor bounce gate
+        uses: GhrammR/the-janitor@v6
+        with:
+          args: bounce . --patch /tmp/pr.patch
+            --pr-number ${{ github.event.pull_request.number }}
+            --author ${{ github.event.pull_request.user.login }}
+            --format json
+          path: .
+
+      - name: Upload audit report
+        # Upload even on gate failure so reviewers can inspect the findings.
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: janitor-audit-pr-${{ github.event.pull_request.number }}
+          path: |
+            godot_pr_audit.md
+            .janitor/bounce_log.ndjson
+            .janitor/bonds/
+          if-no-files-found: ignore
+          # Raw upload — no zip compression overhead.
+          compression-level: 0
+          retention-days: 30

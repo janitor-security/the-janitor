@@ -11,6 +11,7 @@
 //! | Python   | Hallucinated imports | `import X` inside a function body where `X` is never used |
 //! | Rust     | Vacuous unsafe | `unsafe { ... }` containing no genuinely unsafe operations |
 //! | Go       | Goroutine closure trap | `go func()` in a loop that may capture loop variables |
+//! | YAML     | Wildcard Kubernetes host | `VirtualService`/`Ingress` with `hosts: ["*"]` — exposes all routes publicly |
 //!
 //! ## Usage
 //! ```ignore
@@ -55,6 +56,20 @@ const RUST_UNSAFE_QUERY: &str = r#"
 ) @unsafe_block
 "#;
 
+// Equivalent to queries/kubernetes.scm — documents the targeted structure.
+// Direct AST walking is used instead of this query because tree-sitter
+// predicates cannot correlate sibling pairs (kind: X AND hosts: ["*"]) in a
+// single match expression.
+#[allow(dead_code)]
+const YAML_K8S_WILDCARD_HOSTS_QUERY: &str = r#"
+; Matches a block-sequence item whose scalar value is the bare wildcard "*".
+; Used to locate wildcard host entries inside Kubernetes VirtualService/Ingress specs.
+(block_sequence_item
+  (flow_node
+    (plain_scalar
+      (string_scalar) @wildcard_host)))
+"#;
+
 // ---------------------------------------------------------------------------
 // Singleton query engine
 // ---------------------------------------------------------------------------
@@ -67,6 +82,9 @@ struct QueryEngine {
     /// Go grammar language handle; Go slop detection uses direct AST walking
     /// rather than a query, so only the language object is needed.
     go_lang: Language,
+    /// YAML grammar handle; Kubernetes detection uses direct AST walking for
+    /// the same reason as Go — cross-sibling predicate matching is unsupported.
+    yaml_lang: Language,
 }
 
 impl QueryEngine {
@@ -80,7 +98,7 @@ impl QueryEngine {
             .map_err(|e| anyhow::anyhow!("slop_hunter: Rust query error: {e}"))?;
 
         let go_lang: Language = tree_sitter_go::LANGUAGE.into();
-        // Go detection uses direct AST walking; no query compilation needed.
+        let yaml_lang: Language = tree_sitter_yaml::LANGUAGE.into();
 
         Ok(Self {
             python_lang,
@@ -88,6 +106,7 @@ impl QueryEngine {
             rust_lang,
             rust_query,
             go_lang,
+            yaml_lang,
         })
     }
 }
@@ -115,6 +134,7 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "py" => find_python_slop(eng, source),
         "rs" => find_rust_slop(eng, source),
         "go" => find_go_slop(eng, source),
+        "yaml" | "yml" => find_yaml_slop(eng, source),
         _ => Vec::new(),
     }
 }
@@ -456,6 +476,207 @@ fn extract_go_loop_vars(for_node: Node<'_>, source: &[u8]) -> Vec<String> {
 }
 
 // ---------------------------------------------------------------------------
+// YAML: Kubernetes wildcard-host misconfiguration
+// ---------------------------------------------------------------------------
+
+/// Kubernetes resource kinds that govern traffic routing.
+const K8S_ROUTING_KINDS: &[&str] = &["VirtualService", "Ingress", "HTTPRoute", "Gateway"];
+
+fn find_yaml_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files that can't possibly contain the pattern.
+    let has_k8s_kind = K8S_ROUTING_KINDS
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
+    if !has_k8s_kind {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.yaml_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+
+    let mut findings = Vec::new();
+    detect_k8s_wildcard_hosts(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Walk the YAML AST looking for Kubernetes documents where a routing resource
+/// (`VirtualService`, `Ingress`, etc.) exposes a wildcard host (`"*"` or `*`).
+///
+/// Strategy (two-pass per document):
+/// 1. Walk the top-level block mapping to extract the `kind` scalar.
+/// 2. If `kind` is a routing resource, walk the same mapping depth-first to
+///    find any sequence item whose scalar is `*` or `"*"`.
+fn detect_k8s_wildcard_hosts(root: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    let mut doc_cursor = root.walk();
+    for child in root.children(&mut doc_cursor) {
+        // Each child of `stream` is a `document`.
+        walk_yaml_document(child, source, findings);
+    }
+}
+
+fn walk_yaml_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    // Find the top-level block_mapping inside this document.
+    let Some(mapping) = find_first_block_mapping(doc_node) else {
+        return;
+    };
+
+    // Pass 1: collect `kind` value from the top-level mapping pairs.
+    let kind = extract_mapping_scalar(mapping, source, "kind");
+    let is_routing_kind = kind
+        .as_deref()
+        .is_some_and(|k| K8S_ROUTING_KINDS.contains(&k));
+
+    if !is_routing_kind {
+        return;
+    }
+
+    // Pass 2: find any sequence item whose scalar equals `*` under `hosts`.
+    let mut cursor = mapping.walk();
+    for pair in mapping.children(&mut cursor) {
+        if pair.kind() != "block_mapping_pair" {
+            continue;
+        }
+        let Some(key_text) = pair_key_text(pair, source) else {
+            continue;
+        };
+        // `hosts` may appear at top-level (Gateway) or inside `spec` (VirtualService/Ingress).
+        // We accept `hosts` at any depth by recursively scanning `spec`.
+        if key_text == "hosts" {
+            if let Some(start) = find_wildcard_in_sequence(pair, source) {
+                findings.push(SlopFinding {
+                    start_byte: start,
+                    end_byte: start + 1,
+                    description: format!(
+                        "Kubernetes wildcard host: `{k}` exposes all routes publicly via \
+                         `hosts: [\"*\"]`; restrict to explicit hostnames",
+                        k = kind.as_deref().unwrap_or("unknown")
+                    ),
+                });
+            }
+        } else if key_text == "spec" {
+            // Recurse one level into `spec` to find a nested `hosts` key.
+            if let Some(inner_mapping) = find_first_block_mapping(pair) {
+                let mut inner_cursor = inner_mapping.walk();
+                for inner_pair in inner_mapping.children(&mut inner_cursor) {
+                    if inner_pair.kind() != "block_mapping_pair" {
+                        continue;
+                    }
+                    if pair_key_text(inner_pair, source).as_deref() == Some("hosts") {
+                        if let Some(start) = find_wildcard_in_sequence(inner_pair, source) {
+                            findings.push(SlopFinding {
+                                start_byte: start,
+                                end_byte: start + 1,
+                                description: format!(
+                                    "Kubernetes wildcard host: `{k}` exposes all routes publicly \
+                                     via `spec.hosts: [\"*\"]`; restrict to explicit hostnames",
+                                    k = kind.as_deref().unwrap_or("unknown")
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Return the scalar text of the value for a given `key` in a `block_mapping` node.
+fn extract_mapping_scalar<'a>(
+    mapping: Node<'a>,
+    source: &'a [u8],
+    key: &str,
+) -> Option<String> {
+    let mut cursor = mapping.walk();
+    for pair in mapping.children(&mut cursor) {
+        if pair.kind() != "block_mapping_pair" {
+            continue;
+        }
+        if pair_key_text(pair, source).as_deref() == Some(key) {
+            return pair_value_scalar(pair, source);
+        }
+    }
+    None
+}
+
+/// Extract the text of a `block_mapping_pair`'s key.
+fn pair_key_text(pair: Node<'_>, source: &[u8]) -> Option<String> {
+    let key_node = pair.child_by_field_name("key")?;
+    scalar_text(key_node, source)
+}
+
+/// Extract the scalar text of a `block_mapping_pair`'s value.
+fn pair_value_scalar(pair: Node<'_>, source: &[u8]) -> Option<String> {
+    let val_node = pair.child_by_field_name("value")?;
+    scalar_text(val_node, source)
+}
+
+/// Walk a node tree to find the first string scalar text.
+fn scalar_text(node: Node<'_>, source: &[u8]) -> Option<String> {
+    let kind = node.kind();
+    // Direct scalar kinds.
+    if matches!(
+        kind,
+        "string_scalar" | "plain_scalar" | "double_quote_scalar" | "single_quote_scalar"
+    ) {
+        return node.utf8_text(source).ok().map(|s| s.trim_matches('"').trim_matches('\'').to_string());
+    }
+    // Wrapper nodes — recurse into children.
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(text) = scalar_text(child, source) {
+            return Some(text);
+        }
+    }
+    None
+}
+
+/// Find the first `block_mapping` node that is a descendant of `node`.
+fn find_first_block_mapping(node: Node<'_>) -> Option<Node<'_>> {
+    if node.kind() == "block_mapping" {
+        return Some(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(m) = find_first_block_mapping(child) {
+            return Some(m);
+        }
+    }
+    None
+}
+
+/// Search a `block_mapping_pair`'s value for a sequence item whose scalar is `*`.
+/// Returns the start byte of the wildcard item when found.
+fn find_wildcard_in_sequence(pair: Node<'_>, source: &[u8]) -> Option<usize> {
+    find_wildcard_recursive(pair, source)
+}
+
+fn find_wildcard_recursive(node: Node<'_>, source: &[u8]) -> Option<usize> {
+    // Check if this node is a scalar with value `*`.
+    if matches!(
+        node.kind(),
+        "string_scalar" | "plain_scalar" | "double_quote_scalar" | "single_quote_scalar"
+    ) {
+        let text = node.utf8_text(source).ok()?;
+        let trimmed = text.trim_matches('"').trim_matches('\'');
+        if trimmed == "*" {
+            return Some(node.start_byte());
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(pos) = find_wildcard_recursive(child, source) {
+            return Some(pos);
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -508,6 +729,45 @@ mod tests {
         assert!(
             findings.is_empty(),
             "unsafe with raw pointer dereference must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_yaml_virtualservice_wildcard_host_detected() {
+        let src = b"\
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+  - \"*\"
+  gateways:
+  - bookinfo-gateway
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            !findings.is_empty(),
+            "VirtualService with wildcard host must be detected"
+        );
+        assert!(findings[0].description.contains("VirtualService"));
+    }
+
+    #[test]
+    fn test_yaml_explicit_host_not_flagged() {
+        let src = b"\
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+  - bookinfo.example.com
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            findings.is_empty(),
+            "VirtualService with explicit host must not be flagged"
         );
     }
 }
