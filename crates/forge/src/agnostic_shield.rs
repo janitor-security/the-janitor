@@ -8,6 +8,7 @@
 //! ## Algorithm
 //! 1. **Shannon entropy** — computed over 512-byte sliding windows (stride 256).
 //!    Code entropy typically falls in [2.0, 5.5]; compressed/encrypted data sits near 8.0.
+//!    `max_window_entropy` tracks the highest single-window value across the entire input.
 //! 2. **Bigram diagonal analysis** — builds a 256×256 byte-pair frequency matrix and
 //!    measures how many counts fall on the main diagonal (byte pairs `(x, x)`).
 //!    Human-written code has characteristic diagonal concentration patterns; random
@@ -16,10 +17,17 @@
 //! ## Classification
 //! | Condition | Result |
 //! |-----------|--------|
-//! | Entropy > 7.0 | [`AnomalousBlob`] — likely compressed or encrypted |
-//! | Entropy < 2.0 or > 5.5 | [`AnomalousBlob`] — degenerate byte distribution |
-//! | Diagonal density ≤ 0.05 | [`AnomalousBlob`] — no code-like bigram structure |
+//! | Per-window entropy < 2.0 or > 5.5 | [`AnomalousBlob`] — degenerate byte distribution |
+//! | Per-window diagonal density ≤ 0.05 | [`AnomalousBlob`] — no code-like bigram structure |
+//! | `max_window_entropy` > 7.8 | [`AnomalousBlob`] — localized entropy spike; cloaked payload |
 //! | Otherwise | [`ProbableCode`] |
+//!
+//! ## Cloaked-Payload Detection
+//! A naive average-entropy check over the whole file can miss high-entropy payloads
+//! (encrypted blobs, shellcode, base64-encoded secrets) hidden inside large, mostly
+//! normal files — the low-entropy code dilutes the signal.  `max_window_entropy`
+//! measures the *worst* 512-byte window; a spike above 7.8 flags the file regardless
+//! of how benign the surrounding content is ("1Campaign"-style cloaking).
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -47,23 +55,27 @@ impl ByteLatticeAnalyzer {
             return TextClass::ProbableCode;
         }
 
-        // Analyse in 512-byte windows; classify the whole input as anomalous if
-        // any window looks anomalous.
+        // Analyse in 512-byte sliding windows (stride 256).
+        // `max_window_entropy` accumulates the highest per-window Shannon
+        // entropy seen across the entire input — used for cloaked-payload
+        // spike detection after the per-window structural checks pass.
         let window_size = 512;
         let stride = 256;
         let mut offset = 0;
+        let mut max_window_entropy: f64 = 0.0;
 
         while offset < bytes.len() {
             let end = (offset + window_size).min(bytes.len());
             let window = &bytes[offset..end];
 
             let entropy = compute_entropy(window);
+            // Track the highest single-window entropy seen across the whole input.
+            if entropy > max_window_entropy {
+                max_window_entropy = entropy;
+            }
+
             let (diagonal, total_bigrams) = compute_bigram_diagonal(window);
 
-            // High-entropy window → binary / compressed data.
-            if entropy > 7.0 {
-                return TextClass::AnomalousBlob;
-            }
             // Degenerate entropy: too low (constant bytes) or too high for code.
             if !(2.0..=5.5).contains(&entropy) {
                 return TextClass::AnomalousBlob;
@@ -82,6 +94,15 @@ impl ByteLatticeAnalyzer {
                 break;
             }
             offset += stride;
+        }
+
+        // Cloaked-payload spike guard: a localized window with entropy > 7.8
+        // indicates encrypted, compressed, or otherwise cloaked binary data
+        // regardless of how benign the surrounding content appears.
+        // This is a named invariant separate from the per-window range check
+        // so that it survives future relaxation of the code-entropy bounds.
+        if max_window_entropy > 7.8 {
+            return TextClass::AnomalousBlob;
         }
 
         TextClass::ProbableCode
@@ -179,6 +200,43 @@ mod tests {
         assert!(
             e < 0.01,
             "uniform bytes must have near-zero entropy, got {e}"
+        );
+    }
+
+    /// Simulate a "1Campaign"-style cloaked payload: a large, structurally
+    /// normal source file with a high-entropy binary blob injected mid-file.
+    /// The surrounding code dilutes the *average* file entropy but the
+    /// `max_window_entropy` spike must still be detected.
+    #[test]
+    fn test_cloaked_payload_in_normal_code_detected() {
+        // ~3500 bytes of normal Rust-like source (entropy ≈ 4.5).
+        let code_line = b"fn compute(x: u32, y: u32) -> u32 { x.wrapping_add(y) }\n";
+        let mut normal_code = Vec::new();
+        for _ in 0..60 {
+            normal_code.extend_from_slice(code_line);
+        }
+
+        // 512 bytes of xorshift pseudo-random output (entropy ≈ 8.0).
+        // Simulates an AES-encrypted blob or base64-decoded secret.
+        let mut payload = Vec::with_capacity(512);
+        let mut v: u64 = 0x1337c0de_deadbeef;
+        for _ in 0..512 {
+            v ^= v << 13;
+            v ^= v >> 7;
+            v ^= v << 17;
+            payload.push(v as u8);
+        }
+
+        // Splice payload at the 1500-byte mark — surrounded by normal code.
+        let mut cloaked = Vec::with_capacity(normal_code.len() + payload.len());
+        cloaked.extend_from_slice(&normal_code[..1500]);
+        cloaked.extend_from_slice(&payload);
+        cloaked.extend_from_slice(&normal_code[1500..]);
+
+        assert_eq!(
+            ByteLatticeAnalyzer::classify(&cloaked),
+            TextClass::AnomalousBlob,
+            "high-entropy payload cloaked inside normal source code must be detected"
         );
     }
 }
