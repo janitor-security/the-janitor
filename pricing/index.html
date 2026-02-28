@@ -366,9 +366,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#junior-janitor-free" class="md-nav__link">
+  <a href="#free-tier" class="md-nav__link">
     <span class="md-ellipsis">
-      Junior Janitor — Free
+      Free Tier
     </span>
   </a>
   
@@ -475,27 +475,6 @@
   
   <span class="md-ellipsis">
     Godot Engine
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../godot_slop_audit/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Godot Slop Audit
   </span>
   
 
@@ -804,9 +783,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#junior-janitor-free" class="md-nav__link">
+  <a href="#free-tier" class="md-nav__link">
     <span class="md-ellipsis">
-      Junior Janitor — Free
+      Free Tier
     </span>
   </a>
   
@@ -876,7 +855,7 @@
 <p>The Janitor separates the <strong>action</strong> (dead code removal) from the <strong>verified proof</strong> (signed attestation that the action occurred correctly). The action is a utility. The proof is the product.</p>
 <hr />
 <h2 id="tiers">Tiers</h2>
-<h3 id="junior-janitor-free">Junior Janitor — Free</h3>
+<h3 id="free-tier">Free Tier</h3>
 <p><strong>For individual developers and open-source projects.</strong></p>
 <p>No account required. No time limit. No LOC cap.</p>
 <table>
@@ -967,7 +946,7 @@
 </tbody>
 </table>
 <p>The token gate is a single Ed25519 signature verified offline — no network call, no telemetry.</p>
-<p><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/lazarus_key"><strong>Get Certified → thejanitor.lemonsqueezy.com</strong></a></p>
+<p><a href="https://forgelogic.lemonsqueezy.com/checkout/buy/99915c1e-1c7e-4749-94d8-6de7ed8e33b9"><strong>Get Certified → thejanitor.lemonsqueezy.com</strong></a></p>
 <hr />
 <h3 id="industrial-core-custom">Industrial Core — Custom</h3>
 <p><strong>An enterprise digital license for organizations where code integrity is a compliance obligation, not a preference.</strong></p>
@@ -983,7 +962,7 @@
 <p><a href="mailto:sales@thejanitor.app"><strong>Book an Audit → sales@thejanitor.app</strong></a></p>
 <hr />
 <h2 id="what-the-token-does">What the Token Does</h2>
-<p>A Lead Specialist or Industrial Core token is a <strong>base64-encoded Ed25519 signature</strong> of the string
+<p>A Team or Industrial Core token is a <strong>base64-encoded Ed25519 signature</strong> of the string
 <code>JANITOR_PURGE_AUTHORIZED</code>. The binary embeds only the verifying key (32 bytes) — no network call
 is made at verification time.</p>
 <p>When you run:</p>
@@ -1006,7 +985,7 @@ is made at verification time.</p>
 Tokens are deterministic for a given keypair — the same key always produces the same token. Revocation works by rotating the keypair (updating <code>VERIFYING_KEY_BYTES</code> in the binary and redistributing). Existing tokens for the old key become invalid.</p>
 <p><strong>Does the tool phone home?</strong>
 No. Token verification, audit log signing, and all analysis are fully offline computations. No telemetry is collected.</p>
-<p><strong>Can I use the Junior Janitor tier commercially?</strong>
+<p><strong>Can I use the Free tier commercially?</strong>
 Yes. Running <code>janitor scan</code>, <code>janitor clean</code>, and <code>janitor dedup</code> on a commercial codebase is free. The BUSL-1.1 commercial restriction applies when you embed The Janitor as part of a paid SaaS product or issue attestations to your own paying customers. See <a href="../licensing/">Licensing</a> for details.</p>
 <p><strong>When does the license convert to MIT?</strong>
 <code>2030-02-15</code>. All versions ever released will be MIT from that date forward.</p>
