@@ -437,6 +437,47 @@ impl PRBouncer for PatchBouncer {
 // GitBouncer — shadow_git-backed PR analysis
 // ---------------------------------------------------------------------------
 
+/// Extract per-file added content from a unified diff.
+///
+/// Parses `+`-prefixed lines (excluding `+++` headers) per `+++ b/<path>` section
+/// and returns a `HashMap` mapping each changed file path to its added byte content.
+///
+/// Used by `cmd_bounce` (patch mode) to build the blob map for
+/// [`anatomist::manifest::find_zombie_deps_in_blobs`] without any extra I/O.
+pub fn extract_patch_blobs(patch: &str) -> HashMap<std::path::PathBuf, Vec<u8>> {
+    let mut blobs: HashMap<std::path::PathBuf, Vec<u8>> = HashMap::new();
+    let mut current_path: Option<std::path::PathBuf> = None;
+    let mut current_content: Vec<u8> = Vec::new();
+
+    for line in patch.lines() {
+        if let Some(rest) = line.strip_prefix("+++ b/") {
+            // Flush the previous file's accumulated content.
+            if let Some(path) = current_path.take() {
+                if !current_content.is_empty() {
+                    blobs.insert(path, std::mem::take(&mut current_content));
+                }
+            }
+            let path_str = rest.trim();
+            if path_str != "/dev/null" {
+                current_path = Some(std::path::PathBuf::from(path_str));
+            }
+            current_content = Vec::new();
+        } else if line.starts_with('+') && !line.starts_with("+++") && current_path.is_some() {
+            // Strip the leading '+' and preserve the original line.
+            current_content.extend_from_slice(&line.as_bytes()[1..]);
+            current_content.push(b'\n');
+        }
+    }
+    // Flush the last file.
+    if let Some(path) = current_path {
+        if !current_content.is_empty() {
+            blobs.insert(path, current_content);
+        }
+    }
+
+    blobs
+}
+
 /// Analyse a pull request's changes against `registry` by loading changed blobs
 /// directly from the git pack index via [`shadow_git::simulate_merge`].
 ///
@@ -451,6 +492,11 @@ impl PRBouncer for PatchBouncer {
 /// - `head_sha`: 40-hex OID of the head (feature-branch head) commit.
 /// - `registry`: Symbol registry for dead-symbol and zombie checks.
 ///
+/// # Returns
+/// A tuple of `(SlopScore, blobs)` where `blobs` is the `HashMap<PathBuf, Vec<u8>>`
+/// of changed files loaded from the git pack index.  The caller uses `blobs` to run
+/// [`anatomist::manifest::find_zombie_deps_in_blobs`] without re-opening the pack.
+///
 /// # Errors
 /// Returns `Err` if the repository cannot be opened, the OIDs are invalid, or
 /// libgit2 cannot read a blob from the pack.
@@ -459,7 +505,7 @@ pub fn bounce_git(
     base_sha: &str,
     head_sha: &str,
     registry: &SymbolRegistry,
-) -> Result<SlopScore> {
+) -> Result<(SlopScore, HashMap<std::path::PathBuf, Vec<u8>>)> {
     let repo = git2::Repository::open(repo_path).map_err(|e| {
         anyhow::anyhow!("bounce_git: cannot open repo {}: {e}", repo_path.display())
     })?;
@@ -504,7 +550,7 @@ pub fn bounce_git(
         }
     }
 
-    Ok(total)
+    Ok((total, snapshot.blobs))
 }
 
 // ---------------------------------------------------------------------------

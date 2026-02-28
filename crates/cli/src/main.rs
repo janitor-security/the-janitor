@@ -404,7 +404,14 @@ async fn main() -> anyhow::Result<()> {
             out,
             global,
             gauntlet,
-        } => cmd_report(repo, *top, format, out.as_deref(), *global, gauntlet.as_deref())?,
+        } => cmd_report(
+            repo,
+            *top,
+            format,
+            out.as_deref(),
+            *global,
+            gauntlet.as_deref(),
+        )?,
         Commands::Mcp => mcp::serve().await?,
         #[cfg(unix)]
         Commands::Serve {
@@ -1923,15 +1930,18 @@ fn cmd_bounce(
     };
 
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
-    let (score, merkle_root, min_hashes_vec) = match (repo, base, head) {
+    // `bounce_blobs` carries the per-file byte content of the PR for the
+    // O(1)-scoped zombie dep scan performed below (no full-repo WalkDir).
+    let (score, merkle_root, min_hashes_vec, bounce_blobs) = match (repo, base, head) {
         (Some(repo_path), Some(base_sha), Some(head_sha)) => {
             // Git-native mode: shadow_git blob extraction.
-            let score = bounce_git(repo_path, base_sha, head_sha, &registry)?;
+            // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
+            let (score, blobs) = bounce_git(repo_path, base_sha, head_sha, &registry)?;
             let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
             let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
             // Derive MinHash from the deterministic merkle key (no raw patch in git mode).
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(merkle_root.as_bytes());
-            (score, merkle_root, sig.min_hashes.to_vec())
+            (score, merkle_root, sig.min_hashes.to_vec(), blobs)
         }
         _ => {
             // Patch mode: read diff from file or stdin.
@@ -1960,7 +1970,10 @@ fn cmd_bounce(
                 }
             }
 
-            (score, merkle_root, sig.min_hashes.to_vec())
+            // Extract per-file blobs from the unified diff for the zombie dep scan.
+            let blobs = forge::slop_filter::extract_patch_blobs(&patch);
+
+            (score, merkle_root, sig.min_hashes.to_vec(), blobs)
         }
     };
 
@@ -2003,11 +2016,8 @@ fn cmd_bounce(
     }
 
     // Persist to bounce_log.ndjson for `janitor report` aggregation.
-    // Run zombie-dep scan on the project root (best-effort; errors are suppressed).
-    let zombie_deps = {
-        let dep_registry = anatomist::manifest::scan_manifests(project_root);
-        anatomist::manifest::find_zombie_deps(project_root, &dep_registry)
-    };
+    // PR-scoped zombie dep scan — O(PR-diff bytes), no full-tree WalkDir.
+    let zombie_deps = anatomist::manifest::find_zombie_deps_in_blobs(&bounce_blobs);
     let janitor_dir = project_root.join(".janitor");
     let log_entry = report::BounceLogEntry {
         pr_number,
@@ -2030,8 +2040,6 @@ fn cmd_bounce(
 // report
 // ---------------------------------------------------------------------------
 
-/// Generate an intelligence report from historical bounce results or a live scan.
-///
 // ---------------------------------------------------------------------------
 // report --global
 // ---------------------------------------------------------------------------

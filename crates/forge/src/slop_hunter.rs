@@ -586,11 +586,7 @@ fn walk_yaml_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
 }
 
 /// Return the scalar text of the value for a given `key` in a `block_mapping` node.
-fn extract_mapping_scalar<'a>(
-    mapping: Node<'a>,
-    source: &'a [u8],
-    key: &str,
-) -> Option<String> {
+fn extract_mapping_scalar<'a>(mapping: Node<'a>, source: &'a [u8], key: &str) -> Option<String> {
     let mut cursor = mapping.walk();
     for pair in mapping.children(&mut cursor) {
         if pair.kind() != "block_mapping_pair" {
@@ -623,7 +619,10 @@ fn scalar_text(node: Node<'_>, source: &[u8]) -> Option<String> {
         kind,
         "string_scalar" | "plain_scalar" | "double_quote_scalar" | "single_quote_scalar"
     ) {
-        return node.utf8_text(source).ok().map(|s| s.trim_matches('"').trim_matches('\'').to_string());
+        return node
+            .utf8_text(source)
+            .ok()
+            .map(|s| s.trim_matches('"').trim_matches('\'').to_string());
     }
     // Wrapper nodes — recurse into children.
     let mut cursor = node.walk();

@@ -581,18 +581,15 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
             let total_slop_score: u64 = entries.iter().map(|e| e.slop_score as u64).sum();
             let antipatterns_found: u32 = entries.iter().map(|e| e.antipatterns_found).sum();
             let dead_symbols_added: u32 = entries.iter().map(|e| e.dead_symbols_added).sum();
-            let zombie_dep_prs: u32 = entries
-                .iter()
-                .filter(|e| !e.zombie_deps.is_empty())
-                .count() as u32;
-            let (highest_score, highest_pr) =
-                entries.iter().fold((0u32, None), |(hs, hp), e| {
-                    if e.slop_score > hs {
-                        (e.slop_score, e.pr_number)
-                    } else {
-                        (hs, hp)
-                    }
-                });
+            let zombie_dep_prs: u32 =
+                entries.iter().filter(|e| !e.zombie_deps.is_empty()).count() as u32;
+            let (highest_score, highest_pr) = entries.iter().fold((0u32, None), |(hs, hp), e| {
+                if e.slop_score > hs {
+                    (e.slop_score, e.pr_number)
+                } else {
+                    (hs, hp)
+                }
+            });
             RepoStats {
                 repo_name,
                 pr_count,
