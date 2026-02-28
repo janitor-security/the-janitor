@@ -143,7 +143,7 @@ while IFS= read -r PR; do
             fi
         fi
 
-        RESULT=$("$JANITOR" bounce "$LOCAL_REPO" \
+        RESULT=$(timeout 30s "$JANITOR" bounce "$LOCAL_REPO" \
             --repo      "$LOCAL_REPO" \
             --base      "$BASE_OID"   \
             --head      "$HEAD_OID"   \
@@ -177,7 +177,7 @@ while IFS= read -r PR; do
             SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
         fi
 
-        RESULT=$("$JANITOR" bounce "$LOCAL_REPO" \
+        RESULT=$(timeout 30s "$JANITOR" bounce "$LOCAL_REPO" \
             --patch     "$PATCH_FILE" \
             --pr-number "$NUMBER"     \
             --author    "$AUTHOR"     \
@@ -188,7 +188,10 @@ while IFS= read -r PR; do
         rm -f "$PATCH_FILE"; trap - EXIT
     fi
 
-    if [[ $EXIT_CODE -ne 0 ]]; then
+    if [[ $EXIT_CODE -eq 124 ]]; then
+        echo -e "${RED}[TIMEOUT — SKIPPED]${NC}  PR #$NUMBER took >30 s — likely oversized diff"
+        SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
+    elif [[ $EXIT_CODE -ne 0 ]]; then
         echo "[ERROR: bounce returned $EXIT_CODE]"
         ERRORS=$((ERRORS + 1)); INDEX=$((INDEX + 1)); continue
     fi

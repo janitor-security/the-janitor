@@ -301,6 +301,14 @@ impl PRBouncer for PatchBouncer {
         }
 
         let source = added.as_bytes();
+
+        // Circuit breaker: skip tree-sitter AST work for patch sections > 1 MB.
+        // Such sections are overwhelmingly auto-generated (C# P/Invoke bindings,
+        // protobuf stubs, WASM glue) and would stall the engine on an 8 GB machine.
+        if source.len() > 1_048_576 {
+            return Ok(SlopScore::default());
+        }
+
         let mut parser = tree_sitter::Parser::new();
         parser
             .set_language(&cfg.language)
@@ -520,9 +528,19 @@ pub fn bounce_git(
 
     let mut total = SlopScore::default();
 
+    // Files > 1 MB are almost exclusively auto-generated bindings, compiled assets,
+    // or massive monolithic stubs.  Tree-sitter AST allocation on multi-megabyte
+    // inputs can exhaust the 8 GB heap on large corpora; real "slop" is never in
+    // these files.  Skip them entirely.
+    const MAX_BLOB_BYTES: usize = 1_048_576; // 1 MiB
+
     // Chemotaxis: process high-calorie slop vectors (.rs, .py, .js, .ts, .go)
     // before low-calorie files (.md, .txt) so structural violations surface early.
     for (path, blob_bytes) in snapshot.iter_by_priority() {
+        if blob_bytes.len() > MAX_BLOB_BYTES {
+            continue; // Circuit breaker — skip oversized blobs.
+        }
+
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         // Synthesise a virtual unified diff from the blob content.
