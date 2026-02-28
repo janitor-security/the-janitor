@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 # tools/grand_slam.sh — THE GRAND SLAM
 #
-# Full-corpus PR audit using a local git clone.
-# One batch API call caches ALL open PRs. Smart OID detection skips
-# unnecessary `git fetch` calls. Survives 4,600+ PR corpora without
-# burning the GitHub 5,000 req/hr rate limit.
+# Full-corpus PR audit. One batch API call caches ALL open PRs to
+# ~/.janitor/pr_cache.json. Survives 4,600+ PR corpora without burning
+# the GitHub 5,000 req/hr rate limit.
+#
+# Two modes — auto-detected:
+#   GIT MODE  (LOCAL_REPO has .git): git cat-file -t checks OID presence;
+#              only fetches refs/pull/<N>/head when the commit is missing.
+#              Uses janitor bounce --repo --base --head (no API call per PR).
+#   DIFF MODE (LOCAL_REPO is a source snapshot): gh pr diff <N> per PR.
+#              Uses janitor bounce --patch. Same as the Crucible but with
+#              metadata (author, body) pulled from the cached batch list.
 #
 # Usage:
-#   ./tools/grand_slam.sh [local_repo_path]
+#   ./tools/grand_slam.sh [local_repo_path [report_output.md]]
 #
 # Environment overrides:
 #   JANITOR     — path to janitor binary        (default: ./target/release/janitor)
-#   LOCAL_REPO  — path to local git clone       (default: ~/dev/gauntlet/godot-git)
+#   LOCAL_REPO  — repo path (git clone or src)  (default: ~/dev/gauntlet/godot)
 #   REPO_SLUG   — GitHub "owner/repo" slug      (default: godotengine/godot)
 #   CACHE_FILE  — PR list JSON cache            (default: ~/.janitor/pr_cache.json)
 #   PR_LIMIT    — max PRs to fetch into cache   (default: 5000)
@@ -21,7 +28,7 @@ set -uo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 JANITOR="${JANITOR:-$(pwd)/target/release/janitor}"
-LOCAL_REPO="${1:-${LOCAL_REPO:-$HOME/dev/gauntlet/godot-git}}"
+LOCAL_REPO="${1:-${LOCAL_REPO:-$HOME/dev/gauntlet/godot}}"
 REPO_SLUG="${REPO_SLUG:-godotengine/godot}"
 CACHE_FILE="${CACHE_FILE:-$HOME/.janitor/pr_cache.json}"
 PR_LIMIT="${PR_LIMIT:-5000}"
@@ -39,7 +46,7 @@ warn()  { echo -e "${YLW}WARN${NC}  $*"; }
 fail()  { echo -e "${RED}FAIL${NC}  $*"; }
 
 # ── Preflight ─────────────────────────────────────────────────────────────────
-for dep in gh git jq; do
+for dep in gh jq awk; do
     command -v "$dep" >/dev/null 2>&1 || { fail "'$dep' not found in PATH — aborting."; exit 1; }
 done
 
@@ -49,12 +56,19 @@ if [[ ! -x "$JANITOR" ]]; then
     exit 1
 fi
 
-if [[ ! -d "$LOCAL_REPO/.git" ]]; then
-    fail "LOCAL_REPO '$LOCAL_REPO' is not a git repository (no .git directory)."
-    echo "      Clone with: git clone https://github.com/${REPO_SLUG}.git $LOCAL_REPO"
+if [[ ! -d "$LOCAL_REPO" ]]; then
+    fail "LOCAL_REPO '$LOCAL_REPO' does not exist."
     exit 1
 fi
 
+# ── Mode detection ────────────────────────────────────────────────────────────
+if [[ -d "$LOCAL_REPO/.git" ]]; then
+    GIT_MODE=true
+    info "Mode       : GIT (smart OID fetch)"
+else
+    GIT_MODE=false
+    info "Mode       : DIFF (gh pr diff per PR)"
+fi
 info "Janitor    : $JANITOR"
 info "Local repo : $LOCAL_REPO"
 info "Slug       : $REPO_SLUG"
@@ -79,19 +93,19 @@ if [[ ! -f "$CACHE_FILE" ]]; then
         --limit  "$PR_LIMIT" \
         --json   number,headRefOid,baseRefOid,author,body \
         > "$CACHE_FILE"
-    FETCHED=$(jq 'length' "$CACHE_FILE")
-    info "Cached $FETCHED PRs → $CACHE_FILE"
+    CACHED=$(jq 'length' "$CACHE_FILE")
+    info "Cached $CACHED PRs → $CACHE_FILE"
 else
-    FETCHED=$(jq 'length' "$CACHE_FILE")
-    info "Using cached PR list: $FETCHED PRs → $CACHE_FILE"
-    info "  (delete cache to refresh: rm $CACHE_FILE)"
+    CACHED=$(jq 'length' "$CACHE_FILE")
+    info "Using cached PR list: $CACHED PRs → $CACHE_FILE"
+    info "  (delete to refresh: rm $CACHE_FILE)"
 fi
 echo ""
 
 TOTAL=$(jq 'length' "$CACHE_FILE")
 
 # ── Counters ──────────────────────────────────────────────────────────────────
-PROCESSED=0; SKIPPED=0; ERRORS=0; FETCHED_COUNT=0
+PROCESSED=0; SKIPPED=0; ERRORS=0; GIT_FETCHES=0
 UNLINKED_COUNT=0; COMMENT_VIOLATIONS=0; HIGH_SCORE=0; HIGH_PR=0
 
 # ── Per-PR bounce loop ────────────────────────────────────────────────────────
@@ -103,70 +117,97 @@ while IFS= read -r PR; do
         continue
     fi
 
-    NUMBER=$(echo "$PR" | jq -r '.number')
-    AUTHOR=$(echo "$PR" | jq -r '.author.login // "unknown"')
+    NUMBER=$(echo   "$PR" | jq -r '.number')
+    AUTHOR=$(echo   "$PR" | jq -r '.author.login // "unknown"')
     HEAD_OID=$(echo "$PR" | jq -r '.headRefOid')
     BASE_OID=$(echo "$PR" | jq -r '.baseRefOid')
-    BODY=$(echo "$PR" | jq -r '.body // ""' | head -c "$BODY_MAX_BYTES" | tr -d '\000')
+    BODY=$(echo     "$PR" | jq -r '.body // ""' | head -c "$BODY_MAX_BYTES" | tr -d '\000')
 
     DISPLAY_IDX=$((INDEX + 1))
     printf "  [%4d/%d] PR #%-5s %-20s  " "$DISPLAY_IDX" "$TOTAL" "$NUMBER" "($AUTHOR)"
 
-    # ── Smart fetch: check if headRefOid is already present ──────────────────
-    OBJ_TYPE=$(git -C "$LOCAL_REPO" cat-file -t "$HEAD_OID" 2>/dev/null || true)
-    if [[ "$OBJ_TYPE" != "commit" ]]; then
-        # OID not in local repo — fetch it from GitHub.
-        # GitHub supports fetching arbitrary commit SHAs via refs/pull/<N>/head.
-        if ! git -C "$LOCAL_REPO" fetch origin "refs/pull/${NUMBER}/head" --quiet 2>/dev/null; then
-            echo "[SKIP: fetch failed for refs/pull/${NUMBER}/head]"
-            SKIPPED=$((SKIPPED + 1))
-            INDEX=$((INDEX + 1))
-            continue
-        fi
-        FETCHED_COUNT=$((FETCHED_COUNT + 1))
-        # Verify the OID is now present.
+    # ── Per-mode bounce dispatch ───────────────────────────────────────────────
+    if [[ "$GIT_MODE" == true ]]; then
+        # Smart fetch: check if headRefOid is already in the local clone.
         OBJ_TYPE=$(git -C "$LOCAL_REPO" cat-file -t "$HEAD_OID" 2>/dev/null || true)
         if [[ "$OBJ_TYPE" != "commit" ]]; then
-            echo "[SKIP: OID $HEAD_OID not found after fetch]"
-            SKIPPED=$((SKIPPED + 1))
-            INDEX=$((INDEX + 1))
-            continue
+            if ! git -C "$LOCAL_REPO" fetch origin "refs/pull/${NUMBER}/head" --quiet 2>/dev/null; then
+                echo "[SKIP: git fetch refs/pull/${NUMBER}/head failed]"
+                SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
+            fi
+            GIT_FETCHES=$((GIT_FETCHES + 1))
+            OBJ_TYPE=$(git -C "$LOCAL_REPO" cat-file -t "$HEAD_OID" 2>/dev/null || true)
+            if [[ "$OBJ_TYPE" != "commit" ]]; then
+                echo "[SKIP: OID $HEAD_OID missing after fetch]"
+                SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
+            fi
         fi
-    fi
 
-    # ── Bounce (git-native mode) ───────────────────────────────────────────────
-    RESULT=$("$JANITOR" bounce "$LOCAL_REPO" \
-        --repo       "$LOCAL_REPO" \
-        --base       "$BASE_OID"   \
-        --head       "$HEAD_OID"   \
-        --pr-number  "$NUMBER"     \
-        --author     "$AUTHOR"     \
-        --pr-body    "$BODY"       \
-        --format     json          \
-        2>/dev/null) && EXIT_CODE=0 || EXIT_CODE=$?
+        RESULT=$("$JANITOR" bounce "$LOCAL_REPO" \
+            --repo      "$LOCAL_REPO" \
+            --base      "$BASE_OID"   \
+            --head      "$HEAD_OID"   \
+            --pr-number "$NUMBER"     \
+            --author    "$AUTHOR"     \
+            --pr-body   "$BODY"       \
+            --format    json          \
+            2>/dev/null) && EXIT_CODE=0 || EXIT_CODE=$?
+
+    else
+        # Diff mode: fetch patch via gh pr diff (one API call per PR).
+        PATCH_FILE=$(mktemp /tmp/grand_slam_XXXXXX.patch)
+        trap 'rm -f "$PATCH_FILE"' EXIT
+
+        if ! gh pr diff "$NUMBER" --repo "$REPO_SLUG" 2>/dev/null \
+            | awk '
+                /^diff --git/ {
+                    skip = ($3 ~ /^a\/thirdparty\// ||
+                            $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/)
+                }
+                !skip { print }
+            ' > "$PATCH_FILE"; then
+            echo "[SKIP: gh pr diff failed]"
+            rm -f "$PATCH_FILE"; trap - EXIT
+            SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
+        fi
+
+        if [[ ! -s "$PATCH_FILE" ]]; then
+            echo "[SKIP: empty diff — thirdparty/binary only]"
+            rm -f "$PATCH_FILE"; trap - EXIT
+            SKIPPED=$((SKIPPED + 1)); INDEX=$((INDEX + 1)); continue
+        fi
+
+        RESULT=$("$JANITOR" bounce "$LOCAL_REPO" \
+            --patch     "$PATCH_FILE" \
+            --pr-number "$NUMBER"     \
+            --author    "$AUTHOR"     \
+            --pr-body   "$BODY"       \
+            --format    json          \
+            2>/dev/null) && EXIT_CODE=0 || EXIT_CODE=$?
+
+        rm -f "$PATCH_FILE"; trap - EXIT
+    fi
 
     if [[ $EXIT_CODE -ne 0 ]]; then
         echo "[ERROR: bounce returned $EXIT_CODE]"
-        ERRORS=$((ERRORS + 1))
-        INDEX=$((INDEX + 1))
-        continue
+        ERRORS=$((ERRORS + 1)); INDEX=$((INDEX + 1)); continue
     fi
 
     # ── Parse score components ─────────────────────────────────────────────────
-    SCORE=$(  echo "$RESULT" | jq -r '.slop_score         // 0')
-    DEAD=$(   echo "$RESULT" | jq -r '.dead_symbols_added // 0')
-    CLONES=$( echo "$RESULT" | jq -r '.logic_clones_found // 0')
+    SCORE=$(  echo "$RESULT" | jq -r '.slop_score          // 0')
+    DEAD=$(   echo "$RESULT" | jq -r '.dead_symbols_added  // 0')
+    CLONES=$( echo "$RESULT" | jq -r '.logic_clones_found  // 0')
     ZOMBIES=$(echo "$RESULT" | jq -r '.zombie_symbols_added // 0')
-    ANTI=$(   echo "$RESULT" | jq -r '.antipatterns_found // 0')
-    CVIOL=$(  echo "$RESULT" | jq -r '.comment_violations // 0')
-    UNLINK=$( echo "$RESULT" | jq -r '.unlinked_pr        // 0')
+    ANTI=$(   echo "$RESULT" | jq -r '.antipatterns_found  // 0')
+    CVIOL=$(  echo "$RESULT" | jq -r '.comment_violations  // 0')
+    UNLINK=$( echo "$RESULT" | jq -r '.unlinked_pr         // 0')
 
     FLAGS=""
-    [[ "$UNLINK" == "1"    ]] && FLAGS="${FLAGS}${YLW}[NO-ISSUE]${NC} "
-    [[ "$CVIOL"  -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[COMMENT×${CVIOL}]${NC} "
-    [[ "$ANTI"   -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[ANTI×${ANTI}]${NC} "
-    [[ "$DEAD"   -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[DEAD×${DEAD}]${NC} "
-    [[ "$CLONES" -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[CLONE×${CLONES}]${NC} "
+    [[ "$UNLINK"  == "1"  ]] && FLAGS="${FLAGS}${YLW}[NO-ISSUE]${NC} "
+    [[ "$CVIOL"   -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[COMMENT×${CVIOL}]${NC} "
+    [[ "$ANTI"    -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[ANTI×${ANTI}]${NC} "
+    [[ "$DEAD"    -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[DEAD×${DEAD}]${NC} "
+    [[ "$CLONES"  -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[CLONE×${CLONES}]${NC} "
     [[ "$ZOMBIES" -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[ZMB×${ZOMBIES}]${NC} "
 
     printf "score=%-4s  %b\n" "$SCORE" "${FLAGS:-${GRN}CLEAN${NC}}"
@@ -186,17 +227,20 @@ done < <(jq -c '.[]' "$CACHE_FILE")
 echo ""
 echo -e "${GRN}══════════════════════════════════════════════════${NC}"
 echo   "  Grand Slam complete"
+echo   "  Mode               : $([ "$GIT_MODE" = true ] && echo 'GIT' || echo 'DIFF')"
 echo   "  PRs processed      : $PROCESSED"
-echo   "  PRs skipped        : $SKIPPED  (fetch failed / OID mismatch)"
+echo   "  PRs skipped        : $SKIPPED"
 echo   "  Errors             : $ERRORS"
-echo   "  OIDs freshly fetched: $FETCHED_COUNT  (rest were already local)"
+if [[ "$GIT_MODE" == true ]]; then
+    echo "  OIDs freshly fetched: $GIT_FETCHES  (rest already local)"
+fi
 echo   "  Unlinked PRs       : $UNLINKED_COUNT"
 echo   "  Comment violations : $COMMENT_VIOLATIONS"
 [[ "$HIGH_PR" -gt 0 ]] && echo "  Highest slop score : $HIGH_SCORE  (PR #$HIGH_PR)"
 echo -e "${GRN}══════════════════════════════════════════════════${NC}"
 echo ""
 
-# ── Generate global intelligence report ──────────────────────────────────────
+# ── Generate intelligence report ──────────────────────────────────────────────
 REPORT_OUT="${2:-grand_slam_report.md}"
 info "Generating report → $REPORT_OUT"
 "$JANITOR" report \
@@ -204,5 +248,5 @@ info "Generating report → $REPORT_OUT"
     --top    50            \
     --format markdown      \
     --out    "$REPORT_OUT"
-info "Done. Grand Slam report: $REPORT_OUT"
-info "Hint: run 'janitor report --global --gauntlet ~/dev/gauntlet/' for cross-repo aggregation."
+info "Done. Report: $REPORT_OUT"
+info "Hint: janitor report --global --gauntlet ~/dev/gauntlet/ for cross-repo aggregation."
