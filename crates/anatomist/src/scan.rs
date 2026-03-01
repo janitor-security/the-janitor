@@ -241,35 +241,25 @@ pub fn rust_cross_file_shield(
         // Group candidates by definition file to read each file only once.
         let mut by_file: std::collections::HashMap<&str, Vec<(usize, &str)>> =
             std::collections::HashMap::new();
-        for (idx, name, def_file) in &unfound {
-            by_file.entry(def_file).or_default().push((*idx, name));
+        for &(idx, name, def_file) in &unfound {
+            by_file.entry(def_file).or_default().push((idx, name));
         }
 
         for (def_file, syms) in &by_file {
-            let sym_names: Vec<&str> = syms.iter().map(|(_, n)| *n).collect();
-            let Ok(ac2) = AhoCorasick::builder()
-                .match_kind(MatchKind::LeftmostFirst)
-                .build(&sym_names)
-            else {
-                continue;
-            };
-
             let Ok(f) = File::open(def_file) else {
                 continue;
             };
+            // SAFETY: mmap is read-only; the file handle outlives the mmap.
             let Ok(mmap) = (unsafe { Mmap::map(&f) }) else {
                 continue;
             };
-
-            // Count total occurrences of each symbol in its definition file.
-            let mut counts = vec![0usize; sym_names.len()];
-            for mat in ac2.find_iter(&*mmap) {
-                counts[mat.pattern().as_usize()] += 1;
-            }
+            let Ok(content) = std::str::from_utf8(&mmap) else {
+                continue;
+            };
 
             // count > 1 means there is at least one call site beyond the definition.
-            for (local_idx, (_, name)) in syms.iter().enumerate() {
-                if counts[local_idx] > 1 {
+            for (_, name) in syms {
+                if content.matches(name).count() > 1 {
                     found.insert(name.to_string());
                 }
             }

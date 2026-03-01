@@ -227,7 +227,6 @@ dependencies = [
  "ptr_meta",
  "rancor",
  "simdutf8",
- "uuid",
 ]
 
 [[package]]
@@ -375,7 +374,6 @@ dependencies = [
  "serde",
  "sysinfo",
  "thiserror 2.0.18",
- "uuid",
 ]
 
 [[package]]
@@ -2915,7 +2913,6 @@ dependencies = [
  "atomic",
  "getrandom 0.4.1",
  "js-sys",
- "serde_core",
  "wasm-bindgen",
 ]
 

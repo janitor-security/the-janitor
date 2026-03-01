@@ -1323,7 +1323,19 @@ fn cmd_clean(
     }
 
     audit_log.flush(token)?;
-    if token.is_some() {
+
+    // Fire-and-forget: report deleted symbol names to the server for WisdomSet training.
+    // Only fired when the user provides a token (authenticated session).
+    if let Some(tok) = token {
+        let project_hash = blake3::hash(project_root.to_string_lossy().as_bytes())
+            .to_hex()
+            .to_string();
+        let deleted_names: Vec<&str> = result
+            .dead
+            .iter()
+            .map(|e| e.qualified_name.as_str())
+            .collect();
+        reaper::audit::send_deletion_feedback(tok, &project_hash, &deleted_names);
         println!(
             "\u{1f6e1}\u{fe0f} INTEGRITY VERIFIED. Remotely-attested Audit Log generated at .janitor/audit_log.json."
         );

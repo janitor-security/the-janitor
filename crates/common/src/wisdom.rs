@@ -95,8 +95,18 @@ impl WisdomSet {
     }
 }
 
-// Helper for JSON (de)serialization of files like immortality_rules.json
+/// Wrapper for JSON (de)serialization of `immortality_rules.json` files.
+///
+/// Used by `tools/wisdom-bake` to load rule files from disk and merge them
+/// into a [`WisdomSet`].
 #[derive(Debug, SerdeSerialize, SerdeDeserialize)]
 pub struct ImmortalityRulesWrapper {
     pub immortality_rules: Vec<ImmortalityRule>,
+}
+
+impl ImmortalityRulesWrapper {
+    /// Returns `true` if this wrapper contains no rules.
+    pub fn is_empty(&self) -> bool {
+        self.immortality_rules.is_empty()
+    }
 }

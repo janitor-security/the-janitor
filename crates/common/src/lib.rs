@@ -6,8 +6,6 @@ pub mod wisdom;
 use rkyv::bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::fmt;
-use std::path::Path;
-use uuid::Uuid;
 
 /// Reason why a symbol was protected from deletion by the 6-stage pipeline.
 ///
@@ -76,60 +74,4 @@ impl fmt::Display for Protection {
         };
         f.write_str(label)
     }
-}
-
-// THE ATOM: CLR FACT
-#[derive(Archive, Deserialize, Serialize, CheckBytes, Debug, PartialEq)]
-#[repr(u8)]
-pub enum ClrFact {
-    Definition { id: u64, file_id: u64 },
-    Reference { caller: u64, callee: u64 },
-    SlopMarker { id: u64, entropy: f32 },
-}
-
-// THE CONTAINER: CLR GRAPH
-#[derive(Archive, Deserialize, Serialize, CheckBytes, Debug, PartialEq)]
-#[repr(C)]
-pub struct ClrGraph {
-    pub facts: Vec<ClrFact>,
-    pub symbol_attestation_hash: [u8; 32],
-}
-
-impl ClrGraph {
-    pub fn from_facts(facts: Vec<ClrFact>, symbol_attestation_hash: [u8; 32]) -> Self {
-        Self {
-            facts,
-            symbol_attestation_hash,
-        }
-    }
-}
-
-// TEMPORAL DEBT BOND
-// SSOT: Internal storage = rkyv. Serde is for dashboards only.
-#[derive(Archive, Deserialize, Serialize, CheckBytes, Debug, Clone)]
-#[repr(C)]
-pub struct TemporalDebtBond {
-    pub id: Uuid,
-    pub original_checksum: [u8; 32],
-    pub creation_timestamp: u64,
-    pub entropy_score: f32,
-}
-
-// TRAITS
-
-pub struct Candidate {
-    pub id: u64,
-    pub path: std::path::PathBuf,
-}
-
-pub trait Anatomist {
-    fn dissect(&self, path: &Path) -> anyhow::Result<ClrGraph>;
-}
-
-pub trait Reaper {
-    fn execute(&self, candidate: &Candidate) -> anyhow::Result<bool>;
-}
-
-pub trait Oracle {
-    fn attest(&self, graph: &ClrGraph) -> bool;
 }
