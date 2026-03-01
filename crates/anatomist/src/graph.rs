@@ -699,6 +699,9 @@ fn is_excluded(path: &Path) -> bool {
                 | "target"
                 | "node_modules"
                 | ".pytest_cache"
+                | "site"
+                | "dist"
+                | "build"
         )
     } else {
         false

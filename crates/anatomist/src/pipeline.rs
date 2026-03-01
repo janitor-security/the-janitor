@@ -280,12 +280,36 @@ pub fn run(
         return Ok(result);
     }
 
-    // Stage 5: Grep Shield — only for symbols still dead after stages 0-4.5.
+    // Stage 5: Grep Shield — scan non-Rust project files (HTML/YAML/JS/etc.)
+    // for occurrences of each dead symbol name. `.py` files are already covered
+    // by the reference graph (Stage 1); `.rs` files are handled by Stage 5.5.
     let dead_names: Vec<&str> = candidates.iter().map(|e| e.name.as_str()).collect();
     let grep_found = scan::grep_shield(&dead_names, &root)?;
 
+    // Stage 5.5: Rust cross-file reference shield.
+    //
+    // The main grep_shield intentionally excludes `.rs` files: scanning them
+    // naïvely would find every symbol in its own definition and protect all Rust
+    // code from dead-code analysis. This stage uses a file-path-aware scan that
+    // skips the definition file, catching true cross-file usages (function calls,
+    // qualified paths, struct instantiations, `use` imports, type annotations).
+    let rust_cross_found = {
+        let rust_candidates: Vec<(&str, &str)> = candidates
+            .iter()
+            .filter(|e| !grep_found.contains(&e.name))
+            .filter(|e| e.file_path.ends_with(".rs"))
+            .map(|e| (e.name.as_str(), e.file_path.as_str()))
+            .collect();
+
+        if rust_candidates.is_empty() {
+            HashSet::new()
+        } else {
+            scan::rust_cross_file_shield(&rust_candidates, &root)?
+        }
+    };
+
     for mut entity in candidates {
-        if grep_found.contains(&entity.name) {
+        if grep_found.contains(&entity.name) || rust_cross_found.contains(&entity.name) {
             entity.protected_by = Some(Protection::GrepShield);
             result.stage_counts[5] += 1;
             result.protected.push(entity);
