@@ -300,6 +300,29 @@ enum Commands {
         #[arg(long, short = 'o', default_value = "bounce_export.csv")]
         out: PathBuf,
     },
+
+    /// Teach the local brain to suppress a recurring false positive.
+    ///
+    /// Records a pardon for `<symbol>` in `.janitor/local_brain.rkyv`.
+    /// After 5 pardons the symbol's suppression probability exceeds the 0.85
+    /// threshold and future `janitor scan` / `janitor bounce` runs will silently
+    /// ignore it.
+    ///
+    /// ## Example
+    /// ```text
+    /// # The scanner keeps flagging my proc-macro expansion helper:
+    /// janitor pardon my_macro_fn
+    /// janitor pardon my_macro_fn   # repeat until suppressed (5×)
+    /// ```
+    ///
+    /// Use `--repo` to pardon in a non-current directory.
+    Pardon {
+        /// Symbol name or antipattern description to suppress.
+        symbol: String,
+        /// Project root (where `.janitor/local_brain.rkyv` lives).
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -448,6 +471,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::UpdateWisdom { path } => cmd_update_wisdom(path)?,
         Commands::Export { repo, out } => export::cmd_export(repo, out)?,
+        Commands::Pardon { symbol, repo } => cmd_pardon(symbol, repo)?,
     }
 
     Ok(())
@@ -494,7 +518,7 @@ fn cmd_scan(
     let mut host = ParserHost::new()?;
     host.register_heuristic(Box::new(PytestFixtureHeuristic));
 
-    let result = pipeline::run(
+    let mut result = pipeline::run(
         project_root,
         &mut host,
         library,
@@ -518,6 +542,29 @@ fn cmd_scan(
     pb_graph.finish_and_clear();
     pb_resolve.finish_and_clear();
     pb_filter.finish_and_clear();
+
+    // Stage 6: Local Adaptive Brain — suppress user-pardoned false positives.
+    //
+    // Loads `.janitor/local_brain.rkyv` (if it exists) and silently drops any
+    // dead symbol whose predicted false-positive probability exceeds the 0.85
+    // threshold.  Missing or corrupt brain files are silently ignored so the
+    // command never fails due to brain I/O.
+    {
+        let brain_path = project_root.join(".janitor").join("local_brain.rkyv");
+        if let Ok(brain) = forge::brain::AdaptiveBrain::load(&brain_path) {
+            if brain.total_pardons > 0 {
+                let before = result.dead.len();
+                result.dead.retain(|e| {
+                    brain.predict_false_positive_probability(&e.name)
+                        <= forge::brain::SUPPRESS_THRESHOLD
+                });
+                let suppressed = before - result.dead.len();
+                if suppressed > 0 {
+                    eprintln!("  [brain] {suppressed} symbol(s) suppressed by local pardon list");
+                }
+            }
+        }
+    }
 
     if format == "json" {
         // Machine-readable output for Governor SaaS / GitHub Checks integration.
@@ -1953,7 +2000,7 @@ fn cmd_bounce(
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
     // `bounce_blobs` carries the per-file byte content of the PR for the
     // O(1)-scoped zombie dep scan performed below (no full-repo WalkDir).
-    let (score, merkle_root, min_hashes_vec, bounce_blobs) = match (repo, base, head) {
+    let (mut score, merkle_root, min_hashes_vec, bounce_blobs) = match (repo, base, head) {
         (Some(repo_path), Some(base_sha), Some(head_sha)) => {
             // Git-native mode: shadow_git blob extraction.
             // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
@@ -2002,6 +2049,27 @@ fn cmd_bounce(
             (score, merkle_root, sig.min_hashes.to_vec(), blobs)
         }
     };
+
+    // Local Adaptive Brain — suppress pardoned antipatterns and comment violations.
+    //
+    // Retains only findings whose suppression probability is below the threshold.
+    // Counts are kept consistent with the filtered details so `score()` reflects
+    // the post-suppression signal.
+    {
+        let brain_path = project_root.join(".janitor").join("local_brain.rkyv");
+        if let Ok(brain) = forge::brain::AdaptiveBrain::load(&brain_path) {
+            if brain.total_pardons > 0 {
+                score.antipattern_details.retain(|d| {
+                    brain.predict_false_positive_probability(d) <= forge::brain::SUPPRESS_THRESHOLD
+                });
+                score.antipatterns_found = score.antipattern_details.len() as u32;
+                score.comment_violation_details.retain(|d| {
+                    brain.predict_false_positive_probability(d) <= forge::brain::SUPPRESS_THRESHOLD
+                });
+                score.comment_violations = score.comment_violation_details.len() as u32;
+            }
+        }
+    }
 
     if format == "json" {
         let json_out = serde_json::json!({
@@ -2059,6 +2127,39 @@ fn cmd_bounce(
         zombie_deps,
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// pardon
+// ---------------------------------------------------------------------------
+
+/// Records a pardon for `symbol` in `.janitor/local_brain.rkyv`.
+///
+/// After 5 pardons the symbol's suppression probability exceeds the 0.85
+/// threshold and future scans / bounces will silently ignore it.
+fn cmd_pardon(symbol: &str, repo: &Path) -> anyhow::Result<()> {
+    let brain_path = repo.join(".janitor").join("local_brain.rkyv");
+    let mut brain = forge::brain::AdaptiveBrain::load(&brain_path)?;
+
+    brain.update(symbol, true);
+    brain.save(&brain_path)?;
+
+    let p = brain.predict_false_positive_probability(symbol);
+    let suppressed = p > forge::brain::SUPPRESS_THRESHOLD;
+
+    println!(
+        "Pardoned '{}' (total pardons: {}, P(FP)={:.2}{})",
+        symbol,
+        brain.total_pardons,
+        p,
+        if suppressed {
+            " — SUPPRESSED in future scans"
+        } else {
+            " — not yet at threshold (0.85)"
+        }
+    );
 
     Ok(())
 }
