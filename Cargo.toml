@@ -66,7 +66,7 @@ ureq = { version = "2", features = ["json"] }
 arc-swap = "1.7"
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
-git2 = "0.19"
+git2 = "0.20"
 
 # Progress reporting
 indicatif = "0.17"
