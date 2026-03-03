@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#token-gate-ed25519-purge-authorization" class="md-skip">
+        <a href="#token-gate-ml-dsa-65-purge-authorization" class="md-skip">
           Skip to content
         </a>
       
@@ -838,13 +838,13 @@
   
 
 
-<h1 id="token-gate-ed25519-purge-authorization">Token Gate: Ed25519 Purge Authorization</h1>
+<h1 id="token-gate-ml-dsa-65-purge-authorization">Token Gate: ML-DSA-65 Purge Authorization</h1>
 <p><strong>Crate</strong>: <code>crates/vault</code>
 <strong>Guard</strong>: <code>vault::SigningOracle::verify_token(token: &amp;str) -&gt; bool</code></p>
 <hr />
 <h2 id="protocol">Protocol</h2>
-<p>Destructive operations (<code>janitor clean</code>, <code>janitor dedup --apply</code>) require a valid <strong>purge token</strong> — a base64-encoded Ed25519 signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Token = Base64( Ed25519_Sign(SIGNING_KEY, &quot;JANITOR_PURGE_AUTHORIZED&quot;) )
+<p>Destructive operations (<code>janitor clean</code>, <code>janitor dedup --apply</code>) require a valid <strong>purge token</strong> — a base64-encoded ML-DSA-65 (NIST FIPS 204) signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Token = Base64( ML_DSA65_Sign(SIGNING_KEY, &quot;JANITOR_PURGE_AUTHORIZED&quot;) )
 </code></pre></div>
 <p>The binary embeds only the <strong>verifying key</strong> (32 bytes, <code>const VERIFYING_KEY_BYTES</code>). The signing key never leaves thejanitor.app.</p>
 <hr />
@@ -864,7 +864,7 @@
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                                        Err → ACCESS DENIED
 </code></pre></div>
 <ol>
-<li>Base64-decode the token → 64-byte Ed25519 signature.</li>
+<li>Base64-decode the token → ML-DSA-65 signature bytes.</li>
 <li>Construct <code>Signature::from_bytes(&amp;sig_bytes)</code>.</li>
 <li>Call <code>verifying_key.verify(b"JANITOR_PURGE_AUTHORIZED", &amp;sig)</code>.</li>
 <li><code>Ok(())</code> → operation proceeds. Any error → process exits 1.</li>
@@ -917,7 +917,7 @@
 <tbody>
 <tr>
 <td><strong>Unforgeability</strong></td>
-<td>Ed25519 — 128-bit security level. Signature invalid without the private key.</td>
+<td>ML-DSA-65 (NIST FIPS 204) — 128-bit post-quantum security level. Signature invalid without the private key.</td>
 </tr>
 <tr>
 <td><strong>Message binding</strong></td>
@@ -940,7 +940,7 @@
 <hr />
 <h2 id="access-denied">Access Denied</h2>
 <p>On an invalid or missing token, the CLI prints:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ACCESS DENIED. Purchase PQC/Ed25519 Token at thejanitor.app
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ACCESS DENIED. Purchase ML-DSA-65 Token at thejanitor.app
 </code></pre></div>
 <p>and exits with code <code>1</code>. No partial work is performed.</p>
 

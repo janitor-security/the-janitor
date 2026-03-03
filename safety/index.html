@@ -1366,10 +1366,10 @@ is a pure offline computation — no network call, no lookup table, no telemetry
 </table>
 <p>Industrial Core licensees receive a <strong>contractual rotation SLA</strong>: an emergency keypair rotation and new binary delivery within 4 hours of a confirmed compromise report.</p>
 <h3 id="post-quantum-rationale">Post-Quantum Rationale</h3>
-<p>Ed25519, while fast and correct against classical adversaries, is broken by Shor's algorithm
-on a sufficiently capable quantum computer. ML-DSA-65 (FIPS 204) is lattice-based and
-provides no known quantum speedup for signature forgery. Migrating now eliminates exposure
-to "harvest now, decrypt later" attacks against signed attestation logs.</p>
+<p>Classical elliptic-curve schemes are broken by Shor's algorithm on a sufficiently capable
+quantum computer. ML-DSA-65 (FIPS 204) is lattice-based and provides no known quantum
+speedup for signature forgery. Migrating now eliminates exposure to "harvest now, decrypt
+later" attacks against signed attestation logs.</p>
 <h3 id="forensic-traceability">Forensic Traceability</h3>
 <p>Every physical excision event signed with a valid token includes a per-event ML-DSA-65 signature in the audit log:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>

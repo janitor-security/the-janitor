@@ -1069,8 +1069,8 @@
 <p>The Janitor scans <strong><code>package.json</code>, <code>Cargo.toml</code>, <code>requirements.txt</code>, <code>spin.toml</code> (Fermyon WASM), and <code>wrangler.toml</code> (Cloudflare Workers)</strong> against the live symbol reference graph. A package that appears in your manifest but never appears in a reachable import path is a <strong>zombie dependency</strong> — declared, installed, and billing you in attack surface.</p>
 <p>Every PR that introduces a zombie dependency is flagged before merge.</p>
 <h3 id="cryptographic-integrity-bonds">Cryptographic Integrity Bonds</h3>
-<p>Every cleanup operation can be sealed with an <strong>Ed25519 attestation</strong> — a per-event cryptographic signature covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>. The verifying key (32 bytes) is embedded in the binary. Verification is a pure offline computation.</p>
-<p>The result is a <code>audit_log.json</code> that can be presented to a SOC 2 auditor, a regulator, or an incident response team as a chain of custody for every line of code removed from production. Not a log. A bond.</p>
+<p>When a pull request clears the slop gate, <strong>The Governor</strong> — our GitHub App — automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
+<p>No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody presentable to a SOC 2 auditor, a regulator, or an incident response team. Not a log. A bond.</p>
 <hr />
 <h2 id="the-pr-gate-live-results">THE PR GATE: LIVE RESULTS</h2>
 <p>The <code>janitor bounce</code> command intercepts pull requests at the diff level and scores them across four dimensions:</p>
@@ -1118,7 +1118,7 @@
 <hr />
 <h2 id="the-technical-stack">THE TECHNICAL STACK</h2>
 <h3 id="the-anatomist">The Anatomist</h3>
-<p>Parses via zero-copy Tree-sitter CSTs across <strong>9 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python</strong>. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
+<p>Parses via zero-copy Tree-sitter CSTs across <strong>12 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash</strong>. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
 <thead>
@@ -1183,19 +1183,19 @@
 <td style="text-align: left;">Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong><a href="INSERT_REAL_LEMONSQUEEZY_LINK_HERE">Team</a></strong></td>
+<td style="text-align: left;"><strong><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348">Team</a></strong></td>
 <td style="text-align: left;"><strong>$499/yr</strong></td>
-<td style="text-align: left;">All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats.</td>
+<td style="text-align: left;">All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong><a href="INSERT_REAL_LEMONSQUEEZY_LINK_HERE">Industrial</a></strong></td>
+<td style="text-align: left;"><strong><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7">Industrial</a></strong></td>
 <td style="text-align: left;"><strong>Custom</strong></td>
 <td style="text-align: left;">On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats.</td>
 </tr>
 </tbody>
 </table>
 <p>The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.</p>
-<p><a href="INSERT_REAL_LEMONSQUEEZY_LINK_HERE"><strong>Activate Attestation → thejanitor.lemonsqueezy.com</strong></a></p>
+<p><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7"><strong>Activate Attestation → thejanitor.lemonsqueezy.com</strong></a></p>
 <hr />
 <h2 id="installation">INSTALLATION</h2>
 <p><strong>From source (Rust 1.82+, <code>just</code> required):</strong></p>
@@ -1226,7 +1226,7 @@
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
 <a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Shadow-simulate deletion → test suite → physical removal</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge<span class="w"> </span>--token<span class="w"> </span>&lt;attestation-token&gt;
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
 <a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
 <a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Generate historical slop / clone / zombie intelligence report</span>
 <a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>janitor<span class="w"> </span>report<span class="w"> </span><span class="o">[</span>--repo<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--top<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>markdown<span class="p">|</span>json<span class="o">]</span>

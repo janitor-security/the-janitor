@@ -396,11 +396,35 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-the-token-does" class="md-nav__link">
+  <a href="#how-attestation-works" class="md-nav__link">
     <span class="md-ellipsis">
-      What the Token Does
+      How Attestation Works
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="How Attestation Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#team-the-governor-saas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Team — The Governor SaaS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#industrial-core-on-premises" class="md-nav__link">
+    <span class="md-ellipsis">
+      Industrial Core — On-Premises
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -813,11 +837,35 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-the-token-does" class="md-nav__link">
+  <a href="#how-attestation-works" class="md-nav__link">
     <span class="md-ellipsis">
-      What the Token Does
+      How Attestation Works
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="How Attestation Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#team-the-governor-saas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Team — The Governor SaaS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#industrial-core-on-premises" class="md-nav__link">
+    <span class="md-ellipsis">
+      Industrial Core — On-Premises
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -918,7 +966,7 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>PQC-Signed Audit Logs</strong> — every cleanup event automatically signed with Ed25519, stored in <code>.janitor/audit_log.json</code></td>
+<td style="text-align: left;"><strong>PQC-Signed Audit Logs</strong> — every cleanup event automatically signed with ML-DSA-65 (NIST FIPS 204), stored in <code>.janitor/audit_log.json</code></td>
 <td style="text-align: center;">✓</td>
 </tr>
 <tr>
@@ -943,8 +991,8 @@
 </tr>
 </tbody>
 </table>
-<p>The token gate is a single Ed25519 signature verified offline — no network call, no telemetry.</p>
-<p><a href="INSERT_REAL_LEMONSQUEEZY_LINK_HERE"><strong>Get Certified → thejanitor.lemonsqueezy.com</strong></a></p>
+<p>When a pull request clears the gate, The Governor GitHub App issues a CycloneDX v1.5 CBOM automatically — no token flag, no manual step.</p>
+<p><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348"><strong>Activate — Yearly ($499/yr) →</strong></a> · <a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1362706"><strong>Monthly billing →</strong></a></p>
 <hr />
 <h3 id="industrial-core-custom">Industrial Core — Custom</h3>
 <p><strong>An enterprise digital license for organizations where code integrity is a compliance obligation, not a preference.</strong></p>
@@ -959,28 +1007,17 @@
 </ul>
 <p><a href="mailto:sales@thejanitor.app"><strong>Book an Audit → sales@thejanitor.app</strong></a></p>
 <hr />
-<h2 id="what-the-token-does">What the Token Does</h2>
-<p>A Team or Industrial Core token is a <strong>base64-encoded Ed25519 signature</strong> of the string
-<code>JANITOR_PURGE_AUTHORIZED</code>. The binary embeds only the verifying key (32 bytes) — no network call
-is made at verification time.</p>
-<p>When you run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>janitor<span class="w"> </span>clean<span class="w"> </span>./src<span class="w"> </span>--force-purge<span class="w"> </span>--token<span class="w"> </span>&lt;your-token&gt;
-</code></pre></div>
-<p>The Janitor:
-1. Verifies the token offline (pure cryptographic check)
-2. Performs the cleanup
-3. Signs each audit entry with a per-event Ed25519 signature covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>
-4. Writes the signed log to <code>.janitor/audit_log.json</code>
-5. Prints: <code>🛡️ INTEGRITY VERIFIED. PQC-Signed Audit Log generated at .janitor/audit_log.json.</code></p>
-<p>Without a token:
-1. Performs the cleanup
-2. Writes an unsigned audit log
-3. Prints: <code>✅ RECLAMATION COMPLETE. (Note: No signed attestation generated. Run with --token to certify this excision.)</code></p>
-<p>The cleanup is identical either way. The attestation is what you are paying for.</p>
+<h2 id="how-attestation-works">How Attestation Works</h2>
+<h3 id="team-the-governor-saas">Team — The Governor SaaS</h3>
+<p>When a Team-licensed pull request clears the slop gate, <strong>The Governor</strong> GitHub App automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials). The CBOM records every cryptographic operation: the ML-DSA-65 (NIST FIPS 204) attestation signatures, BLAKE3 structural hashes, and per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
+<p>No CLI flag required. No manual step. The Governor handles issuance automatically on a clean merge.</p>
+<h3 id="industrial-core-on-premises">Industrial Core — On-Premises</h3>
+<p>Industrial Core licensees receive a dedicated verifying-key token for air-gapped deployments. The token is a base64-encoded ML-DSA-65 (NIST FIPS 204) signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>, verified offline against the public key embedded in the binary. No network call is made at verification time.</p>
+<p>The cleanup is identical at every tier. The attestation is what you are paying for.</p>
 <hr />
 <h2 id="faq">FAQ</h2>
-<p><strong>Is the token a subscription that can be revoked?</strong>
-Tokens are deterministic for a given keypair — the same key always produces the same token. Revocation works by rotating the keypair (updating <code>VERIFYING_KEY_BYTES</code> in the binary and redistributing). Existing tokens for the old key become invalid.</p>
+<p><strong>Is the Team license a subscription that can be revoked?</strong>
+Team licenses are managed via The Governor SaaS. Industrial Core on-premises tokens are ML-DSA-65 (NIST FIPS 204) signatures — deterministic for a given keypair. Revocation is achieved by rotating the keypair; existing tokens for the old key become cryptographically invalid.</p>
 <p><strong>Does the tool phone home?</strong>
 No. Token verification, audit log signing, and all analysis are fully offline computations. No telemetry is collected.</p>
 <p><strong>Can I use the Free tier commercially?</strong>

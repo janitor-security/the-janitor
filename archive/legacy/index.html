@@ -768,7 +768,7 @@
 </tr>
 <tr>
 <td>Tree-sitter (Python binding)</td>
-<td>Tree-sitter (Rust, zero-copy mmap, 9 grammars)</td>
+<td>Tree-sitter (Rust, zero-copy mmap, 12 grammars)</td>
 </tr>
 <tr>
 <td>ChromaDB + UniXcoder</td>
@@ -799,7 +799,7 @@
 <ol>
 <li><strong>Non-determinism</strong>: LLM-generated merge bodies varied between runs. Identical inputs produced different outputs. An integrity tool cannot be non-deterministic.</li>
 <li><strong>External dependencies</strong>: ChromaDB and the UniXcoder embedding model required network access and a GPU or paid API. The Janitor must work offline, on a CI runner with no GPU, for airgapped deployments.</li>
-<li><strong>Single-language scope</strong>: A Python-only dead-code tool is a liability in any polyglot codebase. The Rust rewrite supports 9 grammars from day one, with the same pipeline for all languages.</li>
+<li><strong>Single-language scope</strong>: A Python-only dead-code tool is a liability in any polyglot codebase. The Rust rewrite supports 12 grammars from day one, with the same pipeline for all languages.</li>
 </ol>
 <hr />
 <p><em>This file is an archive. No further updates will be made here.</em></p>

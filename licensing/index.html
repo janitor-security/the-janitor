@@ -965,7 +965,7 @@
 <tr>
 <td><strong>Team</strong></td>
 <td><strong>$499/yr</strong></td>
-<td>Teams up to 25. All free features + Ed25519 Integrity Bonds + CI/CD Compliance Attestation + The Governor GitHub App.</td>
+<td>Teams up to 25. All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + The Governor GitHub App.</td>
 </tr>
 <tr>
 <td><strong>Industrial</strong></td>
@@ -974,13 +974,13 @@
 </tr>
 </tbody>
 </table>
-<p><a href="https://forgelogic.lemonsqueezy.com/checkout/buy/99915c1e-1c7e-4749-94d8-6de7ed8e33b9"><strong>Get Certified → thejanitor.lemonsqueezy.com</strong></a></p>
+<p><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7"><strong>Get Certified → thejanitor.lemonsqueezy.com</strong></a></p>
 <hr />
 <h2 id="the-token-gate-technical-implementation">The Token Gate: Technical Implementation</h2>
 <p>The commercial boundary is enforced cryptographically — not by a license key file or a network check.</p>
 <ol>
 <li><strong>Free path</strong>: <code>janitor scan</code>, <code>janitor clean --force-purge</code> (without <code>--token</code>) — no token required.</li>
-<li><strong>Paid path</strong>: operations requiring a purge token call <code>vault::SigningOracle::verify_token(token)</code>, which verifies an Ed25519 signature of the string <code>JANITOR_PURGE_AUTHORIZED</code> against a verifying key embedded in the binary.</li>
+<li><strong>Paid path</strong>: Industrial Core on-premises tokens call <code>vault::SigningOracle::verify_token(token)</code>, which verifies an ML-DSA-65 (NIST FIPS 204) signature of the string <code>JANITOR_PURGE_AUTHORIZED</code> against a verifying key embedded in the binary.</li>
 <li><strong>Token issuance</strong>: tokens are minted by thejanitor.app's signing key after license verification. The private key never leaves thejanitor.app servers.</li>
 <li><strong>Offline verification</strong>: the binary performs a pure local cryptographic check — no network call, no telemetry.</li>
 </ol>

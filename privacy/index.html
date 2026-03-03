@@ -924,7 +924,7 @@
 <h2 id="4-token-verification-lead-specialist-industrial-core">4. Token Verification (Lead Specialist / Industrial Core)</h2>
 <p>Token verification is a <strong>pure offline cryptographic operation</strong>:</p>
 <ol>
-<li>Your token is a base64-encoded Ed25519 signature.</li>
+<li>Your token is a base64-encoded ML-DSA-65 (NIST FIPS 204) signature.</li>
 <li>The binary verifies the signature against a public verifying key embedded in the binary at compile time.</li>
 <li>No network request is made. No token value or verification result is transmitted anywhere.</li>
 </ol>
