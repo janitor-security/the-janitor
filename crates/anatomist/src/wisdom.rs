@@ -423,21 +423,20 @@ pub fn classify(entities: &mut [Entity], source: &[u8], file_path: &str) {
 
         // 2a-hook. Single-underscore lifecycle hook in dynamic language.
         //
-        // Scoped to CLASS METHODS only (`parent_class.is_some()`): module-level
-        // `_`-prefixed functions are private-by-convention and may be dead code.
-        // Only class methods are invoked by frameworks via dynamic dispatch without
-        // appearing in any static import chain.
+        // Applies to ALL `_`-prefixed symbols (class methods AND module-level):
+        // in Next.js, Django, Home Assistant, Celery, etc., module-level hooks
+        // such as `_handle_event`, `_on_connect`, or `_process` are invoked by
+        // frameworks without appearing in any static import chain.
         //
-        // Python: ALL `_`-prefixed class methods are protected — async frameworks
-        // dispatch both single-underscore and name-mangled `__attr` methods
-        // (Home Assistant, Django signals, Celery hooks, etc.).
+        // False-negative cost (missing a few genuine dead private methods) is far
+        // lower than false-positive cost (flagging 4,000+ framework hooks as dead).
+        //
+        // Python: ALL `_`-prefixed symbols (single and double underscore);
+        //   dunders are already caught above and never reach this branch.
         // JS/TS/JSX/TSX: single-underscore convention only (`is_private` excludes
-        // double-underscore prefixes which are rare and static-analysis-tractable).
-        if entity.parent_class.is_some()
-            && ((file_path.ends_with(".py") && entity.name.starts_with('_'))
-                || (!file_path.ends_with(".py")
-                    && entity.is_private()
-                    && is_dynamic_lang(file_path)))
+        //   double-underscore prefixes which are rare and static-analysis-tractable).
+        if (file_path.ends_with(".py") && entity.name.starts_with('_'))
+            || (entity.is_private() && is_dynamic_lang(file_path))
         {
             entity.protected_by = Some(Protection::LifecycleHook);
             continue;
@@ -929,7 +928,9 @@ mod tests {
         classify(&mut entities, source, "src/mod.py");
         assert_eq!(entities[0].protected_by, Some(Protection::PackageExport));
         assert_eq!(entities[1].protected_by, Some(Protection::PackageExport));
-        assert_eq!(entities[2].protected_by, None); // private, not in __all__
+        // _private: shielded as LifecycleHook — module-level _-prefixed symbols
+        // in Python are routinely invoked by frameworks without static imports.
+        assert_eq!(entities[2].protected_by, Some(Protection::LifecycleHook));
     }
 
     #[test]
@@ -941,7 +942,8 @@ mod tests {
         ];
         classify(&mut entities, source, "pkg/__init__.py");
         assert_eq!(entities[0].protected_by, Some(Protection::PackageExport));
-        assert_eq!(entities[1].protected_by, None);
+        // _private: shielded as LifecycleHook before reaching PackageExport stage.
+        assert_eq!(entities[1].protected_by, Some(Protection::LifecycleHook));
     }
 
     #[test]
@@ -986,8 +988,9 @@ mod tests {
         classify(&mut entities, b"", "myproject/spiders/my_spider.py");
         // Public class in spiders/ → EntryPoint
         assert_eq!(entities[0].protected_by, Some(Protection::EntryPoint));
-        // Private helper in spiders/ → NOT protected by plugin rule
-        assert_eq!(entities[1].protected_by, None);
+        // Private helper in spiders/ → LifecycleHook (all _-prefixed .py symbols
+        // are protected; framework internals are never safely presumed dead).
+        assert_eq!(entities[1].protected_by, Some(Protection::LifecycleHook));
     }
 
     #[test]

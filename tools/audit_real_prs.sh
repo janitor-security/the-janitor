@@ -178,34 +178,18 @@ while IFS= read -r PR; do
 
     # ── Generate diff via git object store (no API call) ──────────────────────
     PATCH_FILE=$(mktemp /tmp/crucible_XXXXXX.patch)
+    AWK_FILTER='/^diff --git/ { skip = ($3 ~ /^a\/thirdparty\// || $3 ~ /^a\/vendor\// || $3 ~ /^a\/tests\// || $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/) } !skip { print }'
 
-    if ! git -C "$GODOT_GIT" diff "$BASE_OID" "$HEAD_OID" 2>/dev/null \
-        | awk '
-            /^diff --git/ {
-                skip = ($3 ~ /^a\/thirdparty\// ||
-                        $3 ~ /^a\/vendor\//      ||
-                        $3 ~ /^a\/tests\//       ||
-                        $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/)
-            }
-            !skip { print }
-        ' > "$PATCH_FILE"; then
-        echo "[SKIP: git diff failed]"
-        rm -f "$PATCH_FILE"; SKIPPED=$((SKIPPED + 1)); continue
-    fi
+    # BASE_OID is often absent from the shallow pack — allow git diff to fail
+    # silently so the git-show fallback below can recover.
+    git -C "$GODOT_GIT" diff "$BASE_OID" "$HEAD_OID" 2>/dev/null \
+        | awk "$AWK_FILTER" > "$PATCH_FILE" || true
 
     # If BASE_OID isn't in the local pack (shallow clone edge case), fall back
     # to showing only the PR head commit's own diff.
     if [[ ! -s "$PATCH_FILE" ]]; then
         git -C "$GODOT_GIT" show "$HEAD_OID" --format="" --patch 2>/dev/null \
-            | awk '
-                /^diff --git/ {
-                    skip = ($3 ~ /^a\/thirdparty\// ||
-                            $3 ~ /^a\/vendor\//      ||
-                            $3 ~ /^a\/tests\//       ||
-                            $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/)
-                }
-                !skip { print }
-            ' > "$PATCH_FILE" || true
+            | awk "$AWK_FILTER" > "$PATCH_FILE" || true
     fi
 
     if [[ ! -s "$PATCH_FILE" ]]; then
