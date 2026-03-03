@@ -66,7 +66,17 @@ pub mod unix {
     #[serde(tag = "type")]
     pub enum DaemonRequest {
         /// Analyse a unified-diff patch for slop.
-        Bounce { patch: String },
+        Bounce {
+            patch: String,
+            /// Optional: PR author handle for Vouch identity verification.
+            #[serde(default)]
+            author: Option<String>,
+            /// Optional: absolute path to the cloned PR repository root.
+            /// When provided alongside `author`, `is_vouched` is computed from
+            /// the Vouch identity files present in that directory.
+            #[serde(default)]
+            repo_path: Option<String>,
+        },
     }
 
     /// Daemon response payload — one JSON object per line.
@@ -81,6 +91,11 @@ pub mod unix {
             zombies: u32,
             /// Number of language-specific antipatterns detected (×50 each).
             antipatterns: u32,
+            /// Whether the PR author is listed in a Vouch identity file
+            /// (`.vouched`, `trust.td`, or `.github/vouched.td`) inside the
+            /// repository.  Always `false` when `author` or `repo_path` were
+            /// not supplied in the request.
+            is_vouched: bool,
         },
         /// Error during request processing.
         Error { message: String },
@@ -325,7 +340,11 @@ pub mod unix {
     /// and adds any cross-PR collision count to `logic_clones_found`.
     async fn process_request(line: &str, state: &Arc<DaemonState>) -> DaemonResponse {
         match serde_json::from_str::<DaemonRequest>(line) {
-            Ok(DaemonRequest::Bounce { patch }) => {
+            Ok(DaemonRequest::Bounce {
+                patch,
+                author,
+                repo_path,
+            }) => {
                 // Lock-free read guard — no blocking.
                 let guard = state.registry.load();
                 let registry: &SymbolRegistry = &guard;
@@ -350,7 +369,7 @@ pub mod unix {
                         // fields are None.  Best-effort: I/O errors are silently dropped.
                         let log_entry = crate::report::BounceLogEntry {
                             pr_number: None,
-                            author: None,
+                            author: author.clone(),
                             timestamp: crate::utc_now_iso8601(),
                             slop_score,
                             dead_symbols_added: score.dead_symbols_added,
@@ -363,10 +382,21 @@ pub mod unix {
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 
+                        // Vouch identity check: requires both the author handle and the
+                        // repository root path supplied in the request.  Falls back to
+                        // `false` when either is absent (e.g. MCP or direct CLI callers).
+                        let is_vouched = match (&author, &repo_path) {
+                            (Some(a), Some(r)) => {
+                                forge::metadata::is_author_vouched(std::path::Path::new(r), a)
+                            }
+                            _ => false,
+                        };
+
                         DaemonResponse::Report {
                             slop_score: slop_score as f64,
                             zombies: zombie_symbols_added,
                             antipatterns: antipatterns_count,
+                            is_vouched,
                         }
                     }
                     Err(e) => DaemonResponse::Error {

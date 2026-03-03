@@ -19,6 +19,20 @@ use std::collections::HashSet;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
+// ROI Constants — Workslop Triage Tax
+// ---------------------------------------------------------------------------
+
+/// Conservative estimate of senior-engineer minutes consumed triaging a single
+/// slop PR (AI-generated hallucination, zombie dependency, adversarial security
+/// claim, or blocked high-score submission).
+///
+/// Source: industry Workslop research (2026). See <https://builtin.com/articles/what-is-workslop>.
+pub const MINUTES_PER_TRIAGE: f64 = 12.0;
+
+/// Loaded hourly engineering cost assumed for ROI calculations (USD).
+const HOURLY_COST_USD: f64 = 100.0;
+
+// ---------------------------------------------------------------------------
 // BounceLogEntry
 // ---------------------------------------------------------------------------
 
@@ -86,6 +100,13 @@ pub struct ReportData {
     pub clone_pairs: Vec<(usize, usize)>,
     /// Indices of entries that have at least one zombie dependency.
     pub zombie_indices: Vec<usize>,
+    /// Total engineering minutes reclaimed: actionable PR count × [`MINUTES_PER_TRIAGE`].
+    ///
+    /// An "actionable" PR is one that meets at least one of:
+    /// - `slop_score >= 100` (Blocked)
+    /// - `zombie_symbols_added > 0` (Shotgun re-injection)
+    /// - an antipattern description containing "Hallucinated" (Hallucination)
+    pub total_reclaimed_minutes: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -155,12 +176,37 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
         .map(|(i, _)| i)
         .collect();
 
+    // Workslop ROI — sum 12 minutes for every actionable intercept.
+    let total_reclaimed_minutes =
+        entries.iter().filter(|e| is_actionable(e)).count() as f64 * MINUTES_PER_TRIAGE;
+
     ReportData {
         entries,
         slop_top_indices,
         clone_pairs,
         zombie_indices,
+        total_reclaimed_minutes,
     }
+}
+
+/// Returns `true` if the entry represents a PR that required active triage.
+///
+/// Criteria (any one sufficient):
+/// - **Blocked**: `slop_score >= 100` (gate threshold reached)
+/// - **Shotgun**: `zombie_symbols_added > 0` — re-introduction of previously dead symbols;
+///   contributes ×15 to the score and signals adversarial or AI-generated content
+/// - **Hallucination**: an antipattern description contains "Hallucinated" — either a
+///   hallucinated security fix claim or a hallucinated import
+///
+/// Note: `zombie_deps` (manifest-level zombie dependencies) is intentionally excluded.
+/// It is informational metadata that may reflect false positives from base-manifest packages
+/// (e.g., shared toolchain deps that appear in every PR diff).  Score-affecting zombie dep
+/// violations are captured by the `slop_score >= 100` branch once their ×15 contributions
+/// push the PR over the gate.
+fn is_actionable(e: &BounceLogEntry) -> bool {
+    e.slop_score >= 100
+        || e.zombie_symbols_added > 0
+        || e.antipatterns.iter().any(|a| a.contains("Hallucinated"))
 }
 
 /// Detect pairs of entries whose MinHash Jaccard similarity exceeds `threshold`.
@@ -231,6 +277,37 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         "**Total PRs analyzed**: {}\n\n",
         data.entries.len()
     ));
+    out.push_str("---\n\n");
+
+    // ── Workslop: Maintainer Impact ────────────────────────────────────────
+    {
+        let actionable = (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64;
+        let hours = data.total_reclaimed_minutes / 60.0;
+        let savings = hours * HOURLY_COST_USD;
+        out.push_str("## Workslop: Maintainer Impact\n\n");
+        out.push_str(
+            "*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax \
+             senior engineers pay reviewing AI-generated low-quality PRs.*\n\n",
+        );
+        out.push_str("| Metric | Value |\n");
+        out.push_str("|--------|-------|\n");
+        out.push_str(&format!(
+            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{}** |\n",
+            actionable
+        ));
+        out.push_str(&format!(
+            "| **Total engineering time reclaimed** | **{:.1} hours** |\n",
+            hours
+        ));
+        out.push_str(&format!(
+            "| **Estimated operational savings** | **${:.0}** |\n",
+            savings
+        ));
+        out.push('\n');
+        out.push_str(
+            "> At **12 min/triage** (industry estimate) × **$100/hr** loaded engineering cost.\n\n",
+        );
+    }
     out.push_str("---\n\n");
 
     // ── Section 1: Slop Top ────────────────────────────────────────────────
@@ -379,10 +456,17 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
 
 /// Renders the aggregated report as a structured JSON value.
 pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
+    let hours = data.total_reclaimed_minutes / 60.0;
     serde_json::json!({
-        "schema_version": "6.6.0",
+        "schema_version": "6.9.0",
         "repository": repo_name,
         "total_prs_analyzed": data.entries.len(),
+        "workslop": {
+            "actionable_intercepts": (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64,
+            "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
+            "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
+            "estimated_savings_usd": (hours * HOURLY_COST_USD).round() as u64,
+        },
         "slop_top": data.slop_top_indices.iter().enumerate().map(|(rank, &i)| {
             let e = &data.entries[i];
             serde_json::json!({
@@ -576,6 +660,8 @@ pub struct RepoStats {
     pub highest_pr: Option<u64>,
     /// Highest slop score seen in this repo.
     pub highest_score: u32,
+    /// Engineering minutes reclaimed from actionable intercepts in this repo.
+    pub reclaimed_minutes: f64,
 }
 
 /// Aggregated cross-repository data for `--global` report.
@@ -588,6 +674,8 @@ pub struct GlobalReportData {
     pub total_slop_score: u64,
     /// Total antipatterns across all repos.
     pub total_antipatterns: u32,
+    /// Total engineering minutes reclaimed across all repos.
+    pub total_reclaimed_minutes: f64,
 }
 
 /// Discover all bounce logs one directory level beneath `gauntlet_root`.
@@ -643,6 +731,8 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                     (hs, hp)
                 }
             });
+            let reclaimed_minutes =
+                entries.iter().filter(|e| is_actionable(e)).count() as f64 * MINUTES_PER_TRIAGE;
             RepoStats {
                 repo_name,
                 pr_count,
@@ -652,6 +742,7 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                 zombie_dep_prs,
                 highest_pr,
                 highest_score,
+                reclaimed_minutes,
             }
         })
         .collect();
@@ -662,12 +753,14 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
     let total_prs: usize = repo_stats.iter().map(|r| r.pr_count).sum();
     let total_slop_score: u64 = repo_stats.iter().map(|r| r.total_slop_score).sum();
     let total_antipatterns: u32 = repo_stats.iter().map(|r| r.antipatterns_found).sum();
+    let total_reclaimed_minutes: f64 = repo_stats.iter().map(|r| r.reclaimed_minutes).sum();
 
     GlobalReportData {
         repos: repo_stats,
         total_prs,
         total_slop_score,
         total_antipatterns,
+        total_reclaimed_minutes,
     }
 }
 
@@ -681,6 +774,37 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
          Generated by The Janitor: Deterministic Structural Analysis.*\n\n",
     );
     out.push_str(&format!("**Gauntlet root**: `{}`\n\n", gauntlet_root));
+    out.push_str("---\n\n");
+
+    // ── Workslop: Maintainer Impact ────────────────────────────────────────
+    {
+        let actionable = (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64;
+        let hours = data.total_reclaimed_minutes / 60.0;
+        let savings = hours * HOURLY_COST_USD;
+        out.push_str("## Workslop: Maintainer Impact\n\n");
+        out.push_str(
+            "*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax \
+             senior engineers pay reviewing AI-generated low-quality PRs.*\n\n",
+        );
+        out.push_str("| Metric | Value |\n");
+        out.push_str("|--------|-------|\n");
+        out.push_str(&format!(
+            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{}** |\n",
+            actionable
+        ));
+        out.push_str(&format!(
+            "| **Total engineering time reclaimed** | **{:.1} hours** |\n",
+            hours
+        ));
+        out.push_str(&format!(
+            "| **Estimated operational savings** | **${:.0}** |\n",
+            savings
+        ));
+        out.push('\n');
+        out.push_str(
+            "> At **12 min/triage** (industry estimate) × **$100/hr** loaded engineering cost.\n\n",
+        );
+    }
     out.push_str("---\n\n");
 
     // ── Global summary table ───────────────────────────────────────────────
@@ -734,14 +858,22 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
 
 /// Renders the global cross-repository report as structured JSON.
 pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde_json::Value {
+    let hours = data.total_reclaimed_minutes / 60.0;
     serde_json::json!({
-        "schema_version": "6.8.0",
+        "schema_version": "6.9.0",
         "gauntlet_root": gauntlet_root,
         "total_repos": data.repos.len(),
         "total_prs": data.total_prs,
         "total_slop_score": data.total_slop_score,
         "total_antipatterns": data.total_antipatterns,
+        "workslop": {
+            "actionable_intercepts": (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64,
+            "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
+            "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
+            "estimated_savings_usd": (hours * HOURLY_COST_USD).round() as u64,
+        },
         "repositories": data.repos.iter().map(|r| {
+            let r_hours = r.reclaimed_minutes / 60.0;
             serde_json::json!({
                 "repo_name": r.repo_name,
                 "pr_count": r.pr_count,
@@ -751,6 +883,8 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
                 "zombie_dep_prs": r.zombie_dep_prs,
                 "highest_pr": r.highest_pr,
                 "highest_score": r.highest_score,
+                "reclaimed_minutes": (r.reclaimed_minutes * 10.0).round() / 10.0,
+                "reclaimed_hours": (r_hours * 10.0).round() / 10.0,
             })
         }).collect::<Vec<_>>(),
     })

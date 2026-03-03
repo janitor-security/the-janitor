@@ -527,6 +527,45 @@ fn lang_to_ts(ext: &str) -> Option<tree_sitter::Language> {
 }
 
 // ---------------------------------------------------------------------------
+// Vouch identity scanner
+// ---------------------------------------------------------------------------
+
+/// Returns `true` when `author` appears in a Vouch identity file inside `repo_root`.
+///
+/// ## Files checked (in priority order)
+/// 1. `<repo_root>/.vouched`
+/// 2. `<repo_root>/trust.td`
+/// 3. `<repo_root>/.github/vouched.td`
+///
+/// The first file that exists is read and every line is checked for a
+/// case-insensitive occurrence of `author`.  If the file is found but the
+/// author is not listed, the remaining files are also checked before giving up.
+///
+/// ## Zero-friction failure
+/// Any I/O error (file missing, permission denied, etc.) is silently skipped
+/// and the next candidate file is tried.  Returns `false` when no vouch file
+/// exists or none of them list `author`.
+pub fn is_author_vouched(repo_root: &std::path::Path, author: &str) -> bool {
+    const VOUCH_FILES: &[&str] = &[".vouched", "trust.td", ".github/vouched.td"];
+    let author_lower = author.to_ascii_lowercase();
+
+    for &filename in VOUCH_FILES {
+        let path = repo_root.join(filename);
+        let contents = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue, // file absent or unreadable — try next
+        };
+        for line in contents.lines() {
+            if line.to_ascii_lowercase().contains(author_lower.as_str()) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

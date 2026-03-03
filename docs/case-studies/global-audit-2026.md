@@ -28,6 +28,22 @@
 
 ---
 
+## Workslop: Maintainer Impact
+
+*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax senior engineers pay reviewing AI-generated low-quality PRs. In 2026, it is the fastest-growing hidden cost in software engineering.*
+
+| Metric | Value |
+|:-------|------:|
+| Actionable intercepts (Blocked ≥ 100 / Zombie re-injection / Hallucination) | **~330** |
+| **Total engineering time reclaimed** | **~66.0 hours** |
+| **Estimated operational savings** | **~$6,600** |
+
+> Methodology: 12 min/triage (conservative industry estimate from [Workslop research](https://builtin.com/articles/what-is-workslop)) × $100/hr loaded engineering cost. Actionable intercepts = PRs with score ≥ 100 (gate blocked) or a confirmed adversarial signal (Hallucinated Security Fix, zombie symbol re-injection). PRs scoring exactly 70 (unlinked-only penalty) are excluded as informational.
+
+**At a $499/year subscription, The Janitor delivers a >13× ROI** on the triage tax alone — before counting the engineering hours saved by catching 22,918 dead symbols before they compound.
+
+---
+
 ## Full Results
 
 | Repo | Duration | Peak RSS | Dead Symbols | Clone Groups | PRs Bounced | Unlinked PRs | Zombies | Antipatterns | Errors |
