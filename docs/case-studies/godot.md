@@ -16,6 +16,7 @@
 | Peak RAM | **58 MB** |
 | Total entities extracted | **22,747** |
 | Dead symbols (library mode) | **717** |
+| Complexity Delta | **−717 symbols** |
 | Clone groups | **2** |
 | PRs bounced | **98 / 100** |
 | Antipatterns caught | **15** |
@@ -43,7 +44,7 @@ It is exactly the kind of codebase where dead code accumulates invisibly: active
 
 ## Technical Debt Opportunities: What Was Found
 
-Of the **16,134 dead symbols** identified, The Janitor classifies them into three tiers:
+Of the **16,134 dead symbols** identified, The Janitor classifies them into three tiers. After stripping vendored, generated, and shielded symbols, the **addressable Complexity Delta is −717 symbols** — engine-authored dead code with no upward reference paths in library-mode scan.
 
 ### Tier 1 — Immediately Actionable (~7,800 symbols)
 
@@ -246,6 +247,17 @@ These symbols have zero upward reference paths in library-mode scan:
 - `_compute_key` (`scene/resources/canvas_item_material.h`)
 - *(…and 712 more — run `janitor scan godotengine/godot --library` to see the full list)*
 
+### Workslop: Maintainer ROI
+
+| Metric | Value |
+|:-------|------:|
+| Actionable intercepts (Blocked ≥ 100) | **3** |
+| Engineering time reclaimed | **0.6 hours** |
+| **Estimated operational savings** | **$60** |
+
+> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost.
+> Source: [Workslop research](https://builtin.com/articles/what-is-workslop).
+
 **Verdict**: 70 of 98 bounced PRs (71%) had no linked GitHub issue. The top antipattern —
 raw `new` allocation without RAII wrappers — appeared in 15 PRs, concentrated in Godot's
 platform and rendering subsystems where the C++ modernisation has not yet reached.
@@ -329,10 +341,15 @@ The Janitor performed a complete forensic audit of Godot's ~3.5M LOC polyglot co
 C++, C#, Java, Objective-C++, GLSL, Python — in **33 seconds**, consuming **58 MB of RAM**,
 with **zero panics** and **zero false positives** against live engine lifecycle hooks.
 
-The **~7,800 actionable dead symbols** represent measurable technical debt: superseded rendering
-helpers, deprecated geometry utilities, and parser internals replaced by the bytecode compiler.
-Cleaning them reduces binary size, build time, and cognitive load for contributors navigating
-22,000+ entity symbols.
+The static scan produced a **Complexity Delta of −717 addressable symbols** — engine-authored
+dead code after shielding vendored, generated, and runtime-registered entries. These superseded
+rendering helpers, deprecated geometry utilities, and parser internals replaced by the bytecode
+compiler are the actionable maintenance surface. Eliminating them reduces binary size, build time,
+and cognitive load for contributors navigating 22,000+ entity symbols.
+
+The PR gate intercepted **3 actionable submissions** across 98 live PRs — **0.6 hours reclaimed,
+$60 saved** on the triage line alone. Multiply across a team processing hundreds of PRs weekly
+and the number compounds.
 
 This is the baseline. Now you know.
 

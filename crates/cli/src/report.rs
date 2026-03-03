@@ -305,7 +305,8 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         ));
         out.push('\n');
         out.push_str(
-            "> At **12 min/triage** (industry estimate) × **$100/hr** loaded engineering cost.\n\n",
+            "> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost. \
+             Source: [Workslop research](https://builtin.com/articles/what-is-workslop).\n\n",
         );
     }
     out.push_str("---\n\n");
@@ -558,8 +559,12 @@ pub fn render_scan_markdown(
         dead_pct
     ));
     out.push_str(&format!(
-        "| Reclaimable bytes | {} |\n",
+        "| Maintenance Surface Reduction | {} |\n",
         fmt_bytes(total_dead_bytes)
+    ));
+    out.push_str(&format!(
+        "| Complexity Delta | **-{}** symbols |\n",
+        dead.len()
     ));
     out.push_str(&format!("| Orphan files | {} |\n", orphan_files.len()));
     out.push('\n');
@@ -618,12 +623,14 @@ pub fn render_scan_json(
     let total_dead_bytes: u64 = dead.iter().map(|e| e.byte_size as u64).sum();
 
     serde_json::json!({
-        "schema_version": "6.8.0",
+        "schema_version": "6.9.0",
         "repository": repo_name,
         "total_entities": total_entities,
         "dead_symbol_count": dead.len(),
         "dead_pct": (dead_pct * 10.0).round() / 10.0,
         "reclaimable_bytes": total_dead_bytes,
+        "maintenance_surface_reduction_mb": (total_dead_bytes as f64 / 1_048_576.0 * 100.0).round() / 100.0,
+        "complexity_delta_symbols": -(dead.len() as i64),
         "orphan_file_count": orphan_files.len(),
         "dead_symbols": dead.iter().take(top_n).enumerate().map(|(rank, e)| {
             serde_json::json!({
@@ -802,7 +809,8 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         ));
         out.push('\n');
         out.push_str(
-            "> At **12 min/triage** (industry estimate) × **$100/hr** loaded engineering cost.\n\n",
+            "> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost. \
+             Source: [Workslop research](https://builtin.com/articles/what-is-workslop).\n\n",
         );
     }
     out.push_str("---\n\n");
