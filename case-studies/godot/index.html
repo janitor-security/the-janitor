@@ -19,7 +19,7 @@
         <link rel="next" href="../../licensing/">
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
     
     
@@ -94,8 +94,7 @@
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="../.." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -213,8 +212,7 @@
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     The Janitor
@@ -543,6 +541,48 @@
       The GDCLASS False-Positive Problem (Solved)
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-slop-found" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Slop Found
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Slop Found">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-3-toxic-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top 3 Toxic PRs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#top-3-clean-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top 3 Clean PRs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dead-symbol-certainty-audit-top-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dead Symbol Certainty Audit (Top 5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1009,6 +1049,48 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-slop-found" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Slop Found
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Slop Found">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-3-toxic-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top 3 Toxic PRs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#top-3-clean-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top 3 Clean PRs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dead-symbol-certainty-audit-top-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dead Symbol Certainty Audit (Top 5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-slop-filter-logic-clones-humans-miss" class="md-nav__link">
     <span class="md-ellipsis">
       The Slop Filter: Logic Clones Humans Miss
@@ -1064,9 +1146,9 @@
 
 <h1 id="autopsy-of-a-giant-auditing-the-godot-engine">Autopsy of a Giant: Auditing the Godot Engine</h1>
 <p><strong>Target</strong>: Godot Engine — <code>master</code> branch (February 2026)
-<strong>Analyzer</strong>: The Janitor v6.8.0 — default scan mode
-<strong>Scan Date</strong>: 2026-02-26
-<strong>Scan Duration</strong>: <strong>33 seconds</strong></p>
+<strong>Analyzer</strong>: The Janitor v6.9.0 — library mode + PR bounce
+<strong>Scan Date</strong>: 2026-03-02
+<strong>Scan Duration</strong>: <strong>33 seconds</strong> (static scan) / <strong>2m54s</strong> (full gauntlet: scan + dedup + 98 PRs bounced)</p>
 <hr />
 <h2 id="headline-results">Headline Results</h2>
 <table>
@@ -1082,7 +1164,7 @@
 <td style="text-align: right;"><strong>~3.5M LOC</strong></td>
 </tr>
 <tr>
-<td style="text-align: left;">Scan time</td>
+<td style="text-align: left;">Scan time (static)</td>
 <td style="text-align: right;"><strong>33 seconds</strong></td>
 </tr>
 <tr>
@@ -1094,16 +1176,24 @@
 <td style="text-align: right;"><strong>22,747</strong></td>
 </tr>
 <tr>
-<td style="text-align: left;">Dead symbols identified</td>
-<td style="text-align: right;"><strong>16,134</strong></td>
+<td style="text-align: left;">Dead symbols (library mode)</td>
+<td style="text-align: right;"><strong>717</strong></td>
 </tr>
 <tr>
-<td style="text-align: left;">Technical Debt Opportunities (actionable)</td>
-<td style="text-align: right;"><strong>~7,800</strong></td>
+<td style="text-align: left;">Clone groups</td>
+<td style="text-align: right;"><strong>2</strong></td>
 </tr>
 <tr>
-<td style="text-align: left;">Orphan files</td>
-<td style="text-align: right;"><strong>1,934</strong></td>
+<td style="text-align: left;">PRs bounced</td>
+<td style="text-align: right;"><strong>98 / 100</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Antipatterns caught</td>
+<td style="text-align: right;"><strong>15</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Unlinked PRs</td>
+<td style="text-align: right;"><strong>70 / 98</strong></td>
 </tr>
 <tr>
 <td style="text-align: left;">OOM events</td>
@@ -1115,7 +1205,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Scanned 3.5M LOC in 33 seconds. Peak Memory: 58 MB. Identified ~7,800 actionable dead symbols.</strong></p>
+<p><strong>Scanned 3.5M LOC in 33 seconds. Peak Memory: 58 MB. 15 antipatterns caught across 98 live PRs.</strong></p>
 <hr />
 <h2 id="the-subject">The Subject</h2>
 <p>Godot is a production-grade, open-source game engine written in C++ with GDScript bindings, GLSL shaders, and Objective-C++ platform layers. Its codebase spans:</p>
@@ -1327,6 +1417,48 @@ methods is added to <code>GLOBAL_SHIELD_NAMES</code> in <code>wisdom.rs</code>:<
 </code></pre></div>
 <p><strong>Result</strong>: Zero false positives from GDCLASS registration. All lifecycle hooks are
 <code>Protection::EntryPoint</code> before the dead-symbol pipeline runs.</p>
+<hr />
+<h2 id="the-slop-found">The Slop Found</h2>
+<p>Results from bouncing the <strong>98 most recent Godot PRs</strong> via <code>gh pr diff</code> — no local git
+clone required. The Janitor fetches each patch, parses it through tree-sitter, runs the
+full slop pipeline, and writes a <code>BounceLogEntry</code> to <code>.janitor/bounce_log.ndjson</code>.</p>
+<h3 id="top-3-toxic-prs">Top 3 Toxic PRs</h3>
+<ul>
+<li><strong>PR #116839</strong> by <code>bruvzg</code> — score <strong>120</strong></li>
+<li><em>Antipattern: Raw <code>new</code>: prefer <code>std::make_unique&lt;T&gt;()</code> or <code>std::make_shared&lt;T&gt;()</code> for exception-safe RAII ownership (×2)</em></li>
+<li>
+<p><em>No linked issue</em></p>
+</li>
+<li>
+<p><strong>PR #116993</strong> by <code>Calinou</code> — score <strong>70</strong></p>
+</li>
+<li>
+<p><em>No linked issue</em></p>
+</li>
+<li>
+<p><strong>PR #116982</strong> by <code>Calinou</code> — score <strong>70</strong></p>
+</li>
+<li><em>No linked issue</em></li>
+</ul>
+<h3 id="top-3-clean-prs">Top 3 Clean PRs</h3>
+<ul>
+<li>PR #116976 by <code>akien-mga</code> — score 0</li>
+<li>PR #116954 by <code>dalexeev</code> — score 0</li>
+<li>PR #116946 by <code>vaner-org</code> — score 0</li>
+</ul>
+<h3 id="dead-symbol-certainty-audit-top-5">Dead Symbol Certainty Audit (Top 5)</h3>
+<p>These symbols have zero upward reference paths in library-mode scan:</p>
+<ul>
+<li><code>_EVCSort</code> (<code>editor/settings/editor_settings.cpp</code>)</li>
+<li><code>_get_skipped_locales</code> (<code>editor/settings/editor_settings.cpp</code>)</li>
+<li><code>_EDITOR_DEF</code> (<code>editor/settings/editor_settings.cpp</code>)</li>
+<li><code>_write_to_str</code> (<code>core/variant/variant_parser.cpp</code>)</li>
+<li><code>_compute_key</code> (<code>scene/resources/canvas_item_material.h</code>)</li>
+<li><em>(…and 712 more — run <code>janitor scan godotengine/godot --library</code> to see the full list)</em></li>
+</ul>
+<p><strong>Verdict</strong>: 70 of 98 bounced PRs (71%) had no linked GitHub issue. The top antipattern —
+raw <code>new</code> allocation without RAII wrappers — appeared in 15 PRs, concentrated in Godot's
+platform and rendering subsystems where the C++ modernisation has not yet reached.</p>
 <hr />
 <h2 id="the-slop-filter-logic-clones-humans-miss">The Slop Filter: Logic Clones Humans Miss</h2>
 <p>Beyond dead symbols, the <strong>SlopFilter</strong> uses alpha-normalized BLAKE3 structural hashing to
