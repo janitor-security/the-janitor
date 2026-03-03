@@ -91,7 +91,7 @@ echo ""
 REGISTRY="$GODOT_REPO/.janitor/symbols.rkyv"
 if [[ ! -f "$REGISTRY" ]]; then
     info "No registry found — running janitor scan (~30–60 s)..."
-    "$JANITOR" scan "$GODOT_REPO" --format json >/dev/null 2>&1
+    "$JANITOR" scan "$GODOT_REPO" --library --format json >/dev/null 2>&1
     info "Scan complete. Registry: $REGISTRY"
 fi
 
@@ -183,6 +183,8 @@ while IFS= read -r PR; do
         | awk '
             /^diff --git/ {
                 skip = ($3 ~ /^a\/thirdparty\// ||
+                        $3 ~ /^a\/vendor\//      ||
+                        $3 ~ /^a\/tests\//       ||
                         $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/)
             }
             !skip { print }
@@ -198,6 +200,8 @@ while IFS= read -r PR; do
             | awk '
                 /^diff --git/ {
                     skip = ($3 ~ /^a\/thirdparty\// ||
+                            $3 ~ /^a\/vendor\//      ||
+                            $3 ~ /^a\/tests\//       ||
                             $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff)$/)
                 }
                 !skip { print }
@@ -210,7 +214,7 @@ while IFS= read -r PR; do
     fi
 
     # ── Bounce ─────────────────────────────────────────────────────────────────
-    RESULT=$(timeout 30s "$JANITOR" bounce "$GODOT_REPO" \
+    RESULT=$(timeout 10s "$JANITOR" bounce "$GODOT_REPO" \
         --patch     "$PATCH_FILE" \
         --pr-number "$NUMBER"     \
         --author    "$AUTHOR"     \
