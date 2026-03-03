@@ -31,6 +31,13 @@
 
 set -uo pipefail
 
+# Declare the resume-progress associative array at global scope BEFORE any
+# conditional blocks.  With `set -u`, bash triggers "unbound variable" on
+# ${DONE_PRS[$KEY]+_} lookups if the array was declared inside an `if` branch
+# that hasn't run yet — even when the +word expansion would normally suppress
+# the error.  Global declaration guarantees the array always exists.
+declare -A DONE_PRS
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 JANITOR="${JANITOR:-$(pwd)/target/release/janitor}"
 GODOT_REPO="${GODOT_REPO:-$HOME/dev/gauntlet/godot}"
@@ -88,10 +95,19 @@ info "Report     : $REPORT_OUT"
 echo ""
 
 # ── Registry bootstrap ────────────────────────────────────────────────────────
+# This must complete BEFORE the PR loop.  If symbols.rkyv is absent, every
+# `bounce` call attempts an inline scan — guaranteeing timeouts on 8 GB RAM.
 REGISTRY="$GODOT_REPO/.janitor/symbols.rkyv"
 if [[ ! -f "$REGISTRY" ]]; then
-    info "No registry found — running janitor scan (~30–60 s)..."
-    "$JANITOR" scan "$GODOT_REPO" --library --format json >/dev/null 2>&1
+    info "No registry found — running janitor scan (Godot: ~2–5 min)..."
+    info "Output visible below so failures are not silently swallowed."
+    mkdir -p "$GODOT_REPO/.janitor"
+    "$JANITOR" scan "$GODOT_REPO" --library
+    if [[ ! -f "$REGISTRY" ]]; then
+        fail "Scan finished but registry missing at $REGISTRY — aborting."
+        fail "Check the scan output above for errors."
+        exit 1
+    fi
     info "Scan complete. Registry: $REGISTRY"
 fi
 
@@ -117,7 +133,6 @@ TOTAL=$(jq 'length' "$CACHE_FILE")
 echo ""
 
 # ── Progress: load already-processed PRs into associative array ───────────────
-declare -A DONE_PRS
 if [[ -f "$PROGRESS_FILE" ]]; then
     while IFS= read -r pr_num; do
         [[ -n "$pr_num" ]] && DONE_PRS["$pr_num"]=1
@@ -198,7 +213,7 @@ while IFS= read -r PR; do
     fi
 
     # ── Bounce ─────────────────────────────────────────────────────────────────
-    RESULT=$(timeout 10s "$JANITOR" bounce "$GODOT_REPO" \
+    RESULT=$(timeout 20s "$JANITOR" bounce "$GODOT_REPO" \
         --patch     "$PATCH_FILE" \
         --pr-number "$NUMBER"     \
         --author    "$AUTHOR"     \
