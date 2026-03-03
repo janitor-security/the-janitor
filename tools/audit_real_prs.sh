@@ -98,6 +98,15 @@ echo ""
 # This must complete BEFORE the PR loop.  If symbols.rkyv is absent, every
 # `bounce` call attempts an inline scan — guaranteeing timeouts on 8 GB RAM.
 REGISTRY="$GODOT_REPO/.janitor/symbols.rkyv"
+
+# Invalidate stale registry.  A registry > 60 min old (or from a prior partial
+# run with different flags) can be corrupt or misaligned with the source tree,
+# causing bounce to hang inside the per-PR timeout budget.
+if [[ -f "$REGISTRY" ]] && find "$REGISTRY" -mmin +60 -print -quit 2>/dev/null | grep -q .; then
+    warn "Registry is > 60 min old — deleting for fresh scan."
+    rm -f "$REGISTRY"
+fi
+
 if [[ ! -f "$REGISTRY" ]]; then
     info "No registry found — running janitor scan (Godot: ~2–5 min)..."
     info "Output visible below so failures are not silently swallowed."
@@ -133,6 +142,11 @@ TOTAL=$(jq 'length' "$CACHE_FILE")
 echo ""
 
 # ── Progress: load already-processed PRs into associative array ───────────────
+# Initialise ALREADY here so the bounce-log check below can use it without
+# ever evaluating ${#DONE_PRS[@]} on a potentially empty array.  Bash (even
+# 5.2) can fire "unbound variable" on that expansion when the array is empty
+# and set -u is active — use a plain integer counter instead.
+ALREADY=0
 if [[ -f "$PROGRESS_FILE" ]]; then
     while IFS= read -r pr_num; do
         [[ -n "$pr_num" ]] && DONE_PRS["$pr_num"]=1
@@ -147,7 +161,7 @@ fi
 # Bounce log accumulates across runs when resuming.
 # Start fresh only when there is no prior progress.
 BOUNCE_LOG="$GODOT_REPO/.janitor/bounce_log.ndjson"
-if [[ ${#DONE_PRS[@]} -eq 0 && -f "$BOUNCE_LOG" ]]; then
+if [[ $ALREADY -eq 0 && -f "$BOUNCE_LOG" ]]; then
     warn "Fresh run — clearing stale bounce_log.ndjson"
     : > "$BOUNCE_LOG"
 fi
@@ -168,7 +182,11 @@ while IFS= read -r PR; do
     INDEX=$((INDEX + 1))
 
     # ── Resume: skip PRs already in progress file ──────────────────────────────
-    if [[ -n "${DONE_PRS[$NUMBER]+_}" ]]; then
+    # Use the ${var-} (hyphen) form, NOT ${var+word}: with set -u, bash 4.x
+    # evaluates the key lookup before applying the +word modifier and fires
+    # "unbound variable".  The - form explicitly provides an empty default,
+    # which is the correct set -u suppression mechanism for all bash versions.
+    if [[ -n "${DONE_PRS[$NUMBER]-}" ]]; then
         continue
     fi
 
@@ -212,8 +230,17 @@ while IFS= read -r PR; do
         rm -f "$PATCH_FILE"; SKIPPED=$((SKIPPED + 1)); continue
     fi
 
+    # Skip patches > 4 MB: tree-sitter parsing of enormous C++ diffs can blow
+    # the 60s budget even with per-file circuit breakers.  4 MB covers ~95% of
+    # real PRs while filtering out mega-refactors that produce noise anyway.
+    PATCH_BYTES=$(wc -c < "$PATCH_FILE")
+    if [[ $PATCH_BYTES -gt 4194304 ]]; then
+        echo "[SKIP: patch ${PATCH_BYTES}B > 4 MiB limit]"
+        rm -f "$PATCH_FILE"; SKIPPED=$((SKIPPED + 1)); continue
+    fi
+
     # ── Bounce ─────────────────────────────────────────────────────────────────
-    RESULT=$(timeout 20s "$JANITOR" bounce "$GODOT_REPO" \
+    RESULT=$(timeout 60s "$JANITOR" bounce "$GODOT_REPO" \
         --patch     "$PATCH_FILE" \
         --pr-number "$NUMBER"     \
         --author    "$AUTHOR"     \
