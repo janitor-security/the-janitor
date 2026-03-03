@@ -82,18 +82,19 @@ if [[ ! -x "$JANITOR" ]]; then
     exit 1
 fi
 
-# GNU time (-v) for peak RSS sampling.
-# Use absolute path /usr/bin/time to bypass shell builtin.
-# Also probe for --output=FILE support (writes stats to a dedicated file,
-# separating them from the command's own stderr / indicatif ANSI progress bars).
+# GNU time for peak RSS sampling.
+# Use absolute path /usr/bin/time to bypass the shell builtin.
+# Preferred: -f "%M" -o FILE writes only the peak RSS in KB (a plain integer)
+# to a dedicated file — simple to parse, no regex, immune to ANSI noise.
+# Fallback: -v writes verbose stats to stderr (shared with janitor's progress bars);
+# awk grep for "Maximum resident set size (kbytes):" with LC_ALL=C.
 GNU_TIME=""
-GNU_TIME_OUTPUT_FLAG=""
-if /usr/bin/time -v true 2>&1 | grep -q "Maximum resident set size" 2>/dev/null; then
+GNU_TIME_HAS_F=false
+if /usr/bin/time -o /dev/null -f "%M" true >/dev/null 2>&1; then
     GNU_TIME="/usr/bin/time"
-    # --output keeps time stats out of janitor's stderr stream entirely.
-    if /usr/bin/time --output=/dev/null -v true >/dev/null 2>&1; then
-        GNU_TIME_OUTPUT_FLAG="--output"
-    fi
+    GNU_TIME_HAS_F=true
+elif /usr/bin/time -v true 2>&1 | grep -q "Maximum resident set size" 2>/dev/null; then
+    GNU_TIME="/usr/bin/time"
 fi
 
 # ── Vendor / test exclusions ──────────────────────────────────────────────────
@@ -153,6 +154,17 @@ else
     info "Appending to existing ledger: $LEDGER"
 fi
 
+# ── Global accumulators (summed across all repos) ─────────────────────────────
+GLOBAL_DEAD=0
+GLOBAL_GROUPS=0
+GLOBAL_PROCESSED=0
+GLOBAL_TOTAL_PRS=0
+GLOBAL_UNLINKED=0
+GLOBAL_ZOMBIES=0
+GLOBAL_ANTI=0
+GLOBAL_ERRORS=0
+GLOBAL_ACTIONABLE=0
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 TOTAL_REPOS=${#REPOS[@]}
 REPO_IDX=0
@@ -181,6 +193,11 @@ for REPO_SLUG in "${REPOS[@]}"; do
     ZOMBIE_COUNT=0
     ANTI_COUNT=0
     PEAK_RSS="N/A"
+    ACTIONABLE_COUNT=0
+    SCORE_BLOCKED=0  # ≥100
+    SCORE_WARNED=0   # 70–99
+    SCORE_MINOR=0    # 1–69
+    SCORE_CLEAN=0    # 0
     # Deep-dive data (populated during scan + bounce).
     TOP_DEAD=""
     TOP_TOXIC_TEXT=""
@@ -222,26 +239,30 @@ for REPO_SLUG in "${REPOS[@]}"; do
     SCAN_TIME=$(mktemp /tmp/gauntlet_time_XXXXXX.txt)
 
     if [[ -n "$GNU_TIME" ]]; then
-        if [[ -n "$GNU_TIME_OUTPUT_FLAG" ]]; then
-            # --output writes time stats to a dedicated file; janitor's own
-            # stderr (indicatif progress bars + ANSI escape codes) is discarded,
-            # eliminating any interleaving that can confuse the awk RSS parser.
-            /usr/bin/time --output="$SCAN_TIME" -v "$JANITOR" scan "$CLONE_DIR" \
+        if [[ "$GNU_TIME_HAS_F" == true ]]; then
+            # -f "%M" writes only the peak RSS in kilobytes to the output file.
+            # Janitor's stderr (indicatif ANSI progress bars) goes to /dev/null.
+            /usr/bin/time -f "%M" -o "$SCAN_TIME" "$JANITOR" scan "$CLONE_DIR" \
                 "${SCAN_EXCLUDES[@]}" --library --format json \
                 > "$SCAN_JSON" 2>/dev/null
+            SCAN_EXIT=$?
+            RSS_KB=$(tr -d '[:space:]' < "$SCAN_TIME" 2>/dev/null)
+            if [[ "$RSS_KB" =~ ^[0-9]+$ ]]; then
+                PEAK_RSS=$(awk "BEGIN { printf \"%.0f MB\", $RSS_KB/1024 }")
+            else
+                PEAK_RSS="N/A"
+            fi
         else
-            # Fallback: both janitor stderr and time stats share SCAN_TIME.
-            # LC_ALL=C in the awk step handles non-ASCII bytes from ANSI codes.
+            # Fallback: -v verbose — both janitor stderr and time stats share SCAN_TIME.
+            # LC_ALL=C prevents awk choking on ANSI codes from janitor's progress bar.
             /usr/bin/time -v "$JANITOR" scan "$CLONE_DIR" \
                 "${SCAN_EXCLUDES[@]}" --library --format json \
                 > "$SCAN_JSON" 2>"$SCAN_TIME"
+            SCAN_EXIT=$?
+            PEAK_RSS=$(LC_ALL=C awk '/Maximum resident set size \(kbytes\):/ { printf "%.0f MB", $NF/1024 }' \
+                "$SCAN_TIME" 2>/dev/null)
+            [[ -z "$PEAK_RSS" ]] && PEAK_RSS="N/A"
         fi
-        SCAN_EXIT=$?
-        # \(kbytes\) uses escaped parens for awk ERE literal match.
-        # LC_ALL=C prevents awk from choking on non-ASCII bytes in ANSI codes.
-        PEAK_RSS=$(LC_ALL=C awk '/Maximum resident set size \(kbytes\):/ { printf "%.0fMB", $NF/1024 }' \
-            "$SCAN_TIME" 2>/dev/null)
-        [[ -z "$PEAK_RSS" ]] && PEAK_RSS="N/A"
     else
         "$JANITOR" scan "$CLONE_DIR" \
             "${SCAN_EXCLUDES[@]}" --library --format json \
@@ -343,10 +364,14 @@ for REPO_SLUG in "${REPOS[@]}"; do
                 continue
             fi
 
-            SCORE=$(   echo "$RESULT" | jq -r '.slop_score           // 0')
-            ANTI=$(    echo "$RESULT" | jq -r '.antipatterns_found   // 0')
-            UNLINK=$(  echo "$RESULT" | jq -r '.unlinked_pr          // 0')
-            ZOMBIES=$( echo "$RESULT" | jq -r '.zombie_symbols_added // 0')
+            SCORE=$(      echo "$RESULT" | jq -r '.slop_score                // 0')
+            SCORE_INT=${SCORE%.*}   # integer part for bash -ge/-gt comparisons
+            ANTI=$(      echo "$RESULT" | jq -r '.antipatterns_found        // 0')
+            UNLINK=$(    echo "$RESULT" | jq -r '.unlinked_pr               // 0')
+            ZOMBIES=$(   echo "$RESULT" | jq -r '.zombie_symbols_added      // 0')
+            DEAD_ADDED=$(echo "$RESULT" | jq -r '.dead_symbols_added        // 0')
+            CLONES=$(    echo "$RESULT" | jq -r '.logic_clones_found        // 0')
+            HALL=$(      echo "$RESULT" | jq -r '.hallucinated_security_fix // 0')
             # antipattern_details: array of human-readable finding descriptions.
             # Falls back to empty array on older binaries that don't emit this field.
             # Identical strings are grouped with (xN) suffix to avoid A | A | A noise.
@@ -370,17 +395,40 @@ for REPO_SLUG in "${REPOS[@]}"; do
             [[ "$ANTI"    -gt 0 ]] 2>/dev/null && ANTI_COUNT=$((ANTI_COUNT + ANTI))
             [[ "$ZOMBIES" -gt 0 ]] 2>/dev/null && ZOMBIE_COUNT=$((ZOMBIE_COUNT + ZOMBIES))
 
+            # Score band tracking (uses SCORE_INT — bash -ge/-gt require integers).
+            if [[ "$SCORE_INT" -ge 100 ]]; then
+                SCORE_BLOCKED=$((SCORE_BLOCKED + 1))
+            elif [[ "$SCORE_INT" -ge 70 ]]; then
+                SCORE_WARNED=$((SCORE_WARNED + 1))
+            elif [[ "$SCORE_INT" -gt 0 ]]; then
+                SCORE_MINOR=$((SCORE_MINOR + 1))
+            else
+                SCORE_CLEAN=$((SCORE_CLEAN + 1))
+            fi
+
+            # Actionable intercept: blocked (≥100), zombie re-injection, or hallucination.
+            if [[ "$SCORE_INT" -ge 100 ]] \
+                || [[ "$ZOMBIES" -gt 0 ]] \
+                || [[ "$HALL"    -gt 0 ]]; then
+                ACTIONABLE_COUNT=$((ACTIONABLE_COUNT + 1))
+            fi
+
             # Record per-PR data for deep-dive ranking (TAB-separated).
+            # Columns: SCORE NUMBER AUTHOR ANTI_DETAIL ZOMBIES UNLINK DEAD_ADDED CLONES HALL
             # Use dash sentinel for empty ANTI_DETAIL: IFS=$'\t' read collapses
             # consecutive tabs (tab is whitespace in IFS), shifting later columns.
-            printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-                "$SCORE" "$NUMBER" "$AUTHOR" "${ANTI_DETAIL:--}" "$ZOMBIES" "$UNLINK" \
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$SCORE" "$NUMBER" "$AUTHOR" "${ANTI_DETAIL:--}" \
+                "$ZOMBIES" "$UNLINK" "$DEAD_ADDED" "$CLONES" "$HALL" \
                 >> "$PR_DATA_FILE"
 
             FLAGS=""
-            [[ "$UNLINK"  == "1"  ]] && FLAGS="${FLAGS}${YLW}[NO-ISSUE]${NC} "
-            [[ "$ANTI"    -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[ANTI×${ANTI}]${NC} "
-            [[ "$ZOMBIES" -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[ZMB×${ZOMBIES}]${NC} "
+            [[ "$UNLINK"     == "1" ]] && FLAGS="${FLAGS}${YLW}[NO-ISSUE]${NC} "
+            [[ "$ANTI"       -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[ANTI×${ANTI}]${NC} "
+            [[ "$HALL"       -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${RED}[HALL×${HALL}]${NC} "
+            [[ "$ZOMBIES"    -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[ZMB×${ZOMBIES}]${NC} "
+            [[ "$DEAD_ADDED" -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${BLU}[DEAD×${DEAD_ADDED}]${NC} "
+            [[ "$CLONES"     -gt 0 ]] 2>/dev/null && FLAGS="${FLAGS}${DIM}[CLN×${CLONES}]${NC} "
 
             printf "score=%-4s  %b\n" "$SCORE" "${FLAGS:-${GRN}CLEAN${NC}}"
 
@@ -393,10 +441,13 @@ for REPO_SLUG in "${REPOS[@]}"; do
     # ── Compute top-3 toxic + top-3 clean from per-PR data ────────────────────
     if [[ -s "$PR_DATA_FILE" ]]; then
         # Top 3 by score (descending numeric sort on column 1).
-        while IFS=$'\t' read -r TSCORE TNUMBER TAUTHOR TDETAIL TZOMBIES TUNLINK; do
+        while IFS=$'\t' read -r TSCORE TNUMBER TAUTHOR TDETAIL TZOMBIES TUNLINK TDEAD TCLONES THALL; do
             TOP_TOXIC_TEXT+="  - **PR #${TNUMBER}** by \`${TAUTHOR}\` — score **${TSCORE}**"
-            [[ "$TDETAIL" != "-" ]] && TOP_TOXIC_TEXT+="\n    *Antipatterns: ${TDETAIL}*"
+            [[ "$TDETAIL"  != "-" ]] && TOP_TOXIC_TEXT+="\n    *Antipatterns: ${TDETAIL}*"
+            [[ "$THALL"    -gt 0 ]] 2>/dev/null && TOP_TOXIC_TEXT+="\n    *Hallucinated security fixes: ${THALL}*"
             [[ "$TZOMBIES" -gt 0 ]] 2>/dev/null && TOP_TOXIC_TEXT+="\n    *Zombie deps: ${TZOMBIES}*"
+            [[ "$TDEAD"    -gt 0 ]] 2>/dev/null && TOP_TOXIC_TEXT+="\n    *Dead symbols added: ${TDEAD}*"
+            [[ "$TCLONES"  -gt 0 ]] 2>/dev/null && TOP_TOXIC_TEXT+="\n    *Logic clone groups: ${TCLONES}*"
             [[ "$TUNLINK" == "1" ]] && TOP_TOXIC_TEXT+="\n    *No linked issue*"
             TOP_TOXIC_TEXT+="\n"
         done < <(sort -t$'\t' -k1 -rn "$PR_DATA_FILE" | head -3)
@@ -445,6 +496,14 @@ for REPO_SLUG in "${REPOS[@]}"; do
         printf "**Duration**: %s | **Peak RSS**: %s | **PRs Bounced**: %d/%d | **Dead Symbols**: %d | **Clone Groups**: %d\n\n" \
             "$DURATION_FMT" "$PEAK_RSS" "$PR_PROCESSED" "$PR_TOTAL" "$DEAD_SYMBOLS" "$DEDUP_GROUPS"
 
+        HOURS_SAVED=$(awk "BEGIN { printf \"%.1f\", $ACTIONABLE_COUNT * 12 / 60 }")
+        MONEY_SAVED=$(awk "BEGIN { printf \"%.0f\", $ACTIONABLE_COUNT * 12 / 60 * 100 }")
+        printf "**Workslop Impact**: %d actionable intercepts | **%s hrs reclaimed** | **\$%s saved**\n\n" \
+            "$ACTIONABLE_COUNT" "$HOURS_SAVED" "$MONEY_SAVED"
+
+        printf "**Score Distribution**: %d blocked (≥100) | %d warned (70–99) | %d minor (1–69) | %d clean (0)\n\n" \
+            "$SCORE_BLOCKED" "$SCORE_WARNED" "$SCORE_MINOR" "$SCORE_CLEAN"
+
         printf "#### Top 3 Toxic PRs\n\n"
         if [[ -n "$TOP_TOXIC_TEXT" ]]; then
             printf "%b" "$TOP_TOXIC_TEXT"
@@ -475,15 +534,49 @@ for REPO_SLUG in "${REPOS[@]}"; do
 
     rm -f "$SCAN_JSON"
 
+    # Accumulate global totals.
+    GLOBAL_DEAD=$((GLOBAL_DEAD + DEAD_SYMBOLS))
+    GLOBAL_GROUPS=$((GLOBAL_GROUPS + DEDUP_GROUPS))
+    GLOBAL_PROCESSED=$((GLOBAL_PROCESSED + PR_PROCESSED))
+    GLOBAL_TOTAL_PRS=$((GLOBAL_TOTAL_PRS + PR_TOTAL))
+    GLOBAL_UNLINKED=$((GLOBAL_UNLINKED + UNLINKED_COUNT))
+    GLOBAL_ZOMBIES=$((GLOBAL_ZOMBIES + ZOMBIE_COUNT))
+    GLOBAL_ANTI=$((GLOBAL_ANTI + ANTI_COUNT))
+    GLOBAL_ERRORS=$((GLOBAL_ERRORS + PR_ERRORS))
+    GLOBAL_ACTIONABLE=$((GLOBAL_ACTIONABLE + ACTIONABLE_COUNT))
+
     echo ""
-    info "${REPO_SLUG} → ${DURATION_FMT} | rss=${PEAK_RSS} | dead=${DEAD_SYMBOLS} | prs=${PR_PROCESSED}/${PR_TOTAL} | unlinked=${UNLINKED_COUNT} | zombies=${ZOMBIE_COUNT} | anti=${ANTI_COUNT}"
+    info "${REPO_SLUG} → ${DURATION_FMT} | rss=${PEAK_RSS} | dead=${DEAD_SYMBOLS} | prs=${PR_PROCESSED}/${PR_TOTAL} | unlinked=${UNLINKED_COUNT} | zombies=${ZOMBIE_COUNT} | anti=${ANTI_COUNT} | actionable=${ACTIONABLE_COUNT}"
 
 done
 
-# ── Final summary ─────────────────────────────────────────────────────────────
+# ── Final summary: TOTAL row + Global Workslop section ────────────────────────
+TOTAL_HOURS=$(awk "BEGIN { printf \"%.1f\", $GLOBAL_ACTIONABLE * 12 / 60 }")
+TOTAL_SAVINGS=$(awk "BEGIN { printf \"%.0f\", $GLOBAL_ACTIONABLE * 12 / 60 * 100 }")
+
+{
+    printf "| **TOTAL** | — | — | **%d** | **%d** | **%d/%d** | **%d** | **%d** | **%d** | **%d** |\n" \
+        "$GLOBAL_DEAD" "$GLOBAL_GROUPS" \
+        "$GLOBAL_PROCESSED" "$GLOBAL_TOTAL_PRS" \
+        "$GLOBAL_UNLINKED" "$GLOBAL_ZOMBIES" "$GLOBAL_ANTI" "$GLOBAL_ERRORS"
+
+    printf "\n---\n\n"
+    printf "## Global Workslop Impact\n\n"
+    printf "| Metric | Value |\n"
+    printf "|:-------|------:|\n"
+    printf "| Actionable intercepts (Blocked ≥ 100 / Zombie / Hallucination) | **%d** |\n" "$GLOBAL_ACTIONABLE"
+    printf "| **Total engineering time reclaimed** | **%s hours** |\n" "$TOTAL_HOURS"
+    printf "| **Estimated operational savings** | **\$%s** |\n" "$TOTAL_SAVINGS"
+    printf "\n"
+    printf "> Methodology: 12 min/triage × \$100/hr loaded engineering cost.\n"
+    printf "> Actionable = PRs scoring ≥ 100 (gate blocked) or confirmed adversarial signal (Zombie re-injection / Hallucinated Security Fix).\n"
+} >> "$LEDGER"
+
 echo ""
 echo -e "${GRN}════════════════════════════════════════════════════${NC}"
 echo   "  ULTIMATE GAUNTLET COMPLETE"
+echo   "  Repos: ${TOTAL_REPOS} | PRs: ${GLOBAL_PROCESSED}/${GLOBAL_TOTAL_PRS} | Dead: ${GLOBAL_DEAD}"
+echo   "  Actionable: ${GLOBAL_ACTIONABLE} | Saved: ${TOTAL_HOURS}h / \$${TOTAL_SAVINGS}"
 echo   "  Full results: $LEDGER"
 echo -e "${GRN}════════════════════════════════════════════════════${NC}"
 echo ""
