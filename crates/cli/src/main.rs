@@ -111,7 +111,11 @@ enum Commands {
     },
     /// Analyse a unified diff patch for slop: dead-symbol additions and logic clones.
     ///
-    /// Reads the patch from `--patch <file>` or from stdin.
+    /// **Patch source (pick one)**:
+    ///   - `--patch <file>` — read from a local unified diff file.
+    ///   - `--pr-number <N> --repo-slug <owner/repo>` — auto-fetch via `gh pr diff`.
+    ///   - stdin — pipe a diff when no other source is specified.
+    ///
     /// Loads the symbol registry from `--registry <file>` when provided, otherwise
     /// falls back to `.janitor/symbols.rkyv` under the project root.
     ///
@@ -176,6 +180,14 @@ enum Commands {
         /// Markdown bullet-list PR descriptions).
         #[arg(long, allow_hyphen_values = true)]
         pr_body: Option<String>,
+        /// GitHub repository slug (`owner/repo`) used for auto-fetch mode.
+        ///
+        /// When `--pr-number` is supplied without `--patch`, the Janitor calls
+        /// `gh pr diff <N> --repo <slug>` to retrieve the diff automatically.
+        /// Falls back to the `GITHUB_REPOSITORY` environment variable when omitted,
+        /// so no extra flag is needed inside GitHub Actions.
+        #[arg(long)]
+        repo_slug: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -428,6 +440,7 @@ async fn main() -> anyhow::Result<()> {
             pr_number,
             author,
             pr_body,
+            repo_slug,
         } => cmd_bounce(
             path,
             patch.as_deref(),
@@ -439,6 +452,7 @@ async fn main() -> anyhow::Result<()> {
             *pr_number,
             author.as_deref(),
             pr_body.as_deref(),
+            repo_slug.as_deref(),
         )?,
         Commands::Report {
             repo,
@@ -1989,6 +2003,7 @@ fn cmd_bounce(
     pr_number: Option<u64>,
     author: Option<&str>,
     pr_body: Option<&str>,
+    repo_slug: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -2056,16 +2071,52 @@ fn cmd_bounce(
             (score, merkle_root, sig.min_hashes.to_vec(), blobs)
         }
         _ => {
-            // Patch mode: read diff from file or stdin.
-            let patch = match patch_file {
-                Some(pf) => std::fs::read_to_string(pf)
-                    .with_context(|| format!("reading patch file: {}", pf.display()))?,
-                None => {
-                    let mut s = String::new();
-                    std::io::stdin()
-                        .read_to_string(&mut s)
-                        .context("reading patch from stdin")?;
-                    s
+            // Patch mode: file, auto-fetch via gh, or stdin.
+            let patch = if let (None, Some(pn)) = (patch_file, pr_number) {
+                // Auto-fetch: gh pr diff <N> --repo <slug>
+                let slug = repo_slug
+                    .map(|s| s.to_owned())
+                    .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Auto-fetch requires --repo-slug <owner/repo> \
+                             or the GITHUB_REPOSITORY env var"
+                        )
+                    })?;
+                let output = std::process::Command::new("gh")
+                    .args(["pr", "diff", &pn.to_string(), "--repo", &slug])
+                    .output()
+                    .context(
+                        "failed to invoke `gh pr diff` — is `gh` installed and authenticated?",
+                    )?;
+                if !output.status.success() {
+                    anyhow::bail!(
+                        "`gh pr diff {}` failed (exit {}): {}",
+                        pn,
+                        output.status,
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                }
+                String::from_utf8(output.stdout)
+                    .context("`gh pr diff` output is not valid UTF-8")?
+            } else {
+                match patch_file {
+                    Some(pf) => std::fs::read_to_string(pf)
+                        .with_context(|| format!("reading patch file: {}", pf.display()))?,
+                    None => {
+                        use std::io::IsTerminal as _;
+                        if std::io::stdin().is_terminal() {
+                            anyhow::bail!(
+                                "Must provide either --patch <file> \
+                                 or --pr-number <N> --repo-slug <owner/repo>"
+                            );
+                        }
+                        let mut s = String::new();
+                        std::io::stdin()
+                            .read_to_string(&mut s)
+                            .context("reading patch from stdin")?;
+                        s
+                    }
                 }
             };
             let mut score = PatchBouncer.bounce(&patch, &registry)?;
@@ -2169,12 +2220,23 @@ fn cmd_bounce(
         );
         println!("+------------------------------------------+");
         println!("  Merkle root: {}...", &merkle_root[..32]);
-        println!("  Gate threshold: {} (effective: {})", policy.min_slop_score, effective_gate);
+        println!(
+            "  Gate threshold: {} (effective: {})",
+            policy.min_slop_score, effective_gate
+        );
         println!();
         if gate_passed {
-            println!("PATCH CLEAN — slop score {} < gate {}.", score.score(), effective_gate);
+            println!(
+                "PATCH CLEAN — slop score {} < gate {}.",
+                score.score(),
+                effective_gate
+            );
         } else {
-            println!("PATCH FLAGGED — slop score {} ≥ gate {}.", score.score(), effective_gate);
+            println!(
+                "PATCH FLAGGED — slop score {} ≥ gate {}.",
+                score.score(),
+                effective_gate
+            );
         }
     }
 

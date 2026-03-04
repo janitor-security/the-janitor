@@ -7,20 +7,26 @@
 
 | Repo | Duration | Peak RSS | Dead Symbols | Clone Groups | PRs Bounced | Unlinked PRs | Zombies | Antipatterns | Errors |
 |------|----------|----------|-------------|--------------|-------------|--------------|---------|--------------|--------|
-| `godotengine/godot` | 2m54s | 58MB | 717 | 2 | 98/100 | 70 | 0 | 15 | 0 |
+| `godotengine/godot` | 3m19s | 55 MB | 718 | 2 | 99/100 | 73 | 0 | 14 | 0 |
 
 ### godotengine/godot
 
-**Duration**: 2m54s | **Peak RSS**: 58MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 717 | **Clone Groups**: 2
+**Duration**: 3m19s | **Peak RSS**: 55 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 718 | **Clone Groups**: 2
+
+**Workslop Impact**: 2 actionable intercepts | **0.4 hrs reclaimed** | **$40 saved**
+
+**Score Distribution**: 2 blocked (≥100) | 11 warned (70–99) | 60 minor (1–69) | 26 clean (0)
 
 #### Top 3 Toxic PRs
 
+  - **PR #116963** by `Repiteo` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
+    *No linked issue*
   - **PR #116839** by `bruvzg` — score **120.0**
     *Antipatterns: Raw `new`: prefer std::make_unique<T>() or std::make_shared<T>() for exception-safe RAII ownership (x2)*
     *No linked issue*
   - **PR #116993** by `Calinou` — score **70.0**
-    *No linked issue*
-  - **PR #116982** by `Calinou` — score **70.0**
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -31,19 +37,23 @@
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_EVCSort` (editor/settings/editor_settings.cpp)
-  - `_get_skipped_locales` (editor/settings/editor_settings.cpp)
-  - `_EDITOR_DEF` (editor/settings/editor_settings.cpp)
-  - `_write_to_str` (core/variant/variant_parser.cpp)
-  - `_compute_key` (scene/resources/canvas_item_material.h)
-  _(…and 712 more — verify with `janitor scan godotengine/godot --library`)_
+  - `_get_resolved_dep_path` (editor/file_system/dependency_editor.cpp)
+  - `_get_stored_dep_path` (editor/file_system/dependency_editor.cpp)
+  - `_rgba8_to_packbits_encode` (platform/macos/export/export_plugin.cpp)
+  - `_unpair` (core/math/bvh.h)
+  - `_find_leavers_process_pair` (core/math/bvh.h)
+  _(…and 713 more — verify with `janitor scan godotengine/godot --library`)_
 
 ---
-| `electron/electron` | 1m58s | 30MB | 10 | 2 | 100/100 | 97 | 0 | 68 | 0 |
+| `electron/electron` | 2m3s | 30 MB | 10 | 2 | 100/100 | 97 | 0 | 68 | 0 |
 
 ### electron/electron
 
-**Duration**: 1m58s | **Peak RSS**: 30MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 10 | **Clone Groups**: 2
+**Duration**: 2m3s | **Peak RSS**: 30 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 10 | **Clone Groups**: 2
+
+**Workslop Impact**: 11 actionable intercepts | **2.2 hrs reclaimed** | **$220 saved**
+
+**Score Distribution**: 11 blocked (≥100) | 34 warned (70–99) | 54 minor (1–69) | 1 clean (0)
 
 #### Top 3 Toxic PRs
 
@@ -63,58 +73,73 @@
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_GtkMenu` (shell/browser/ui/gtk/menu_gtk.h)
-  - `_GtkWidget` (shell/browser/ui/gtk/menu_gtk.h)
-  - `_DbusmenuMenuitem` (shell/browser/ui/views/global_menu_bar_x11.h)
-  - `_DbusmenuServer` (shell/browser/ui/views/global_menu_bar_x11.h)
+  - `_GtkStatusIcon` (shell/browser/ui/status_icon_gtk.h)
   - `_UnityInspector` (shell/browser/linux/unity_service.cc)
+  - `_UnityLauncherEntry` (shell/browser/linux/unity_service.cc)
+  - `_DbusmenuMenuitem` (shell/browser/ui/views/global_menu_bar_x11.cc)
+  - `_DbusmenuServer` (shell/browser/ui/views/global_menu_bar_x11.cc)
   _(…and 5 more — verify with `janitor scan electron/electron --library`)_
 
 ---
-| `microsoft/vscode` | 2m20s | 107MB | 2827 | 0 | 99/100 | 75 | 0 | 68 | 0 |
+| `microsoft/vscode` | 2m13s | 106 MB | 4658 | 0 | 99/100 | 81 | 0 | 67 | 0 |
 
 ### microsoft/vscode
 
-**Duration**: 2m20s | **Peak RSS**: 107MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 2827 | **Clone Groups**: 0
+**Duration**: 2m13s | **Peak RSS**: 106 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 4658 | **Clone Groups**: 0
+
+**Workslop Impact**: 1 actionable intercepts | **0.2 hrs reclaimed** | **$20 saved**
+
+**Score Distribution**: 1 blocked (≥100) | 50 warned (70–99) | 46 minor (1–69) | 2 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #298852** by `joshspicer` — score **70.0**
+  - **PR #298806** by `app/copilot-swe-agent` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #298844** by `osortega` — score **70.0**
+  - **PR #298929** by `benibenj` — score **70.0**
     *No linked issue*
-  - **PR #298839** by `rzhao271` — score **70.0**
+  - **PR #298925** by `gjsjohnmurray` — score **70.0**
     *No linked issue*
 
 #### Top 3 Clean PRs
 
   - PR #298819 by `kycutler`
   - PR #298598 by `sanchirico`
-  - PR #298586 by `barruka`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_updateSnippets` (src/vs/workbench/contrib/snippets/browser/tabCompletion.ts)
-  - `_updateReadIndicator` (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)
-  - `_updateTitle` (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)
-  - `_updateToggleButton` (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)
-  - `_updateExplanationText` (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)
-  _(…and 2822 more — verify with `janitor scan microsoft/vscode --library`)_
+  - `_updatePolicyDefinitions` (src/vs/platform/policy/common/policyIpc.ts)
+  - `_updateCounts` (src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts)
+  - `_updateDecorations` (src/vs/sessions/contrib/chat/browser/slashCommands.ts)
+  - `_updateResults` (src/vs/workbench/contrib/search/browser/searchView.ts)
+  - `_updateContent` (src/vs/workbench/contrib/debug/browser/replAccessibleView.ts)
+  _(…and 4653 more — verify with `janitor scan microsoft/vscode --library`)_
 
 ---
-| `DefinitelyTyped/DefinitelyTyped` | 4m40s | 110MB | 13 | 0 | 99/100 | 99 | 0 | 32 | 0 |
+| `DefinitelyTyped/DefinitelyTyped` | 4m15s | 110 MB | 16 | 0 | 99/100 | 99 | 0 | 32 | 0 |
 
 ### DefinitelyTyped/DefinitelyTyped
 
-**Duration**: 4m40s | **Peak RSS**: 110MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 13 | **Clone Groups**: 0
+**Duration**: 4m15s | **Peak RSS**: 110 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 16 | **Clone Groups**: 0
+
+**Workslop Impact**: 4 actionable intercepts | **0.8 hrs reclaimed** | **$80 saved**
+
+**Score Distribution**: 4 blocked (≥100) | 32 warned (70–99) | 63 minor (1–69) | 0 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #74619** by `jlgrimes` — score **70.0**
+  - **PR #74620** by `app/dependabot` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #74615** by `myabc` — score **70.0**
+  - **PR #74566** by `patrickrauls` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #74613** by `myabc` — score **70.0**
+  - **PR #74559** by `alex-rantos` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -123,19 +148,23 @@ _No zero-score PRs in sample._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_NotificationModule` (types/openfin/_v2/api/notification/notification.d.ts)
-  - `_IndicatorElement` (types/dojo/dojox.charting.d.ts)
   - `_CalendarDayView` (types/dojo/dojox.widget.d.ts)
   - `_CalendarMonthYear` (types/dojo/dojox.widget.d.ts)
   - `_CalendarMonthView` (types/dojo/dojox.widget.d.ts)
-  _(…and 8 more — verify with `janitor scan DefinitelyTyped/DefinitelyTyped --library`)_
+  - `_CalendarMonthYearView` (types/dojo/dojox.widget.d.ts)
+  - `_CalendarYearView` (types/dojo/dojox.widget.d.ts)
+  _(…and 11 more — verify with `janitor scan DefinitelyTyped/DefinitelyTyped --library`)_
 
 ---
-| `vercel/next.js` | 2m11s | 51MB | 0 | 0 | 97/100 | 91 | 0 | 42 | 0 |
+| `vercel/next.js` | 2m42s | 51 MB | 0 | 0 | 97/100 | 89 | 0 | 40 | 0 |
 
 ### vercel/next.js
 
-**Duration**: 2m11s | **Peak RSS**: 51MB | **PRs Bounced**: 97/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+**Duration**: 2m42s | **Peak RSS**: 51 MB | **PRs Bounced**: 97/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+
+**Workslop Impact**: 5 actionable intercepts | **1.0 hrs reclaimed** | **$100 saved**
+
+**Score Distribution**: 5 blocked (≥100) | 34 warned (70–99) | 54 minor (1–69) | 4 clean (0)
 
 #### Top 3 Toxic PRs
 
@@ -143,33 +172,46 @@ _No zero-score PRs in sample._
     *Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x3)*
     *No linked issue*
   - **PR #90710** by `lukesandberg` — score **150.0**
+    *Dead symbols added: 11*
+    *Logic clone groups: 4*
     *No linked issue*
   - **PR #90617** by `lukesandberg` — score **125.0**
+    *Dead symbols added: 9*
+    *Logic clone groups: 3*
     *No linked issue*
 
 #### Top 3 Clean PRs
 
+  - PR #90812 by `sleitor`
+  - PR #90800 by `devjiwonchoi`
   - PR #90700 by `sleitor`
-  - PR #90697 by `umutkeltek`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
 _No dead symbols found._
 
 ---
-| `ansible/ansible` | 1m33s | 25MB | 894 | 2 | 100/100 | 79 | 15 | 22 | 0 |
+| `ansible/ansible` | 1m46s | 25 MB | 895 | 2 | 100/100 | 79 | 15 | 22 | 0 |
 
 ### ansible/ansible
 
-**Duration**: 1m33s | **Peak RSS**: 25MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 894 | **Clone Groups**: 2
+**Duration**: 1m46s | **Peak RSS**: 25 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 895 | **Clone Groups**: 2
+
+**Workslop Impact**: 3 actionable intercepts | **0.6 hrs reclaimed** | **$60 saved**
+
+**Score Distribution**: 2 blocked (≥100) | 18 warned (70–99) | 64 minor (1–69) | 16 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #86600** by `haosenwang1018` — score **750.0**
     *Zombie deps: 7*
+    *Dead symbols added: 40*
+    *Logic clone groups: 45*
     *No linked issue*
   - **PR #86597** by `haosenwang1018` — score **750.0**
     *Zombie deps: 7*
+    *Dead symbols added: 40*
+    *Logic clone groups: 45*
     *No linked issue*
   - **PR #86604** by `nitzmahone` — score **70.0**
     *No linked issue*
@@ -182,29 +224,39 @@ _No dead symbols found._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_get_encoded_arguments` (lib/ansible/_internal/_powershell/_script.py)
-  - `RoleMetadata._load_dependencies` (lib/ansible/playbook/role/metadata.py)
-  - `_generate_ansible_managed` (lib/ansible/_internal/_templating/_template_vars.py)
-  - `DnfModule._sanitize_dnf_error_msg_install` (lib/ansible/modules/dnf.py)
-  - `DnfModule._package_dict` (lib/ansible/modules/dnf.py)
-  _(…and 889 more — verify with `janitor scan ansible/ansible --library`)_
+  - `JinjaPluginIntercept._wrap_and_set_func` (lib/ansible/_internal/_templating/_jinja_plugins.py)
+  - `JinjaPluginIntercept._invoke_plugin` (lib/ansible/_internal/_templating/_jinja_plugins.py)
+  - `JinjaPluginIntercept._wrap_filter` (lib/ansible/_internal/_templating/_jinja_plugins.py)
+  - `_LookupContext` (lib/ansible/_internal/_templating/_jinja_plugins.py)
+  - `_get_builtin_short_description` (lib/ansible/_internal/_templating/_jinja_plugins.py)
+  _(…and 890 more — verify with `janitor scan ansible/ansible --library`)_
 
 ---
-| `home-assistant/core` | 3m47s | 101MB | 8311 | 9 | 98/100 | 84 | 37 | 9 | 0 |
+| `home-assistant/core` | 4m4s | 99 MB | 8240 | 9 | 97/100 | 85 | 36 | 10 | 0 |
 
 ### home-assistant/core
 
-**Duration**: 3m47s | **Peak RSS**: 101MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 8311 | **Clone Groups**: 9
+**Duration**: 4m4s | **Peak RSS**: 99 MB | **PRs Bounced**: 97/100 | **Dead Symbols**: 8240 | **Clone Groups**: 9
+
+**Workslop Impact**: 23 actionable intercepts | **4.6 hrs reclaimed** | **$460 saved**
+
+**Score Distribution**: 8 blocked (≥100) | 17 warned (70–99) | 66 minor (1–69) | 6 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #164611** by `arievanderwende` — score **670.0**
     *Zombie deps: 6*
+    *Dead symbols added: 25*
+    *Logic clone groups: 62*
     *No linked issue*
-  - **PR #164543** by `Claeysson` — score **525.0**
+  - **PR #164543** by `Claeysson` — score **515.0**
     *Zombie deps: 1*
+    *Dead symbols added: 14*
+    *Logic clone groups: 68*
     *No linked issue*
   - **PR #164544** by `agentgonzo` — score **200.0**
+    *Dead symbols added: 12*
+    *Logic clone groups: 12*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -215,58 +267,78 @@ _No dead symbols found._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `TokenView._async_handle_auth_code` (homeassistant/components/auth/__init__.py)
-  - `TokenView._async_handle_refresh_token` (homeassistant/components/auth/__init__.py)
-  - `_create_auth_code_store` (homeassistant/components/auth/__init__.py)
-  - `_delete_current_token_soon` (homeassistant/components/auth/__init__.py)
-  - `SamsungTVDevice._update_sources` (homeassistant/components/samsungtv/media_player.py)
-  _(…and 8306 more — verify with `janitor scan home-assistant/core --library`)_
+  - `TTSMediaSource._engine_item` (homeassistant/components/tts/media_source.py)
+  - `_rotate_token` (homeassistant/components/brands/__init__.py)
+  - `_read_cached_file_with_marker` (homeassistant/components/brands/__init__.py)
+  - `_write_cache_file` (homeassistant/components/brands/__init__.py)
+  - `_read_brand_file` (homeassistant/components/brands/__init__.py)
+  _(…and 8235 more — verify with `janitor scan home-assistant/core --library`)_
 
 ---
-| `kubernetes/kubernetes` | 3m15s | 166MB | 73 | 2 | 98/100 | 86 | 0 | 16 | 0 |
+| `kubernetes/kubernetes` | 3m25s | 166 MB | 73 | 2 | 98/100 | 86 | 0 | 15 | 0 |
 
 ### kubernetes/kubernetes
 
-**Duration**: 3m15s | **Peak RSS**: 166MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 73 | **Clone Groups**: 2
+**Duration**: 3m25s | **Peak RSS**: 166 MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 73 | **Clone Groups**: 2
+
+**Workslop Impact**: 4 actionable intercepts | **0.8 hrs reclaimed** | **$80 saved**
+
+**Score Distribution**: 4 blocked (≥100) | 14 warned (70–99) | 69 minor (1–69) | 11 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #137346** by `aramase` — score **370.0**
+    *Dead symbols added: 14*
+    *Logic clone groups: 42*
+    *No linked issue*
+  - **PR #137288** by `ffromani` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
   - **PR #137310** by `KunWuLuan` — score **140.0**
-    *No linked issue*
-  - **PR #137353** by `ArvindParekh` — score **70.0**
+    *Dead symbols added: 6*
+    *Logic clone groups: 12*
     *No linked issue*
 
 #### Top 3 Clean PRs
 
+  - PR #137360 by `Chunxia202410`
+  - PR #137359 by `Towaiji`
   - PR #137338 by `GunaKKIBM`
-  - PR #137332 by `gavinkflam`
-  - PR #137319 by `AutuSnow`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_PodResourcesLister_List_Handler` (staging/src/k8s.io/kubelet/pkg/apis/podresources/v1alpha1/api_grpc.pb.go)
-  - `_ExternalJWTSigner_Sign_Handler` (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)
-  - `_ExternalJWTSigner_FetchKeys_Handler` (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)
-  - `_ExternalJWTSigner_Metadata_Handler` (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)
-  - `_ExternalJWTSigner_Sign_Handler` (staging/src/k8s.io/externaljwt/apis/v1/api_grpc.pb.go)
+  - `_Registration_Register_Handler` (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
+  - `_DevicePlugin_GetDevicePluginOptions_Handler` (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
+  - `_DevicePlugin_ListAndWatch_Handler` (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
+  - `_DevicePlugin_GetPreferredAllocation_Handler` (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
+  - `_DevicePlugin_Allocate_Handler` (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
   _(…and 68 more — verify with `janitor scan kubernetes/kubernetes --library`)_
 
 ---
-| `moby/moby` | 1m48s | 34MB | 0 | 0 | 100/100 | 95 | 0 | 29 | 0 |
+| `moby/moby` | 2m21s | 34 MB | 0 | 0 | 99/100 | 94 | 0 | 28 | 0 |
 
 ### moby/moby
 
-**Duration**: 1m48s | **Peak RSS**: 34MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+**Duration**: 2m21s | **Peak RSS**: 34 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+
+**Workslop Impact**: 6 actionable intercepts | **1.2 hrs reclaimed** | **$120 saved**
+
+**Score Distribution**: 6 blocked (≥100) | 26 warned (70–99) | 63 minor (1–69) | 4 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #52123** by `renovate-bot` — score **70.0**
+  - **PR #52034** by `thaJeztah` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #52120** by `renovate-bot` — score **70.0**
+  - **PR #52126** by `vvoland` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #52115** by `renovate-bot` — score **70.0**
+  - **PR #52108** by `renovate-bot` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -280,22 +352,31 @@ _No dead symbols found._
 _No dead symbols found._
 
 ---
-| `rust-lang/rust` | 4m4s | 235MB | 30 | 2 | 100/100 | 100 | 0 | 54 | 0 |
+| `rust-lang/rust` | 4m0s | 235 MB | 29 | 2 | 100/100 | 100 | 0 | 56 | 0 |
 
 ### rust-lang/rust
 
-**Duration**: 4m4s | **Peak RSS**: 235MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 30 | **Clone Groups**: 2
+**Duration**: 4m0s | **Peak RSS**: 235 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 29 | **Clone Groups**: 2
+
+**Workslop Impact**: 10 actionable intercepts | **2.0 hrs reclaimed** | **$200 saved**
+
+**Score Distribution**: 10 blocked (≥100) | 23 warned (70–99) | 67 minor (1–69) | 0 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #153239** by `asder8215` — score **1235.0**
     *Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x8)*
+    *Logic clone groups: 163*
     *No linked issue*
   - **PR #153270** by `jhpratt` — score **515.0**
     *Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x7)*
+    *Dead symbols added: 12*
+    *Logic clone groups: 5*
     *No linked issue*
   - **PR #153277** by `jhpratt` — score **505.0**
     *Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x7)*
+    *Dead symbols added: 11*
+    *Logic clone groups: 5*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -304,27 +385,37 @@ _No zero-score PRs in sample._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_assert_hashmap_is_unwind_safe` (library/std/src/collections/hash/map/tests.rs)
-  - `_block_dim_x` (library/stdarch/crates/core_arch/src/nvptx/mod.rs)
-  - `_block_dim_y` (library/stdarch/crates/core_arch/src/nvptx/mod.rs)
-  - `_block_dim_z` (library/stdarch/crates/core_arch/src/nvptx/mod.rs)
-  - `_block_idx_x` (library/stdarch/crates/core_arch/src/nvptx/mod.rs)
-  _(…and 25 more — verify with `janitor scan rust-lang/rust --library`)_
+  - `_assert_is_dyn_compatible` (library/core/src/iter/traits/iterator.rs)
+  - `_assert_dyn_compatible` (src/tools/rust-analyzer/crates/hir-ty/src/db.rs)
+  - `_assert_sync_and_send` (library/std/src/thread/mod.rs)
+  - `Context._init_change_list` (library/compiler-builtins/ci/ci-util.py)
+  - `Context._ignore_file` (library/compiler-builtins/ci/ci-util.py)
+  _(…and 24 more — verify with `janitor scan rust-lang/rust --library`)_
 
 ---
-| `tauri-apps/tauri` | 1m20s | 29MB | 1 | 0 | 100/100 | 68 | 0 | 52 | 0 |
+| `tauri-apps/tauri` | 1m49s | 28 MB | 1 | 0 | 100/100 | 67 | 0 | 52 | 0 |
 
 ### tauri-apps/tauri
 
-**Duration**: 1m20s | **Peak RSS**: 29MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 1 | **Clone Groups**: 0
+**Duration**: 1m49s | **Peak RSS**: 28 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 1 | **Clone Groups**: 0
+
+**Workslop Impact**: 23 actionable intercepts | **4.6 hrs reclaimed** | **$460 saved**
+
+**Score Distribution**: 23 blocked (≥100) | 17 warned (70–99) | 43 minor (1–69) | 17 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #14911** by `amrbashir` — score **160.0**
-    *Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x3)*
-  - **PR #15015** by `app/dependabot` — score **70.0**
+  - **PR #15015** by `app/dependabot` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yaml, json). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #15001** by `app/renovate` — score **70.0**
+  - **PR #15001** by `app/renovate` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json, yaml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
+    *No linked issue*
+  - **PR #14991** by `app/renovate` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yaml, json). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -338,19 +429,29 @@ _No zero-score PRs in sample._
   - `_as_defined` (crates/tauri-cli/src/interface/rust.rs)
 
 ---
-| `spring-projects/spring-boot` | 1m41s | 55MB | 0 | 0 | 99/100 | 89 | 0 | 21 | 0 |
+| `spring-projects/spring-boot` | 2m9s | 55 MB | 0 | 0 | 99/100 | 89 | 0 | 21 | 0 |
 
 ### spring-projects/spring-boot
 
-**Duration**: 1m41s | **Peak RSS**: 55MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+**Duration**: 2m9s | **Peak RSS**: 55 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+
+**Workslop Impact**: 13 actionable intercepts | **2.6 hrs reclaimed** | **$260 saved**
+
+**Score Distribution**: 13 blocked (≥100) | 19 warned (70–99) | 63 minor (1–69) | 4 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #49028** by `MassimoDeiana` — score **325.0**
+    *Dead symbols added: 11*
+    *Logic clone groups: 39*
     *No linked issue*
   - **PR #48879** by `jayychoi` — score **295.0**
+    *Dead symbols added: 4*
+    *Logic clone groups: 47*
     *No linked issue*
   - **PR #48960** by `jayychoi` — score **205.0**
+    *Dead symbols added: 10*
+    *Logic clone groups: 17*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -364,26 +465,36 @@ _No zero-score PRs in sample._
 _No dead symbols found._
 
 ---
-| `elastic/elasticsearch` | 3m44s | 315MB | 21 | 0 | 96/100 | 92 | 0 | 35 | 0 |
+| `elastic/elasticsearch` | 4m0s | 331 MB | 21 | 0 | 95/100 | 89 | 0 | 31 | 0 |
 
 ### elastic/elasticsearch
 
-**Duration**: 3m44s | **Peak RSS**: 315MB | **PRs Bounced**: 96/100 | **Dead Symbols**: 21 | **Clone Groups**: 0
+**Duration**: 4m0s | **Peak RSS**: 331 MB | **PRs Bounced**: 95/100 | **Dead Symbols**: 21 | **Clone Groups**: 0
+
+**Workslop Impact**: 17 actionable intercepts | **3.4 hrs reclaimed** | **$340 saved**
+
+**Score Distribution**: 17 blocked (≥100) | 27 warned (70–99) | 46 minor (1–69) | 5 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #143339** by `nik9000` — score **865.0**
+    *Dead symbols added: 13*
+    *Logic clone groups: 143*
     *No linked issue*
   - **PR #143322** by `nik9000` — score **500.0**
+    *Dead symbols added: 22*
+    *Logic clone groups: 52*
     *No linked issue*
   - **PR #143352** by `nik9000` — score **475.0**
+    *Dead symbols added: 17*
+    *Logic clone groups: 57*
     *No linked issue*
 
 #### Top 3 Clean PRs
 
+  - PR #143447 by `spinscale`
+  - PR #143440 by `morning-color`
   - PR #143424 by `nik9000`
-  - PR #143375 by `leontyevdv`
-  - PR #143358 by `ywangd`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
@@ -395,19 +506,29 @@ _No dead symbols found._
   _(…and 16 more — verify with `janitor scan elastic/elasticsearch --library`)_
 
 ---
-| `redis/redis` | 1m30s | 23MB | 87 | 2 | 98/100 | 95 | 0 | 15 | 0 |
+| `redis/redis` | 1m35s | 23 MB | 87 | 2 | 98/100 | 95 | 0 | 15 | 0 |
 
 ### redis/redis
 
-**Duration**: 1m30s | **Peak RSS**: 23MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 87 | **Clone Groups**: 2
+**Duration**: 1m35s | **Peak RSS**: 23 MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 87 | **Clone Groups**: 2
+
+**Workslop Impact**: 3 actionable intercepts | **0.6 hrs reclaimed** | **$60 saved**
+
+**Score Distribution**: 3 blocked (≥100) | 13 warned (70–99) | 79 minor (1–69) | 3 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #14826** by `minchopaskal` — score **70.0**
+  - **PR #14768** by `greatest-voyage` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #14795** by `moticless` — score **70.0**
+  - **PR #14747** by `LiorKogan` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'vulnerability' but only non-code files changed (md). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #14788** by `alisaifee` — score **70.0**
+  - **PR #14743** by `alonre24` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'memory leak' but only non-code files changed (). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -418,57 +539,72 @@ _No dead symbols found._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_anetTcpServer` (src/anet.c)
-  - `_dictReset` (src/dict.c)
-  - `_dictInit` (src/dict.c)
-  - `_dictResize` (src/dict.c)
-  - `_dictExpand` (src/dict.c)
+  - `_redisSortObject` (src/server.h)
+  - `_redisSortOperation` (src/server.h)
+  - `_serverLog` (src/server.c)
+  - `_kvstore` (src/kvstore.c)
+  - `_crc64` (src/crc64.c)
   _(…and 82 more — verify with `janitor scan redis/redis --library`)_
 
 ---
-| `NixOS/nixpkgs` | 1m55s | 29MB | 199 | 2 | 100/100 | 97 | 0 | 42 | 0 |
+| `NixOS/nixpkgs` | 2m4s | 29 MB | 205 | 2 | 100/100 | 96 | 0 | 43 | 0 |
 
 ### NixOS/nixpkgs
 
-**Duration**: 1m55s | **Peak RSS**: 29MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 199 | **Clone Groups**: 2
+**Duration**: 2m4s | **Peak RSS**: 29 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 205 | **Clone Groups**: 2
+
+**Workslop Impact**: 0 actionable intercepts | **0.0 hrs reclaimed** | **$0 saved**
+
+**Score Distribution**: 0 blocked (≥100) | 42 warned (70–99) | 55 minor (1–69) | 3 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #496067** by `r-ryantm` — score **70.0**
+  - **PR #496180** by `r-ryantm` — score **70.0**
     *No linked issue*
-  - **PR #496064** by `r-ryantm` — score **70.0**
+  - **PR #496179** by `r-ryantm` — score **70.0**
     *No linked issue*
-  - **PR #496062** by `r-ryantm` — score **70.0**
+  - **PR #496178** by `hatch01` — score **70.0**
     *No linked issue*
 
 #### Top 3 Clean PRs
 
-  - PR #495995 by `LunNova`
-  - PR #495963 by `PatrickDaG`
+  - PR #496139 by `mulatta`
+  - PR #496084 by `pancaek`
+  - PR #496074 by `kalbasit`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_map_worker_init` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/parallel.py)
-  - `_map_worker_step` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/parallel.py)
-  - `Machine._next_newline_closed_block_from_shell` (nixos/lib/test-driver/src/test_driver/machine/__init__.py)
-  - `Machine._managed_screenshot` (nixos/lib/test-driver/src/test_driver/machine/__init__.py)
-  - `_get_data_json` (pkgs/by-name/gi/gitlab/update.py)
-  _(…and 194 more — verify with `janitor scan NixOS/nixpkgs --library`)_
+  - `_handle_called_process_error` (pkgs/by-name/ni/nixos-rebuild-ng/src/nixos_rebuild/__init__.py)
+  - `CommonMarkRenderer._enter_block` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)
+  - `CommonMarkRenderer._leave_block` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)
+  - `CommonMarkRenderer._maybe_parbreak` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)
+  - `CommonMarkRenderer._admonition_open` (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)
+  _(…and 200 more — verify with `janitor scan NixOS/nixpkgs --library`)_
 
 ---
-| `dotnet/aspnetcore` | 2m9s | 142MB | 4 | 0 | 98/100 | 83 | 0 | 42 | 1 |
+| `dotnet/aspnetcore` | 2m20s | 142 MB | 4 | 0 | 96/100 | 80 | 0 | 42 | 1 |
 
 ### dotnet/aspnetcore
 
-**Duration**: 2m9s | **Peak RSS**: 142MB | **PRs Bounced**: 98/100 | **Dead Symbols**: 4 | **Clone Groups**: 0
+**Duration**: 2m20s | **Peak RSS**: 142 MB | **PRs Bounced**: 96/100 | **Dead Symbols**: 4 | **Clone Groups**: 0
+
+**Workslop Impact**: 3 actionable intercepts | **0.6 hrs reclaimed** | **$60 saved**
+
+**Score Distribution**: 3 blocked (≥100) | 35 warned (70–99) | 50 minor (1–69) | 8 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #65622** by `app/dotnet-maestro` — score **70.0**
+  - **PR #65487** by `app/dependabot` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #65621** by `app/dotnet-maestro` — score **70.0**
+  - **PR #65486** by `app/dependabot` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #65615** by `app/dotnet-maestro` — score **70.0**
+  - **PR #65554** by `app/dependabot` — score **120.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -479,26 +615,36 @@ _No dead symbols found._
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_RW_LOCK` (src/Servers/IIS/AspNetCoreModuleV2/IISLib/rwlock.h)
   - `_TRACE_LOG` (src/Servers/IIS/AspNetCoreModuleV2/IISLib/tracelog.h)
   - `_REF_TRACE_LOG_ENTRY` (src/Servers/IIS/AspNetCoreModuleV2/IISLib/reftrace.h)
   - `_ackTimer` (src/SignalR/clients/ts/signalr/src/MessageBuffer.ts)
+  - `_RW_LOCK` (src/Servers/IIS/AspNetCoreModuleV2/IISLib/rwlock.h)
 
 ---
-| `apache/kafka` | 1m51s | 72MB | 1 | 3 | 100/100 | 100 | 0 | 27 | 0 |
+| `apache/kafka` | 1m56s | 72 MB | 1 | 3 | 99/100 | 99 | 0 | 30 | 0 |
 
 ### apache/kafka
 
-**Duration**: 1m51s | **Peak RSS**: 72MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 1 | **Clone Groups**: 3
+**Duration**: 1m56s | **Peak RSS**: 72 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 1 | **Clone Groups**: 3
+
+**Workslop Impact**: 15 actionable intercepts | **3.0 hrs reclaimed** | **$300 saved**
+
+**Score Distribution**: 15 blocked (≥100) | 31 warned (70–99) | 53 minor (1–69) | 0 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #21581** by `frankvicky` — score **1015.0**
+    *Dead symbols added: 54*
+    *Logic clone groups: 91*
     *No linked issue*
   - **PR #21600** by `bbejeck` — score **905.0**
+    *Dead symbols added: 51*
+    *Logic clone groups: 75*
     *No linked issue*
   - **PR #21580** by `aliehsaeedii` — score **800.0**
     *Antipatterns: System.out.println: console debug logging in production — use a structured logger (SLF4J, Log4j, etc.)*
+    *Dead symbols added: 51*
+    *Logic clone groups: 44*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -510,19 +656,29 @@ _No zero-score PRs in sample._
   - `_prefix` (release/runtime.py)
 
 ---
-| `ohmyzsh/ohmyzsh` | 1m20s | 10MB | 0 | 0 | 100/100 | 92 | 0 | 42 | 0 |
+| `ohmyzsh/ohmyzsh` | 1m20s | 10 MB | 0 | 0 | 100/100 | 92 | 0 | 42 | 0 |
 
 ### ohmyzsh/ohmyzsh
 
-**Duration**: 1m20s | **Peak RSS**: 10MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+**Duration**: 1m20s | **Peak RSS**: 10 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 0 | **Clone Groups**: 0
+
+**Workslop Impact**: 25 actionable intercepts | **5.0 hrs reclaimed** | **$500 saved**
+
+**Score Distribution**: 25 blocked (≥100) | 36 warned (70–99) | 34 minor (1–69) | 5 clean (0)
 
 #### Top 3 Toxic PRs
 
-  - **PR #13604** by `gorewilliams` — score **70.0**
+  - **PR #13571** by `bdynamic` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #13598** by `omair-inam` — score **70.0**
+  - **PR #13520** by `robbyrussell` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
-  - **PR #13597** by `KevinWMatthews` — score **70.0**
+  - **PR #13498** by `MD-Mushfiqur123` — score **170.0**
+    *Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.*
+    *Hallucinated security fixes: 1*
     *No linked issue*
 
 #### Top 3 Clean PRs
@@ -536,71 +692,105 @@ _No zero-score PRs in sample._
 _No dead symbols found._
 
 ---
-| `pytorch/pytorch` | 3m45s | 164MB | 8247 | 24 | 99/100 | 89 | 55 | 4 | 0 |
+| `pytorch/pytorch` | 3m23s | 165 MB | 8149 | 24 | 99/100 | 90 | 42 | 5 | 0 |
 
 ### pytorch/pytorch
 
-**Duration**: 3m45s | **Peak RSS**: 164MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 8247 | **Clone Groups**: 24
+**Duration**: 3m23s | **Peak RSS**: 165 MB | **PRs Bounced**: 99/100 | **Dead Symbols**: 8149 | **Clone Groups**: 24
+
+**Workslop Impact**: 18 actionable intercepts | **3.6 hrs reclaimed** | **$360 saved**
+
+**Score Distribution**: 9 blocked (≥100) | 10 warned (70–99) | 76 minor (1–69) | 4 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #176190** by `soulitzer` — score **450.0**
     *Zombie deps: 3*
+    *Dead symbols added: 20*
+    *Logic clone groups: 37*
     *No linked issue*
   - **PR #176235** by `aorenste` — score **440.0**
     *Zombie deps: 3*
+    *Dead symbols added: 20*
+    *Logic clone groups: 35*
     *No linked issue*
-  - **PR #176140** by `weifengpy` — score **420.0**
-    *Zombie deps: 9*
+  - **PR #176140** by `weifengpy` — score **385.0**
+    *Zombie deps: 8*
+    *Dead symbols added: 21*
+    *Logic clone groups: 7*
     *No linked issue*
 
 #### Top 3 Clean PRs
 
+  - PR #176265 by `evgri243`
   - PR #176243 by `drisspg`
   - PR #176226 by `cleonard530`
-  - PR #176135 by `cluePrints`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `_not_implemented` (torch/package/_mock.py)
-  - `_is_aligned` (torch/_inductor/utils.py)
-  - `_set_env` (torch/_inductor/utils.py)
-  - `DeferredLineBase._new_line` (torch/_inductor/utils.py)
-  - `DelayReplaceLine._new_line` (torch/_inductor/utils.py)
-  _(…and 8242 more — verify with `janitor scan pytorch/pytorch --library`)_
+  - `_AssertRaisesRegexWithHighlightContext` (torch/testing/_internal/jit_utils.py)
+  - `JitTestCase._isHookExceptionOk` (torch/testing/_internal/jit_utils.py)
+  - `JitTestCase._compared_saved_loaded` (torch/testing/_internal/jit_utils.py)
+  - `_inline_everything` (torch/testing/_internal/jit_utils.py)
+  - `_tmp_donotuse_dont_inline_everything` (torch/testing/_internal/jit_utils.py)
+  _(…and 8144 more — verify with `janitor scan pytorch/pytorch --library`)_
 
 ---
-| `langchain-ai/langchain` | 1m37s | 20MB | 1483 | 2 | 100/100 | 53 | 77 | 17 | 0 |
+| `langchain-ai/langchain` | 1m37s | 20 MB | 1483 | 2 | 100/100 | 53 | 79 | 17 | 0 |
 
 ### langchain-ai/langchain
 
-**Duration**: 1m37s | **Peak RSS**: 20MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 1483 | **Clone Groups**: 2
+**Duration**: 1m37s | **Peak RSS**: 20 MB | **PRs Bounced**: 100/100 | **Dead Symbols**: 1483 | **Clone Groups**: 2
+
+**Workslop Impact**: 27 actionable intercepts | **5.4 hrs reclaimed** | **$540 saved**
+
+**Score Distribution**: 22 blocked (≥100) | 5 warned (70–99) | 50 minor (1–69) | 23 clean (0)
 
 #### Top 3 Toxic PRs
 
   - **PR #35416** by `sadilet` — score **1095.0**
     *Antipatterns: Hallucinated import: 'otel_context' imported inside function but never used*
     *Zombie deps: 39*
+    *Dead symbols added: 12*
+    *Logic clone groups: 64*
     *No linked issue*
   - **PR #35434** by `marklubin` — score **935.0**
     *Zombie deps: 17*
+    *Dead symbols added: 23*
+    *Logic clone groups: 86*
     *No linked issue*
   - **PR #35459** by `saadsaleem01` — score **465.0**
     *Zombie deps: 6*
+    *Dead symbols added: 5*
+    *Logic clone groups: 65*
 
 #### Top 3 Clean PRs
 
+  - PR #35532 by `Jaredw2289-svg`
   - PR #35523 by `OiPunk`
   - PR #35520 by `squallopen`
-  - PR #35517 by `A404coder`
 
 #### Dead Symbol Certainty Audit (Top 5)
 
-  - `ModelRetryMiddleware._handle_failure` (libs/langchain_v1/langchain/agents/middleware/model_retry.py)
-  - `_warn_on_import` (libs/langchain/langchain_classic/__init__.py)
-  - `_merge_status` (libs/core/langchain_core/messages/tool.py)
-  - `_get_builtin_translator` (libs/langchain/langchain_classic/retrievers/self_query/base.py)
-  - `SelfQueryRetriever._prepare_query` (libs/langchain/langchain_classic/retrievers/self_query/base.py)
+  - `_hash_string_to_uuid` (libs/core/langchain_core/indexing/api.py)
+  - `_warn_about_sha1` (libs/core/langchain_core/indexing/api.py)
+  - `_hash_string` (libs/core/langchain_core/indexing/api.py)
+  - `_hash_nested_dict` (libs/core/langchain_core/indexing/api.py)
+  - `_batch` (libs/core/langchain_core/indexing/api.py)
   _(…and 1478 more — verify with `janitor scan langchain-ai/langchain --library`)_
 
 ---
+| **TOTAL** | — | — | **24590** | **52** | **1974/2000** | **1733** | **172** | **650** | **1** |
+
+---
+
+## Global Workslop Impact
+
+| Metric | Value |
+|:-------|------:|
+| Actionable intercepts (Blocked ≥ 100 / Zombie / Hallucination) | **213** |
+| **Total engineering time reclaimed** | **42.6 hours** |
+| **Estimated operational savings** | **$4260** |
+
+> Methodology: 12 min/triage × $100/hr loaded engineering cost.
+> Actionable = PRs scoring ≥ 100 (gate blocked) or confirmed adversarial signal (Zombie re-injection / Hallucinated Security Fix).
