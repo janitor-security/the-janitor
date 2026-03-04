@@ -74,7 +74,6 @@ runs:
         echo "Downloading janitor from ${DL_URL} ..."
         curl -sSfL "$DL_URL" -o /tmp/janitor
         chmod +x /tmp/janitor
-        /tmp/janitor --version
 
     # Step 2 — Fetch the PR diff.
     #
