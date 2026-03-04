@@ -3,7 +3,7 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token"]
 resolver = "2"
 
 [workspace.package]
-version = "6.10.1"
+version = "6.10.2"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
