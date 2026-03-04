@@ -1592,6 +1592,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#global-workslop-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Workslop Impact
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1634,28 +1643,32 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <tbody>
 <tr>
 <td><code>godotengine/godot</code></td>
-<td>2m54s</td>
-<td>58MB</td>
-<td>717</td>
+<td>3m19s</td>
+<td>55 MB</td>
+<td>718</td>
 <td>2</td>
-<td>98/100</td>
-<td>70</td>
+<td>99/100</td>
+<td>73</td>
 <td>0</td>
-<td>15</td>
+<td>14</td>
 <td>0</td>
 </tr>
 </tbody>
 </table>
 <h3 id="godotenginegodot">godotengine/godot</h3>
-<p><strong>Duration</strong>: 2m54s | <strong>Peak RSS</strong>: 58MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 717 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 3m19s | <strong>Peak RSS</strong>: 55 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 718 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 2 actionable intercepts | <strong>0.4 hrs reclaimed</strong> | <strong>$40 saved</strong></p>
+<p><strong>Score Distribution</strong>: 2 blocked (≥100) | 11 warned (70–99) | 60 minor (1–69) | 26 clean (0)</p>
 <h4 id="top-3-toxic-prs">Top 3 Toxic PRs</h4>
 <ul>
+<li><strong>PR #116963</strong> by <code>Repiteo</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
+    <em>No linked issue</em></li>
 <li><strong>PR #116839</strong> by <code>bruvzg</code> — score <strong>120.0</strong>
     <em>Antipatterns: Raw <code>new</code>: prefer std::make_unique<T>() or std::make_shared<T>() for exception-safe RAII ownership (x2)</em>
     <em>No linked issue</em></li>
 <li><strong>PR #116993</strong> by <code>Calinou</code> — score <strong>70.0</strong>
-    <em>No linked issue</em></li>
-<li><strong>PR #116982</strong> by <code>Calinou</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs">Top 3 Clean PRs</h4>
@@ -1666,17 +1679,19 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_EVCSort</code> (editor/settings/editor_settings.cpp)</li>
-<li><code>_get_skipped_locales</code> (editor/settings/editor_settings.cpp)</li>
-<li><code>_EDITOR_DEF</code> (editor/settings/editor_settings.cpp)</li>
-<li><code>_write_to_str</code> (core/variant/variant_parser.cpp)</li>
-<li><code>_compute_key</code> (scene/resources/canvas_item_material.h)
-  <em>(…and 712 more — verify with <code>janitor scan godotengine/godot --library</code>)</em></li>
+<li><code>_get_resolved_dep_path</code> (editor/file_system/dependency_editor.cpp)</li>
+<li><code>_get_stored_dep_path</code> (editor/file_system/dependency_editor.cpp)</li>
+<li><code>_rgba8_to_packbits_encode</code> (platform/macos/export/export_plugin.cpp)</li>
+<li><code>_unpair</code> (core/math/bvh.h)</li>
+<li><code>_find_leavers_process_pair</code> (core/math/bvh.h)
+  <em>(…and 713 more — verify with <code>janitor scan godotengine/godot --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>electron/electron</code> | 1m58s | 30MB | 10 | 2 | 100/100 | 97 | 0 | 68 | 0 |</p>
+<p>| <code>electron/electron</code> | 2m3s | 30 MB | 10 | 2 | 100/100 | 97 | 0 | 68 | 0 |</p>
 <h3 id="electronelectron">electron/electron</h3>
-<p><strong>Duration</strong>: 1m58s | <strong>Peak RSS</strong>: 30MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 10 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 2m3s | <strong>Peak RSS</strong>: 30 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 10 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 11 actionable intercepts | <strong>2.2 hrs reclaimed</strong> | <strong>$220 saved</strong></p>
+<p><strong>Score Distribution</strong>: 11 blocked (≥100) | 34 warned (70–99) | 54 minor (1–69) | 1 clean (0)</p>
 <h4 id="top-3-toxic-prs_1">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #50023</strong> by <code>app/trop</code> — score <strong>370.0</strong>
@@ -1695,97 +1710,121 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_1">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_GtkMenu</code> (shell/browser/ui/gtk/menu_gtk.h)</li>
-<li><code>_GtkWidget</code> (shell/browser/ui/gtk/menu_gtk.h)</li>
-<li><code>_DbusmenuMenuitem</code> (shell/browser/ui/views/global_menu_bar_x11.h)</li>
-<li><code>_DbusmenuServer</code> (shell/browser/ui/views/global_menu_bar_x11.h)</li>
-<li><code>_UnityInspector</code> (shell/browser/linux/unity_service.cc)
+<li><code>_GtkStatusIcon</code> (shell/browser/ui/status_icon_gtk.h)</li>
+<li><code>_UnityInspector</code> (shell/browser/linux/unity_service.cc)</li>
+<li><code>_UnityLauncherEntry</code> (shell/browser/linux/unity_service.cc)</li>
+<li><code>_DbusmenuMenuitem</code> (shell/browser/ui/views/global_menu_bar_x11.cc)</li>
+<li><code>_DbusmenuServer</code> (shell/browser/ui/views/global_menu_bar_x11.cc)
   <em>(…and 5 more — verify with <code>janitor scan electron/electron --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>microsoft/vscode</code> | 2m20s | 107MB | 2827 | 0 | 99/100 | 75 | 0 | 68 | 0 |</p>
+<p>| <code>microsoft/vscode</code> | 2m13s | 106 MB | 4658 | 0 | 99/100 | 81 | 0 | 67 | 0 |</p>
 <h3 id="microsoftvscode">microsoft/vscode</h3>
-<p><strong>Duration</strong>: 2m20s | <strong>Peak RSS</strong>: 107MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 2827 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 2m13s | <strong>Peak RSS</strong>: 106 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 4658 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 1 actionable intercepts | <strong>0.2 hrs reclaimed</strong> | <strong>$20 saved</strong></p>
+<p><strong>Score Distribution</strong>: 1 blocked (≥100) | 50 warned (70–99) | 46 minor (1–69) | 2 clean (0)</p>
 <h4 id="top-3-toxic-prs_2">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #298852</strong> by <code>joshspicer</code> — score <strong>70.0</strong>
+<li><strong>PR #298806</strong> by <code>app/copilot-swe-agent</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #298844</strong> by <code>osortega</code> — score <strong>70.0</strong>
+<li><strong>PR #298929</strong> by <code>benibenj</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
-<li><strong>PR #298839</strong> by <code>rzhao271</code> — score <strong>70.0</strong>
+<li><strong>PR #298925</strong> by <code>gjsjohnmurray</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_2">Top 3 Clean PRs</h4>
 <ul>
 <li>PR #298819 by <code>kycutler</code></li>
 <li>PR #298598 by <code>sanchirico</code></li>
-<li>PR #298586 by <code>barruka</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_2">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_updateSnippets</code> (src/vs/workbench/contrib/snippets/browser/tabCompletion.ts)</li>
-<li><code>_updateReadIndicator</code> (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)</li>
-<li><code>_updateTitle</code> (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)</li>
-<li><code>_updateToggleButton</code> (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)</li>
-<li><code>_updateExplanationText</code> (src/vs/workbench/contrib/chat/browser/chatEditing/chatEditingExplanationWidget.ts)
-  <em>(…and 2822 more — verify with <code>janitor scan microsoft/vscode --library</code>)</em></li>
+<li><code>_updatePolicyDefinitions</code> (src/vs/platform/policy/common/policyIpc.ts)</li>
+<li><code>_updateCounts</code> (src/vs/sessions/contrib/sessions/browser/customizationsToolbar.contribution.ts)</li>
+<li><code>_updateDecorations</code> (src/vs/sessions/contrib/chat/browser/slashCommands.ts)</li>
+<li><code>_updateResults</code> (src/vs/workbench/contrib/search/browser/searchView.ts)</li>
+<li><code>_updateContent</code> (src/vs/workbench/contrib/debug/browser/replAccessibleView.ts)
+  <em>(…and 4653 more — verify with <code>janitor scan microsoft/vscode --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>DefinitelyTyped/DefinitelyTyped</code> | 4m40s | 110MB | 13 | 0 | 99/100 | 99 | 0 | 32 | 0 |</p>
+<p>| <code>DefinitelyTyped/DefinitelyTyped</code> | 4m15s | 110 MB | 16 | 0 | 99/100 | 99 | 0 | 32 | 0 |</p>
 <h3 id="definitelytypeddefinitelytyped">DefinitelyTyped/DefinitelyTyped</h3>
-<p><strong>Duration</strong>: 4m40s | <strong>Peak RSS</strong>: 110MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 13 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 4m15s | <strong>Peak RSS</strong>: 110 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 16 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 4 actionable intercepts | <strong>0.8 hrs reclaimed</strong> | <strong>$80 saved</strong></p>
+<p><strong>Score Distribution</strong>: 4 blocked (≥100) | 32 warned (70–99) | 63 minor (1–69) | 0 clean (0)</p>
 <h4 id="top-3-toxic-prs_3">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #74619</strong> by <code>jlgrimes</code> — score <strong>70.0</strong>
+<li><strong>PR #74620</strong> by <code>app/dependabot</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #74615</strong> by <code>myabc</code> — score <strong>70.0</strong>
+<li><strong>PR #74566</strong> by <code>patrickrauls</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #74613</strong> by <code>myabc</code> — score <strong>70.0</strong>
+<li><strong>PR #74559</strong> by <code>alex-rantos</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_3">Top 3 Clean PRs</h4>
 <p><em>No zero-score PRs in sample.</em></p>
 <h4 id="dead-symbol-certainty-audit-top-5_3">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_NotificationModule</code> (types/openfin/_v2/api/notification/notification.d.ts)</li>
-<li><code>_IndicatorElement</code> (types/dojo/dojox.charting.d.ts)</li>
 <li><code>_CalendarDayView</code> (types/dojo/dojox.widget.d.ts)</li>
 <li><code>_CalendarMonthYear</code> (types/dojo/dojox.widget.d.ts)</li>
-<li><code>_CalendarMonthView</code> (types/dojo/dojox.widget.d.ts)
-  <em>(…and 8 more — verify with <code>janitor scan DefinitelyTyped/DefinitelyTyped --library</code>)</em></li>
+<li><code>_CalendarMonthView</code> (types/dojo/dojox.widget.d.ts)</li>
+<li><code>_CalendarMonthYearView</code> (types/dojo/dojox.widget.d.ts)</li>
+<li><code>_CalendarYearView</code> (types/dojo/dojox.widget.d.ts)
+  <em>(…and 11 more — verify with <code>janitor scan DefinitelyTyped/DefinitelyTyped --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>vercel/next.js</code> | 2m11s | 51MB | 0 | 0 | 97/100 | 91 | 0 | 42 | 0 |</p>
+<p>| <code>vercel/next.js</code> | 2m42s | 51 MB | 0 | 0 | 97/100 | 89 | 0 | 40 | 0 |</p>
 <h3 id="vercelnextjs">vercel/next.js</h3>
-<p><strong>Duration</strong>: 2m11s | <strong>Peak RSS</strong>: 51MB | <strong>PRs Bounced</strong>: 97/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 2m42s | <strong>Peak RSS</strong>: 51 MB | <strong>PRs Bounced</strong>: 97/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 5 actionable intercepts | <strong>1.0 hrs reclaimed</strong> | <strong>$100 saved</strong></p>
+<p><strong>Score Distribution</strong>: 5 blocked (≥100) | 34 warned (70–99) | 54 minor (1–69) | 4 clean (0)</p>
 <h4 id="top-3-toxic-prs_4">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #90769</strong> by <code>sokra</code> — score <strong>170.0</strong>
     <em>Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x3)</em>
     <em>No linked issue</em></li>
 <li><strong>PR #90710</strong> by <code>lukesandberg</code> — score <strong>150.0</strong>
+    <em>Dead symbols added: 11</em>
+    <em>Logic clone groups: 4</em>
     <em>No linked issue</em></li>
 <li><strong>PR #90617</strong> by <code>lukesandberg</code> — score <strong>125.0</strong>
+    <em>Dead symbols added: 9</em>
+    <em>Logic clone groups: 3</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_4">Top 3 Clean PRs</h4>
 <ul>
+<li>PR #90812 by <code>sleitor</code></li>
+<li>PR #90800 by <code>devjiwonchoi</code></li>
 <li>PR #90700 by <code>sleitor</code></li>
-<li>PR #90697 by <code>umutkeltek</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_4">Dead Symbol Certainty Audit (Top 5)</h4>
 <p><em>No dead symbols found.</em></p>
 <hr />
-<p>| <code>ansible/ansible</code> | 1m33s | 25MB | 894 | 2 | 100/100 | 79 | 15 | 22 | 0 |</p>
+<p>| <code>ansible/ansible</code> | 1m46s | 25 MB | 895 | 2 | 100/100 | 79 | 15 | 22 | 0 |</p>
 <h3 id="ansibleansible">ansible/ansible</h3>
-<p><strong>Duration</strong>: 1m33s | <strong>Peak RSS</strong>: 25MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 894 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 1m46s | <strong>Peak RSS</strong>: 25 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 895 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 3 actionable intercepts | <strong>0.6 hrs reclaimed</strong> | <strong>$60 saved</strong></p>
+<p><strong>Score Distribution</strong>: 2 blocked (≥100) | 18 warned (70–99) | 64 minor (1–69) | 16 clean (0)</p>
 <h4 id="top-3-toxic-prs_5">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #86600</strong> by <code>haosenwang1018</code> — score <strong>750.0</strong>
     <em>Zombie deps: 7</em>
+    <em>Dead symbols added: 40</em>
+    <em>Logic clone groups: 45</em>
     <em>No linked issue</em></li>
 <li><strong>PR #86597</strong> by <code>haosenwang1018</code> — score <strong>750.0</strong>
     <em>Zombie deps: 7</em>
+    <em>Dead symbols added: 40</em>
+    <em>Logic clone groups: 45</em>
     <em>No linked issue</em></li>
 <li><strong>PR #86604</strong> by <code>nitzmahone</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
@@ -1798,26 +1837,34 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_5">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_get_encoded_arguments</code> (lib/ansible/_internal/_powershell/_script.py)</li>
-<li><code>RoleMetadata._load_dependencies</code> (lib/ansible/playbook/role/metadata.py)</li>
-<li><code>_generate_ansible_managed</code> (lib/ansible/_internal/_templating/_template_vars.py)</li>
-<li><code>DnfModule._sanitize_dnf_error_msg_install</code> (lib/ansible/modules/dnf.py)</li>
-<li><code>DnfModule._package_dict</code> (lib/ansible/modules/dnf.py)
-  <em>(…and 889 more — verify with <code>janitor scan ansible/ansible --library</code>)</em></li>
+<li><code>JinjaPluginIntercept._wrap_and_set_func</code> (lib/ansible/_internal/_templating/_jinja_plugins.py)</li>
+<li><code>JinjaPluginIntercept._invoke_plugin</code> (lib/ansible/_internal/_templating/_jinja_plugins.py)</li>
+<li><code>JinjaPluginIntercept._wrap_filter</code> (lib/ansible/_internal/_templating/_jinja_plugins.py)</li>
+<li><code>_LookupContext</code> (lib/ansible/_internal/_templating/_jinja_plugins.py)</li>
+<li><code>_get_builtin_short_description</code> (lib/ansible/<em>internal/_templating/_jinja_plugins.py)
+  </em>(…and 890 more — verify with <code>janitor scan ansible/ansible --library</code>)_</li>
 </ul>
 <hr />
-<p>| <code>home-assistant/core</code> | 3m47s | 101MB | 8311 | 9 | 98/100 | 84 | 37 | 9 | 0 |</p>
+<p>| <code>home-assistant/core</code> | 4m4s | 99 MB | 8240 | 9 | 97/100 | 85 | 36 | 10 | 0 |</p>
 <h3 id="home-assistantcore">home-assistant/core</h3>
-<p><strong>Duration</strong>: 3m47s | <strong>Peak RSS</strong>: 101MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 8311 | <strong>Clone Groups</strong>: 9</p>
+<p><strong>Duration</strong>: 4m4s | <strong>Peak RSS</strong>: 99 MB | <strong>PRs Bounced</strong>: 97/100 | <strong>Dead Symbols</strong>: 8240 | <strong>Clone Groups</strong>: 9</p>
+<p><strong>Workslop Impact</strong>: 23 actionable intercepts | <strong>4.6 hrs reclaimed</strong> | <strong>$460 saved</strong></p>
+<p><strong>Score Distribution</strong>: 8 blocked (≥100) | 17 warned (70–99) | 66 minor (1–69) | 6 clean (0)</p>
 <h4 id="top-3-toxic-prs_6">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #164611</strong> by <code>arievanderwende</code> — score <strong>670.0</strong>
     <em>Zombie deps: 6</em>
+    <em>Dead symbols added: 25</em>
+    <em>Logic clone groups: 62</em>
     <em>No linked issue</em></li>
-<li><strong>PR #164543</strong> by <code>Claeysson</code> — score <strong>525.0</strong>
+<li><strong>PR #164543</strong> by <code>Claeysson</code> — score <strong>515.0</strong>
     <em>Zombie deps: 1</em>
+    <em>Dead symbols added: 14</em>
+    <em>Logic clone groups: 68</em>
     <em>No linked issue</em></li>
 <li><strong>PR #164544</strong> by <code>agentgonzo</code> — score <strong>200.0</strong>
+    <em>Dead symbols added: 12</em>
+    <em>Logic clone groups: 12</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_6">Top 3 Clean PRs</h4>
@@ -1828,52 +1875,68 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_6">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>TokenView._async_handle_auth_code</code> (homeassistant/components/auth/<strong>init</strong>.py)</li>
-<li><code>TokenView._async_handle_refresh_token</code> (homeassistant/components/auth/<strong>init</strong>.py)</li>
-<li><code>_create_auth_code_store</code> (homeassistant/components/auth/<strong>init</strong>.py)</li>
-<li><code>_delete_current_token_soon</code> (homeassistant/components/auth/<strong>init</strong>.py)</li>
-<li><code>SamsungTVDevice._update_sources</code> (homeassistant/components/samsungtv/media_player.py)
-  <em>(…and 8306 more — verify with <code>janitor scan home-assistant/core --library</code>)</em></li>
+<li><code>TTSMediaSource._engine_item</code> (homeassistant/components/tts/media_source.py)</li>
+<li><code>_rotate_token</code> (homeassistant/components/brands/<strong>init</strong>.py)</li>
+<li><code>_read_cached_file_with_marker</code> (homeassistant/components/brands/<strong>init</strong>.py)</li>
+<li><code>_write_cache_file</code> (homeassistant/components/brands/<strong>init</strong>.py)</li>
+<li><code>_read_brand_file</code> (homeassistant/components/brands/<strong>init</strong>.py)
+  <em>(…and 8235 more — verify with <code>janitor scan home-assistant/core --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>kubernetes/kubernetes</code> | 3m15s | 166MB | 73 | 2 | 98/100 | 86 | 0 | 16 | 0 |</p>
+<p>| <code>kubernetes/kubernetes</code> | 3m25s | 166 MB | 73 | 2 | 98/100 | 86 | 0 | 15 | 0 |</p>
 <h3 id="kuberneteskubernetes">kubernetes/kubernetes</h3>
-<p><strong>Duration</strong>: 3m15s | <strong>Peak RSS</strong>: 166MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 73 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 3m25s | <strong>Peak RSS</strong>: 166 MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 73 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 4 actionable intercepts | <strong>0.8 hrs reclaimed</strong> | <strong>$80 saved</strong></p>
+<p><strong>Score Distribution</strong>: 4 blocked (≥100) | 14 warned (70–99) | 69 minor (1–69) | 11 clean (0)</p>
 <h4 id="top-3-toxic-prs_7">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #137346</strong> by <code>aramase</code> — score <strong>370.0</strong>
+    <em>Dead symbols added: 14</em>
+    <em>Logic clone groups: 42</em>
+    <em>No linked issue</em></li>
+<li><strong>PR #137288</strong> by <code>ffromani</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 <li><strong>PR #137310</strong> by <code>KunWuLuan</code> — score <strong>140.0</strong>
-    <em>No linked issue</em></li>
-<li><strong>PR #137353</strong> by <code>ArvindParekh</code> — score <strong>70.0</strong>
+    <em>Dead symbols added: 6</em>
+    <em>Logic clone groups: 12</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_7">Top 3 Clean PRs</h4>
 <ul>
+<li>PR #137360 by <code>Chunxia202410</code></li>
+<li>PR #137359 by <code>Towaiji</code></li>
 <li>PR #137338 by <code>GunaKKIBM</code></li>
-<li>PR #137332 by <code>gavinkflam</code></li>
-<li>PR #137319 by <code>AutuSnow</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_7">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_PodResourcesLister_List_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/podresources/v1alpha1/api_grpc.pb.go)</li>
-<li><code>_ExternalJWTSigner_Sign_Handler</code> (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)</li>
-<li><code>_ExternalJWTSigner_FetchKeys_Handler</code> (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)</li>
-<li><code>_ExternalJWTSigner_Metadata_Handler</code> (staging/src/k8s.io/externaljwt/apis/v1alpha1/api_grpc.pb.go)</li>
-<li><code>_ExternalJWTSigner_Sign_Handler</code> (staging/src/k8s.io/externaljwt/apis/v1/api_grpc.pb.go)
+<li><code>_Registration_Register_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)</li>
+<li><code>_DevicePlugin_GetDevicePluginOptions_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)</li>
+<li><code>_DevicePlugin_ListAndWatch_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)</li>
+<li><code>_DevicePlugin_GetPreferredAllocation_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)</li>
+<li><code>_DevicePlugin_Allocate_Handler</code> (staging/src/k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1/api_grpc.pb.go)
   <em>(…and 68 more — verify with <code>janitor scan kubernetes/kubernetes --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>moby/moby</code> | 1m48s | 34MB | 0 | 0 | 100/100 | 95 | 0 | 29 | 0 |</p>
+<p>| <code>moby/moby</code> | 2m21s | 34 MB | 0 | 0 | 99/100 | 94 | 0 | 28 | 0 |</p>
 <h3 id="mobymoby">moby/moby</h3>
-<p><strong>Duration</strong>: 1m48s | <strong>Peak RSS</strong>: 34MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 2m21s | <strong>Peak RSS</strong>: 34 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 6 actionable intercepts | <strong>1.2 hrs reclaimed</strong> | <strong>$120 saved</strong></p>
+<p><strong>Score Distribution</strong>: 6 blocked (≥100) | 26 warned (70–99) | 63 minor (1–69) | 4 clean (0)</p>
 <h4 id="top-3-toxic-prs_8">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #52123</strong> by <code>renovate-bot</code> — score <strong>70.0</strong>
+<li><strong>PR #52034</strong> by <code>thaJeztah</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #52120</strong> by <code>renovate-bot</code> — score <strong>70.0</strong>
+<li><strong>PR #52126</strong> by <code>vvoland</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #52115</strong> by <code>renovate-bot</code> — score <strong>70.0</strong>
+<li><strong>PR #52108</strong> by <code>renovate-bot</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_8">Top 3 Clean PRs</h4>
@@ -1885,43 +1948,58 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <h4 id="dead-symbol-certainty-audit-top-5_8">Dead Symbol Certainty Audit (Top 5)</h4>
 <p><em>No dead symbols found.</em></p>
 <hr />
-<p>| <code>rust-lang/rust</code> | 4m4s | 235MB | 30 | 2 | 100/100 | 100 | 0 | 54 | 0 |</p>
+<p>| <code>rust-lang/rust</code> | 4m0s | 235 MB | 29 | 2 | 100/100 | 100 | 0 | 56 | 0 |</p>
 <h3 id="rust-langrust">rust-lang/rust</h3>
-<p><strong>Duration</strong>: 4m4s | <strong>Peak RSS</strong>: 235MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 30 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 4m0s | <strong>Peak RSS</strong>: 235 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 29 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 10 actionable intercepts | <strong>2.0 hrs reclaimed</strong> | <strong>$200 saved</strong></p>
+<p><strong>Score Distribution</strong>: 10 blocked (≥100) | 23 warned (70–99) | 67 minor (1–69) | 0 clean (0)</p>
 <h4 id="top-3-toxic-prs_9">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #153239</strong> by <code>asder8215</code> — score <strong>1235.0</strong>
     <em>Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x8)</em>
+    <em>Logic clone groups: 163</em>
     <em>No linked issue</em></li>
 <li><strong>PR #153270</strong> by <code>jhpratt</code> — score <strong>515.0</strong>
     <em>Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x7)</em>
+    <em>Dead symbols added: 12</em>
+    <em>Logic clone groups: 5</em>
     <em>No linked issue</em></li>
 <li><strong>PR #153277</strong> by <code>jhpratt</code> — score <strong>505.0</strong>
     <em>Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x7)</em>
+    <em>Dead symbols added: 11</em>
+    <em>Logic clone groups: 5</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_9">Top 3 Clean PRs</h4>
 <p><em>No zero-score PRs in sample.</em></p>
 <h4 id="dead-symbol-certainty-audit-top-5_9">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_assert_hashmap_is_unwind_safe</code> (library/std/src/collections/hash/map/tests.rs)</li>
-<li><code>_block_dim_x</code> (library/stdarch/crates/core_arch/src/nvptx/mod.rs)</li>
-<li><code>_block_dim_y</code> (library/stdarch/crates/core_arch/src/nvptx/mod.rs)</li>
-<li><code>_block_dim_z</code> (library/stdarch/crates/core_arch/src/nvptx/mod.rs)</li>
-<li><code>_block_idx_x</code> (library/stdarch/crates/core_arch/src/nvptx/mod.rs)
-  <em>(…and 25 more — verify with <code>janitor scan rust-lang/rust --library</code>)</em></li>
+<li><code>_assert_is_dyn_compatible</code> (library/core/src/iter/traits/iterator.rs)</li>
+<li><code>_assert_dyn_compatible</code> (src/tools/rust-analyzer/crates/hir-ty/src/db.rs)</li>
+<li><code>_assert_sync_and_send</code> (library/std/src/thread/mod.rs)</li>
+<li><code>Context._init_change_list</code> (library/compiler-builtins/ci/ci-util.py)</li>
+<li><code>Context._ignore_file</code> (library/compiler-builtins/ci/ci-util.py)
+  <em>(…and 24 more — verify with <code>janitor scan rust-lang/rust --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>tauri-apps/tauri</code> | 1m20s | 29MB | 1 | 0 | 100/100 | 68 | 0 | 52 | 0 |</p>
+<p>| <code>tauri-apps/tauri</code> | 1m49s | 28 MB | 1 | 0 | 100/100 | 67 | 0 | 52 | 0 |</p>
 <h3 id="tauri-appstauri">tauri-apps/tauri</h3>
-<p><strong>Duration</strong>: 1m20s | <strong>Peak RSS</strong>: 29MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 1 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 1m49s | <strong>Peak RSS</strong>: 28 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 1 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 23 actionable intercepts | <strong>4.6 hrs reclaimed</strong> | <strong>$460 saved</strong></p>
+<p><strong>Score Distribution</strong>: 23 blocked (≥100) | 17 warned (70–99) | 43 minor (1–69) | 17 clean (0)</p>
 <h4 id="top-3-toxic-prs_10">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #14911</strong> by <code>amrbashir</code> — score <strong>160.0</strong>
-    <em>Antipatterns: Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly (x3)</em></li>
-<li><strong>PR #15015</strong> by <code>app/dependabot</code> — score <strong>70.0</strong>
+<li><strong>PR #15015</strong> by <code>app/dependabot</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yaml, json). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #15001</strong> by <code>app/renovate</code> — score <strong>70.0</strong>
+<li><strong>PR #15001</strong> by <code>app/renovate</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (json, yaml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
+    <em>No linked issue</em></li>
+<li><strong>PR #14991</strong> by <code>app/renovate</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yaml, json). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_10">Top 3 Clean PRs</h4>
@@ -1935,16 +2013,24 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <li><code>_as_defined</code> (crates/tauri-cli/src/interface/rust.rs)</li>
 </ul>
 <hr />
-<p>| <code>spring-projects/spring-boot</code> | 1m41s | 55MB | 0 | 0 | 99/100 | 89 | 0 | 21 | 0 |</p>
+<p>| <code>spring-projects/spring-boot</code> | 2m9s | 55 MB | 0 | 0 | 99/100 | 89 | 0 | 21 | 0 |</p>
 <h3 id="spring-projectsspring-boot">spring-projects/spring-boot</h3>
-<p><strong>Duration</strong>: 1m41s | <strong>Peak RSS</strong>: 55MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 2m9s | <strong>Peak RSS</strong>: 55 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 13 actionable intercepts | <strong>2.6 hrs reclaimed</strong> | <strong>$260 saved</strong></p>
+<p><strong>Score Distribution</strong>: 13 blocked (≥100) | 19 warned (70–99) | 63 minor (1–69) | 4 clean (0)</p>
 <h4 id="top-3-toxic-prs_11">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #49028</strong> by <code>MassimoDeiana</code> — score <strong>325.0</strong>
+    <em>Dead symbols added: 11</em>
+    <em>Logic clone groups: 39</em>
     <em>No linked issue</em></li>
 <li><strong>PR #48879</strong> by <code>jayychoi</code> — score <strong>295.0</strong>
+    <em>Dead symbols added: 4</em>
+    <em>Logic clone groups: 47</em>
     <em>No linked issue</em></li>
 <li><strong>PR #48960</strong> by <code>jayychoi</code> — score <strong>205.0</strong>
+    <em>Dead symbols added: 10</em>
+    <em>Logic clone groups: 17</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_11">Top 3 Clean PRs</h4>
@@ -1956,23 +2042,31 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <h4 id="dead-symbol-certainty-audit-top-5_11">Dead Symbol Certainty Audit (Top 5)</h4>
 <p><em>No dead symbols found.</em></p>
 <hr />
-<p>| <code>elastic/elasticsearch</code> | 3m44s | 315MB | 21 | 0 | 96/100 | 92 | 0 | 35 | 0 |</p>
+<p>| <code>elastic/elasticsearch</code> | 4m0s | 331 MB | 21 | 0 | 95/100 | 89 | 0 | 31 | 0 |</p>
 <h3 id="elasticelasticsearch">elastic/elasticsearch</h3>
-<p><strong>Duration</strong>: 3m44s | <strong>Peak RSS</strong>: 315MB | <strong>PRs Bounced</strong>: 96/100 | <strong>Dead Symbols</strong>: 21 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 4m0s | <strong>Peak RSS</strong>: 331 MB | <strong>PRs Bounced</strong>: 95/100 | <strong>Dead Symbols</strong>: 21 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 17 actionable intercepts | <strong>3.4 hrs reclaimed</strong> | <strong>$340 saved</strong></p>
+<p><strong>Score Distribution</strong>: 17 blocked (≥100) | 27 warned (70–99) | 46 minor (1–69) | 5 clean (0)</p>
 <h4 id="top-3-toxic-prs_12">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #143339</strong> by <code>nik9000</code> — score <strong>865.0</strong>
+    <em>Dead symbols added: 13</em>
+    <em>Logic clone groups: 143</em>
     <em>No linked issue</em></li>
 <li><strong>PR #143322</strong> by <code>nik9000</code> — score <strong>500.0</strong>
+    <em>Dead symbols added: 22</em>
+    <em>Logic clone groups: 52</em>
     <em>No linked issue</em></li>
 <li><strong>PR #143352</strong> by <code>nik9000</code> — score <strong>475.0</strong>
+    <em>Dead symbols added: 17</em>
+    <em>Logic clone groups: 57</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_12">Top 3 Clean PRs</h4>
 <ul>
+<li>PR #143447 by <code>spinscale</code></li>
+<li>PR #143440 by <code>morning-color</code></li>
 <li>PR #143424 by <code>nik9000</code></li>
-<li>PR #143375 by <code>leontyevdv</code></li>
-<li>PR #143358 by <code>ywangd</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_12">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
@@ -1984,16 +2078,24 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
   <em>(…and 16 more — verify with <code>janitor scan elastic/elasticsearch --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>redis/redis</code> | 1m30s | 23MB | 87 | 2 | 98/100 | 95 | 0 | 15 | 0 |</p>
+<p>| <code>redis/redis</code> | 1m35s | 23 MB | 87 | 2 | 98/100 | 95 | 0 | 15 | 0 |</p>
 <h3 id="redisredis">redis/redis</h3>
-<p><strong>Duration</strong>: 1m30s | <strong>Peak RSS</strong>: 23MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 87 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 1m35s | <strong>Peak RSS</strong>: 23 MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 87 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 3 actionable intercepts | <strong>0.6 hrs reclaimed</strong> | <strong>$60 saved</strong></p>
+<p><strong>Score Distribution</strong>: 3 blocked (≥100) | 13 warned (70–99) | 79 minor (1–69) | 3 clean (0)</p>
 <h4 id="top-3-toxic-prs_13">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #14826</strong> by <code>minchopaskal</code> — score <strong>70.0</strong>
+<li><strong>PR #14768</strong> by <code>greatest-voyage</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #14795</strong> by <code>moticless</code> — score <strong>70.0</strong>
+<li><strong>PR #14747</strong> by <code>LiorKogan</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'vulnerability' but only non-code files changed (md). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #14788</strong> by <code>alisaifee</code> — score <strong>70.0</strong>
+<li><strong>PR #14743</strong> by <code>alonre24</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'memory leak' but only non-code files changed (). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_13">Top 3 Clean PRs</h4>
@@ -2004,51 +2106,62 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_13">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_anetTcpServer</code> (src/anet.c)</li>
-<li><code>_dictReset</code> (src/dict.c)</li>
-<li><code>_dictInit</code> (src/dict.c)</li>
-<li><code>_dictResize</code> (src/dict.c)</li>
-<li><code>_dictExpand</code> (src/dict.c)
+<li><code>_redisSortObject</code> (src/server.h)</li>
+<li><code>_redisSortOperation</code> (src/server.h)</li>
+<li><code>_serverLog</code> (src/server.c)</li>
+<li><code>_kvstore</code> (src/kvstore.c)</li>
+<li><code>_crc64</code> (src/crc64.c)
   <em>(…and 82 more — verify with <code>janitor scan redis/redis --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>NixOS/nixpkgs</code> | 1m55s | 29MB | 199 | 2 | 100/100 | 97 | 0 | 42 | 0 |</p>
+<p>| <code>NixOS/nixpkgs</code> | 2m4s | 29 MB | 205 | 2 | 100/100 | 96 | 0 | 43 | 0 |</p>
 <h3 id="nixosnixpkgs">NixOS/nixpkgs</h3>
-<p><strong>Duration</strong>: 1m55s | <strong>Peak RSS</strong>: 29MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 199 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 2m4s | <strong>Peak RSS</strong>: 29 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 205 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 0 actionable intercepts | <strong>0.0 hrs reclaimed</strong> | <strong>$0 saved</strong></p>
+<p><strong>Score Distribution</strong>: 0 blocked (≥100) | 42 warned (70–99) | 55 minor (1–69) | 3 clean (0)</p>
 <h4 id="top-3-toxic-prs_14">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #496067</strong> by <code>r-ryantm</code> — score <strong>70.0</strong>
+<li><strong>PR #496180</strong> by <code>r-ryantm</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
-<li><strong>PR #496064</strong> by <code>r-ryantm</code> — score <strong>70.0</strong>
+<li><strong>PR #496179</strong> by <code>r-ryantm</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
-<li><strong>PR #496062</strong> by <code>r-ryantm</code> — score <strong>70.0</strong>
+<li><strong>PR #496178</strong> by <code>hatch01</code> — score <strong>70.0</strong>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_14">Top 3 Clean PRs</h4>
 <ul>
-<li>PR #495995 by <code>LunNova</code></li>
-<li>PR #495963 by <code>PatrickDaG</code></li>
+<li>PR #496139 by <code>mulatta</code></li>
+<li>PR #496084 by <code>pancaek</code></li>
+<li>PR #496074 by <code>kalbasit</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_14">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_map_worker_init</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/parallel.py)</li>
-<li><code>_map_worker_step</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/parallel.py)</li>
-<li><code>Machine._next_newline_closed_block_from_shell</code> (nixos/lib/test-driver/src/test_driver/machine/<strong>init</strong>.py)</li>
-<li><code>Machine._managed_screenshot</code> (nixos/lib/test-driver/src/test_driver/machine/<strong>init</strong>.py)</li>
-<li><code>_get_data_json</code> (pkgs/by-name/gi/gitlab/update.py)
-  <em>(…and 194 more — verify with <code>janitor scan NixOS/nixpkgs --library</code>)</em></li>
+<li><code>_handle_called_process_error</code> (pkgs/by-name/ni/nixos-rebuild-ng/src/nixos_rebuild/<strong>init</strong>.py)</li>
+<li><code>CommonMarkRenderer._enter_block</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)</li>
+<li><code>CommonMarkRenderer._leave_block</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)</li>
+<li><code>CommonMarkRenderer._maybe_parbreak</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)</li>
+<li><code>CommonMarkRenderer._admonition_open</code> (pkgs/by-name/ni/nixos-render-docs/src/nixos_render_docs/commonmark.py)
+  <em>(…and 200 more — verify with <code>janitor scan NixOS/nixpkgs --library</code>)</em></li>
 </ul>
 <hr />
-<p>| <code>dotnet/aspnetcore</code> | 2m9s | 142MB | 4 | 0 | 98/100 | 83 | 0 | 42 | 1 |</p>
+<p>| <code>dotnet/aspnetcore</code> | 2m20s | 142 MB | 4 | 0 | 96/100 | 80 | 0 | 42 | 1 |</p>
 <h3 id="dotnetaspnetcore">dotnet/aspnetcore</h3>
-<p><strong>Duration</strong>: 2m9s | <strong>Peak RSS</strong>: 142MB | <strong>PRs Bounced</strong>: 98/100 | <strong>Dead Symbols</strong>: 4 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 2m20s | <strong>Peak RSS</strong>: 142 MB | <strong>PRs Bounced</strong>: 96/100 | <strong>Dead Symbols</strong>: 4 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 3 actionable intercepts | <strong>0.6 hrs reclaimed</strong> | <strong>$60 saved</strong></p>
+<p><strong>Score Distribution</strong>: 3 blocked (≥100) | 35 warned (70–99) | 50 minor (1–69) | 8 clean (0)</p>
 <h4 id="top-3-toxic-prs_15">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #65622</strong> by <code>app/dotnet-maestro</code> — score <strong>70.0</strong>
+<li><strong>PR #65487</strong> by <code>app/dependabot</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #65621</strong> by <code>app/dotnet-maestro</code> — score <strong>70.0</strong>
+<li><strong>PR #65486</strong> by <code>app/dependabot</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #65615</strong> by <code>app/dotnet-maestro</code> — score <strong>70.0</strong>
+<li><strong>PR #65554</strong> by <code>app/dependabot</code> — score <strong>120.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (yml). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_15">Top 3 Clean PRs</h4>
@@ -2059,23 +2172,31 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_15">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_RW_LOCK</code> (src/Servers/IIS/AspNetCoreModuleV2/IISLib/rwlock.h)</li>
 <li><code>_TRACE_LOG</code> (src/Servers/IIS/AspNetCoreModuleV2/IISLib/tracelog.h)</li>
 <li><code>_REF_TRACE_LOG_ENTRY</code> (src/Servers/IIS/AspNetCoreModuleV2/IISLib/reftrace.h)</li>
 <li><code>_ackTimer</code> (src/SignalR/clients/ts/signalr/src/MessageBuffer.ts)</li>
+<li><code>_RW_LOCK</code> (src/Servers/IIS/AspNetCoreModuleV2/IISLib/rwlock.h)</li>
 </ul>
 <hr />
-<p>| <code>apache/kafka</code> | 1m51s | 72MB | 1 | 3 | 100/100 | 100 | 0 | 27 | 0 |</p>
+<p>| <code>apache/kafka</code> | 1m56s | 72 MB | 1 | 3 | 99/100 | 99 | 0 | 30 | 0 |</p>
 <h3 id="apachekafka">apache/kafka</h3>
-<p><strong>Duration</strong>: 1m51s | <strong>Peak RSS</strong>: 72MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 1 | <strong>Clone Groups</strong>: 3</p>
+<p><strong>Duration</strong>: 1m56s | <strong>Peak RSS</strong>: 72 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 1 | <strong>Clone Groups</strong>: 3</p>
+<p><strong>Workslop Impact</strong>: 15 actionable intercepts | <strong>3.0 hrs reclaimed</strong> | <strong>$300 saved</strong></p>
+<p><strong>Score Distribution</strong>: 15 blocked (≥100) | 31 warned (70–99) | 53 minor (1–69) | 0 clean (0)</p>
 <h4 id="top-3-toxic-prs_16">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #21581</strong> by <code>frankvicky</code> — score <strong>1015.0</strong>
+    <em>Dead symbols added: 54</em>
+    <em>Logic clone groups: 91</em>
     <em>No linked issue</em></li>
 <li><strong>PR #21600</strong> by <code>bbejeck</code> — score <strong>905.0</strong>
+    <em>Dead symbols added: 51</em>
+    <em>Logic clone groups: 75</em>
     <em>No linked issue</em></li>
 <li><strong>PR #21580</strong> by <code>aliehsaeedii</code> — score <strong>800.0</strong>
     <em>Antipatterns: System.out.println: console debug logging in production — use a structured logger (SLF4J, Log4j, etc.)</em>
+    <em>Dead symbols added: 51</em>
+    <em>Logic clone groups: 44</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_16">Top 3 Clean PRs</h4>
@@ -2085,16 +2206,24 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <li><code>_prefix</code> (release/runtime.py)</li>
 </ul>
 <hr />
-<p>| <code>ohmyzsh/ohmyzsh</code> | 1m20s | 10MB | 0 | 0 | 100/100 | 92 | 0 | 42 | 0 |</p>
+<p>| <code>ohmyzsh/ohmyzsh</code> | 1m20s | 10 MB | 0 | 0 | 100/100 | 92 | 0 | 42 | 0 |</p>
 <h3 id="ohmyzshohmyzsh">ohmyzsh/ohmyzsh</h3>
-<p><strong>Duration</strong>: 1m20s | <strong>Peak RSS</strong>: 10MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Duration</strong>: 1m20s | <strong>Peak RSS</strong>: 10 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 0 | <strong>Clone Groups</strong>: 0</p>
+<p><strong>Workslop Impact</strong>: 25 actionable intercepts | <strong>5.0 hrs reclaimed</strong> | <strong>$500 saved</strong></p>
+<p><strong>Score Distribution</strong>: 25 blocked (≥100) | 36 warned (70–99) | 34 minor (1–69) | 5 clean (0)</p>
 <h4 id="top-3-toxic-prs_17">Top 3 Toxic PRs</h4>
 <ul>
-<li><strong>PR #13604</strong> by <code>gorewilliams</code> — score <strong>70.0</strong>
+<li><strong>PR #13571</strong> by <code>bdynamic</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #13598</strong> by <code>omair-inam</code> — score <strong>70.0</strong>
+<li><strong>PR #13520</strong> by <code>robbyrussell</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
-<li><strong>PR #13597</strong> by <code>KevinWMatthews</code> — score <strong>70.0</strong>
+<li><strong>PR #13498</strong> by <code>MD-Mushfiqur123</code> — score <strong>170.0</strong>
+    <em>Antipatterns: Hallucinated Security Fix: PR body claims 'RCE' but only non-code files changed (md). A real security fix requires modifying source code.</em>
+    <em>Hallucinated security fixes: 1</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_17">Top 3 Clean PRs</h4>
@@ -2106,68 +2235,113 @@ Engine: <a href="https://thejanitor.app">The Janitor</a></p>
 <h4 id="dead-symbol-certainty-audit-top-5_17">Dead Symbol Certainty Audit (Top 5)</h4>
 <p><em>No dead symbols found.</em></p>
 <hr />
-<p>| <code>pytorch/pytorch</code> | 3m45s | 164MB | 8247 | 24 | 99/100 | 89 | 55 | 4 | 0 |</p>
+<p>| <code>pytorch/pytorch</code> | 3m23s | 165 MB | 8149 | 24 | 99/100 | 90 | 42 | 5 | 0 |</p>
 <h3 id="pytorchpytorch">pytorch/pytorch</h3>
-<p><strong>Duration</strong>: 3m45s | <strong>Peak RSS</strong>: 164MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 8247 | <strong>Clone Groups</strong>: 24</p>
+<p><strong>Duration</strong>: 3m23s | <strong>Peak RSS</strong>: 165 MB | <strong>PRs Bounced</strong>: 99/100 | <strong>Dead Symbols</strong>: 8149 | <strong>Clone Groups</strong>: 24</p>
+<p><strong>Workslop Impact</strong>: 18 actionable intercepts | <strong>3.6 hrs reclaimed</strong> | <strong>$360 saved</strong></p>
+<p><strong>Score Distribution</strong>: 9 blocked (≥100) | 10 warned (70–99) | 76 minor (1–69) | 4 clean (0)</p>
 <h4 id="top-3-toxic-prs_18">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #176190</strong> by <code>soulitzer</code> — score <strong>450.0</strong>
     <em>Zombie deps: 3</em>
+    <em>Dead symbols added: 20</em>
+    <em>Logic clone groups: 37</em>
     <em>No linked issue</em></li>
 <li><strong>PR #176235</strong> by <code>aorenste</code> — score <strong>440.0</strong>
     <em>Zombie deps: 3</em>
+    <em>Dead symbols added: 20</em>
+    <em>Logic clone groups: 35</em>
     <em>No linked issue</em></li>
-<li><strong>PR #176140</strong> by <code>weifengpy</code> — score <strong>420.0</strong>
-    <em>Zombie deps: 9</em>
+<li><strong>PR #176140</strong> by <code>weifengpy</code> — score <strong>385.0</strong>
+    <em>Zombie deps: 8</em>
+    <em>Dead symbols added: 21</em>
+    <em>Logic clone groups: 7</em>
     <em>No linked issue</em></li>
 </ul>
 <h4 id="top-3-clean-prs_18">Top 3 Clean PRs</h4>
 <ul>
+<li>PR #176265 by <code>evgri243</code></li>
 <li>PR #176243 by <code>drisspg</code></li>
 <li>PR #176226 by <code>cleonard530</code></li>
-<li>PR #176135 by <code>cluePrints</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_18">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>_not_implemented</code> (torch/package/_mock.py)</li>
-<li><code>_is_aligned</code> (torch/_inductor/utils.py)</li>
-<li><code>_set_env</code> (torch/_inductor/utils.py)</li>
-<li><code>DeferredLineBase._new_line</code> (torch/_inductor/utils.py)</li>
-<li><code>DelayReplaceLine._new_line</code> (torch/<em>inductor/utils.py)
-  </em>(…and 8242 more — verify with <code>janitor scan pytorch/pytorch --library</code>)_</li>
+<li><code>_AssertRaisesRegexWithHighlightContext</code> (torch/testing/_internal/jit_utils.py)</li>
+<li><code>JitTestCase._isHookExceptionOk</code> (torch/testing/_internal/jit_utils.py)</li>
+<li><code>JitTestCase._compared_saved_loaded</code> (torch/testing/_internal/jit_utils.py)</li>
+<li><code>_inline_everything</code> (torch/testing/_internal/jit_utils.py)</li>
+<li><code>_tmp_donotuse_dont_inline_everything</code> (torch/testing/<em>internal/jit_utils.py)
+  </em>(…and 8144 more — verify with <code>janitor scan pytorch/pytorch --library</code>)_</li>
 </ul>
 <hr />
-<p>| <code>langchain-ai/langchain</code> | 1m37s | 20MB | 1483 | 2 | 100/100 | 53 | 77 | 17 | 0 |</p>
+<p>| <code>langchain-ai/langchain</code> | 1m37s | 20 MB | 1483 | 2 | 100/100 | 53 | 79 | 17 | 0 |</p>
 <h3 id="langchain-ailangchain">langchain-ai/langchain</h3>
-<p><strong>Duration</strong>: 1m37s | <strong>Peak RSS</strong>: 20MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 1483 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Duration</strong>: 1m37s | <strong>Peak RSS</strong>: 20 MB | <strong>PRs Bounced</strong>: 100/100 | <strong>Dead Symbols</strong>: 1483 | <strong>Clone Groups</strong>: 2</p>
+<p><strong>Workslop Impact</strong>: 27 actionable intercepts | <strong>5.4 hrs reclaimed</strong> | <strong>$540 saved</strong></p>
+<p><strong>Score Distribution</strong>: 22 blocked (≥100) | 5 warned (70–99) | 50 minor (1–69) | 23 clean (0)</p>
 <h4 id="top-3-toxic-prs_19">Top 3 Toxic PRs</h4>
 <ul>
 <li><strong>PR #35416</strong> by <code>sadilet</code> — score <strong>1095.0</strong>
     <em>Antipatterns: Hallucinated import: 'otel_context' imported inside function but never used</em>
     <em>Zombie deps: 39</em>
+    <em>Dead symbols added: 12</em>
+    <em>Logic clone groups: 64</em>
     <em>No linked issue</em></li>
 <li><strong>PR #35434</strong> by <code>marklubin</code> — score <strong>935.0</strong>
     <em>Zombie deps: 17</em>
+    <em>Dead symbols added: 23</em>
+    <em>Logic clone groups: 86</em>
     <em>No linked issue</em></li>
 <li><strong>PR #35459</strong> by <code>saadsaleem01</code> — score <strong>465.0</strong>
-    <em>Zombie deps: 6</em></li>
+    <em>Zombie deps: 6</em>
+    <em>Dead symbols added: 5</em>
+    <em>Logic clone groups: 65</em></li>
 </ul>
 <h4 id="top-3-clean-prs_19">Top 3 Clean PRs</h4>
 <ul>
+<li>PR #35532 by <code>Jaredw2289-svg</code></li>
 <li>PR #35523 by <code>OiPunk</code></li>
 <li>PR #35520 by <code>squallopen</code></li>
-<li>PR #35517 by <code>A404coder</code></li>
 </ul>
 <h4 id="dead-symbol-certainty-audit-top-5_19">Dead Symbol Certainty Audit (Top 5)</h4>
 <ul>
-<li><code>ModelRetryMiddleware._handle_failure</code> (libs/langchain_v1/langchain/agents/middleware/model_retry.py)</li>
-<li><code>_warn_on_import</code> (libs/langchain/langchain_classic/<strong>init</strong>.py)</li>
-<li><code>_merge_status</code> (libs/core/langchain_core/messages/tool.py)</li>
-<li><code>_get_builtin_translator</code> (libs/langchain/langchain_classic/retrievers/self_query/base.py)</li>
-<li><code>SelfQueryRetriever._prepare_query</code> (libs/langchain/langchain_classic/retrievers/self_query/base.py)
+<li><code>_hash_string_to_uuid</code> (libs/core/langchain_core/indexing/api.py)</li>
+<li><code>_warn_about_sha1</code> (libs/core/langchain_core/indexing/api.py)</li>
+<li><code>_hash_string</code> (libs/core/langchain_core/indexing/api.py)</li>
+<li><code>_hash_nested_dict</code> (libs/core/langchain_core/indexing/api.py)</li>
+<li><code>_batch</code> (libs/core/langchain_core/indexing/api.py)
   <em>(…and 1478 more — verify with <code>janitor scan langchain-ai/langchain --library</code>)</em></li>
 </ul>
 <hr />
+<p>| <strong>TOTAL</strong> | — | — | <strong>24590</strong> | <strong>52</strong> | <strong>1974/2000</strong> | <strong>1733</strong> | <strong>172</strong> | <strong>650</strong> | <strong>1</strong> |</p>
+<hr />
+<h2 id="global-workslop-impact">Global Workslop Impact</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Actionable intercepts (Blocked ≥ 100 / Zombie / Hallucination)</td>
+<td style="text-align: right;"><strong>213</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Total engineering time reclaimed</strong></td>
+<td style="text-align: right;"><strong>42.6 hours</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Estimated operational savings</strong></td>
+<td style="text-align: right;"><strong>$4260</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Methodology: 12 min/triage × $100/hr loaded engineering cost.
+Actionable = PRs scoring ≥ 100 (gate blocked) or confirmed adversarial signal (Zombie re-injection / Hallucinated Security Fix).</p>
+</blockquote>
 
 
 
