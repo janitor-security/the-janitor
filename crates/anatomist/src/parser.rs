@@ -14,7 +14,7 @@ use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::induce;
 use crate::path_util::normalize_path;
-use crate::{AnatomistError, Entity, EntityType, Heuristic};
+use crate::{AnatomistError, Entity, EntityType, Heuristic, Protection};
 use forge::compute_structural_hash;
 
 /// Pattern indices for the entity query.
@@ -600,19 +600,31 @@ impl ParserHost {
 
     /// Extracts `fn`, `struct`, `enum`, and `trait` entities from a Rust source buffer.
     ///
-    /// Does not apply Python-specific heuristics. `protected_by` is `None` for all
-    /// returned entities; protection is assigned by later pipeline stages.
+    /// Functions annotated with `#[test]` are immediately shielded as
+    /// `Protection::PytestFixture` so the dead-symbol pipeline never flags them.
     pub fn extract_rust_entities(
         source: &[u8],
         file_path: &str,
     ) -> Result<Vec<Entity>, AnatomistError> {
-        extract_named_entities(
+        let mut entities = extract_named_entities(
             source,
             tree_sitter_rust::LANGUAGE.into(),
             get_rust_query()?,
             file_path,
             RUST_PATTERNS,
-        )
+        )?;
+        // Post-process: protect any `fn` item preceded by `#[test]`.
+        // `extract_named_entities` captures the `fn_item` node start (not its
+        // attribute siblings), so we inspect raw bytes to detect the attribute.
+        for entity in &mut entities {
+            if entity.entity_type == EntityType::FunctionDefinition
+                && entity.protected_by.is_none()
+                && rust_has_test_attr(source, entity.start_byte as usize)
+            {
+                entity.protected_by = Some(Protection::PytestFixture);
+            }
+        }
+        Ok(entities)
     }
 
     /// Extracts `function`, `class`, and `method` entities from a JavaScript source buffer.
@@ -1030,6 +1042,47 @@ impl ParserHost {
 
 /// Generic entity extractor for non-Python languages.
 ///
+/// Returns `true` if `#[test]` appears in the attribute lines immediately
+/// preceding the Rust item whose first byte is at `fn_start`.
+///
+/// Walks backward through horizontal whitespace and `#[…]` attribute lines
+/// (e.g. `#[should_panic]`, `#[ignore]`) until it either matches `#[test]`
+/// (returns `true`) or hits a non-attribute, non-blank line (returns `false`).
+fn rust_has_test_attr(source: &[u8], fn_start: usize) -> bool {
+    let mut cur = fn_start;
+    loop {
+        // Skip horizontal whitespace (indentation) preceding `cur`.
+        while cur > 0 && matches!(source[cur - 1], b' ' | b'\t') {
+            cur -= 1;
+        }
+        // No preceding newline — we are at the start of the first line.
+        if cur == 0 || source[cur - 1] != b'\n' {
+            return false;
+        }
+        cur -= 1; // step past the '\n'
+                  // Locate the start of this previous line.
+        let line_start = source[..cur]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line = source[line_start..=cur].trim_ascii();
+        if line.is_empty() {
+            cur = line_start;
+            continue;
+        }
+        if line == b"#[test]" {
+            return true;
+        }
+        if line.starts_with(b"#[") {
+            // Another attribute (e.g. `#[ignore]`) — keep scanning.
+            cur = line_start;
+            continue;
+        }
+        return false;
+    }
+}
+
 /// Parses `source` with `language`, runs `query`, and maps pattern indices to entity
 /// metadata via `patterns: &[(def_cap, name_cap, entity_type)]`.
 ///
@@ -1256,6 +1309,35 @@ mod tests {
         assert_eq!(fn_entity.entity_type, EntityType::FunctionDefinition);
         assert_eq!(fn_entity.file_path, "src/lib.rs");
         assert!(fn_entity.protected_by.is_none());
+    }
+
+    #[test]
+    fn test_rust_test_fn_shielded() {
+        // A function annotated with `#[test]` must be classified as PytestFixture
+        // (the shared "test symbol" protection) so the scanner never flags it dead.
+        let source = b"#[test]\nfn my_test() { assert!(true); }\n";
+        let entities = ParserHost::extract_rust_entities(source, "src/lib.rs").unwrap();
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].name, "my_test");
+        assert_eq!(entities[0].protected_by, Some(Protection::PytestFixture));
+    }
+
+    #[test]
+    fn test_rust_non_test_fn_unshielded() {
+        // A plain function without `#[test]` must NOT be auto-protected.
+        let source = b"fn plain() { }\n";
+        let entities = ParserHost::extract_rust_entities(source, "src/lib.rs").unwrap();
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].protected_by, None);
+    }
+
+    #[test]
+    fn test_rust_test_fn_with_extra_attr_shielded() {
+        // #[test] mixed with other attrs (e.g. #[ignore]) must still be shielded.
+        let source = b"#[ignore]\n#[test]\nfn slow_test() { }\n";
+        let entities = ParserHost::extract_rust_entities(source, "src/lib.rs").unwrap();
+        let fn_e = entities.iter().find(|e| e.name == "slow_test").unwrap();
+        assert_eq!(fn_e.protected_by, Some(Protection::PytestFixture));
     }
 
     #[test]

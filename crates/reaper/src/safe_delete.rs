@@ -95,6 +95,11 @@ impl SafeDeleter {
                 continue;
             }
 
+            // Retract start backward past any `#[…]` attribute lines that
+            // immediately precede this item.  Prevents orphaned attributes
+            // (e.g. a dangling `#[test]`) after the function body is removed.
+            let start = retract_attrs(&content, start);
+
             // Consume the trailing newline (if present) to avoid a blank line.
             if end < content.len() && content[end] == b'\n' {
                 end += 1;
@@ -201,6 +206,53 @@ impl SafeDeleter {
         let bak_path = self.ghost_dir.join(bak_name);
         std::fs::copy(file_path, &bak_path)?;
         Ok(bak_path)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Attribute retraction helper
+// ---------------------------------------------------------------------------
+
+/// Walks `content` backward from `pos`, retracting past any `#[…]` attribute
+/// lines (and blank lines) that immediately precede the item.
+///
+/// Returns the adjusted start position (≤ `pos`), which is the byte offset of
+/// the first attribute line found, or `pos` itself when no attribute lines are
+/// present.  The retraction stops as soon as a non-attribute, non-blank line
+/// is encountered, so regular code above the attribute is never consumed.
+///
+/// This ensures `SafeDeleter::delete_symbols` never leaves orphaned `#[test]`
+/// (or any other `#[…]`) annotation behind after excising a function body.
+fn retract_attrs(content: &[u8], pos: usize) -> usize {
+    let mut cur = pos;
+    loop {
+        // Skip horizontal whitespace (indentation of current item's line).
+        while cur > 0 && matches!(content[cur - 1], b' ' | b'\t') {
+            cur -= 1;
+        }
+        if cur == 0 || content[cur - 1] != b'\n' {
+            // At start of file or not preceded by a newline — stop.
+            return cur;
+        }
+        let nl = cur - 1; // byte position of the preceding '\n'
+        let line_start = content[..nl]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line = content[line_start..nl].trim_ascii();
+        if line.is_empty() {
+            cur = line_start;
+            continue;
+        }
+        if line.starts_with(b"#[") {
+            // Attribute line — include it in the deletion and keep retracting.
+            cur = line_start;
+            continue;
+        }
+        // Non-attribute, non-blank line — deletion starts at `cur` (right
+        // after the preceding non-attribute content).
+        return cur;
     }
 }
 
@@ -417,6 +469,62 @@ mod tests {
         }];
         let removed = deleter.delete_symbols(&file, &mut targets).unwrap();
         assert_eq!(removed, 1);
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_delete_retracts_rust_test_attr() {
+        // Deleting a `#[test]`-annotated Rust function must also remove the
+        // attribute, leaving no orphaned `#[test]` behind.
+        let tmp = tmp_dir("test_retract_rust_attr");
+        // "#[test]\nfn my_test() { let x = 1; }\n"
+        // start_byte=8 (fn), end_byte=src.len()
+        let src = b"#[test]\nfn my_test() { let x = 1; }\n";
+        let file = tmp.join("lib.rs");
+        fs::write(&file, src).unwrap();
+
+        let mut deleter = SafeDeleter::new(&tmp).unwrap();
+        let mut targets = vec![DeletionTarget {
+            qualified_name: "my_test".into(),
+            start_byte: 8, // first byte of `fn my_test`
+            end_byte: src.len() as u32,
+        }];
+        let removed = deleter.delete_symbols(&file, &mut targets).unwrap();
+        assert_eq!(removed, 1);
+
+        let result = fs::read(&file).unwrap();
+        assert!(
+            result.is_empty(),
+            "file should be empty — attribute + function both removed"
+        );
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_retract_stops_at_non_attr_line() {
+        // The retraction must NOT consume code that precedes the attribute block.
+        let tmp = tmp_dir("test_retract_stops");
+        // "fn keep() { }\n#[test]\nfn gone() { }\n"
+        // We delete gone() (start_byte=22, end_byte=src.len()).
+        // After retraction, keep() must survive.
+        let src = b"fn keep() { }\n#[test]\nfn gone() { }\n";
+        let file = tmp.join("lib.rs");
+        fs::write(&file, src).unwrap();
+
+        let mut deleter = SafeDeleter::new(&tmp).unwrap();
+        let mut targets = vec![DeletionTarget {
+            qualified_name: "gone".into(),
+            start_byte: 22, // first byte of `fn gone`
+            end_byte: src.len() as u32,
+        }];
+        deleter.delete_symbols(&file, &mut targets).unwrap();
+
+        let result = fs::read_to_string(&file).unwrap();
+        assert!(result.contains("fn keep()"), "keep() must not be deleted");
+        assert!(!result.contains("#[test]"), "orphaned attr must be removed");
+        assert!(!result.contains("fn gone()"), "gone() must be deleted");
 
         fs::remove_dir_all(tmp).ok();
     }
