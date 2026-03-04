@@ -21,7 +21,7 @@ inputs:
   token:
     description: >
       GitHub token used to fetch the PR diff via `gh pr diff`.
-      Pass ${{ secrets.GITHUB_TOKEN }} — no elevated scopes required.
+      Pass secrets.GITHUB_TOKEN — no elevated scopes required.
     required: false
     default: ''
   fail_on_slop:
