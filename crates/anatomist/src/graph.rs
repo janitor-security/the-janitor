@@ -675,7 +675,7 @@ fn walk_polyglot_files(
         if path.is_file() {
             if let Some(
                 "rs" | "js" | "jsx" | "ts" | "tsx" | "c" | "java" | "cs" | "go" | "glsl" | "vert"
-                | "frag" | "m" | "mm",
+                | "frag" | "m" | "mm" | "tf" | "hcl" | "nix" | "gd" | "kt" | "kts",
             ) = path.extension().and_then(|s| s.to_str())
             {
                 files.push(path.to_path_buf());

@@ -20,3 +20,7 @@ tree-sitter-glsl.workspace = true
 tree-sitter-objc.workspace = true
 tree-sitter-yaml.workspace = true
 tree-sitter-bash.workspace = true
+tree-sitter-hcl.workspace = true
+tree-sitter-nix.workspace = true
+tree-sitter-gdscript.workspace = true
+tree-sitter-kotlin-ng.workspace = true
