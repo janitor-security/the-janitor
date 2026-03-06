@@ -54,6 +54,12 @@ When a pull request clears the slop gate, **The Governor** — our GitHub App �
 
 No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody presentable to a SOC 2 auditor, a regulator, or an incident response team. Not a log. A bond.
 
+### Zero-Friction GitHub Integration
+
+![Janitor Sentinel Demo](assets/sentinel_demo.webp)
+
+*The Governor automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).*
+
 ---
 
 ## THE PR GATE: LIVE RESULTS

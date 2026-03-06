@@ -18,6 +18,12 @@ The Veracode 2025 State of Software Security report established the baseline: AI
 
 The threat model has changed. Your enforcement layer has not.
 
+## Zero-Friction GitHub Integration
+
+![Janitor Sentinel Demo](docs/assets/sentinel_demo.webp)
+
+*The Governor automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).*
+
 ## The Enforcement Layer
 
 The Janitor is not a linter. It is a **structural firewall** that runs on your hardware, on every pull request — before the merge button is available.
