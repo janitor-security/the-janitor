@@ -207,7 +207,9 @@ impl MappedRegistry {
     /// # Safety
     /// The mmap is held for the lifetime of `self`. The checksum was verified in
     /// [`open`], so the bytes are structurally valid rkyv data starting at offset
-    /// [`CHECKSUM_LEN`].
+    /// [`CHECKSUM_LEN`]. Specifically, `open` runs both a BLAKE3 checksum check
+    /// and a `rkyv::access` structural validation before constructing `Self` —
+    /// `access_unchecked` here is therefore safe: the buffer is known-valid.
     pub fn archived(&self) -> &ArchivedSymbolRegistry {
         unsafe { rkyv::access_unchecked::<ArchivedSymbolRegistry>(&self._mmap[CHECKSUM_LEN..]) }
     }

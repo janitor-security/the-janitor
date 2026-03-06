@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use memmap2::MmapOptions;
-use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Language, ParseOptions, ParseState, Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::induce;
 use crate::path_util::normalize_path;
@@ -22,6 +22,14 @@ const PATTERN_FN: usize = 0; // Standalone function_definition
 const PATTERN_CLASS: usize = 1; // Standalone class_definition
 const PATTERN_DECORATED: usize = 2; // decorated_definition wrapping function or class
 const PATTERN_ASSIGNMENT: usize = 3; // Module-level assignments
+
+/// Maximum time tree-sitter is allowed to spend on a single parse (100 ms).
+///
+/// Adversarial inputs ("parser bombs") can trigger super-linear parse time in
+/// certain grammars. Aborting after 100 ms returns `None` from `parse()`, which
+/// the caller maps to `ParseFailure` — the file is skipped and the daemon
+/// continues processing the next blob.
+const PARSE_TIMEOUT_MICROS: u64 = 100_000;
 
 /// Static cache for the Python entity extraction query.
 static ENTITY_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
@@ -767,10 +775,8 @@ impl ParserHost {
         source: &[u8],
         file_path: &str,
     ) -> Result<Vec<Entity>, AnatomistError> {
-        // Parse source into CST
-        let tree = self.parser.parse(source, None).ok_or_else(|| {
-            AnatomistError::ParseFailure("Tree-sitter parse returned None".to_string())
-        })?;
+        // Parse source into CST — abort after 100 ms (adversarial-input shield).
+        let tree = timed_parse(&mut self.parser, source)?;
 
         let root = tree.root_node();
         let query = get_entity_query()?;
@@ -1083,6 +1089,52 @@ fn rust_has_test_attr(source: &[u8], fn_start: usize) -> bool {
     }
 }
 
+/// Coerces a closure to satisfy `for<'a> FnMut(&'a ParseState) -> ControlFlow<()>`.
+///
+/// Rust's inference sometimes fails to make closures higher-ranked when the
+/// argument is unused. Routing through this function forces the HRTB check.
+fn coerce_progress_cb<F>(f: F) -> F
+where
+    F: for<'a> FnMut(&'a ParseState) -> std::ops::ControlFlow<()>,
+{
+    f
+}
+
+/// Runs a timed parse with panic shielding.
+///
+/// Limits parse time to [`PARSE_TIMEOUT_MICROS`] via the tree-sitter 0.26
+/// `ParseOptions` progress callback — returns `Break` when the wall-clock
+/// deadline is exceeded, causing `parse_with_options` to return `None`.
+///
+/// Also wraps the call in `catch_unwind` so a grammar-level Rust panic is
+/// caught and converted to `ParseFailure` rather than crashing the daemon.
+/// (A C-level segfault in a grammar is unrecoverable regardless.)
+fn timed_parse(parser: &mut Parser, source: &[u8]) -> Result<tree_sitter::Tree, AnatomistError> {
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_micros(PARSE_TIMEOUT_MICROS);
+    // `move` copies `deadline` (Instant: Copy) into the closure.
+    // `coerce_progress_cb` forces the HRTB `for<'a> FnMut(&'a ParseState)`.
+    let mut progress_cb = coerce_progress_cb(move |_: &ParseState| {
+        if std::time::Instant::now() >= deadline {
+            std::ops::ControlFlow::Break(())
+        } else {
+            std::ops::ControlFlow::Continue(())
+        }
+    });
+    let opts = ParseOptions::default().progress_callback(&mut progress_cb);
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        parser.parse_with_options(
+            &mut |i, _| source.get(i..).unwrap_or_default(),
+            None,
+            Some(opts),
+        )
+    }))
+    .unwrap_or(None)
+    .ok_or_else(|| {
+        AnatomistError::ParseFailure("Parse returned None (timeout or bad input)".to_string())
+    })
+}
+
 /// Parses `source` with `language`, runs `query`, and maps pattern indices to entity
 /// metadata via `patterns: &[(def_cap, name_cap, entity_type)]`.
 ///
@@ -1099,9 +1151,7 @@ fn extract_named_entities(
         .set_language(&language)
         .map_err(|e| AnatomistError::ParseFailure(format!("Grammar load failed: {e}")))?;
 
-    let tree = parser
-        .parse(source, None)
-        .ok_or_else(|| AnatomistError::ParseFailure("Parse returned None".to_string()))?;
+    let tree = timed_parse(&mut parser, source)?;
 
     let root = tree.root_node();
     let capture_names = query.capture_names();
@@ -1370,5 +1420,30 @@ mod tests {
         assert!(fn_entity.protected_by.is_none());
         // u32 byte ranges must fit without overflow
         assert!(fn_entity.end_byte > fn_entity.start_byte);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Fuzz-proofing: binary garbage must never panic or crash the process.
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_garbage_bytes_python_no_panic() {
+        let mut host = ParserHost::new().unwrap();
+        // 4 KiB of repeating 0x00–0xFF — adversarial binary noise.
+        let garbage: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
+        // Must not panic; result may be Ok([]) or Err(ParseFailure) — both safe.
+        let _ = host.dissect_bytes(&garbage, "adversarial.py");
+    }
+
+    #[test]
+    fn test_garbage_bytes_rust_no_panic() {
+        let garbage: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
+        let _ = ParserHost::extract_rust_entities(&garbage, "adversarial.rs");
+    }
+
+    #[test]
+    fn test_garbage_bytes_js_no_panic() {
+        let garbage: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
+        let _ = ParserHost::extract_js_entities(&garbage, "adversarial.js");
     }
 }
