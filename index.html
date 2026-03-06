@@ -328,6 +328,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#zero-friction-github-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Zero-Friction GitHub Integration
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -990,6 +999,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#zero-friction-github-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Zero-Friction GitHub Integration
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1160,6 +1178,9 @@
 <h3 id="cryptographic-integrity-bonds">Cryptographic Integrity Bonds</h3>
 <p>When a pull request clears the slop gate, <strong>The Governor</strong> — our GitHub App — automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
 <p>No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody presentable to a SOC 2 auditor, a regulator, or an incident response team. Not a log. A bond.</p>
+<h3 id="zero-friction-github-integration">Zero-Friction GitHub Integration</h3>
+<p><img alt="Janitor Sentinel Demo" src="assets/sentinel_demo.webp" /></p>
+<p><em>The Governor automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).</em></p>
 <hr />
 <h2 id="the-pr-gate-live-results">THE PR GATE: LIVE RESULTS</h2>
 <p>The <code>janitor bounce</code> command intercepts pull requests at the diff level and scores them across four dimensions:</p>
