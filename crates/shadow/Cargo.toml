@@ -11,4 +11,4 @@ thiserror.workspace = true
 walkdir.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-junction = "1.1"
+junction = "1.4"
