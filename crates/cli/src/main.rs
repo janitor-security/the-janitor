@@ -268,7 +268,11 @@ enum Commands {
         /// Number of PRs to include in the Slop Top list.
         #[arg(long, default_value = "50")]
         top: usize,
-        /// Output format: `markdown` (default) or `json`.
+        /// Output format: `markdown` (default), `json`, or `pdf`.
+        ///
+        /// The `pdf` format requires `pandoc` and a LaTeX distribution
+        /// (texlive-latex-recommended on Debian/Ubuntu, BasicTeX on macOS).
+        /// Output defaults to `janitor_report.pdf` when `--out` is not specified.
         #[arg(long, default_value = "markdown")]
         format: String,
         /// Write the report to this file instead of stdout.
@@ -2300,6 +2304,126 @@ fn cmd_pardon(symbol: &str, repo: &Path) -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// report --pdf helpers
+// ---------------------------------------------------------------------------
+
+/// Pandoc LaTeX template embedded at compile time.
+///
+/// Lives at `tools/templates/report.tex` in the workspace; baked into the
+/// binary so the distributed `janitor` binary works without the source tree.
+const REPORT_TEX_TEMPLATE: &str = include_str!("../../../tools/templates/report.tex");
+
+/// Returns today's date as `"Month DD, YYYY"` (e.g. `"March 05, 2026"`).
+///
+/// Falls back to the current Unix epoch year on any error.
+fn current_date_str() -> String {
+    std::process::Command::new("date")
+        .arg("+%B %d, %Y")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "2026".to_string())
+}
+
+/// Searches for `docs/assets/logo.png` relative to the process working
+/// directory.  Returns an absolute path if found; `None` otherwise.
+///
+/// The logo is optional — the LaTeX template renders a text fallback when the
+/// variable is absent.
+fn locate_report_logo() -> Option<PathBuf> {
+    let candidates = [
+        PathBuf::from("docs/assets/logo.png"),
+        PathBuf::from("../docs/assets/logo.png"),
+    ];
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .and_then(|p| p.canonicalize().ok())
+}
+
+/// Converts `markdown` to a PDF via `pandoc` + `pdflatex`.
+///
+/// # Errors
+/// - Returns an error if `pandoc` is not in `PATH`.
+/// - Returns an error if pdflatex or required LaTeX packages are missing.
+/// - Returns an error if `pandoc` exits non-zero.
+fn export_pdf(markdown: &str, out: &Path) -> anyhow::Result<()> {
+    // ── Check pandoc availability ──────────────────────────────────────────
+    let pandoc_found = std::process::Command::new("pandoc")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !pandoc_found {
+        anyhow::bail!(
+            "pandoc not found in PATH.\n\
+             Install: https://pandoc.org/installing.html\n\
+             Debian/Ubuntu: sudo apt-get install pandoc texlive-latex-recommended \
+             texlive-fonts-recommended\n\
+             macOS: brew install pandoc basictex"
+        );
+    }
+
+    // ── Temp workspace ────────────────────────────────────────────────────
+    let tmp = PathBuf::from(format!("/tmp/janitor_pdf_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).context("creating PDF temp dir")?;
+
+    let md_path = tmp.join("report.md");
+    let tpl_path = tmp.join("report.tex");
+
+    std::fs::write(&md_path, markdown.as_bytes()).context("writing markdown to temp")?;
+    std::fs::write(&tpl_path, REPORT_TEX_TEMPLATE).context("writing LaTeX template to temp")?;
+
+    let logo = locate_report_logo();
+    let date = current_date_str();
+    let version = env!("CARGO_PKG_VERSION");
+
+    // ── Build pandoc command ──────────────────────────────────────────────
+    let mut cmd = std::process::Command::new("pandoc");
+    cmd.arg(&md_path)
+        .arg("--template")
+        .arg(&tpl_path)
+        .arg("--pdf-engine=pdflatex")
+        .arg("--toc")
+        .arg("--toc-depth=2")
+        .arg("-V")
+        .arg("title=The Janitor: Intelligence Report")
+        .arg("-V")
+        .arg(format!("date={}", date))
+        .arg("-V")
+        .arg(format!("version={}", version))
+        .arg("-o")
+        .arg(out);
+
+    if let Some(logo_path) = logo {
+        cmd.arg("-V").arg(format!("logo={}", logo_path.display()));
+    }
+
+    let status = cmd
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .context("running pandoc")?;
+
+    // ── Cleanup temp dir (best-effort) ────────────────────────────────────
+    let _ = std::fs::remove_dir_all(&tmp);
+
+    if !status.success() {
+        anyhow::bail!(
+            "pandoc exited with code {:?} — ensure texlive-latex-recommended is installed",
+            status.code()
+        );
+    }
+
+    println!("PDF report written: {}", out.display());
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // report --global
 // ---------------------------------------------------------------------------
 
@@ -2347,6 +2471,14 @@ fn cmd_report_global(
     } else {
         report::render_global_markdown(&data, &gauntlet_str)
     };
+
+    // PDF: route the generated markdown through pandoc.
+    if format == "pdf" {
+        let pdf_path = out
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("janitor_report.pdf"));
+        return export_pdf(&content, &pdf_path);
+    }
 
     match out {
         Some(path) => {
@@ -2472,6 +2604,14 @@ fn cmd_report(
             report::render_markdown(&data, &repo_name)
         }
     };
+
+    // PDF: route the generated markdown through pandoc.
+    if format == "pdf" {
+        let pdf_path = out
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("janitor_report.pdf"));
+        return export_pdf(&content, &pdf_path);
+    }
 
     match out {
         Some(path) => {

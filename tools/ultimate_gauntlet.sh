@@ -49,6 +49,10 @@ REPOS=(
     ohmyzsh/ohmyzsh             # Bash     — shell framework (Bash stress test)
     pytorch/pytorch             # C++/Py   — AI infrastructure (C++ stress test)
     langchain-ai/langchain      # Python   — AI framework (high-velocity)
+    # ── Enterprise scale benchmarks (Go/HCL/TS/Rust grammar stress) ──────────
+    hashicorp/terraform         # Go/HCL   — IaC engine (large Go + HCL corpus)
+    docker/cli                  # Go       — Docker CLI (large single-language Go)
+    cloudflare/workers-sdk      # TS/Rust  — Wrangler v2+ (active repo; cloudflare/wrangler is archived v1)
 )
 
 # ── Configuration ─────────────────────────────────────────────────────────────

@@ -10,7 +10,9 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use memmap2::MmapOptions;
-use tree_sitter::{Language, ParseOptions, ParseState, Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{
+    Language, ParseOptions, ParseState, Parser, Query, QueryCursor, StreamingIterator,
+};
 
 use crate::induce;
 use crate::path_util::normalize_path;
