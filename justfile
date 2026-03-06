@@ -54,6 +54,8 @@ bump-version version:
 	# ARCHITECTURE.md — two VERSION patterns: header (**VERSION:** x) and footer (**VERSION: x**)
 	sed -i 's/\*\*VERSION:\*\* [0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?/\*\*VERSION:\*\* {{version}}/' ARCHITECTURE.md
 	sed -i 's/\*\*VERSION: [0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?\*\*/\*\*VERSION: {{version}}\*\*/' ARCHITECTURE.md
+	# CLAUDE.md — local working doc (gitignored); update if present
+	sed -i 's/\*\*Current Version\*\*: `[0-9]\+\.[0-9]\+\.[0-9]\+`/\*\*Current Version\*\*: `{{version}}`/' CLAUDE.md 2>/dev/null || true
 	cargo check > /dev/null 2>&1 || true
 	@echo "✅ Manifests updated."
 

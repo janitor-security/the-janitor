@@ -1,9 +1,9 @@
 # Autopsy of a Giant: Auditing the Godot Engine
 
-**Target**: Godot Engine — `master` branch (February 2026)
-**Analyzer**: The Janitor v6.9.0 — library mode + PR bounce
-**Scan Date**: 2026-03-02
-**Scan Duration**: **33 seconds** (static scan) / **2m54s** (full gauntlet: scan + dedup + 98 PRs bounced)
+**Target**: Godot Engine — `master` branch (February–March 2026)
+**Analyzer**: The Janitor v6.10.1 — library mode + PR bounce
+**Scan Date**: 2026-03-02 → 2026-03-03 (full corpus run)
+**Scan Duration**: **33 seconds** (static scan) / **4,663 PRs bounced** (full open-PR corpus)
 
 ---
 
@@ -18,13 +18,13 @@
 | Dead symbols (library mode) | **717** |
 | Complexity Delta | **−717 symbols** |
 | Clone groups | **2** |
-| PRs bounced | **98 / 100** |
-| Antipatterns caught | **15** |
-| Unlinked PRs | **70 / 98** |
+| PRs bounced | **4,663** (full open-PR corpus) |
+| Actionable intercepts (score ≥ 100) | **105** |
+| Structural clone pairs detected | **59** |
 | OOM events | **0** |
 | Panics | **0** |
 
-**Scanned 3.5M LOC in 33 seconds. Peak Memory: 58 MB. 15 antipatterns caught across 98 live PRs.**
+**Scanned 3.5M LOC in 33 seconds. Peak Memory: 58 MB. 105 actionable intercepts across 4,663 live PRs. $2,100 in maintainer time reclaimed.**
 
 ---
 
@@ -212,29 +212,84 @@ methods is added to `GLOBAL_SHIELD_NAMES` in `wisdom.rs`:
 
 ---
 
-## The Slop Found
+## The Slop Found — Full Corpus Run (4,663 PRs)
 
-Results from bouncing the **98 most recent Godot PRs** via `gh pr diff` — no local git
-clone required. The Janitor fetches each patch, parses it through tree-sitter, runs the
-full slop pipeline, and writes a `BounceLogEntry` to `.janitor/bounce_log.ndjson`.
+Results from bouncing **every open PR** in the Godot repository via `gh pr diff` — no local
+git clone required. The Janitor fetches each patch, runs the full slop pipeline (tree-sitter
+AST, MinHash LSH, CommentScanner, ManifestScanner), and appends a `BounceLogEntry` to
+`.janitor/bounce_log.ndjson`. Aggregated via `janitor report`.
 
-### Top 3 Toxic PRs
+### Workslop: Maintainer Impact
 
-- **PR #116839** by `bruvzg` — score **120**
-  - *Antipattern: Raw `new`: prefer `std::make_unique<T>()` or `std::make_shared<T>()` for exception-safe RAII ownership (×2)*
-  - *No linked issue*
+*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax senior engineers pay reviewing AI-generated low-quality PRs.*
 
-- **PR #116993** by `Calinou` — score **70**
-  - *No linked issue*
+| Metric | Value |
+|:-------|------:|
+| Total PRs analyzed | **4,663** |
+| Actionable intercepts (score ≥ 100) | **105** |
+| **Total engineering time reclaimed** | **21.0 hours** |
+| **Estimated operational savings** | **$2,100** |
 
-- **PR #116982** by `Calinou` — score **70**
-  - *No linked issue*
+> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost.
+> Source: [Workslop research](https://builtin.com/articles/what-is-workslop).
 
-### Top 3 Clean PRs
+---
 
-- PR #116976 by `akien-mga` — score 0
-- PR #116954 by `dalexeev` — score 0
-- PR #116946 by `vaner-org` — score 0
+### Slop Top 10 — Highest Structural Debt
+
+*Full top-50 available via `janitor report --repo godotengine/godot --top 50`.*
+
+| Rank | PR | Author | Slop Score | Dead Added | Clones | Antipatterns |
+|------|----|--------|------------|------------|--------|---------------|
+| 1 | #116301 | neikeq | **34,885** | 0 | 3,143 | 383 |
+| 2 | #116300 | neikeq | **34,245** | 0 | 3,139 | 371 |
+| 3 | #116365 | dalexeev | **7,480** | 0 | 2 | 149 |
+| 4 | #55220 | DevinPentecost | **5,005** | 0 | 277 | 72 |
+| 5 | #83505 | magian1127 | **2,410** | 0 | 18 | 46 |
+| 6 | #96498 | Repiteo | **1,865** | 124 | 121 | 0 |
+| 7 | #114690 | adamscott | **1,855** | 2 | 3 | 36 |
+| 8 | #116673 | adamscott | **1,635** | 3 | 7 | 31 |
+| 9 | #85683 | Repiteo | **1,330** | 90 | 82 | 0 |
+| 10 | #105818 | Vulwsztyn | **840** | 42 | 80 | 0 |
+
+**Dominant antipattern**: Raw `new` / raw `delete` — manual memory management without RAII.
+Godot's C++ modernisation has not yet reached the platform layer and rendering subsystems.
+
+**Hallucinated security fixes** (score inflated by +100 each): PRs #116963, #116777,
+#116578, #116373, #114347 — PR bodies claim RCE/CVE fixes but only non-code files changed
+(`.yml`, `.xml`). The Janitor's hallucinated-fix detector flags these automatically.
+
+---
+
+### Structural Clones — Near-Duplicate PRs
+
+*Detected via 64-hash MinHash LSH (Jaccard ≥ 0.70). **59 clone pairs** found across the corpus.*
+
+Representative examples:
+
+- **#116301** (neikeq) ≡ **#116300** (neikeq) — identical patch submitted twice
+- **#116673** (adamscott) ≡ **#114690** (adamscott) — reformatted resubmission
+- **#116667** (TokageItLab) ≡ **#116427** (TokageItLab)
+- **#115160** (Saulo-de-Souza) ≡ **#109466** (niYaDevelop)
+- **#113240** (mihe) ≡ **#112764** (mihe)
+- **#109080** (dsnopek) ≡ **#105529** (m4gr3d) — structurally identical implementations by different authors
+- **#111262** (leandro-benedet-garcia) ≡ **#88831** (nlupugla)
+
+*Full clone list: `janitor report --repo godotengine/godot --format markdown`*
+
+---
+
+### Zombie Dependencies — Declared But Never Imported
+
+- **PR #106607** (adamscott): `@eslint/js`, `@html-eslint/eslint-plugin`, `@html-eslint/parser`,
+  `@stylistic/eslint-plugin`, `@types/node`, `eslint-plugin-html`, `espree`, `globals`, `jiti`
+
+*Note*: The ESLint packages appear on every PR snapshot because they live in Godot's base
+`package.json`, not the PR diff itself. These are toolchain-only packages and a known
+false-positive pattern. The zombie-dep scanner operates at O(PR-diff) scope — a base manifest
+shield in `wisdom.json` would suppress them.
+
+---
 
 ### Dead Symbol Certainty Audit (Top 5)
 
@@ -246,21 +301,6 @@ These symbols have zero upward reference paths in library-mode scan:
 - `_write_to_str` (`core/variant/variant_parser.cpp`)
 - `_compute_key` (`scene/resources/canvas_item_material.h`)
 - *(…and 712 more — run `janitor scan godotengine/godot --library` to see the full list)*
-
-### Workslop: Maintainer ROI
-
-| Metric | Value |
-|:-------|------:|
-| Actionable intercepts (Blocked ≥ 100) | **3** |
-| Engineering time reclaimed | **0.6 hours** |
-| **Estimated operational savings** | **$60** |
-
-> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost.
-> Source: [Workslop research](https://builtin.com/articles/what-is-workslop).
-
-**Verdict**: 70 of 98 bounced PRs (71%) had no linked GitHub issue. The top antipattern —
-raw `new` allocation without RAII wrappers — appeared in 15 PRs, concentrated in Godot's
-platform and rendering subsystems where the C++ modernisation has not yet reached.
 
 ---
 
@@ -315,20 +355,21 @@ quadratic. The same profile holds at 10× the entity count.
 
 ## CI Integration
 
+The Janitor ships a native GitHub Action. Zero Python. Zero scripts. One line:
+
 ```yaml
 # .github/workflows/janitor.yml
-- name: Janitor Slop Gate
-  run: |
-    git diff origin/master...HEAD > pr.patch
-    janitor bounce . --patch pr.patch --format json | tee slop_report.json
-    python3 -c "
-    import json, sys
-    r = json.load(open('slop_report.json'))
-    if r['slop_score'] > 20:
-        print(f'BLOCKED: slop_score={r[\"slop_score\"]}')
-        sys.exit(1)
-    print(f'CLEAN: slop_score={r[\"slop_score\"]}')
-    "
+- uses: GhrammR/the-janitor@v6
+  with:
+    token: ${{ secrets.JANITOR_TOKEN }}
+    fail_on_slop: 'true'
+```
+
+Or use the CLI directly with auto-fetch (no manual patch download):
+
+```bash
+# Auto-fetch PR diff via gh CLI — no local git clone needed
+janitor bounce . --pr-number $PR_NUMBER --repo-slug owner/repo --format json
 ```
 
 Score formula: `dead_added × 10 + clones × 5 + zombies × 15 + antipatterns × 50`
@@ -347,9 +388,11 @@ rendering helpers, deprecated geometry utilities, and parser internals replaced 
 compiler are the actionable maintenance surface. Eliminating them reduces binary size, build time,
 and cognitive load for contributors navigating 22,000+ entity symbols.
 
-The PR gate intercepted **3 actionable submissions** across 98 live PRs — **0.6 hours reclaimed,
-$60 saved** on the triage line alone. Multiply across a team processing hundreds of PRs weekly
-and the number compounds.
+The full corpus PR bounce — **4,663 open PRs** processed via `gh pr diff` with no local clone —
+intercepted **105 actionable submissions** and detected **59 structural clone pairs** across the
+contributor base. **$2,100 in maintainer triage time reclaimed.** Multiply across a project
+receiving hundreds of PRs per week, year-round, and the signal compounds into a maintenance
+budget recovered.
 
 This is the baseline. Now you know.
 
