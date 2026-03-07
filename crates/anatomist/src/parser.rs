@@ -564,6 +564,13 @@ impl ParserHost {
             "go" => Self::extract_go_entities(source, &normalized_path),
             "glsl" | "vert" | "frag" => Self::extract_glsl_entities(source, &normalized_path),
             "m" | "mm" => Self::extract_objc_entities(source, &normalized_path),
+            // Polyglot-registered grammars without a dedicated entity extractor.
+            // Parsing happens locally (grammar is in the registry); we return an
+            // empty entity list rather than falling through to the Induction Bridge
+            // and triggering a cloud POST.
+            "yaml" | "yml" | "sh" | "bash" | "tf" | "hcl" | "nix" | "gd" | "kt" | "kts" => {
+                Ok(vec![])
+            }
             _ => {
                 // Unknown extension: attempt to learn via the Induction Bridge.
                 //
@@ -1447,5 +1454,48 @@ mod tests {
     fn test_garbage_bytes_js_no_panic() {
         let garbage: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
         let _ = ParserHost::extract_js_entities(&garbage, "adversarial.js");
+    }
+
+    // ---------------------------------------------------------------------------
+    // Polyglot-registered extensions must return Ok(vec![]) locally — never
+    // fall through to the Induction Bridge (cloud POST).
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_polyglot_new_exts_parsed_locally() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        // Minimal valid source for each new polyglot grammar.
+        let cases: &[(&str, &[u8])] = &[
+            ("nix", b"{ pkgs }: pkgs.hello"),
+            ("tf", b"resource \"aws_instance\" \"web\" {}"),
+            ("hcl", b"variable \"region\" { default = \"us-east-1\" }"),
+            ("yaml", b"key: value\n"),
+            ("sh", b"#!/bin/bash\necho hello\n"),
+            ("gd", b"func _ready():\n  pass\n"),
+            ("kt", b"fun main() { println(\"hi\") }"),
+        ];
+
+        for (ext, src) in cases {
+            let mut f = NamedTempFile::new().unwrap();
+            f.write_all(src).unwrap();
+            // Rename to give the correct extension.
+            let dst = f.path().with_extension(ext);
+            std::fs::copy(f.path(), &dst).unwrap();
+
+            let mut host = ParserHost::new().unwrap();
+            let result = host.dissect(&dst);
+            std::fs::remove_file(&dst).ok();
+
+            assert!(
+                result.is_ok(),
+                ".{ext} dissect must return Ok, not trigger induce"
+            );
+            assert!(
+                result.unwrap().is_empty(),
+                ".{ext} must return empty entity list (no extractor yet)"
+            );
+        }
     }
 }
