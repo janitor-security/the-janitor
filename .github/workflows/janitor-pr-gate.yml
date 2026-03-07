@@ -39,7 +39,7 @@ jobs:
       - name: Upload bounce log
         # Always upload so reviewers can inspect findings even on gate failure.
         if: always()
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: janitor-bounce-log-pr-${{ github.event.pull_request.number }}
           path: .janitor/bounce_log.ndjson
