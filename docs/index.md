@@ -1,9 +1,9 @@
-<div align="center">
-  <img src="/assets/logo_text.png" alt="The Janitor" width="100%" style="max-width: 600px;">
-</div>
+<p align="center">
+  <img src="assets/logo_text.png" alt="The Janitor" width="80%" style="max-width: 800px; display: block; margin: 0 auto;">
+</p>
 
 <video autoplay loop muted playsinline style="width: 100%; border-radius: 8px; border: 1px solid #333; margin-bottom: 2rem;">
-  <source src="/assets/janitor_demo.mp4" type="video/mp4">
+  <source src="assets/janitor_demo.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
