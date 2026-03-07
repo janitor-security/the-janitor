@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# tools/mock_bond.sh — Governor bond display with animated file-scan for VHS demo.
+# tools/mock_bond.sh — Sentinel bond display with animated file-scan for VHS demo.
 #
 # Simulates: janitor clean ~/dev/gauntlet/godot --force-purge --token $JANITOR_TOKEN
 #
-# The bond is issued by The Governor (GitHub App SaaS layer), which implements
-# ML-DSA-65 (FIPS 204) via the-governor/src/compliance/pqc.rs. The local
-# janitor binary verifies the token and writes the audit log; The Governor
-# countersigns the CBOM with its ML-DSA-65 identity key.
+# The bond is issued by Janitor Sentinel (GitHub App SaaS layer), which implements
+# ML-DSA-65 (FIPS 204). The local janitor binary verifies the token and writes the
+# audit log; Janitor Sentinel countersigns the CBOM with its ML-DSA-65 identity key.
 
 set -euo pipefail
 
@@ -82,24 +81,24 @@ printf "  %s[PASS         ]%s  Shadow test suite clean. Proceeding to bond issua
   "$GRN" "$NC"
 sleep 0.5
 
-# ── Governor bond — ML-DSA-65 (FIPS 204) ──────────────────────────────────────
+# ── Sentinel bond — ML-DSA-65 (FIPS 204) ──────────────────────────────────────
 HASH=$(od -An -N4 -tx4 /dev/urandom | tr -d ' \n')
 BOND_FILE="bonds/116833_${HASH:0:8}.json"
 
-printf "  %s[GOVERNOR BOND]%s  Contacting The Governor attestation service...\n" \
+printf "  %s[SENTINEL BOND]%s  Contacting Janitor Sentinel attestation service...\n" \
   "$GRN" "$NC"
 sleep 0.6
 
-printf "  %s[GOVERNOR BOND]%s  ML-DSA-65 (FIPS 204) signature computed\n" \
+printf "  %s[SENTINEL BOND]%s  ML-DSA-65 (FIPS 204) signature computed\n" \
   "$GRN" "$NC"
 sleep 0.4
 
-printf "  %s[GOVERNOR BOND]%s  CycloneDX CBOM written: .janitor/%s\n" \
+printf "  %s[SENTINEL BOND]%s  CycloneDX CBOM written: .janitor/%s\n" \
   "$GRN" "$NC" "$BOND_FILE"
 sleep 0.4
 
 SIG=$(head -c 96 /dev/urandom | base64 | tr -d '\n=' | cut -c1-128)
-printf "  %s[GOVERNOR BOND]%s  Sig: %s%s%s\n" "$GRN" "$NC" "$BLD" "$SIG" "$NC"
+printf "  %s[SENTINEL BOND]%s  Sig: %s%s%s\n" "$GRN" "$NC" "$BLD" "$SIG" "$NC"
 sleep 0.3
 
 echo ""

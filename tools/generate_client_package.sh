@@ -329,9 +329,9 @@ if "$JANITOR" report \
     PDF_OK=true
 else
     warn "PDF generation failed."
-    warn "Requirements: pandoc + texlive-latex-recommended + texlive-fonts-recommended"
-    warn "Install: sudo apt-get install pandoc texlive-latex-recommended texlive-fonts-recommended"
-    warn "macOS:   brew install pandoc basictex && sudo tlmgr install newunicodechar"
+    warn "Requirements: pandoc + texlive-latex-extra + texlive-fonts-recommended"
+    warn "Install: sudo apt-get install pandoc texlive-latex-extra texlive-fonts-recommended"
+    warn "macOS:   brew install pandoc basictex && sudo tlmgr install titlesec tocloft xfp newunicodechar framed"
 fi
 
 echo ""

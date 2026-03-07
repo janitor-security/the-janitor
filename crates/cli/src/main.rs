@@ -289,7 +289,7 @@ enum Commands {
         #[arg(long)]
         gauntlet: Option<PathBuf>,
     },
-    /// Synchronise the local Wisdom Registry with The Governor.
+    /// Synchronise the local Wisdom Registry with Janitor Sentinel.
     ///
     /// Downloads the latest `wisdom.rkyv` from `https://api.thejanitor.app/v1/wisdom.rkyv`
     /// and overwrites `.janitor/wisdom.rkyv` in the project root.
@@ -585,7 +585,7 @@ fn cmd_scan(
     }
 
     if format == "json" {
-        // Machine-readable output for Governor SaaS / GitHub Checks integration.
+        // Machine-readable output for Janitor Sentinel / GitHub Checks integration.
         let slop_score = if result.total == 0 {
             0.0_f64
         } else {
@@ -2373,9 +2373,10 @@ fn export_pdf(markdown: &str, out: &Path, title: &str) -> anyhow::Result<()> {
         anyhow::bail!(
             "pandoc not found in PATH.\n\
              Install: https://pandoc.org/installing.html\n\
-             Debian/Ubuntu: sudo apt-get install pandoc texlive-latex-recommended \
+             Debian/Ubuntu: sudo apt-get install pandoc texlive-latex-extra \
              texlive-fonts-recommended\n\
-             macOS: brew install pandoc basictex"
+             macOS: brew install pandoc basictex && \
+             sudo tlmgr install titlesec tocloft xfp newunicodechar framed"
         );
     }
 
@@ -2424,7 +2425,9 @@ fn export_pdf(markdown: &str, out: &Path, title: &str) -> anyhow::Result<()> {
 
     if !status.success() {
         anyhow::bail!(
-            "pandoc exited with code {:?} — ensure texlive-latex-recommended is installed",
+            "pandoc exited with code {:?} — ensure texlive-latex-extra is installed\n\
+             Debian/Ubuntu: sudo apt-get install texlive-latex-extra texlive-fonts-recommended\n\
+             macOS: sudo tlmgr install titlesec tocloft xfp newunicodechar framed",
             status.code()
         );
     }
@@ -2644,7 +2647,7 @@ fn cmd_report(
 // update-wisdom
 // ---------------------------------------------------------------------------
 
-/// Downloads the latest Wisdom Registry from The Governor and writes it to
+/// Downloads the latest Wisdom Registry from Janitor Sentinel and writes it to
 /// `<project_root>/.janitor/wisdom.rkyv`.
 ///
 /// On any network or I/O failure the function returns an error — no partial
@@ -2671,7 +2674,7 @@ fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
     std::fs::write(&wisdom_path, &bytes)
         .with_context(|| format!("writing {}", wisdom_path.display()))?;
 
-    println!("\u{1f9e0} Wisdom Registry synchronized with The Governor.");
+    println!("\u{1f9e0} Wisdom Registry synchronized with Janitor Sentinel.");
     Ok(())
 }
 

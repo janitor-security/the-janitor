@@ -25,11 +25,22 @@
         # toolchain file always agree.
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-        # Minimal TeX live subset sufficient for pandoc → PDF generation.
-        # scheme-medium (~350 MB) includes the packages pandoc depends on
-        # (lmodern, geometry, xcolor, hyperref, booktabs, longtable, fancyhdr).
+        # TeX live subset sufficient for pandoc → PDF generation via report.tex.
+        # scheme-medium covers the pandoc base deps (geometry, xcolor, hyperref,
+        # booktabs, longtable, fancyhdr, microtype).  The five packages below are
+        # in texlive-latex-extra on Debian but must be listed explicitly in Nix
+        # since scheme-medium does not include them:
+        #   titlesec     — \titleformat section styling
+        #   tocloft      — TOC font/colour customisation
+        #   newunicodechar — Unicode glyph declarations (≥ ≤ → …)
+        #   framed       — snugshade environment for code blocks
+        # Note: xfp (\real{}) is part of l3packages, already in scheme-medium.
         texPackages = pkgs.texlive.combine {
-          inherit (pkgs.texlive) scheme-medium;
+          inherit (pkgs.texlive) scheme-medium
+            titlesec
+            tocloft
+            newunicodechar
+            framed;
         };
       in
       {

@@ -469,12 +469,10 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         );
     } else {
         out.push_str(
-            "| Rank | PR | Author | Slop Score | Dead Added \
-             | Clones | Zombie Syms | Antipatterns |\n",
+            "| Rank | PR | Author | Slop Score | Zombie Syms | Antipatterns |\n",
         );
         out.push_str(
-            "|------|----|--------|------------|------------\
-             |--------|-------------|---------------|\n",
+            "|------|----|--------|------------|-------------|---------------|\n",
         );
         for (rank, &i) in data.slop_top_indices.iter().enumerate() {
             let e = &data.entries[i];
@@ -484,13 +482,11 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
                 .unwrap_or_else(|| "-".to_owned());
             let author = html_escape(&trunc_author(e.author.as_deref().unwrap_or("-"), 20));
             out.push_str(&format!(
-                "| {} | {} | {} | **{}** | {} | {} | {} | {} |\n",
+                "| {} | {} | {} | **{}** | {} | {} |\n",
                 rank + 1,
                 pr,
                 author,
                 e.slop_score,
-                e.dead_symbols_added,
-                e.logic_clones_found,
                 e.zombie_symbols_added,
                 e.antipatterns.len(),
             ));

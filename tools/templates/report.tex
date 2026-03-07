@@ -35,6 +35,9 @@
 \usepackage{calc}   % required for \columnwidth arithmetic in longtable column specs
 \usepackage{xfp}    % provides \real{} used by pandoc for proportional column widths
 \renewcommand{\arraystretch}{1.3}
+% Horizontal cell padding — prevents column content bleeding into adjacent cells
+% during PDF conversion of wide tables.
+\setlength{\tabcolsep}{6pt}
 % Suppress booktabs rule-gap warnings from pandoc-generated tables.
 \setlength{\aboverulesep}{0pt}
 \setlength{\belowrulesep}{0pt}

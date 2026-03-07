@@ -24,7 +24,7 @@ No account required. No time limit. No LOC cap.
 | `janitor dashboard` — Ratatui TUI | ✓ |
 | **PQC-Signed Audit Logs** | — |
 | **CI/CD Compliance Attestation** | — |
-| **The Governor** (GitHub App automation) | — |
+| **Janitor Sentinel** (GitHub App automation) | — |
 
 > The cleanup happens. The proof does not exist in a legally attestable form.
 
@@ -40,12 +40,12 @@ Includes all Junior Janitor capabilities, plus:
 |:-----------|:--------:|
 | **PQC-Signed Audit Logs** — every cleanup event automatically signed with ML-DSA-65 (NIST FIPS 204), stored in `.janitor/audit_log.json` | ✓ |
 | **CI/CD Compliance Attestation** — `--token` flag activates signed reports in GitHub Actions, GitLab CI, Jenkins | ✓ |
-| **The Governor** — GitHub App that automatically runs `janitor bounce` on every pull request and posts a slop-score comment | ✓ |
+| **Janitor Sentinel** — GitHub App that automatically runs `janitor bounce` on every pull request and posts a slop-score comment | ✓ |
 | **Shared Credit Pool** — team-level token shared across all CI runners; no per-seat key management | ✓ |
 | **License Issue SLA** — 48-hour response for license key delivery and renewal | ✓ |
 | Up to 25 named seats on a single license | ✓ |
 
-When a pull request clears the gate, The Governor GitHub App issues a CycloneDX v1.5 CBOM automatically — no token flag, no manual step.
+When a pull request clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM automatically — no token flag, no manual step.
 
 [**Activate — Yearly ($499/yr) →**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348) · [**Monthly billing →**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1362706)
 
@@ -70,11 +70,11 @@ Includes all Team Specialist capabilities, plus:
 
 ## How Attestation Works
 
-### Team — The Governor SaaS
+### Team — Janitor Sentinel
 
-When a Team-licensed pull request clears the slop gate, **The Governor** GitHub App automatically issues a **CycloneDX v1.5 CBOM** (Cryptography Bill of Materials). The CBOM records every cryptographic operation: the ML-DSA-65 (NIST FIPS 204) attestation signatures, BLAKE3 structural hashes, and per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`.
+When a Team-licensed pull request clears the slop gate, **Janitor Sentinel** automatically issues a **CycloneDX v1.5 CBOM** (Cryptography Bill of Materials). The CBOM records every cryptographic operation: the ML-DSA-65 (NIST FIPS 204) attestation signatures, BLAKE3 structural hashes, and per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`.
 
-No CLI flag required. No manual step. The Governor handles issuance automatically on a clean merge.
+No CLI flag required. No manual step. Janitor Sentinel handles issuance automatically on a clean merge.
 
 ### Industrial Core — On-Premises
 
@@ -87,7 +87,7 @@ The cleanup is identical at every tier. The attestation is what you are paying f
 ## FAQ
 
 **Is the Team license a subscription that can be revoked?**
-Team licenses are managed via The Governor SaaS. Industrial Core on-premises tokens are ML-DSA-65 (NIST FIPS 204) signatures — deterministic for a given keypair. Revocation is achieved by rotating the keypair; existing tokens for the old key become cryptographically invalid.
+Team licenses are managed via Janitor Sentinel. Industrial Core on-premises tokens are ML-DSA-65 (NIST FIPS 204) signatures — deterministic for a given keypair. Revocation is achieved by rotating the keypair; existing tokens for the old key become cryptographically invalid.
 
 **Does the tool phone home?**
 No. Token verification, audit log signing, and all analysis are fully offline computations. No telemetry is collected.

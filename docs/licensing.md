@@ -54,7 +54,7 @@ A commercial license is required when **any of the following apply**:
 | Tier | Price | Who It's For |
 |------|-------|--------------|
 | **Free** | **$0** | Individual developers. Unlimited Scan, Cleanup, Dedup, Bounce, Dashboard. No signed logs. |
-| **Team** | **$499/yr** | Teams up to 25. All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + The Governor GitHub App. |
+| **Team** | **$499/yr** | Teams up to 25. All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. |
 | **Industrial** | **Custom** | Monoliths >1M LOC. On-prem token server, keypair rotation protocol, SOC 2 audit support, enterprise SLA, unlimited seats. |
 
 [**Get Certified → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)

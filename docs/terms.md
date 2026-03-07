@@ -8,7 +8,7 @@
 
 ## 1. Acceptance of Terms
 
-By downloading, installing, or using The Janitor binary, The Governor API, or any associated tooling ("the Software"), you agree to these Terms & Conditions ("Terms"). If you do not agree, do not use the Software.
+By downloading, installing, or using The Janitor binary, the Janitor Sentinel API, or any associated tooling ("the Software"), you agree to these Terms & Conditions ("Terms"). If you do not agree, do not use the Software.
 
 ---
 

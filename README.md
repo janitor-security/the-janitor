@@ -22,7 +22,7 @@ The threat model has changed. Your enforcement layer has not.
 
 ![Janitor Sentinel Demo](docs/assets/sentinel_demo.webp)
 
-*The Governor automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).*
+*Janitor Sentinel automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).*
 
 ## The Enforcement Layer
 
@@ -40,7 +40,7 @@ AI generators hallucinate package imports. The Janitor scans `package.json`, `Ca
 
 ### Cryptographic Integrity Bonds
 
-When a pull request clears the slop gate, **The Governor** — our GitHub App — automatically issues a **CycloneDX v1.5 CBOM** (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`. No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody for every line of code removed from production.
+When a pull request clears the slop gate, **Janitor Sentinel** — our GitHub App — automatically issues a **CycloneDX v1.5 CBOM** (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`. No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody for every line of code removed from production.
 
 ---
 
@@ -102,7 +102,7 @@ janitor clean ./src --force-purge
 | **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
 | **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
-| **Audit Attestation** | ML-DSA-65 (NIST FIPS 204) | CycloneDX v1.5 CBOMs issued by The Governor SaaS on clean merge |
+| **Audit Attestation** | ML-DSA-65 (NIST FIPS 204) | CycloneDX v1.5 CBOMs issued by Janitor Sentinel on clean merge |
 
 ## Pricing
 
@@ -111,7 +111,7 @@ janitor clean ./src --force-purge
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats. |
+| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
 | **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 
 [**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)
@@ -186,4 +186,4 @@ chmod +x janitor && sudo mv janitor /usr/local/bin/
 
 **Business Source License 1.1 (BUSL-1.1)** — Source Available. Converts to MIT on 2030-02-15.
 
-Scan, cleanup, dedup, bounce, and dashboard are permanently free. Integrity attestation is issued by [The Governor](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7) (Team tier).
+Scan, cleanup, dedup, bounce, and dashboard are permanently free. Integrity attestation is issued by [Janitor Sentinel](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7) (Team tier).
