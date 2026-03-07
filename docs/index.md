@@ -203,6 +203,6 @@ janitor dashboard <path>
 
 ---
 
-> See [Safety Guarantees](safety.md) for the Shadow Tree isolation and atomic rollback protocol.
-> See [Licensing](licensing.md) for BUSL-1.1 terms and commercial tier details.
+> See [Security Posture](security.md) for the Shadow Tree isolation, atomic rollback protocol, and hermetic build details.
+> See [Pricing & Licensing](pricing.md) for BUSL-1.1 terms and commercial tier details.
 > See [Terms of Service](terms.md) · [Privacy Policy](privacy.md) for legal and data handling.

@@ -23,24 +23,15 @@ theme:
 
 nav:
   - Overview: index.md
-  - Safety Guarantees: safety.md
   - Security Posture: security.md
-  - Build Reproducibility: infrastructure.md
   - Benchmarks: benchmarks.md
-  - Pricing: pricing.md
-  - Detection Engine:
-    - Slop Hunter: slop-hunter.md
-  - Case Studies:
-    - Godot Engine: case-studies/godot.md
+  - Intelligence Reports:
     - Global Audit 2026: case-studies/global-audit-2026.md
-  - Governance:
-    - Licensing (BUSL-1.1): licensing.md
-    - Token Gate: sovereignty/tokens.md
+    - Godot Engine: case-studies/godot.md
+  - Pricing & Licensing: pricing.md
   - Legal:
-    - Terms & Conditions: terms.md
-    - Privacy Policy: privacy.md
-  - Archive:
-    - Legacy (Python v4): archive/legacy.md
+    - Terms: terms.md
+    - Privacy: privacy.md
 
 markdown_extensions:
   - admonition

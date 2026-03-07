@@ -16,7 +16,7 @@ pipeline that continuously audits itself**.
 
 ---
 
-## 1. Zero-Trust Parsing: RAM-Only, Zero-Copy AST Pipeline
+## 1. Zero-Copy Architecture: RAM-Only AST Pipeline
 
 ### Threat Modelled
 
@@ -113,17 +113,19 @@ already on disk and read-only from The Janitor's perspective.
 The `MergeSnapshot` is a `HashMap<PathBuf, Vec<u8>>` — a pure heap allocation. A
 malicious `CMakeLists.txt` exists only as an inert byte array.
 
-### Chemotaxis Prioritisation
+A compromised PR could include:
 
-`MergeSnapshot::iter_by_priority()` processes high-signal languages first
-(`rs → py → go → js → ts → …`), ensuring that the analysis budget is spent on files
-most likely to carry actionable findings before the bounce timeout terminates the run.
-The prioritisation order is statically encoded in `shadow_git.rs` and is not influenced
-by any content of the PR.
+- `CMakeLists.txt` that runs a `add_custom_command(POST_BUILD ...)` shell payload
+- `Makefile` targets executed by `make` during a build-triggered scan
+- `setup.py` / `pyproject.toml` with `setup_requires` that pip-installs malware
+- `.github/actions/` that a naive tool might evaluate locally
+
+The Shadow Merger never materialises any of these to disk. The malicious content exists
+only as a byte array in heap memory — unexecutable, unreachable by the OS process loader.
 
 ---
 
-## 3. Post-Quantum Attestation: ML-DSA-65 (FIPS 204)
+## 3. Cryptographic Provenance: ML-DSA-65 (FIPS 204)
 
 ### Threat Modelled
 
@@ -160,8 +162,13 @@ Revocation is achieved by keypair rotation, not by a revocation list:
 3. All tokens signed against the old private key are **cryptographically invalid** against
    the new verifying key — no database lookup, no network check, no revocation server.
 
-Rotation cadence and emergency SLA are documented in [Safety Guarantees → Cryptographic
-Key Rotation](safety.md).
+| Trigger | Response |
+|---------|----------|
+| Scheduled annual rotation | New binary released at license renewal |
+| Suspected token compromise | Emergency binary release; all licensees notified via sales@thejanitor.app |
+| Binary integrity failure | Binary replaced; SHA-256 hash published on GitHub Release |
+
+Industrial Core licensees receive a **contractual rotation SLA**: an emergency keypair rotation and new binary delivery within 4 hours of a confirmed compromise report.
 
 ### "Harvest Now, Decrypt Later" Resistance
 
@@ -170,9 +177,113 @@ adversary. Classical ECDSA-signed audit trails collected over the next decade wi
 retroactively forgeable once sufficiently powerful quantum computers exist. We made the
 migration in 2024, before the threat materialised.
 
+Every physical excision event signed with a valid token includes a per-event ML-DSA-65 signature in the audit log:
+
+```json
+{
+  "timestamp": "2026-02-19T10:00:00Z",
+  "file_path": "/abs/path/src/module.py",
+  "sha256_pre_cleanup": "a3b4c5d6...",
+  "attestation_signature": "<base64-mldsa65-sig>"
+}
+```
+
+The `attestation_signature` field covers `{timestamp}{file_path}{sha256_pre_cleanup}`. Auditors can verify this signature independently using only the public verifying key embedded in the binary at the time of excision — no server access required.
+
 ---
 
-## 4. Supply Chain Integrity: Pinned Dependencies, Self-Audited CI
+## 4. Shadow Tree Isolation & Atomic Rollback
+
+Before touching any source file, The Janitor creates a **Shadow Tree** — a mirror of your project directory that uses zero additional disk space.
+
+| Platform | Technique | Privilege Required |
+|----------|-----------|-------------------|
+| Linux / macOS | Symbolic links per file | None |
+| Windows | Hard links per file | None (no Admin, no Developer Mode) |
+
+When The Janitor identifies a dead symbol, it removes the **link** from the Shadow Tree — the original file remains intact. Your test suite runs against the shadow view. If tests pass, the symbol was genuinely unused. If they fail, nothing has been permanently modified.
+
+### Atomic Rollback Layers
+
+**Layer 1 — Shadow Rollback (always active):** If the test suite fails against the Shadow Tree, all links are immediately restored. The source tree is in its original, unmodified state.
+
+**Layer 2 — Backup Rollback (active during physical excision):** `SafeDeleter` copies each file to `.janitor/ghost/<timestamp>_<filename>.bak` before the first write. Symbol byte ranges are removed **bottom-to-top** (descending byte order) to preserve upstream offsets. UTF-8 character boundaries are verified before every splice.
+
+If any write operation fails partway through, `restore_all()` copies every `.bak` file back to its original path.
+
+### Dry-Run Default
+
+All destructive commands default to **dry-run mode**. Nothing is modified unless you explicitly request it:
+
+```sh
+# Safe: reports what would be deleted
+janitor clean ./src
+
+# Requires explicit intent + a valid token
+janitor clean ./src --force-purge --token <TOKEN>
+```
+
+### Rollback Command
+
+```sh
+# In a git repository: stashes all uncommitted changes
+# Without git: restores files from .janitor/ghost/
+janitor undo ./src
+```
+
+| Failure Mode | What Happens |
+|--------------|--------------|
+| Test suite fails in Shadow Tree | Links restored, source unchanged, exit 1 |
+| File write fails during excision | Backup restored, source in original state |
+| Process killed mid-excision | Run `janitor undo` to restore from `.janitor/ghost/` |
+| Accidental run without intent | Default dry-run prints report, modifies nothing |
+
+---
+
+## 5. Hermetic Builds: Nix Flakes
+
+The Janitor audits other projects for zombie dependencies and supply-chain drift. A hermetic build guarantees that every developer, CI runner, and release pipeline produces **bit-identical artefacts** from the same source revision — regardless of OS version, globally installed packages, or ambient PATH contents.
+
+| Risk | Mitigated By |
+|------|-------------|
+| "Works on my machine" | Nix Flake pins exact package revisions |
+| Rust toolchain drift | `rust-toolchain.toml` pins Rust 1.85.0 |
+| Pandoc / TeX version skew | Nix devShell provides pinned pandoc + texlive |
+| libgit2 / OpenSSL ABI mismatch | Nix provides C library headers via `pkg-config` |
+| CI/CD supply chain | GitHub Actions steps are SHA-pinned (see Section 6 below) |
+
+### Entering the Dev Shell
+
+```bash
+just shell
+# — or equivalently —
+nix develop
+```
+
+`just audit` and `just build` detect whether they are running inside the Nix devShell via the `IN_NIX_SHELL` environment variable. If Nix is installed but the shell is not active, the recipe transparently re-execs itself under `nix develop --command just <recipe>`.
+
+### Pinning Strategy
+
+`rust-toolchain.toml` declares the exact channel:
+
+```toml
+[toolchain]
+channel = "1.85.0"
+components = ["rustfmt", "clippy", "rust-src"]
+```
+
+`flake.lock` pins every Nix input — including `nixpkgs` and `rust-overlay` — to an exact git commit SHA. Commit `flake.lock` alongside `flake.nix` so that CI and all contributors use identical package revisions.
+
+The production `Dockerfile` pins its base images to `@sha256:<digest>`:
+
+```dockerfile
+FROM rust:1.85-slim@sha256:3490aa77... AS builder
+FROM debian:bookworm-slim@sha256:6458e6ce... AS runtime
+```
+
+---
+
+## 6. Supply Chain Integrity: Pinned Dependencies, Self-Audited CI
 
 ### GitHub Actions: SHA-Pinned, Harden-Runner Gated
 
@@ -187,37 +298,15 @@ restricting the egress network policy to only the endpoints required by that wor
 ```
 
 A tag-pinned action (`@v4`) is a mutable pointer — the action owner can silently
-replace the tag with malicious code. A SHA-pinned action is immutable. The CI pipeline
-will fail to resolve any action whose SHA has changed.
+replace the tag with malicious code. A SHA-pinned action is immutable.
 
 ### Cargo Audit
 
-`cargo audit` is a required gate in the `just audit` recipe (the Definition of Done for
-every change). Any crate with a known advisory in the RustSec database causes the build
-to fail. The workspace `deny.toml` policy additionally enforces licence compatibility and
-bans crates with duplicate transitive dependencies.
-
-### Docker: Digest-Pinned Base Images
-
-The production `Dockerfile` pins both the builder and runtime images to `@sha256:<digest>`:
-
-```dockerfile
-FROM rust:1.85-slim@sha256:3490aa77... AS builder
-FROM debian:bookworm-slim@sha256:6458e6ce... AS runtime
-```
-
-A tag (`rust:1.85-slim`) is mutable. A digest pin is not.
+`cargo audit` is a required gate in the `just audit` recipe. Any crate with a known advisory in the RustSec database causes the build to fail. The workspace `deny.toml` policy additionally enforces licence compatibility and bans crates with duplicate transitive dependencies.
 
 ### The Janitor Scans The Janitor
 
-The engine's own CI/CD pipeline runs `janitor scan` against the engine's own source tree
-on every pull request via the `janitor-pr-gate.yml` GitHub Actions workflow. The
-composite action (`action.yml`) downloads the release binary, runs `janitor bounce`
-against the PR diff, and fails the gate if the slop score exceeds 100.
-
-**The firewall audits itself.** Any PR that introduces dead symbols, zombie dependencies,
-hallucinated security claims, or structural clones into the engine is blocked by the
-engine — before a human reviewer sees it.
+The engine's own CI/CD pipeline runs `janitor scan` against the engine's own source tree on every pull request. Any PR that introduces dead symbols, zombie dependencies, hallucinated security claims, or structural clones into the engine is blocked by the engine — before a human reviewer sees it.
 
 ```
 PR opened ──► janitor-pr-gate.yml
@@ -229,19 +318,9 @@ PR opened ──► janitor-pr-gate.yml
              slop_score < 100 ? ──► CI PASS (review proceeds)
 ```
 
-This creates a structural invariant: the production binary cannot contain classes of
-defects that it is designed to detect in others.
-
 ---
 
-## 5. RAM Pressure Management: Physarum Backpressure
-
-### Threat Modelled
-
-A burst of concurrent bounce requests causes heap allocation to grow without bound,
-leading to OOM-killer termination and denial of service.
-
-### The Control
+## 7. RAM Pressure Management: Physarum Backpressure
 
 `crates/common/src/physarum.rs` implements `SystemHeart::beat()`, which samples total
 RAM utilisation on every request. The daemon acquires a concurrency semaphore before
@@ -259,7 +338,7 @@ termination without requiring manual capacity planning.
 
 ---
 
-## 6. Responsible Disclosure
+## 8. Responsible Disclosure
 
 Security issues in The Janitor should be reported to
 **security@thejanitor.app**. Include:
@@ -271,9 +350,6 @@ Security issues in The Janitor should be reported to
 We commit to acknowledging receipt within 24 hours and providing an initial assessment
 within 72 hours. Critical vulnerabilities (RCE, token forgery, audit log tampering) are
 treated as P0 with a target patch cadence of 48 hours from confirmation.
-
-We do not operate a bug bounty programme at this time. Responsible disclosers are
-credited in the release changelog unless they request anonymity.
 
 ---
 
