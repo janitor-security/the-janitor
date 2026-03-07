@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -285,7 +285,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -320,7 +320,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "common",
  "crossterm",
@@ -700,7 +700,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "forge"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1174,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1330,7 +1330,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -1522,7 +1522,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anyhow",
  "junction",
@@ -2398,7 +2398,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -2787,7 +2787,7 @@ checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.10.4"
+version = "6.11.0"
 dependencies = [
  "anyhow",
  "common",
