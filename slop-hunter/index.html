@@ -13,10 +13,6 @@
         <link rel="canonical" href="https://thejanitor.app/slop-hunter/">
       
       
-        <link rel="prev" href="../pricing/">
-      
-      
-        <link rel="next" href="../case-studies/godot/">
       
       
       <link rel="icon" href="../assets/logo.svg">
@@ -24,7 +20,7 @@
     
     
       
-        <title>Slop Hunter - The Janitor</title>
+        <title>Slop Hunter: Antipattern Detection Engine - The Janitor</title>
       
     
     
@@ -142,7 +138,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Slop Hunter
+              Slop Hunter: Antipattern Detection Engine
             
           </span>
         </div>
@@ -290,51 +286,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../safety/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Safety Guarantees
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../security/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Security Posture
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../infrastructure/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Build Reproducibility
   </span>
   
 
@@ -369,283 +325,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../pricing/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Pricing
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
-            
-  
-  <span class="md-ellipsis">
-    Detection Engine
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
-            <span class="md-nav__icon md-icon"></span>
-            Detection Engine
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Slop Hunter
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  <span class="md-ellipsis">
-    Slop Hunter
-  </span>
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      How It Works
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#detected-antipatterns-by-language" class="md-nav__link">
-    <span class="md-ellipsis">
-      Detected Antipatterns by Language
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Detected Antipatterns by Language">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#python-hallucinated-imports" class="md-nav__link">
-    <span class="md-ellipsis">
-      Python — Hallucinated Imports
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#rust-vacuous-unsafe-blocks" class="md-nav__link">
-    <span class="md-ellipsis">
-      Rust — Vacuous unsafe Blocks
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#go-goroutine-closure-traps" class="md-nav__link">
-    <span class="md-ellipsis">
-      Go — Goroutine Closure Traps
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#c-raw-new-allocation" class="md-nav__link">
-    <span class="md-ellipsis">
-      C++ — Raw new Allocation
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#java-systemoutprintln-in-production-code" class="md-nav__link">
-    <span class="md-ellipsis">
-      Java — System.out.println in Production Code
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-curl-defense-semantic-sanity-checking" class="md-nav__link">
-    <span class="md-ellipsis">
-      The Curl Defense: Semantic Sanity Checking
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The Curl Defense: Semantic Sanity Checking">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-it-detects" class="md-nav__link">
-    <span class="md-ellipsis">
-      What It Detects
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#security-keywords-monitored" class="md-nav__link">
-    <span class="md-ellipsis">
-      Security Keywords Monitored
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#non-code-file-extensions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Non-Code File Extensions
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#penalty" class="md-nav__link">
-    <span class="md-ellipsis">
-      Penalty
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#implementation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Implementation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#output-format" class="md-nav__link">
-    <span class="md-ellipsis">
-      Output Format
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
     
     
     
@@ -659,47 +338,26 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   <span class="md-ellipsis">
-    Case Studies
+    Intelligence Reports
   </span>
   
 
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
-            Case Studies
+            Intelligence Reports
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../case-studies/godot/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Godot Engine
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
             
               
                 
@@ -722,9 +380,50 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case-studies/godot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Godot Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pricing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pricing & Licensing
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -748,99 +447,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
-            
-  
-  <span class="md-ellipsis">
-    Governance
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
-            <span class="md-nav__icon md-icon"></span>
-            Governance
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../licensing/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Licensing (BUSL-1.1)
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../sovereignty/tokens/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Token Gate
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
-        
-          
-          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -851,8 +461,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Legal
           </label>
@@ -869,7 +479,7 @@
         
   
   <span class="md-ellipsis">
-    Terms & Conditions
+    Terms
   </span>
   
 
@@ -890,75 +500,7 @@
         
   
   <span class="md-ellipsis">
-    Privacy Policy
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
-        
-          
-          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
-            
-  
-  <span class="md-ellipsis">
-    Archive
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_11">
-            <span class="md-nav__icon md-icon"></span>
-            Archive
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../archive/legacy/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Legacy (Python v4)
+    Privacy
   </span>
   
 
