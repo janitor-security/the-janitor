@@ -10,28 +10,28 @@
       
       
       
-        <link rel="canonical" href="https://thejanitor.app/sovereignty/tokens/">
+        <link rel="canonical" href="https://thejanitor.app/infrastructure/">
       
       
-        <link rel="prev" href="../../licensing/">
+        <link rel="prev" href="../security/">
       
       
-        <link rel="next" href="../../terms/">
+        <link rel="next" href="../benchmarks/">
       
       
-      <link rel="icon" href="../../assets/logo.svg">
+      <link rel="icon" href="../assets/logo.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
     
     
       
-        <title>Token Gate - The Janitor</title>
+        <title>Build Reproducibility - The Janitor</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.a40c8224.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.a40c8224.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,7 +50,7 @@
       
     
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -107,7 +107,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#token-gate-ml-dsa-65-purge-authorization" class="md-skip">
+        <a href="#hermetic-build-protocol" class="md-skip">
           Skip to content
         </a>
       
@@ -123,9 +123,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
+    <a href=".." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -142,7 +142,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Token Gate
+              Build Reproducibility
             
           </span>
         </div>
@@ -241,9 +241,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
+    <a href=".." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     The Janitor
@@ -270,7 +270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -290,7 +290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../safety/" class="md-nav__link">
+      <a href="../safety/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -310,7 +310,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/" class="md-nav__link">
+      <a href="../security/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -327,10 +327,30 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../infrastructure/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Build Reproducibility
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -339,6 +359,113 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-hermetic-builds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Hermetic Builds?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisite-install-nix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prerequisite: Install Nix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entering-the-dev-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entering the Dev Shell
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-wrap-running-just-audit-outside-the-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Auto-Wrap: Running just audit Outside the Shell
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pinning-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pinning Strategy
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pinning Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rust-toolchain" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rust Toolchain
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nix-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nix Inputs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docker-equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Equivalence
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compliance-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      Compliance Note
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -350,7 +477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../benchmarks/" class="md-nav__link">
+      <a href="../benchmarks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -370,7 +497,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pricing/" class="md-nav__link">
+      <a href="../pricing/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -430,7 +557,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../slop-hunter/" class="md-nav__link">
+      <a href="../slop-hunter/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -498,7 +625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../case-studies/godot/" class="md-nav__link">
+      <a href="../case-studies/godot/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -519,7 +646,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../case-studies/global-audit-2026/" class="md-nav__link">
+      <a href="../case-studies/global-audit-2026/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -544,8 +671,6 @@
       
   
   
-    
-  
   
   
     
@@ -557,11 +682,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -575,7 +700,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Governance
@@ -589,7 +714,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../licensing/" class="md-nav__link">
+      <a href="../licensing/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -607,30 +732,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Token Gate
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../sovereignty/tokens/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -639,89 +744,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
-    <span class="md-ellipsis">
-      Protocol
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verification-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      Verification Flow
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-ceremony" class="md-nav__link">
-    <span class="md-ellipsis">
-      Key Ceremony
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#minting-a-token" class="md-nav__link">
-    <span class="md-ellipsis">
-      Minting a Token
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-properties" class="md-nav__link">
-    <span class="md-ellipsis">
-      Security Properties
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-demo-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      Fallback / Demo Mode
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#access-denied" class="md-nav__link">
-    <span class="md-ellipsis">
-      Access Denied
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -781,7 +803,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../terms/" class="md-nav__link">
+      <a href="../terms/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -802,7 +824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../privacy/" class="md-nav__link">
+      <a href="../privacy/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -870,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../archive/legacy/" class="md-nav__link">
+      <a href="../archive/legacy/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -918,63 +940,87 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#protocol" class="md-nav__link">
+  <a href="#why-hermetic-builds" class="md-nav__link">
     <span class="md-ellipsis">
-      Protocol
+      Why Hermetic Builds?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#verification-flow" class="md-nav__link">
+  <a href="#prerequisite-install-nix" class="md-nav__link">
     <span class="md-ellipsis">
-      Verification Flow
+      Prerequisite: Install Nix
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#key-ceremony" class="md-nav__link">
+  <a href="#entering-the-dev-shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Key Ceremony
+      Entering the Dev Shell
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#minting-a-token" class="md-nav__link">
+  <a href="#auto-wrap-running-just-audit-outside-the-shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Minting a Token
+      Auto-Wrap: Running just audit Outside the Shell
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-properties" class="md-nav__link">
+  <a href="#pinning-strategy" class="md-nav__link">
     <span class="md-ellipsis">
-      Security Properties
+      Pinning Strategy
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pinning Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rust-toolchain" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rust Toolchain
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nix-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nix Inputs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docker-equivalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Equivalence
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#fallback-demo-mode" class="md-nav__link">
+  <a href="#compliance-note" class="md-nav__link">
     <span class="md-ellipsis">
-      Fallback / Demo Mode
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#access-denied" class="md-nav__link">
-    <span class="md-ellipsis">
-      Access Denied
+      Compliance Note
     </span>
   </a>
   
@@ -998,111 +1044,179 @@
   
 
 
-<h1 id="token-gate-ml-dsa-65-purge-authorization">Token Gate: ML-DSA-65 Purge Authorization</h1>
-<p><strong>Crate</strong>: <code>crates/vault</code>
-<strong>Guard</strong>: <code>vault::SigningOracle::verify_token(token: &amp;str) -&gt; bool</code></p>
+<h1 id="hermetic-build-protocol">Hermetic Build Protocol</h1>
+<blockquote>
+<p><strong>Audience</strong>: Contributors, security auditors, and enterprise buyers verifying that
+The Janitor's own build process is reproducible and supply-chain-clean.</p>
+</blockquote>
 <hr />
-<h2 id="protocol">Protocol</h2>
-<p>Destructive operations (<code>janitor clean</code>, <code>janitor dedup --apply</code>) require a valid <strong>purge token</strong> — a base64-encoded ML-DSA-65 (NIST FIPS 204) signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Token = Base64( ML_DSA65_Sign(SIGNING_KEY, &quot;JANITOR_PURGE_AUTHORIZED&quot;) )
-</code></pre></div>
-<p>The binary embeds only the <strong>verifying key</strong> (32 bytes, <code>const VERIFYING_KEY_BYTES</code>). The signing key never leaves thejanitor.app.</p>
-<hr />
-<h2 id="verification-flow">Verification Flow</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>┌─────────────┐        ┌──────────────────┐        ┌─────────────────┐
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>│  CLI flag   │        │  SigningOracle    │        │ VERIFYING_KEY   │
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│ --token T   │──────▶ │  verify_token(T) │──────▶ │ BYTES (binary)  │
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└─────────────┘        └────────┬─────────┘        └────────┬────────┘
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>                                │                           │
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>                          base64_decode(T)          VerifyingKey::
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>                                │                  from_bytes(...)
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>                          sig_bytes [64]                    │
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>                                │                           │
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>                                └──────── verify(msg, sig) ─┘
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>                                                │
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                                        Ok → proceed
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                                        Err → ACCESS DENIED
-</code></pre></div>
-<ol>
-<li>Base64-decode the token → ML-DSA-65 signature bytes.</li>
-<li>Construct <code>Signature::from_bytes(&amp;sig_bytes)</code>.</li>
-<li>Call <code>verifying_key.verify(b"JANITOR_PURGE_AUTHORIZED", &amp;sig)</code>.</li>
-<li><code>Ok(())</code> → operation proceeds. Any error → process exits 1.</li>
-</ol>
-<hr />
-<h2 id="key-ceremony">Key Ceremony</h2>
-<p>Run once per deployment to generate a production keypair:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>mint-token<span class="w"> </span>--<span class="w"> </span>generate
-</code></pre></div>
-<p><strong>Output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>╔═══════════════════════════════════════════════╗
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>║       NEW KEYPAIR — NEVER COMMIT PRIVATE KEY  ║
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>╚═══════════════════════════════════════════════╝
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>PRIVATE KEY (hex) — store at thejanitor.app only:
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  9d50025738375e05d5184a96c09f56b611ac59796df953874ae60258e83a9736
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>PUBLIC KEY — paste into crates/vault/src/lib.rs:
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  const VERIFYING_KEY_BYTES: [u8; 32] = [
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>      0x71, 0xbc, 0x61, 0xae, 0xe0, 0x6f, 0xac, 0x48,
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>      0x5a, 0x97, 0xc4, 0x59, 0x3b, 0xd0, 0x2c, 0x43,
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>      0x92, 0x61, 0x48, 0xe1, 0x33, 0xb7, 0xc5, 0x9e,
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>      0x19, 0x3a, 0x8d, 0x32, 0x15, 0x3e, 0x88, 0xe9,
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>  ];
-</code></pre></div>
-<p><strong>Activation steps:</strong></p>
-<ol>
-<li>Paste the <code>VERIFYING_KEY_BYTES</code> block into <code>crates/vault/src/lib.rs</code>.</li>
-<li>Rebuild: <code>just build</code>.</li>
-<li>Store the private key hex securely — it is never embedded in the binary.</li>
-</ol>
-<hr />
-<h2 id="minting-a-token">Minting a Token</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>mint-token<span class="w"> </span>--<span class="w"> </span>mint<span class="w"> </span>--key<span class="w"> </span>&lt;<span class="m">64</span>-hex-char-private-key&gt;
-</code></pre></div>
-<p>Output is the Base64 token. Pass it to any destructive operation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>janitor<span class="w"> </span>clean<span class="w"> </span>/path/to/project<span class="w"> </span>--token<span class="w"> </span><span class="s2">&quot;lS8SDsLx9dTO...&quot;</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>/path/to/project<span class="w"> </span>--apply<span class="w"> </span>--token<span class="w"> </span><span class="s2">&quot;lS8SDsLx9dTO...&quot;</span>
-</code></pre></div>
-<p>Tokens are <strong>deterministic</strong> for a given keypair: signing the same message with the same key always produces the same signature. Rotate keys to invalidate all previously issued tokens.</p>
-<hr />
-<h2 id="security-properties">Security Properties</h2>
+<h2 id="why-hermetic-builds">Why Hermetic Builds?</h2>
+<p>The Janitor audits other projects for dead symbols, zombie dependencies, and supply-chain
+drift. It would be inconsistent to tolerate those same failure modes in its own toolchain.
+A hermetic build guarantees that every developer, CI runner, and release pipeline produces
+<strong>bit-identical artefacts</strong> from the same source revision — regardless of OS version,
+globally installed packages, or ambient PATH contents.</p>
 <table>
 <thead>
 <tr>
-<th>Property</th>
-<th>Guarantee</th>
+<th>Risk</th>
+<th>Mitigated By</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Unforgeability</strong></td>
-<td>ML-DSA-65 (NIST FIPS 204) — 128-bit post-quantum security level. Signature invalid without the private key.</td>
+<td>"Works on my machine"</td>
+<td>Nix Flake pins exact package revisions</td>
 </tr>
 <tr>
-<td><strong>Message binding</strong></td>
-<td>Token is a signature of the exact string <code>JANITOR_PURGE_AUTHORIZED</code>. A token issued for any other message is rejected.</td>
+<td>Rust toolchain drift</td>
+<td><code>rust-toolchain.toml</code> pins Rust 1.85.0</td>
 </tr>
 <tr>
-<td><strong>Key isolation</strong></td>
-<td>Binary embeds only the 32-byte verifying key. Private key is never present on the end-user machine.</td>
+<td>Pandoc / TeX version skew</td>
+<td>Nix devShell provides pinned pandoc + texlive</td>
 </tr>
 <tr>
-<td><strong>No network call</strong></td>
-<td>Verification is fully offline — <code>VerifyingKey::verify()</code> is a pure local computation.</td>
+<td>libgit2 / OpenSSL ABI mismatch</td>
+<td>Nix provides C library headers; <code>pkg-config</code> wires them into Cargo</td>
+</tr>
+<tr>
+<td>CI/CD supply chain</td>
+<td>GitHub Actions steps are SHA-pinned (see <a href="../security/">Security Posture</a>)</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="fallback-demo-mode">Fallback / Demo Mode</h2>
-<p>When <code>VERIFYING_KEY_BYTES</code> is all-zeros (the placeholder default), the vault derives a fallback verifying key from <code>SIGNING_KEY_SEED</code> for test and development purposes.</p>
-<p>This mode is <strong>never acceptable in production</strong>. A binary with <code>VERIFYING_KEY_BYTES = [0u8; 32]</code> accepts tokens signed by the demo seed, which is public. Replace the bytes before shipping any release binary.</p>
-<hr />
-<h2 id="access-denied">Access Denied</h2>
-<p>On an invalid or missing token, the CLI prints:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ACCESS DENIED. Purchase ML-DSA-65 Token at thejanitor.app
+<h2 id="prerequisite-install-nix">Prerequisite: Install Nix</h2>
+<p>Nix works on Linux, macOS, and WSL2. The recommended installer is the Determinate Systems
+installer, which enables Nix Flakes and the nix-command feature by default:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>--proto<span class="w"> </span><span class="s1">&#39;=https&#39;</span><span class="w"> </span>--tlsv1.2<span class="w"> </span>-sSf<span class="w"> </span>https://install.determinate.systems/nix<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 </code></pre></div>
-<p>and exits with code <code>1</code>. No partial work is performed.</p>
+<p>Verify the installation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nix<span class="w"> </span>--version
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># nix (Nix) 2.x.y</span>
+</code></pre></div>
+<hr />
+<h2 id="entering-the-dev-shell">Entering the Dev Shell</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># From the repository root:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>just<span class="w"> </span>shell
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># — or equivalently —</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>nix<span class="w"> </span>develop
+</code></pre></div>
+<p>The shell provisions:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Version source</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rustc</code> / <code>cargo</code></td>
+<td><code>rust-toolchain.toml</code> → rust-overlay</td>
+<td>Compile, test, lint</td>
+</tr>
+<tr>
+<td><code>rustfmt</code> / <code>clippy</code></td>
+<td>same toolchain</td>
+<td><code>just audit</code></td>
+</tr>
+<tr>
+<td><code>pandoc</code></td>
+<td>nixpkgs unstable</td>
+<td>PDF report generation</td>
+</tr>
+<tr>
+<td><code>texlive</code> (scheme-medium)</td>
+<td>nixpkgs unstable</td>
+<td>LaTeX backend for pandoc</td>
+</tr>
+<tr>
+<td><code>ffmpeg</code></td>
+<td>nixpkgs unstable</td>
+<td>Demo video processing</td>
+</tr>
+<tr>
+<td><code>gh</code></td>
+<td>nixpkgs unstable</td>
+<td>Gauntlet PR audits</td>
+</tr>
+<tr>
+<td><code>jq</code></td>
+<td>nixpkgs unstable</td>
+<td>JSON slicing in shell tools</td>
+</tr>
+<tr>
+<td><code>git</code></td>
+<td>nixpkgs unstable</td>
+<td>Source control</td>
+</tr>
+<tr>
+<td><code>uv</code></td>
+<td>nixpkgs unstable</td>
+<td>MkDocs deployment</td>
+</tr>
+</tbody>
+</table>
+<p>The shell also exports the C-library environment variables (<code>OPENSSL_DIR</code>,
+<code>LIBGIT2_SYS_USE_PKG_CONFIG</code>, <code>PKG_CONFIG_PATH</code>) so that Cargo build scripts locate
+the Nix-provided libraries rather than whatever is installed system-wide.</p>
+<hr />
+<h2 id="auto-wrap-running-just-audit-outside-the-shell">Auto-Wrap: Running <code>just audit</code> Outside the Shell</h2>
+<p><code>just audit</code> and <code>just build</code> detect whether they are running inside the Nix devShell
+by inspecting the <code>IN_NIX_SHELL</code> environment variable that <code>nix develop</code> sets
+automatically. If Nix is installed but the shell is not active, the recipe transparently
+re-execs itself under <code>nix develop --command just &lt;recipe&gt;</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$ just audit          # called from a plain bash session
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>↳ Entering Nix hermetic shell for reproducible audit...
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a># ... Nix shell activates, then just audit runs inside it ...
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>✅ System Clean.
+</code></pre></div>
+<p>If Nix is not installed (e.g., a CI runner with a pre-installed Rust toolchain), the
+recipe falls through and uses whatever toolchain is in PATH — with a warning in the
+shell hook that reproducibility is not guaranteed.</p>
+<hr />
+<h2 id="pinning-strategy">Pinning Strategy</h2>
+<h3 id="rust-toolchain">Rust Toolchain</h3>
+<p><code>rust-toolchain.toml</code> at the repository root declares the exact channel:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[toolchain]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.85.0&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">components</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rustfmt&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;clippy&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;rust-src&quot;</span><span class="p">]</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">targets</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;x86_64-unknown-linux-gnu&quot;</span><span class="p">]</span>
+</code></pre></div>
+<p><code>rustup</code> (inside the Nix shell via <code>rust-overlay</code>) reads this file automatically.
+Any attempt to run <code>cargo</code> with a different toolchain version fails immediately.</p>
+<h3 id="nix-inputs">Nix Inputs</h3>
+<p><code>flake.lock</code> (generated on first <code>nix develop</code> or <code>nix flake update</code>) pins every
+Nix input — including <code>nixpkgs</code> and <code>rust-overlay</code> — to an exact git commit SHA.
+Commit <code>flake.lock</code> alongside <code>flake.nix</code> so that CI and all contributors use
+identical package revisions.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Refresh all Nix inputs to latest:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>nix<span class="w"> </span>flake<span class="w"> </span>update
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Refresh a single input:</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>nix<span class="w"> </span>flake<span class="w"> </span>lock<span class="w"> </span>--update-input<span class="w"> </span>nixpkgs
+</code></pre></div>
+<p>After updating, re-run <code>just audit</code> to verify nothing broke.</p>
+<hr />
+<h2 id="docker-equivalence">Docker Equivalence</h2>
+<p>The production <code>Dockerfile</code> pins its base images to <code>@sha256:&lt;digest&gt;</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">rust:1.85-slim@sha256:3490aa77d179a59d67e94239cca96dd84030b564470859200f535b942bdffedf</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">builder</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">FROM</span><span class="w"> </span><span class="s">debian:bookworm-slim@sha256:6458e6ce2b6448e31bfdced4be7d8aa88d389e6694ab09f5a718a694abe147f4</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">runtime</span>
+</code></pre></div>
+<p>The Nix devShell and the Docker builder use the same Rust release (<code>1.85.0</code>). The
+resulting artefact is functionally identical; the Docker image is used exclusively for
+production deployment, not for local development.</p>
+<hr />
+<h2 id="compliance-note">Compliance Note</h2>
+<p>Hermetic builds are a prerequisite for
+<a href="https://slsa.dev/spec/v1.0/levels#build-l2">SLSA Level 2</a> provenance. The GitHub
+Actions release workflow uses SHA-pinned steps (documented in
+<a href="../security/#4-supply-chain-integrity-pinned-dependencies-self-audited-ci">Security Posture</a>)
+and produces a release binary whose build environment is fully described by this
+<code>flake.nix</code> and <code>rust-toolchain.toml</code>.</p>
 
 
 
@@ -1155,10 +1269,10 @@
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.60a45f97.min.js"></script>
+      <script src="../assets/javascripts/bundle.60a45f97.min.js"></script>
       
     
   </body>

@@ -57,6 +57,37 @@
     
     
     
+  
+  <!--
+    Content Security Policy — defence-in-depth for a static documentation site.
+
+    Threat model: prevent injected <script> payloads from loading external code
+    or exfiltrating data, should any content-injection path reach the rendered HTML.
+
+    Directives:
+      script-src 'self' 'unsafe-inline'  — mkdocs-material 9.x uses inline scripts
+                                           for search configuration; 'self' blocks all
+                                           external script sources.
+      connect-src 'self'                 — blocks XHR/fetch data-exfiltration to
+                                           foreign origins.
+      frame-ancestors 'none'             — clickjacking prevention.
+      base-uri 'self'                    — blocks <base href="…"> injection attacks.
+      form-action 'none'                 — static docs site has no forms.
+      worker-src blob:                   — mkdocs-material search uses blob: workers.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src  'self' 'unsafe-inline';
+    style-src   'self' 'unsafe-inline';
+    img-src     'self' data:;
+    font-src    'self' data:;
+    connect-src 'self';
+    worker-src  blob:;
+    frame-ancestors 'none';
+    base-uri    'self';
+    form-action 'none';
+  ">
+
   </head>
   
   
@@ -299,6 +330,26 @@
   
   
     <li class="md-nav__item">
+      <a href="../../infrastructure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Build Reproducibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../benchmarks/" class="md-nav__link">
         
   
@@ -351,10 +402,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -365,8 +416,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             Detection Engine
           </label>
@@ -421,10 +472,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -435,8 +486,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Case Studies
           </label>
@@ -721,10 +772,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -735,8 +786,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Governance
           </label>
@@ -810,10 +861,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -824,8 +875,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             Legal
           </label>
@@ -899,10 +950,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
         
           
-          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -913,8 +964,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
             <span class="md-nav__icon md-icon"></span>
             Archive
           </label>
