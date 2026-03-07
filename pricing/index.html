@@ -477,9 +477,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#team-the-governor-saas" class="md-nav__link">
+  <a href="#team-janitor-sentinel" class="md-nav__link">
     <span class="md-ellipsis">
-      Team — The Governor SaaS
+      Team — Janitor Sentinel
     </span>
   </a>
   
@@ -1007,9 +1007,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#team-the-governor-saas" class="md-nav__link">
+  <a href="#team-janitor-sentinel" class="md-nav__link">
     <span class="md-ellipsis">
-      Team — The Governor SaaS
+      Team — Janitor Sentinel
     </span>
   </a>
   
@@ -1105,7 +1105,7 @@
 <td style="text-align: center;">—</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>The Governor</strong> (GitHub App automation)</td>
+<td style="text-align: left;"><strong>Janitor Sentinel</strong> (GitHub App automation)</td>
 <td style="text-align: center;">—</td>
 </tr>
 </tbody>
@@ -1134,7 +1134,7 @@
 <td style="text-align: center;">✓</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>The Governor</strong> — GitHub App that automatically runs <code>janitor bounce</code> on every pull request and posts a slop-score comment</td>
+<td style="text-align: left;"><strong>Janitor Sentinel</strong> — GitHub App that automatically runs <code>janitor bounce</code> on every pull request and posts a slop-score comment</td>
 <td style="text-align: center;">✓</td>
 </tr>
 <tr>
@@ -1151,7 +1151,7 @@
 </tr>
 </tbody>
 </table>
-<p>When a pull request clears the gate, The Governor GitHub App issues a CycloneDX v1.5 CBOM automatically — no token flag, no manual step.</p>
+<p>When a pull request clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM automatically — no token flag, no manual step.</p>
 <p><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348"><strong>Activate — Yearly ($499/yr) →</strong></a> · <a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1362706"><strong>Monthly billing →</strong></a></p>
 <hr />
 <h3 id="industrial-core-custom">Industrial Core — Custom</h3>
@@ -1168,16 +1168,16 @@
 <p><a href="mailto:sales@thejanitor.app"><strong>Book an Audit → sales@thejanitor.app</strong></a></p>
 <hr />
 <h2 id="how-attestation-works">How Attestation Works</h2>
-<h3 id="team-the-governor-saas">Team — The Governor SaaS</h3>
-<p>When a Team-licensed pull request clears the slop gate, <strong>The Governor</strong> GitHub App automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials). The CBOM records every cryptographic operation: the ML-DSA-65 (NIST FIPS 204) attestation signatures, BLAKE3 structural hashes, and per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
-<p>No CLI flag required. No manual step. The Governor handles issuance automatically on a clean merge.</p>
+<h3 id="team-janitor-sentinel">Team — Janitor Sentinel</h3>
+<p>When a Team-licensed pull request clears the slop gate, <strong>Janitor Sentinel</strong> automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials). The CBOM records every cryptographic operation: the ML-DSA-65 (NIST FIPS 204) attestation signatures, BLAKE3 structural hashes, and per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
+<p>No CLI flag required. No manual step. Janitor Sentinel handles issuance automatically on a clean merge.</p>
 <h3 id="industrial-core-on-premises">Industrial Core — On-Premises</h3>
 <p>Industrial Core licensees receive a dedicated verifying-key token for air-gapped deployments. The token is a base64-encoded ML-DSA-65 (NIST FIPS 204) signature of the string <code>JANITOR_PURGE_AUTHORIZED</code>, verified offline against the public key embedded in the binary. No network call is made at verification time.</p>
 <p>The cleanup is identical at every tier. The attestation is what you are paying for.</p>
 <hr />
 <h2 id="faq">FAQ</h2>
 <p><strong>Is the Team license a subscription that can be revoked?</strong>
-Team licenses are managed via The Governor SaaS. Industrial Core on-premises tokens are ML-DSA-65 (NIST FIPS 204) signatures — deterministic for a given keypair. Revocation is achieved by rotating the keypair; existing tokens for the old key become cryptographically invalid.</p>
+Team licenses are managed via Janitor Sentinel. Industrial Core on-premises tokens are ML-DSA-65 (NIST FIPS 204) signatures — deterministic for a given keypair. Revocation is achieved by rotating the keypair; existing tokens for the old key become cryptographically invalid.</p>
 <p><strong>Does the tool phone home?</strong>
 No. Token verification, audit log signing, and all analysis are fully offline computations. No telemetry is collected.</p>
 <p><strong>Can I use the Free tier commercially?</strong>

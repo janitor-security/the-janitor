@@ -1247,11 +1247,11 @@
 <p>The Janitor scans <strong><code>package.json</code>, <code>Cargo.toml</code>, <code>requirements.txt</code>, <code>spin.toml</code> (Fermyon WASM), and <code>wrangler.toml</code> (Cloudflare Workers)</strong> against the live symbol reference graph. A package that appears in your manifest but never appears in a reachable import path is a <strong>zombie dependency</strong> — declared, installed, and billing you in attack surface.</p>
 <p>Every PR that introduces a zombie dependency is flagged before merge.</p>
 <h3 id="cryptographic-integrity-bonds">Cryptographic Integrity Bonds</h3>
-<p>When a pull request clears the slop gate, <strong>The Governor</strong> — our GitHub App — automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
+<p>When a pull request clears the slop gate, <strong>Janitor Sentinel</strong> — our GitHub App — automatically issues a <strong>CycloneDX v1.5 CBOM</strong> (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>.</p>
 <p>No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody presentable to a SOC 2 auditor, a regulator, or an incident response team. Not a log. A bond.</p>
 <h3 id="zero-friction-github-integration">Zero-Friction GitHub Integration</h3>
 <p><img alt="Janitor Sentinel Demo" src="assets/sentinel_demo.webp" /></p>
-<p><em>The Governor automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).</em></p>
+<p><em>Janitor Sentinel automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).</em></p>
 <hr />
 <h2 id="the-pr-gate-live-results">THE PR GATE: LIVE RESULTS</h2>
 <p>The <code>janitor bounce</code> command intercepts pull requests at the diff level and scores them across four dimensions:</p>
@@ -1366,7 +1366,7 @@
 <tr>
 <td style="text-align: left;"><strong><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348">Team</a></strong></td>
 <td style="text-align: left;"><strong>$499/yr</strong></td>
-<td style="text-align: left;">All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + The Governor GitHub App. Up to 25 seats.</td>
+<td style="text-align: left;">All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong><a href="https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7">Industrial</a></strong></td>
