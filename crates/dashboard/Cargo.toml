@@ -6,6 +6,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 common = { path = "../common" }

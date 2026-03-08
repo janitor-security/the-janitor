@@ -7,7 +7,7 @@ version = "6.11.0"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 # Core
