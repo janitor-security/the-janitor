@@ -2,10 +2,7 @@
   <img src="assets/logo_text.svg" alt="The Janitor" width="80%" style="max-width: 800px; display: block; margin: 0 auto;">
 </p>
 
-<video autoplay loop muted playsinline controls style="width: 100%; border-radius: 8px; border: 1px solid #333; margin-bottom: 2rem;">
-  <source src="assets/janitor_demo.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![Janitor Terminal Demo](assets/janitor_demo.webp)
 
 # The Janitor
 
