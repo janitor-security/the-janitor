@@ -50,7 +50,8 @@ pub struct BounceLogEntry {
     pub author: Option<String>,
     /// UTC timestamp of the bounce invocation (ISO 8601).
     pub timestamp: String,
-    /// Composite slop score: dead×10 + clones×5 + zombies×15 + antipatterns×50.
+    /// Composite slop score: dead×10 + clones×5 + zombies×15 + antipatterns×50
+    ///                       + comment_violations×5 + unlinked_pr×20.
     pub slop_score: u32,
     /// Number of added functions whose names already appear in the registry.
     pub dead_symbols_added: u32,
@@ -58,6 +59,11 @@ pub struct BounceLogEntry {
     pub logic_clones_found: u32,
     /// Number of zombie symbol reintroductions (verbatim body match to dead symbol).
     pub zombie_symbols_added: u32,
+    /// `1` if the PR was flagged as unlinked (no issue reference in body), `0` otherwise.
+    ///
+    /// Contributes ×20 to the composite slop score.
+    #[serde(default)]
+    pub unlinked_pr: u32,
     /// Descriptions of each language-specific antipattern finding.
     ///
     /// One entry per detection (hallucinated import, vacuous unsafe, goroutine closure trap,

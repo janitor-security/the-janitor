@@ -2266,6 +2266,7 @@ fn cmd_bounce(
         dead_symbols_added: score.dead_symbols_added,
         logic_clones_found: score.logic_clones_found,
         zombie_symbols_added: score.zombie_symbols_added,
+        unlinked_pr: score.unlinked_pr,
         antipatterns: score.antipattern_details,
         comment_violations: score.comment_violation_details,
         min_hashes: min_hashes_vec,

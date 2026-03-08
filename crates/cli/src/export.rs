@@ -10,6 +10,7 @@
 //! | `PR_Number` | `pr_number` | Empty string when absent |
 //! | `Author` | `author` | Empty string when absent |
 //! | `Score` | `slop_score` | Composite weighted score |
+//! | `Unlinked_PR` | `unlinked_pr` | 1 if no issue link in PR body, else 0 |
 //! | `Dead_Code_Count` | `dead_symbols_added` | Functions re-added from registry |
 //! | `Logic_Clones` | `logic_clones_found` | BLAKE3/SimHash clone pairs |
 //! | `Zombie_Syms` | `zombie_symbols_added` | Verbatim dead-body reintroductions |
@@ -49,6 +50,7 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
         "PR_Number",
         "Author",
         "Score",
+        "Unlinked_PR",
         "Dead_Code_Count",
         "Logic_Clones",
         "Zombie_Syms",
@@ -77,15 +79,31 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
 
         let pr_num_str = entry.pr_number.map(|n| n.to_string()).unwrap_or_default();
         let score_str = entry.slop_score.to_string();
+        let unlinked_str = entry.unlinked_pr.to_string();
         let dead_str = entry.dead_symbols_added.to_string();
         let clones_str = entry.logic_clones_found.to_string();
         let zombie_str = entry.zombie_symbols_added.to_string();
         let zombie_deps_str = entry.zombie_deps.join("; ");
-        let anti_str = if entry.antipatterns.is_empty() {
-            String::new()
-        } else {
+
+        // Antipatterns: use stored descriptions when available.
+        // For legacy log entries that recorded a non-zero score but predate the
+        // antipattern_details field, compute the residual score to detect missing data.
+        let anti_str = if !entry.antipatterns.is_empty() {
             entry.antipatterns.join("; ")
+        } else {
+            let known_score = entry.dead_symbols_added * 10
+                + entry.logic_clones_found * 5
+                + entry.zombie_symbols_added * 15
+                + entry.unlinked_pr * 20
+                + entry.comment_violations.len() as u32 * 5;
+            let residual = entry.slop_score.saturating_sub(known_score);
+            if residual > 0 {
+                "Unknown Antipattern".to_owned()
+            } else {
+                String::new()
+            }
         };
+
         let cviol_str = entry.comment_violations.join("; ");
         let time_str = format!("{:.4}", time_saved_h);
         let savings_str = format!("{:.2}", savings_usd);
@@ -94,6 +112,7 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
             pr_num_str.as_str(),
             entry.author.as_deref().unwrap_or(""),
             score_str.as_str(),
+            unlinked_str.as_str(),
             dead_str.as_str(),
             clones_str.as_str(),
             zombie_str.as_str(),
