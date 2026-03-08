@@ -224,3 +224,22 @@ yarn-error.log*
 .yarn/
 package-lock.json
 *.deb
+
+
+# ------------------------------------------------------------------------------
+# 16. REPORTING & MEDIA ARTIFACTS
+# Runtime-generated reports, exports, and media must never enter version control.
+# Use docs/assets/ for intentionally tracked marketing/demo assets (whitelisted
+# below). All other CSV/PDF/MP4/patch/ndjson files in any directory are ignored.
+# ------------------------------------------------------------------------------
+*.csv
+*.pdf
+*.mp4
+*.patch
+*.ndjson
+
+# Whitelist: official docs assets are intentionally tracked.
+!docs/assets/*.pdf
+!docs/assets/*.csv
+!docs/assets/*.mp4
+!docs/assets/*.webp
