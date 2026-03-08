@@ -80,9 +80,13 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
         let dead_str = entry.dead_symbols_added.to_string();
         let clones_str = entry.logic_clones_found.to_string();
         let zombie_str = entry.zombie_symbols_added.to_string();
-        let zombie_deps_str = entry.zombie_deps.join(";");
-        let anti_str = entry.antipatterns.join(";");
-        let cviol_str = entry.comment_violations.join(";");
+        let zombie_deps_str = entry.zombie_deps.join("; ");
+        let anti_str = if entry.antipatterns.is_empty() {
+            String::new()
+        } else {
+            entry.antipatterns.join("; ")
+        };
+        let cviol_str = entry.comment_violations.join("; ");
         let time_str = format!("{:.4}", time_saved_h);
         let savings_str = format!("{:.2}", savings_usd);
 

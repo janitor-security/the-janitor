@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tools/audit_real_prs.sh — THE CRUCIBLE v3 (gh-diff Edition)
+# INTERNAL PLUMBING ONLY. Use generate_client_package.sh for reports.
 #
 # Full-corpus PR audit for godotengine/godot.  Designed to handle 4,600+ PRs.
 #
