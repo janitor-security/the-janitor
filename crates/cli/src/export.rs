@@ -137,19 +137,19 @@ fn build_violation_reasons(entry: &crate::report::BounceLogEntry) -> String {
     // ── Zombie symbol reintroduction (×15 each) ────────────────────────────
     if entry.zombie_symbols_added > 0 {
         reasons.push(format!(
-            "Zombie Symbol Reintroduction ×{}",
+            "Zombie Symbol Reintroduction x{}",
             entry.zombie_symbols_added
         ));
     }
 
     // ── Dead symbol introduction (×10 each) ───────────────────────────────
     if entry.dead_symbols_added > 0 {
-        reasons.push(format!("Dead Symbol Added ×{}", entry.dead_symbols_added));
+        reasons.push(format!("Dead Symbol Added x{}", entry.dead_symbols_added));
     }
 
     // ── Structural clones (×5 each) ────────────────────────────────────────
     if entry.logic_clones_found > 0 {
-        reasons.push(format!("Structural Clone ×{}", entry.logic_clones_found));
+        reasons.push(format!("Structural Clone x{}", entry.logic_clones_found));
     }
 
     // ── Comment violations (×5 each) ───────────────────────────────────────
@@ -188,15 +188,13 @@ fn build_violation_reasons(entry: &crate::report::BounceLogEntry) -> String {
             rem %= 20;
 
             if inferred_antipatterns > 0 {
-                reasons.push(format!(
-                    "Language Antipattern ×{inferred_antipatterns} [inferred from score]"
-                ));
+                reasons.push(format!("Language Antipattern x{inferred_antipatterns}"));
             }
             if inferred_unlinked > 0 {
-                reasons.push("Unlinked PR [inferred from score]".to_owned());
+                reasons.push("Unlinked PR".to_owned());
             }
             if rem > 0 {
-                reasons.push(format!("Unknown violation (residual score: {rem})"));
+                reasons.push(format!("Unknown violation (residual: {rem})"));
             }
         }
     }
