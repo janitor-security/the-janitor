@@ -138,13 +138,22 @@ else
 fi
 
 # ── 3. PR metadata cache (one API call) ───────────────────────────────────────
+# Invalidate cache if it was written by an older version that did not include
+# the `state` field (schema guard — prevents all PRs defaulting to "open").
+if [[ -f "$CACHE_FILE" ]]; then
+    if jq -e '(length > 0) and (.[0] | has("state") | not)' "$CACHE_FILE" > /dev/null 2>&1; then
+        warn "Cache schema outdated (missing 'state' field) — invalidating."
+        rm -f "$CACHE_FILE"
+    fi
+fi
+
 if [[ ! -f "$CACHE_FILE" ]]; then
     step "Fetching up to $PR_LIMIT PRs from $REPO_SLUG (1 API call)..."
     gh pr list \
         --repo  "$REPO_SLUG" \
         --state all \
         --limit "$PR_LIMIT" \
-        --json  number,author,body \
+        --json  number,author,body,state \
         > "$CACHE_FILE"
     CACHED=$(jq 'length' "$CACHE_FILE")
     info "Cached $CACHED PRs → $CACHE_FILE"
@@ -236,6 +245,8 @@ while IFS= read -r PR; do
     NUMBER=$(echo "$PR" | jq -r '.number')
     AUTHOR=$(echo "$PR" | jq -r '.author.login // "unknown"')
     BODY=$(echo   "$PR" | jq -r '.body // ""' | head -c "$BODY_MAX_BYTES" | tr -d '\000')
+    # GitHub state values: OPEN, MERGED, CLOSED — normalise to lowercase for CLI.
+    STATE=$(echo  "$PR" | jq -r '.state // "OPEN"' | tr '[:upper:]' '[:lower:]')
 
     INDEX=$((INDEX + 1))
 
@@ -271,6 +282,7 @@ while IFS= read -r PR; do
         --author    "$AUTHOR"     \
         --pr-body   "$BODY"       \
         --repo-slug "$REPO_SLUG"  \
+        --pr-state  "$STATE"      \
         --format    json          \
         2>"$BOUNCE_STDERR") && EXIT_CODE=0 || EXIT_CODE=$?
     set +x
