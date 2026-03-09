@@ -41,10 +41,14 @@ use tree_sitter::{Node, Parser};
 
 /// Security-claim keywords that trigger hallucinated-fix detection.
 ///
-/// Matched case-insensitively against the PR body.  `"CVE-"` has an additional
-/// suffix constraint: at least one ASCII digit must immediately follow the
-/// matched text (e.g. `"CVE-2026-9999"`) to avoid false positives on prose
-/// that says "like CVE-reporting processes".
+/// The AhoCorasick automaton built from this list uses case-insensitive
+/// matching.  Short acronyms (`"RCE"`, `"XSS"`, `"SQLi"`) are additionally
+/// filtered by [`EXACT_CASE_ACRONYMS`] and a word-boundary check so that
+/// common substrings — `"sou`**rce**`"`, `"re`**source**`"`, `"fo`**rce**`"` —
+/// do not produce false positives.
+///
+/// `"CVE-"` has a separate digit-suffix constraint so that prose phrases like
+/// `"CVE-reporting processes"` are rejected.
 const SECURITY_KEYWORDS: &[&str] = &[
     "CVE-",
     "buffer overflow",
@@ -56,6 +60,21 @@ const SECURITY_KEYWORDS: &[&str] = &[
     "SQLi",
 ];
 
+/// Short-form acronym keywords that require **both** exact casing and a word
+/// boundary on either side of the match.
+///
+/// Unlike prose keywords (`"buffer overflow"`, `"memory leak"`) these are too
+/// short for case-insensitive substring matching to be safe:
+///
+/// | Keyword | False-positive substring examples |
+/// |---------|-----------------------------------|
+/// | `RCE`   | `sou`**rce**`, re`**source**`, fo`**rce**`, par`**cel** |
+/// | `XSS`   | *(rare, but guarded for consistency)* |
+/// | `SQLi`  | *(rare, but guarded for consistency)* |
+///
+/// The word-boundary check is implemented by [`is_word_boundary_match`].
+const EXACT_CASE_ACRONYMS: &[&str] = &["RCE", "XSS", "SQLi"];
+
 /// File extensions that are definitively non-code.
 ///
 /// A PR that changes *only* files with these extensions cannot plausibly be
@@ -65,8 +84,8 @@ const SECURITY_KEYWORDS: &[&str] = &[
 /// The empty string `""` captures extensionless files (e.g. `LICENSE`, `OWNERS`,
 /// `CODEOWNERS`, `NOTICE`) which are also non-code.
 const NON_CODE_EXTENSIONS: &[&str] = &[
-    "md", "txt", "png", "jpg", "jpeg", "gif", "svg", "webp", "json", "yaml", "yml", "toml", "lock",
-    "sum", "csv", "xml", "", // extensionless files: LICENSE, OWNERS, CODEOWNERS, NOTICE, etc.
+    "md", "txt", "png", "jpg", "jpeg", "gif", "svg", "webp", "json", "toml", "lock", "sum", "csv",
+    "xml", "", // extensionless files: LICENSE, OWNERS, CODEOWNERS, NOTICE, etc.
 ];
 
 static SECURITY_AC: OnceLock<AhoCorasick> = OnceLock::new();
@@ -97,6 +116,22 @@ fn is_iac_repo(repo_slug: &str) -> bool {
     s.contains("nixpkgs") || s.contains("/packages") || s.ends_with("packages")
 }
 
+/// Returns `true` when the byte range `[start, end)` in `text` sits at a word
+/// boundary on both sides — i.e. it is not a substring of a longer identifier.
+///
+/// A "word character" is `[A-Za-z0-9_]`.  This mirrors the `\b` assertion from
+/// regular expressions and is used to enforce that short acronyms like `RCE`
+/// only match the standalone token, not embedded substrings such as `source`.
+fn is_word_boundary_match(text: &str, start: usize, end: usize) -> bool {
+    fn is_word_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || b == b'_'
+    }
+    let bytes = text.as_bytes();
+    let left_ok = start == 0 || !is_word_char(bytes[start - 1]);
+    let right_ok = end >= bytes.len() || !is_word_char(bytes[end]);
+    left_ok && right_ok
+}
+
 /// Detect a "Hallucinated Security Fix" — a PR whose description contains
 /// high-stakes security language but whose changed files are all non-code.
 ///
@@ -114,7 +149,9 @@ fn is_iac_repo(repo_slug: &str) -> bool {
 /// 1. `body` contains a security keyword: `CVE-<digits>`, `"buffer overflow"`,
 ///    `"memory leak"`, `"RCE"`, `"vulnerability"`, `"exploit"`, `"XSS"`, or `"SQLi"`.
 /// 2. Every extension in `file_extensions` belongs to the non-code set:
-///    `md`, `txt`, `png`, `jpg`, `json`, `yaml`, `toml`, `lock`, or `""` (no extension).
+///    `md`, `txt`, `png`, `jpg`, `json`, `toml`, `lock`, or `""` (no extension).
+///    Note: `yaml`/`yml` are treated as code — a Dependabot Action version bump is a
+///    legitimate security fix.
 ///
 /// Returns `None` when either condition is absent (no security claim, or at
 /// least one code file is present in the changeset).
@@ -140,6 +177,23 @@ pub fn detect_hallucinated_fix(
     let mut matched_keyword: Option<&str> = None;
     for mat in ac.find_iter(body) {
         let kw = SECURITY_KEYWORDS[mat.pattern().as_usize()];
+
+        // Short acronyms ("RCE", "XSS", "SQLi") require two additional guards
+        // to prevent false positives on common substrings:
+        //   1. Exact casing — the matched text must be byte-for-byte identical
+        //      to the pattern (e.g. "RCE" not "rce" in "source").
+        //   2. Word boundary — neither adjacent character is a word char, so
+        //      "source", "resource", "force", "parcel" are rejected.
+        if EXACT_CASE_ACRONYMS.contains(&kw) {
+            let matched_slice = &body[mat.start()..mat.end()];
+            if matched_slice != kw {
+                continue; // case mismatch ("rce" in "source" is lower-case)
+            }
+            if !is_word_boundary_match(body, mat.start(), mat.end()) {
+                continue; // substring collision ("RCE" embedded in a longer word)
+            }
+        }
+
         // "CVE-" requires at least one ASCII digit immediately after the match
         // to avoid matching "CVE-reporting processes", "CVE-adjacent" etc.
         if kw.eq_ignore_ascii_case("CVE-") {
@@ -737,7 +791,7 @@ diff --git a/src/lib.rs b/src/lib.rs
 
     #[test]
     fn test_hallucinated_fix_various_keywords() {
-        let non_code = vec!["json".to_string(), "yaml".to_string()];
+        let non_code = vec!["json".to_string(), "md".to_string()];
         let bodies = [
             (
                 "buffer overflow",
@@ -762,6 +816,38 @@ diff --git a/src/lib.rs b/src/lib.rs
     }
 
     #[test]
+    fn test_rce_substring_in_common_words_not_flagged() {
+        // "rce" appears as a substring of everyday words.  The word-boundary
+        // guard must prevent these from triggering the hallucinated-fix detector.
+        let exts = vec!["md".to_string()];
+        let cases = [
+            "Update flutterPackages-source.stable to latest",
+            "Improve resource management in the allocator",
+            "Refactor force-update logic",
+            "Use parcel as the bundler",
+            "source code cleanup",
+        ];
+        for body in &cases {
+            assert!(
+                detect_hallucinated_fix(body, &exts, "").is_none(),
+                "should NOT flag '{}' — 'rce' is a substring, not the standalone RCE acronym",
+                body
+            );
+        }
+    }
+
+    #[test]
+    fn test_rce_standalone_still_flagged() {
+        // The standalone uppercase token "RCE" must still trigger detection.
+        let body = "Fix RCE in the API endpoint.";
+        let exts = vec!["md".to_string()];
+        assert!(
+            detect_hallucinated_fix(body, &exts, "").is_some(),
+            "standalone 'RCE' must still be detected"
+        );
+    }
+
+    #[test]
     fn test_hallucinated_fix_nixpkgs_nix_and_lock_not_flagged() {
         // In NixOS/nixpkgs, bumping a .nix derivation + updating flake.lock IS
         // the canonical way to resolve a CVE — must not be flagged.
@@ -775,6 +861,23 @@ diff --git a/src/lib.rs b/src/lib.rs
         assert!(
             detect_hallucinated_fix(body, &["lock".to_string()], "acme/myapp").is_some(),
             "lock-only in non-IaC repo → hallucinated"
+        );
+    }
+
+    #[test]
+    fn test_hallucinated_fix_yaml_action_bump_not_flagged() {
+        // Dependabot bumping a GitHub Action version touches only .yml/.yaml files.
+        // These are legitimate IaC security fixes and must not be flagged.
+        let body = "Bump actions/checkout from 3 to 4\n\nFixes CVE-2026-0001: vulnerability in checkout action.";
+        let exts_yml = vec!["yml".to_string()];
+        let exts_yaml = vec!["yaml".to_string()];
+        assert!(
+            detect_hallucinated_fix(body, &exts_yml, "acme/myapp").is_none(),
+            ".yml is code — GitHub Action bump must not be flagged"
+        );
+        assert!(
+            detect_hallucinated_fix(body, &exts_yaml, "acme/myapp").is_none(),
+            ".yaml is code — GitHub Action bump must not be flagged"
         );
     }
 

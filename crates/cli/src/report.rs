@@ -155,20 +155,50 @@ pub fn load_bounce_log(janitor_dir: &Path) -> Vec<BounceLogEntry> {
 /// Appends one entry as a JSON line to `.janitor/bounce_log.ndjson`.
 ///
 /// Creates the janitor directory and log file if absent.
-/// Ignores I/O errors — log persistence is best-effort; analysis still proceeds.
+/// Calls [`File::sync_all`] after writing to flush the OS page cache to physical
+/// disk before returning — guarantees the entry survives a SIGKILL of the parent
+/// shell script between iterations.
+/// Emits a diagnostic to stderr on any I/O failure so silent log loss is detectable.
 pub fn append_bounce_log(janitor_dir: &Path, entry: &BounceLogEntry) {
-    let Ok(line) = serde_json::to_string(entry) else {
-        return;
+    let line = match serde_json::to_string(entry) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("janitor: bounce_log serialization failed: {e}");
+            return;
+        }
     };
     let log_path = janitor_dir.join("bounce_log.ndjson");
-    let _ = std::fs::create_dir_all(janitor_dir);
+    if let Err(e) = std::fs::create_dir_all(janitor_dir) {
+        eprintln!(
+            "janitor: cannot create .janitor dir {}: {e}",
+            janitor_dir.display()
+        );
+        return;
+    }
     use std::io::Write as _;
-    if let Ok(mut f) = std::fs::OpenOptions::new()
+    match std::fs::OpenOptions::new()
         .append(true)
         .create(true)
         .open(&log_path)
     {
-        let _ = writeln!(f, "{}", line);
+        Ok(mut f) => {
+            if let Err(e) = writeln!(f, "{line}") {
+                eprintln!("janitor: write to {} failed: {e}", log_path.display());
+                return;
+            }
+            // Force OS page-cache flush to physical storage.  Without this, a
+            // SIGKILL of the calling script could lose the entry even though
+            // write(2) returned successfully.
+            if let Err(e) = f.sync_all() {
+                eprintln!("janitor: sync_all on {} failed: {e}", log_path.display());
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "janitor: cannot open {} for append: {e}",
+                log_path.display()
+            );
+        }
     }
 }
 
@@ -255,7 +285,9 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
 fn is_actionable(e: &BounceLogEntry) -> bool {
     e.slop_score >= 100
         || e.zombie_symbols_added > 0
-        || e.antipatterns.iter().any(|a| a.contains("Unverified Security Bump"))
+        || e.antipatterns
+            .iter()
+            .any(|a| a.contains("Unverified Security Bump"))
 }
 
 /// Returns a short, human-readable label for the dominant violation in a bounce entry.
@@ -346,7 +378,7 @@ fn trunc_author(s: &str, max: usize) -> String {
         s.to_owned()
     } else {
         let trimmed: String = s.chars().take(max.saturating_sub(1)).collect();
-        format!("{}…", trimmed)
+        format!("{trimmed}…")
     }
 }
 
@@ -411,16 +443,13 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push_str("| Metric | Value |\n");
         out.push_str("|--------|-------|\n");
         out.push_str(&format!(
-            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{}** |\n",
-            actionable
+            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{actionable}** |\n"
         ));
         out.push_str(&format!(
-            "| **Total engineering time reclaimed** | **{:.1} hours** |\n",
-            hours
+            "| **Total engineering time reclaimed** | **{hours:.1} hours** |\n"
         ));
         out.push_str(&format!(
-            "| **Estimated operational savings** | **${:.0}** |\n",
-            savings
+            "| **Estimated operational savings** | **${savings:.0}** |\n"
         ));
         out.push('\n');
         out.push_str(
@@ -464,7 +493,7 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             let e = &data.entries[i];
             let pr = e
                 .pr_number
-                .map(|n| format!("#{}", n))
+                .map(|n| format!("#{n}"))
                 .unwrap_or_else(|| "-".to_owned());
             let author = html_escape(&trunc_author(e.author.as_deref().unwrap_or("-"), 20));
             out.push_str(&format!(
@@ -497,10 +526,10 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             }
             let pr = e
                 .pr_number
-                .map(|n| format!("#{}", n))
+                .map(|n| format!("#{n}"))
                 .unwrap_or_else(|| "-".to_owned());
             let author = html_escape(e.author.as_deref().unwrap_or("-"));
-            out.push_str(&format!("- **PR {}** (`{}`):\n", pr, author));
+            out.push_str(&format!("- **PR {pr}** (`{author}`):\n"));
             for (desc, count) in group_strings(&e.antipatterns) {
                 if count > 1 {
                     out.push_str(&format!("  - {} (x{})\n", html_escape(desc), count));
@@ -541,17 +570,16 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             let eb = &data.entries[*b];
             let pr_a = ea
                 .pr_number
-                .map(|n| format!("#{}", n))
-                .unwrap_or_else(|| format!("entry-{}", a));
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| format!("entry-{a}"));
             let pr_b = eb
                 .pr_number
-                .map(|n| format!("#{}", n))
-                .unwrap_or_else(|| format!("entry-{}", b));
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| format!("entry-{b}"));
             let auth_a = html_escape(&trunc_author(ea.author.as_deref().unwrap_or("unknown"), 20));
             let auth_b = html_escape(&trunc_author(eb.author.as_deref().unwrap_or("unknown"), 20));
             out.push_str(&format!(
-                "- **PR {}** ({}) is a structural clone of **PR {}** ({})\n",
-                pr_a, auth_a, pr_b, auth_b
+                "- **PR {pr_a}** ({auth_a}) is a structural clone of **PR {pr_b}** ({auth_b})\n"
             ));
         }
         if total_pairs > CLONE_DISPLAY_CAP {
@@ -570,12 +598,12 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             "*Packages added to `Cargo.toml`, `package.json`, or `requirements.txt` \
              that do not appear in any source file import statement.*\n\n",
         );
-        for &i in &data.zombie_indices {
+        for &i in data.zombie_indices.iter().take(LIST_DISPLAY_CAP) {
             let e = &data.entries[i];
             let pr = e
                 .pr_number
-                .map(|n| format!("#{}", n))
-                .unwrap_or_else(|| format!("entry-{}", i));
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| format!("entry-{i}"));
             let author = html_escape(e.author.as_deref().unwrap_or("unknown"));
             let deps: Vec<String> = e.zombie_deps.iter().map(|d| html_escape(d)).collect();
             out.push_str(&format!(
@@ -583,6 +611,12 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
                 pr,
                 author,
                 deps.join("`, `")
+            ));
+        }
+        let zombie_overflow = data.zombie_indices.len().saturating_sub(LIST_DISPLAY_CAP);
+        if zombie_overflow > 0 {
+            out.push_str(&format!(
+                "\n*…and {zombie_overflow} more entries. See CSV for full list.*\n"
             ));
         }
         out.push('\n');
@@ -663,10 +697,18 @@ pub struct DeadSymbolEntry {
     pub byte_size: u32,
 }
 
+/// Maximum number of items printed per list in Markdown/PDF output.
+///
+/// Applies to Dead Symbols, Orphan Files, and Zombie Dependencies.
+/// Lists exceeding this cap emit a `*…and N more entries. See CSV for full list.*`
+/// footer rather than expanding indefinitely — preventing 2,000-page PDFs.
+pub const LIST_DISPLAY_CAP: usize = 50;
+
 /// Renders a scan-mode dead-symbol audit as GitHub-flavored Markdown.
 ///
 /// Dead symbols are ranked by `byte_size` descending (largest removed = most
-/// bytes reclaimed). The table is capped at `top_n` rows.
+/// bytes reclaimed). The table is capped at [`LIST_DISPLAY_CAP`] rows;
+/// `top_n` is honoured but cannot exceed that constant.
 pub fn render_scan_markdown(
     dead: &[DeadSymbolEntry],
     total_entities: usize,
@@ -692,7 +734,7 @@ pub fn render_scan_markdown(
     out.push_str("## Summary\n\n");
     out.push_str("| Metric | Value |\n");
     out.push_str("|--------|-------|\n");
-    out.push_str(&format!("| Total entities | {} |\n", total_entities));
+    out.push_str(&format!("| Total entities | {total_entities} |\n"));
     out.push_str(&format!(
         "| Dead symbols | {} ({:.1}%) |\n",
         dead.len(),
@@ -710,9 +752,9 @@ pub fn render_scan_markdown(
     out.push('\n');
 
     // ── Top N dead symbols by byte size ────────────────────────────────────
+    let effective_top = top_n.min(LIST_DISPLAY_CAP);
     out.push_str(&format!(
-        "## Top {} Dead Symbols — Ranked by Byte Size\n\n",
-        top_n
+        "## Top {effective_top} Dead Symbols — Ranked by Byte Size\n\n"
     ));
 
     if dead.is_empty() {
@@ -720,7 +762,7 @@ pub fn render_scan_markdown(
     } else {
         out.push_str("| Rank | Symbol | File | Line | Bytes |\n");
         out.push_str("|------|--------|------|------|-------|\n");
-        for (rank, entry) in dead.iter().take(top_n).enumerate() {
+        for (rank, entry) in dead.iter().take(effective_top).enumerate() {
             out.push_str(&format!(
                 "| {} | `{}` | `{}` | {} | {} |\n",
                 rank + 1,
@@ -728,6 +770,12 @@ pub fn render_scan_markdown(
                 html_escape(&entry.file_path),
                 entry.start_line,
                 entry.byte_size,
+            ));
+        }
+        let dead_overflow = dead.len().saturating_sub(effective_top);
+        if dead_overflow > 0 {
+            out.push_str(&format!(
+                "\n*…and {dead_overflow} more entries. See CSV for full list.*\n"
             ));
         }
         out.push('\n');
@@ -738,8 +786,14 @@ pub fn render_scan_markdown(
     if orphan_files.is_empty() {
         out.push_str("*No orphan files detected.*\n\n");
     } else {
-        for path in orphan_files {
+        for path in orphan_files.iter().take(LIST_DISPLAY_CAP) {
             out.push_str(&format!("- `{}`\n", html_escape(path)));
+        }
+        let orphan_overflow = orphan_files.len().saturating_sub(LIST_DISPLAY_CAP);
+        if orphan_overflow > 0 {
+            out.push_str(&format!(
+                "\n*…and {orphan_overflow} more entries. See CSV for full list.*\n"
+            ));
         }
         out.push('\n');
     }
@@ -920,7 +974,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         "*Cross-repository structural debt aggregation. \
          Generated by The Janitor: Deterministic Structural Analysis.*\n\n",
     );
-    out.push_str(&format!("**Gauntlet root**: `{}`\n\n", gauntlet_root));
+    out.push_str(&format!("**Gauntlet root**: `{gauntlet_root}`\n\n"));
     out.push_str("---\n\n");
 
     // ── Workslop: Maintainer Impact ────────────────────────────────────────
@@ -936,16 +990,13 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         out.push_str("| Metric | Value |\n");
         out.push_str("|--------|-------|\n");
         out.push_str(&format!(
-            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{}** |\n",
-            actionable
+            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{actionable}** |\n"
         ));
         out.push_str(&format!(
-            "| **Total engineering time reclaimed** | **{:.1} hours** |\n",
-            hours
+            "| **Total engineering time reclaimed** | **{hours:.1} hours** |\n"
         ));
         out.push_str(&format!(
-            "| **Estimated operational savings** | **${:.0}** |\n",
-            savings
+            "| **Estimated operational savings** | **${savings:.0}** |\n"
         ));
         out.push('\n');
         out.push_str(
@@ -1060,6 +1111,80 @@ fn fmt_bytes(b: u64) -> String {
     } else if b >= 1024 {
         format!("{:.1} KB", b as f64 / 1024.0)
     } else {
-        format!("{} B", b)
+        format!("{b} B")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_dead(n: usize) -> Vec<DeadSymbolEntry> {
+        (0..n)
+            .map(|i| DeadSymbolEntry {
+                qualified_name: format!("module::dead_fn_{i}"),
+                file_path: format!("src/file_{}.rs", i / 100),
+                start_line: (i as u32 * 10) + 1,
+                byte_size: 200,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_dead_symbol_cap_at_50_with_overflow_message() {
+        let dead = make_dead(1000);
+        let output = render_scan_markdown(&dead, 2000, &[], "test-repo", 50);
+        // Overflow = 1000 - 50 = 950
+        assert!(
+            output.contains("950 more"),
+            "should contain '950 more' overflow footer;\ngot first 600 chars:\n{}",
+            &output[..output.len().min(600)]
+        );
+        // At most 50 data rows in the table (lines starting with "| N " pattern).
+        let data_rows = output
+            .lines()
+            .filter(|l| l.starts_with("| ") && l.contains("dead_fn_"))
+            .count();
+        assert!(
+            data_rows <= 50,
+            "should emit at most 50 table rows, got {data_rows}"
+        );
+    }
+
+    #[test]
+    fn test_dead_symbol_no_overflow_when_under_cap() {
+        let dead = make_dead(30);
+        let output = render_scan_markdown(&dead, 100, &[], "test-repo", 50);
+        assert!(
+            !output.contains("more entries"),
+            "no overflow footer when count <= 50"
+        );
+    }
+
+    #[test]
+    fn test_orphan_files_capped_at_50() {
+        let orphans: Vec<String> = (0..100).map(|i| format!("src/orphan_{i}.rs")).collect();
+        let output = render_scan_markdown(&[], 0, &orphans, "test-repo", 50);
+        // Overflow = 100 - 50 = 50
+        assert!(
+            output.contains("50 more"),
+            "should contain '50 more' orphan overflow footer"
+        );
+        let orphan_rows = output.lines().filter(|l| l.contains("orphan_")).count();
+        assert!(
+            orphan_rows <= 50,
+            "at most 50 orphan lines, got {orphan_rows}"
+        );
+    }
+
+    #[test]
+    fn test_orphan_files_no_overflow_when_under_cap() {
+        let orphans: Vec<String> = (0..20).map(|i| format!("src/file_{i}.rs")).collect();
+        let output = render_scan_markdown(&[], 0, &orphans, "test-repo", 50);
+        assert!(!output.contains("more entries"), "no overflow when <= 50");
     }
 }

@@ -6,7 +6,7 @@
 use crate::AnatomistError;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
 
 /// Import statement metadata extracted from Python source.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,7 +240,7 @@ fn resolve_module_path(base: &Path, dotted: &str) -> Option<PathBuf> {
     let rel_path = parts.join("/");
 
     // Try module.py
-    let module_py = base.join(format!("{}.py", rel_path));
+    let module_py = base.join(format!("{rel_path}.py"));
     if module_py.exists() {
         return dunce::canonicalize(module_py).ok();
     }
@@ -317,6 +317,152 @@ pub fn extract_cpp_includes(source: &[u8]) -> Vec<CppInclude> {
     }
 
     includes
+}
+
+// ---------------------------------------------------------------------------
+// Nix import extraction
+// ---------------------------------------------------------------------------
+
+/// A Nix file reference (`import ./path` or `callPackage ./path {}`) extracted
+/// from Nix source code via tree-sitter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixImport {
+    /// The raw path literal (e.g., `"./curl"` or `"../lib/default.nix"`).
+    pub raw_path: String,
+    /// Line number (1-indexed).
+    pub line: u32,
+}
+
+static NIX_IMPORT_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+
+/// Extracts `import ./path` and `callPackage ./path {}` path references from
+/// Nix source bytes via tree-sitter.
+///
+/// Only relative paths (starting with `./` or `../`) are captured — nix channel
+/// paths (`<nixpkgs>`) and variable references are ignored.
+///
+/// Returns an empty vec on parse failure (file is silently skipped).
+///
+/// # Examples
+/// ```
+/// use anatomist::imports::extract_nix_imports;
+/// let src = b"{ pkgs }:\n{ curl = pkgs.callPackage ./curl {}; }";
+/// let imports = extract_nix_imports(src);
+/// assert_eq!(imports.len(), 1);
+/// assert_eq!(imports[0].raw_path, "./curl");
+/// ```
+pub fn extract_nix_imports(source: &[u8]) -> Vec<NixImport> {
+    let query = NIX_IMPORT_QUERY
+        .get_or_init(|| {
+            // Three patterns:
+            //   1. `import ./path`  (bare import)
+            //   2. `callPackage ./path {}` (bare callPackage from formals)
+            //   3. `pkgs.callPackage ./path {}` (callPackage via attribute select)
+            Query::new(
+                &tree_sitter_nix::LANGUAGE.into(),
+                r#"
+                (apply_expression
+                  function: (variable_expression
+                    name: (identifier) @_fn
+                    (#eq? @_fn "import"))
+                  argument: (path_expression) @import.path)
+
+                (apply_expression
+                  function: (apply_expression
+                    function: (variable_expression
+                      name: (identifier) @_cpfn
+                      (#eq? @_cpfn "callPackage"))
+                    argument: (path_expression) @callpkg.path))
+
+                (apply_expression
+                  function: (apply_expression
+                    function: (select_expression
+                      attrpath: (attrpath
+                        attr: (identifier) @_attr
+                        (#eq? @_attr "callPackage")))
+                    argument: (path_expression) @callpkg.path))
+                "#,
+            )
+            .map_err(|e| e.to_string())
+        })
+        .as_ref();
+
+    let Ok(query) = query else {
+        return Vec::new();
+    };
+
+    let mut parser = Parser::new();
+    if parser
+        .set_language(&tree_sitter_nix::LANGUAGE.into())
+        .is_err()
+    {
+        return Vec::new();
+    }
+
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(query, tree.root_node(), source);
+    let capture_names = query.capture_names();
+    let mut imports = Vec::new();
+
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let cap_name = capture_names[capture.index as usize];
+            if cap_name != "import.path" && cap_name != "callpkg.path" {
+                continue;
+            }
+            let node = capture.node;
+            let Ok(text) = node.utf8_text(source) else {
+                continue;
+            };
+            // Only local relative paths are meaningful for cross-file edges.
+            if !text.starts_with("./") && !text.starts_with("../") {
+                continue;
+            }
+            imports.push(NixImport {
+                raw_path: text.to_string(),
+                line: node.start_position().row as u32 + 1,
+            });
+        }
+    }
+
+    imports
+}
+
+/// Resolves a Nix relative import path to an absolute file path.
+///
+/// Nix paths may omit the `.nix` extension (e.g., `./curl` resolves to
+/// `./curl/default.nix` or `./curl.nix`). The resolver tries in order:
+/// 1. `{dir}/{raw_path}` as-is (if it's already a file)
+/// 2. `{dir}/{raw_path}.nix`
+/// 3. `{dir}/{raw_path}/default.nix`
+///
+/// Returns `None` if none of the candidates exist on disk.
+pub fn resolve_nix_import(source_file: &Path, raw_path: &str, _root: &Path) -> Option<PathBuf> {
+    let dir = source_file.parent()?;
+    let base = dir.join(raw_path);
+
+    // Candidate 1: exact path (already has .nix extension or is a directory with trailing /)
+    if base.is_file() {
+        return dunce::canonicalize(base).ok();
+    }
+
+    // Candidate 2: append .nix
+    let with_ext = dir.join(format!("{raw_path}.nix"));
+    if with_ext.is_file() {
+        return dunce::canonicalize(with_ext).ok();
+    }
+
+    // Candidate 3: treat as directory, look for default.nix inside
+    let default_nix = base.join("default.nix");
+    if default_nix.is_file() {
+        return dunce::canonicalize(default_nix).ok();
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -459,6 +605,75 @@ mod tests {
         let source = tmp.join("main.py");
         let result = resolve_import(&source, "nonexistent", &tmp);
         assert!(result.is_none());
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Nix import extraction tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_nix_import_directive() {
+        let src = b"{ lib }:\nlet helpers = import ./helpers.nix;\nin helpers.foo\n";
+        let imports = extract_nix_imports(src);
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].raw_path, "./helpers.nix");
+    }
+
+    #[test]
+    fn test_nix_callpackage_path() {
+        let src = b"{ pkgs }:\n{ curl = pkgs.callPackage ./curl {}; }";
+        let imports = extract_nix_imports(src);
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].raw_path, "./curl");
+    }
+
+    #[test]
+    fn test_nix_multiple_callpackages() {
+        let src = b"{ pkgs }:\n{\n  curl = pkgs.callPackage ./curl {};\n  wget = pkgs.callPackage ./wget {};\n}";
+        let imports = extract_nix_imports(src);
+        assert_eq!(imports.len(), 2);
+        let paths: Vec<&str> = imports.iter().map(|i| i.raw_path.as_str()).collect();
+        assert!(paths.contains(&"./curl"));
+        assert!(paths.contains(&"./wget"));
+    }
+
+    #[test]
+    fn test_nix_channel_path_ignored() {
+        // <nixpkgs> channel paths must not be captured.
+        let src = b"{ pkgs }:\nlet x = import <nixpkgs> {}; in x\n";
+        let imports = extract_nix_imports(src);
+        assert!(imports.is_empty(), "channel paths must be ignored");
+    }
+
+    #[test]
+    fn test_resolve_nix_import_with_extension() {
+        let tmp = std::env::temp_dir().join("test_resolve_nix_ext");
+        fs::create_dir_all(&tmp).ok();
+        fs::write(tmp.join("helpers.nix"), "").ok();
+
+        let source = tmp.join("default.nix");
+        let root = tmp.clone();
+        let result = resolve_nix_import(&source, "./helpers.nix", &root);
+        assert!(result.is_some(), "helpers.nix should resolve");
+        assert!(result.unwrap().ends_with("helpers.nix"));
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn test_resolve_nix_import_directory() {
+        let tmp = std::env::temp_dir().join("test_resolve_nix_dir");
+        fs::create_dir_all(tmp.join("curl")).ok();
+        fs::write(tmp.join("curl/default.nix"), "").ok();
+
+        let source = tmp.join("pkgs.nix");
+        let root = tmp.clone();
+        let result = resolve_nix_import(&source, "./curl", &root);
+        assert!(
+            result.is_some(),
+            "./curl should resolve to curl/default.nix"
+        );
+        assert!(result.unwrap().ends_with("default.nix"));
         fs::remove_dir_all(tmp).ok();
     }
 }

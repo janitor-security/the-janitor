@@ -151,10 +151,7 @@ impl JanitorPolicy {
         match toml::from_str::<Self>(&raw) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!(
-                    "warning: janitor.toml — parse error: {}. Using defaults.",
-                    e
-                );
+                eprintln!("warning: janitor.toml — parse error: {e}. Using defaults.");
                 Self::default()
             }
         }

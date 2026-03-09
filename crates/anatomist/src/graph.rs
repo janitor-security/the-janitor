@@ -5,9 +5,12 @@
 //! 2. **Link Pass**: Re-parse each file for imports + call sites, add symbol-to-symbol edges.
 //! 3. **Pass 1b**: Extract C++ entities, register symbols and `__MODULE__` sentinels.
 //! 4. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
-//! 5. **Pass 1c**: Extract polyglot entities (Rust, JS, TS, C, Java, C#, Go) via `ParserHost::dissect()`.
+//! 5. **Pass 1c**: Extract polyglot entities (Rust, JS, TS, C, Java, C#, Go, Nix) via `ParserHost::dissect()`.
+//! 6. **Pass 2c**: Scan Nix files for `import ./path` / `callPackage ./path` — wire `__MODULE__` edges.
 
-use crate::imports::{extract_cpp_includes, extract_imports, resolve_import};
+use crate::imports::{
+    extract_cpp_includes, extract_imports, extract_nix_imports, resolve_import, resolve_nix_import,
+};
 use crate::{AnatomistError, ParserHost};
 use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
 use memmap2::Mmap;
@@ -208,12 +211,15 @@ fn find_containing_entity(byte_offset: u32, entries: &[(u64, u32, u32)]) -> Opti
 ///
 /// # Algorithm
 /// 1. Walk directory for `.py`, C++ (`.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`), and polyglot
-///    (`.rs`, `.js`, `.jsx`, `.ts`, `.tsx`, `.c`, `.java`, `.cs`, `.go`) files.
+///    (`.rs`, `.js`, `.jsx`, `.ts`, `.tsx`, `.c`, `.java`, `.cs`, `.go`, `.nix`) files.
 /// 2. **Pass 1**: Extract Python entities, populate registry, add graph nodes.
 /// 3. **Pass 1b**: Extract C++ entities, register symbols and `__MODULE__` sentinels.
 /// 4. **Pass 1c**: Extract polyglot entities via `ParserHost::dissect()`, register symbols.
+///    Includes Nix attribute-binding extraction via `tree-sitter-nix`.
 /// 5. **Pass 2**: Re-parse Python files for imports + call sites; add symbol-to-symbol edges.
 /// 6. **Pass 2b**: Scan C++ files for `#include "..."` directives; add file-level edges.
+/// 7. **Pass 2c**: Scan Nix files for `import ./path` / `callPackage ./path` references;
+///    add `__MODULE__` → `__MODULE__` file-level edges to eliminate Nix orphan noise.
 ///
 /// # Memory
 /// - Registry stores all symbols (~80 bytes per symbol)
@@ -251,7 +257,7 @@ pub fn build_reference_graph(
 
                 // Insert __MODULE__ virtual entry covering the entire file.
                 // Module-level calls (outside any func/class) are attributed to this symbol.
-                let module_sym_id = format!("{}::__MODULE__", file_key);
+                let module_sym_id = format!("{file_key}::__MODULE__");
                 let module_hash = symbol_hash(&module_sym_id);
                 registry.insert(SymbolEntry {
                     id: module_hash,
@@ -319,7 +325,7 @@ pub fn build_reference_graph(
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
-        .map_err(|e| AnatomistError::ParseFailure(format!("Language load failed: {:?}", e)))?;
+        .map_err(|e| AnatomistError::ParseFailure(format!("Language load failed: {e:?}")))?;
 
     for source_path in &py_files {
         let file = match File::open(source_path) {
@@ -419,7 +425,7 @@ pub fn build_reference_graph(
         let file_size = source.len().min(u32::MAX as usize) as u32;
 
         // __MODULE__ sentinel for file-level include edges
-        let module_sym_id = format!("{}::__MODULE__", file_key);
+        let module_sym_id = format!("{file_key}::__MODULE__");
         let module_hash = symbol_hash(&module_sym_id);
         registry.insert(SymbolEntry {
             id: module_hash,
@@ -506,7 +512,7 @@ pub fn build_reference_graph(
             Err(_) => continue,
         };
         let source_file_key = normalize_path(&source_canonical);
-        let src_module_id = symbol_hash(&format!("{}::__MODULE__", source_file_key));
+        let src_module_id = symbol_hash(&format!("{source_file_key}::__MODULE__"));
         let src_node = match id_to_node.get(&src_module_id) {
             Some(&n) => n,
             None => continue,
@@ -530,7 +536,7 @@ pub fn build_reference_graph(
             if !cpp_file_keys.contains(&target_file_key) {
                 continue;
             }
-            let tgt_module_id = symbol_hash(&format!("{}::__MODULE__", target_file_key));
+            let tgt_module_id = symbol_hash(&format!("{target_file_key}::__MODULE__"));
             if let Some(&tgt_node) = id_to_node.get(&tgt_module_id) {
                 graph.add_edge(src_node, tgt_node, ());
                 stats.edge_count += 1;
@@ -548,7 +554,7 @@ pub fn build_reference_graph(
             .map(|m| m.len().min(u32::MAX as u64) as u32)
             .unwrap_or(0);
 
-        let module_sym_id = format!("{}::__MODULE__", file_key);
+        let module_sym_id = format!("{file_key}::__MODULE__");
         let module_hash = symbol_hash(&module_sym_id);
         registry.insert(SymbolEntry {
             id: module_hash,
@@ -603,6 +609,63 @@ pub fn build_reference_graph(
             }
             Err(_) => {
                 stats.parse_errors += 1;
+            }
+        }
+    }
+
+    // PASS 2c: Wire Nix `import ./path` and `callPackage ./path` edges as
+    // __MODULE__ → __MODULE__ file-level links (analogous to C++ #include wiring).
+    //
+    // Must run AFTER Pass 1c so that Nix __MODULE__ sentinels are in id_to_node.
+    {
+        let nix_file_keys: HashSet<String> = polyglot_files
+            .iter()
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("nix"))
+            .filter_map(|p| dunce::canonicalize(p).ok())
+            .map(|p| normalize_path(&p))
+            .collect();
+
+        for source_path in polyglot_files
+            .iter()
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("nix"))
+        {
+            let file = match File::open(source_path) {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+            let mmap = match unsafe { Mmap::map(&file) } {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let nix_imports = extract_nix_imports(&mmap[..]);
+            if nix_imports.is_empty() {
+                continue;
+            }
+            let source_canonical = match dunce::canonicalize(source_path) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let source_file_key = normalize_path(&source_canonical);
+            let src_module_id = symbol_hash(&format!("{source_file_key}::__MODULE__"));
+            let src_node = match id_to_node.get(&src_module_id) {
+                Some(&n) => n,
+                None => continue,
+            };
+            for nix_import in &nix_imports {
+                let Some(target_abs) =
+                    resolve_nix_import(&source_canonical, &nix_import.raw_path, &root)
+                else {
+                    continue;
+                };
+                let target_file_key = normalize_path(&target_abs);
+                if !nix_file_keys.contains(&target_file_key) {
+                    continue;
+                }
+                let tgt_module_id = symbol_hash(&format!("{target_file_key}::__MODULE__"));
+                if let Some(&tgt_node) = id_to_node.get(&tgt_module_id) {
+                    graph.add_edge(src_node, tgt_node, ());
+                    stats.edge_count += 1;
+                }
             }
         }
     }

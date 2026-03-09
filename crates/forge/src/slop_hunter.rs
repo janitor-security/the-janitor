@@ -17,6 +17,10 @@
 //! | C#       | `async void` method | Cannot be awaited; unhandled exceptions crash the process |
 //! | C++      | Raw `new`/`delete` | Manual memory management instead of RAII smart pointers |
 //! | Bash     | Unquoted variable | `$VAR` without quotes — word-splitting and glob-expansion hazard |
+//! | JavaScript | `eval()` call | Executes arbitrary code from a string — code injection risk |
+//! | TypeScript | `eval()` call | Same as JavaScript |
+//! | C        | `gets()` call | Removed in C11; unbounded buffer overflow — use `fgets()` |
+//! | HCL/Terraform | Open CIDR `0.0.0.0/0` | Wildcard ingress rule exposes resource to the entire internet |
 //!
 //! ## Usage
 //! ```ignore
@@ -114,6 +118,14 @@ struct QueryEngine {
     cpp_query: Query,
     bash_lang: Language,
     bash_query: Query,
+    /// JavaScript/JSX — AST walk, no query needed.
+    js_lang: Language,
+    /// TypeScript — AST walk.
+    ts_lang: Language,
+    /// TSX (TypeScript + JSX) — AST walk.
+    tsx_lang: Language,
+    /// Plain C — AST walk for banned libc calls.
+    c_lang: Language,
 }
 
 impl QueryEngine {
@@ -145,6 +157,11 @@ impl QueryEngine {
         let bash_query = Query::new(&bash_lang, BASH_SLOP_QUERY)
             .map_err(|e| anyhow::anyhow!("slop_hunter: Bash query error: {e}"))?;
 
+        let js_lang: Language = tree_sitter_javascript::LANGUAGE.into();
+        let ts_lang: Language = tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into();
+        let tsx_lang: Language = tree_sitter_typescript::LANGUAGE_TSX.into();
+        let c_lang: Language = tree_sitter_c::LANGUAGE.into();
+
         Ok(Self {
             python_lang,
             python_query,
@@ -160,6 +177,10 @@ impl QueryEngine {
             cpp_query,
             bash_lang,
             bash_query,
+            js_lang,
+            ts_lang,
+            tsx_lang,
+            c_lang,
         })
     }
 }
@@ -192,6 +213,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "cs" => find_csharp_slop(eng, source),
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
         "sh" | "bash" => find_bash_slop(eng, source),
+        "js" | "jsx" | "mjs" | "cjs" => find_javascript_slop(eng, source),
+        "ts" => find_typescript_slop(eng, source, false),
+        "tsx" => find_typescript_slop(eng, source, true),
+        "c" | "h" => find_c_slop(eng, source),
+        "hcl" | "tf" => find_hcl_slop(source),
         _ => Vec::new(),
     }
 }
@@ -474,8 +500,7 @@ fn find_go_goroutine_loops(node: Node<'_>, source: &[u8], findings: &mut Vec<Slo
                         end_byte: node.end_byte(),
                         description: format!(
                             "Goroutine closure trap: `go func()` in loop may capture loop \
-                             variable(s) {:?} by reference — use explicit parameter passing",
-                            loop_vars
+                             variable(s) {loop_vars:?} by reference — use explicit parameter passing"
                         ),
                     });
                     return; // Don't recurse into the same loop
@@ -998,6 +1023,171 @@ fn find_bash_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
 }
 
 // ---------------------------------------------------------------------------
+// JavaScript / TypeScript: eval() call detection
+// ---------------------------------------------------------------------------
+
+/// Detect `eval()` calls in JavaScript/JSX source.
+fn find_javascript_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files that don't contain "eval".
+    if !source.windows(4).any(|w| w == b"eval") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+    let mut findings = Vec::new();
+    find_eval_calls(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Detect `eval()` calls in TypeScript/TSX source.
+///
+/// `tsx` selects the TSX grammar variant (required for `.tsx` files that
+/// contain JSX syntax).
+fn find_typescript_slop(eng: &QueryEngine, source: &[u8], tsx: bool) -> Vec<SlopFinding> {
+    if !source.windows(4).any(|w| w == b"eval") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    let lang = if tsx { &eng.tsx_lang } else { &eng.ts_lang };
+    if parser.set_language(lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+    let mut findings = Vec::new();
+    find_eval_calls(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Walk the AST and report every `call_expression` whose function is the
+/// bare identifier `eval`.
+fn find_eval_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        if let Some(func) = node.child_by_field_name("function") {
+            if func.kind() == "identifier" && func.utf8_text(source).ok() == Some("eval") {
+                findings.push(SlopFinding {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    description: "eval() call: executes arbitrary code from a string — \
+                                  code injection risk; use JSON.parse() or a safe alternative"
+                        .to_string(),
+                });
+                return; // don't recurse into the eval call itself
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_eval_calls(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// C: banned libc functions
+// ---------------------------------------------------------------------------
+
+/// Detect calls to dangerous libc functions (`gets`) in C/C-header source.
+fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: must contain "gets".
+    if !source.windows(4).any(|w| w == b"gets") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.c_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+    let mut findings = Vec::new();
+    find_banned_c_calls(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Walk the C AST reporting calls to functions banned by C11 / CERT-C.
+fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        if let Some(func) = node.child_by_field_name("function") {
+            if func.kind() == "identifier" {
+                if let Ok(name) = func.utf8_text(source) {
+                    let desc = match name {
+                        "gets" => Some(
+                            "gets(): removed in C11 — performs unbounded buffer read; \
+                             use fgets(buf, sizeof(buf), stdin) instead",
+                        ),
+                        _ => None,
+                    };
+                    if let Some(d) = desc {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: d.to_string(),
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_banned_c_calls(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HCL / Terraform: open-world CIDR detection (byte-scan, no grammar needed)
+// ---------------------------------------------------------------------------
+
+/// Detect wildcard CIDR `0.0.0.0/0` inside a security-group context in HCL.
+///
+/// Uses a byte-level scan rather than tree-sitter parsing to avoid a grammar
+/// dependency in forge — the signal is unambiguous enough to not require AST
+/// structure.  A finding is only emitted when the file also contains an
+/// ingress/security-group marker, reducing false positives on non-IaC TOML.
+fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const WILDCARD: &[u8] = b"0.0.0.0/0";
+    if !source.windows(WILDCARD.len()).any(|w| w == WILDCARD) {
+        return Vec::new();
+    }
+
+    // Require a security-group context — reduces false positives on health-check IPs.
+    const SECURITY_MARKERS: &[&[u8]] = &[
+        b"ingress",
+        b"security_group",
+        b"aws_security_group",
+        b"cidr_blocks",
+    ];
+    let has_context = SECURITY_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m));
+    if !has_context {
+        return Vec::new();
+    }
+
+    // Report each occurrence.
+    source
+        .windows(WILDCARD.len())
+        .enumerate()
+        .filter(|(_, w)| *w == WILDCARD)
+        .map(|(i, _)| SlopFinding {
+            start_byte: i,
+            end_byte: i + WILDCARD.len(),
+            description: "Open CIDR `0.0.0.0/0` in security group rule: \
+                          exposes resource to the entire internet — \
+                          restrict to specific IP ranges"
+                .to_string(),
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1028,8 +1218,7 @@ mod tests {
         let findings = find_slop("py", src);
         assert!(
             findings.is_empty(),
-            "used import should not be flagged, got: {:?}",
-            findings
+            "used import should not be flagged, got: {findings:?}"
         );
     }
 
@@ -1110,8 +1299,7 @@ class Foo {
         let findings = find_slop("java", src);
         assert!(
             !findings.is_empty(),
-            "empty catch block must be detected: {:?}",
-            findings
+            "empty catch block must be detected: {findings:?}"
         );
         assert!(findings[0].description.contains("catch"));
     }
@@ -1137,8 +1325,7 @@ class Foo {
             .collect();
         assert!(
             catch_findings.is_empty(),
-            "non-empty catch must not be flagged, got: {:?}",
-            catch_findings
+            "non-empty catch must not be flagged, got: {catch_findings:?}"
         );
     }
 
@@ -1154,8 +1341,7 @@ class Foo {
         let findings = find_slop("java", src);
         assert!(
             !findings.is_empty(),
-            "System.out.println must be detected: {:?}",
-            findings
+            "System.out.println must be detected: {findings:?}"
         );
         assert!(findings[0].description.contains("System.out"));
     }
@@ -1176,8 +1362,7 @@ public class Handler {
         let findings = find_slop("cs", src);
         assert!(
             !findings.is_empty(),
-            "async void method must be detected: {:?}",
-            findings
+            "async void method must be detected: {findings:?}"
         );
         assert!(findings[0].description.contains("async void"));
     }
@@ -1194,8 +1379,7 @@ public class Handler {
         let findings = find_slop("cs", src);
         assert!(
             findings.is_empty(),
-            "async Task method must not be flagged: {:?}",
-            findings
+            "async Task method must not be flagged: {findings:?}"
         );
     }
 
@@ -1219,8 +1403,7 @@ void foo() {
             .collect();
         assert!(
             !new_findings.is_empty(),
-            "raw new must be detected: {:?}",
-            findings
+            "raw new must be detected: {findings:?}"
         );
     }
 
@@ -1238,8 +1421,7 @@ void foo(int* p) {
             .collect();
         assert!(
             !del_findings.is_empty(),
-            "raw delete must be detected: {:?}",
-            findings
+            "raw delete must be detected: {findings:?}"
         );
     }
 
@@ -1253,8 +1435,7 @@ void foo(int* p) {
         let findings = find_slop("sh", src);
         assert!(
             !findings.is_empty(),
-            "unquoted $TARGET_DIR must be detected: {:?}",
-            findings
+            "unquoted $TARGET_DIR must be detected: {findings:?}"
         );
         assert!(findings[0].description.contains("TARGET_DIR"));
     }
@@ -1265,8 +1446,141 @@ void foo(int* p) {
         let findings = find_slop("sh", src);
         assert!(
             findings.is_empty(),
-            "quoted variable must not be flagged: {:?}",
-            findings
+            "quoted variable must not be flagged: {findings:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // JavaScript / TypeScript tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_js_eval_detected() {
+        let src = b"const result = eval(userInput);\n";
+        let findings = find_slop("js", src);
+        assert!(
+            !findings.is_empty(),
+            "eval() call in JS must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("eval()"));
+    }
+
+    #[test]
+    fn test_js_no_eval_not_flagged() {
+        let src = b"const x = JSON.parse(userInput);\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings.is_empty(),
+            "JSON.parse is safe — must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_jsx_eval_detected() {
+        let src = b"function App() { return <div>{eval(code)}</div>; }\n";
+        let findings = find_slop("jsx", src);
+        assert!(
+            !findings.is_empty(),
+            "eval() in JSX must be detected: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_ts_eval_detected() {
+        let src = b"const r: string = eval(s);\n";
+        let findings = find_slop("ts", src);
+        assert!(
+            !findings.is_empty(),
+            "eval() in TypeScript must be detected: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_ts_no_eval_not_flagged() {
+        let src = b"const x: number = parseInt(s, 10);\n";
+        let findings = find_slop("ts", src);
+        assert!(
+            findings.is_empty(),
+            "clean TS must not be flagged: {findings:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // C tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_c_gets_detected() {
+        let src = b"#include <stdio.h>\nint main() { char buf[64]; gets(buf); return 0; }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            !findings.is_empty(),
+            "gets() call in C must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("gets()"));
+    }
+
+    #[test]
+    fn test_c_fgets_not_flagged() {
+        let src =
+            b"#include <stdio.h>\nint main() { char buf[64]; fgets(buf, sizeof(buf), stdin); return 0; }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            findings.is_empty(),
+            "fgets() is safe — must not be flagged: {findings:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // HCL / Terraform tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_hcl_open_cidr_in_security_group_detected() {
+        let src = b"\
+resource \"aws_security_group_rule\" \"allow_all\" {
+  type        = \"ingress\"
+  cidr_blocks = [\"0.0.0.0/0\"]
+  from_port   = 0
+  to_port     = 65535
+  protocol    = \"-1\"
+}
+";
+        let findings = find_slop("tf", src);
+        assert!(
+            !findings.is_empty(),
+            "wildcard CIDR in security group must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("0.0.0.0/0"));
+    }
+
+    #[test]
+    fn test_hcl_restricted_cidr_not_flagged() {
+        let src = b"\
+resource \"aws_security_group_rule\" \"office_only\" {
+  type        = \"ingress\"
+  cidr_blocks = [\"10.0.0.0/8\"]
+  from_port   = 443
+  to_port     = 443
+  protocol    = \"tcp\"
+}
+";
+        let findings = find_slop("tf", src);
+        assert!(
+            findings.is_empty(),
+            "restricted CIDR must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_hcl_wildcard_cidr_without_security_context_not_flagged() {
+        // 0.0.0.0/0 alone (e.g., in a route table default route) is not flagged
+        // without an ingress/security_group context marker.
+        let src = b"destination_cidr_block = \"0.0.0.0/0\"\n";
+        let findings = find_slop("tf", src);
+        assert!(
+            findings.is_empty(),
+            "wildcard CIDR without security context must not be flagged: {findings:?}"
         );
     }
 }

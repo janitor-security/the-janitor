@@ -244,8 +244,14 @@ while IFS= read -r PR; do
         HIGH_SCORE=$SCORE; HIGH_PR=$NUMBER
     fi
 
-    # ── Mark as done — enables clean resume on Ctrl-C ─────────────────────────
+    # ── Mark as done — enables clean resume on Ctrl-C / SIGKILL ──────────────
+    # Write-ahead: persist the PR number to disk BEFORE the next loop iteration
+    # so that a SIGKILL mid-run cannot cause a duplicate bounce_log entry on
+    # restart.  python3 fdatasync() flushes only this file's kernel buffer to
+    # physical storage without a global sync() stall.
     echo "$NUMBER" >> "$PROGRESS_FILE"
+    python3 -c "import os; os.fdatasync(open('${PROGRESS_FILE}', 'ab').fileno())" \
+        2>/dev/null || true
 
 done < <(jq -c '.[]' "$CACHE_FILE")
 

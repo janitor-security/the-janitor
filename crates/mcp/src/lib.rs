@@ -163,7 +163,7 @@ fn tool_list() -> serde_json::Value {
 /// Falls back to a full parse run when the cache is absent or stale.
 fn run_scan(path: &str, library: bool) -> Result<serde_json::Value> {
     let root = Path::new(path);
-    anyhow::ensure!(root.is_dir(), "path is not a directory: {}", path);
+    anyhow::ensure!(root.is_dir(), "path is not a directory: {path}");
 
     // Zero-copy cache path: if symbols.rkyv exists, report its entry count.
     let rkyv_path = root.join(".janitor").join("symbols.rkyv");
@@ -203,7 +203,7 @@ fn load_cached_summary(rkyv_path: &Path) -> Result<serde_json::Value> {
 /// Scan manifests and return zombie dependency report.
 fn run_dep_check(path: &str) -> Result<serde_json::Value> {
     let root = Path::new(path);
-    anyhow::ensure!(root.is_dir(), "path is not a directory: {}", path);
+    anyhow::ensure!(root.is_dir(), "path is not a directory: {path}");
 
     let registry = anatomist::manifest::scan_manifests(root);
     let zombies = anatomist::manifest::find_zombie_deps(root, &registry);
@@ -217,7 +217,7 @@ fn run_dep_check(path: &str) -> Result<serde_json::Value> {
 
 fn run_dedup(path: &str) -> Result<serde_json::Value> {
     let root = Path::new(path);
-    anyhow::ensure!(root.is_dir(), "path is not a directory: {}", path);
+    anyhow::ensure!(root.is_dir(), "path is not a directory: {path}");
 
     let mut host =
         anatomist::parser::ParserHost::new().context("Failed to initialise parser host")?;

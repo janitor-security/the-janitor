@@ -24,6 +24,7 @@ tree-sitter-c-sharp.workspace = true
 tree-sitter-go.workspace = true
 tree-sitter-glsl.workspace = true
 tree-sitter-objc.workspace = true
+tree-sitter-nix.workspace = true
 memmap2.workspace = true
 dunce.workspace = true
 petgraph.workspace = true

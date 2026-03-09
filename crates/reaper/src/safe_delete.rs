@@ -202,7 +202,7 @@ impl SafeDeleter {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        let bak_name = format!("{}_{}.bak", ts, filename);
+        let bak_name = format!("{ts}_{filename}.bak");
         let bak_path = self.ghost_dir.join(bak_name);
         std::fs::copy(file_path, &bak_path)?;
         Ok(bak_path)

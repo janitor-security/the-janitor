@@ -45,7 +45,7 @@ pub fn grep_shield(dead_names: &[&str], project_root: &Path) -> anyhow::Result<H
     let ac = AhoCorasick::builder()
         .match_kind(MatchKind::LeftmostFirst)
         .build(dead_names)
-        .map_err(|e| anyhow::anyhow!("AhoCorasick build failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("AhoCorasick build failed: {e}"))?;
 
     let mut found: HashSet<String> = HashSet::new();
 
@@ -197,7 +197,7 @@ pub fn rust_cross_file_shield(
     let ac = AhoCorasick::builder()
         .match_kind(MatchKind::LeftmostFirst)
         .build(&names)
-        .map_err(|e| anyhow::anyhow!("rust AC build: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("rust AC build: {e}"))?;
 
     for entry in WalkDir::new(project_root)
         .follow_links(false)

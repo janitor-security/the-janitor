@@ -157,12 +157,59 @@ TOTAL=$(jq 'length' "$CACHE_FILE")
 echo ""
 
 # ── 4. Progress: load already-processed PRs ───────────────────────────────────
+# Reconcile progress file against bounce_log on every resume: a prior SIGKILL
+# may have written PR numbers to the progress file but lost the bounce_log
+# entries (kernel page-cache not flushed).  Only PRs with a confirmed log entry
+# are treated as "done" — orphaned entries are silently dropped and will be
+# re-processed.
 declare -A DONE_PRS
 ALREADY=0
+BOUNCE_LOG="$REPO_DIR/.janitor/bounce_log.ndjson"
+
 if [[ -f "$PROGRESS_FILE" ]]; then
-    while IFS= read -r pr_num; do
-        [[ -n "$pr_num" ]] && DONE_PRS["$pr_num"]=1
-    done < "$PROGRESS_FILE"
+    if [[ -f "$BOUNCE_LOG" ]]; then
+        # Build set of PR numbers that actually have a bounce_log entry.
+        LOGGED_PRS=$(python3 - "$BOUNCE_LOG" <<'PYEOF'
+import json, sys
+logged = set()
+with open(sys.argv[1]) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+            n = e.get("pr_number")
+            if n is not None:
+                logged.add(str(int(n)))
+        except Exception:
+            pass
+print('\n'.join(logged))
+PYEOF
+)
+        # Rewrite progress file keeping only confirmed entries.
+        ORPHAN_COUNT=0
+        CONFIRMED_LINES=()
+        while IFS= read -r pr_num; do
+            if [[ -z "$pr_num" ]]; then continue; fi
+            if echo "$LOGGED_PRS" | grep -qxF "$pr_num"; then
+                CONFIRMED_LINES+=("$pr_num")
+                DONE_PRS["$pr_num"]=1
+            else
+                ORPHAN_COUNT=$((ORPHAN_COUNT + 1))
+            fi
+        done < "$PROGRESS_FILE"
+        if [[ $ORPHAN_COUNT -gt 0 ]]; then
+            printf '%s\n' "${CONFIRMED_LINES[@]}" > "$PROGRESS_FILE"
+            python3 -c "import os; os.fdatasync(open('${PROGRESS_FILE}','ab').fileno())" \
+                2>/dev/null || true
+            warn "Reconciled $ORPHAN_COUNT orphaned progress entries (log-less) — will re-process."
+        fi
+    else
+        while IFS= read -r pr_num; do
+            [[ -n "$pr_num" ]] && DONE_PRS["$pr_num"]=1
+        done < "$PROGRESS_FILE"
+    fi
     ALREADY=${#DONE_PRS[@]}
     if [[ $ALREADY -gt 0 ]]; then
         info "Resuming: $ALREADY / $TOTAL PRs already processed — skipping them."
@@ -171,7 +218,6 @@ if [[ -f "$PROGRESS_FILE" ]]; then
 fi
 
 # Start fresh bounce log only on a clean run.
-BOUNCE_LOG="$REPO_DIR/.janitor/bounce_log.ndjson"
 if [[ $ALREADY -eq 0 && -f "$BOUNCE_LOG" ]]; then
     warn "Fresh run — clearing stale bounce_log.ndjson"
     : > "$BOUNCE_LOG"
@@ -199,19 +245,22 @@ while IFS= read -r PR; do
 
     # Fetch PR diff via gh pr diff — no git history needed (proven approach).
     PATCH_FILE=$(mktemp /tmp/pkg_patch_XXXXXX.patch)
+    BOUNCE_STDERR=$(mktemp /tmp/pkg_stderr_XXXXXX.txt)
 
     if ! gh pr diff "$NUMBER" --repo "$REPO_SLUG" 2>/dev/null \
         | awk '/^diff --git/ { skip = ($3 ~ /^a\/thirdparty\// || $3 ~ /^a\/third_party\// || $3 ~ /^a\/vendor\// || $3 ~ /^a\/tests\// || $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff|bin|a|so|dll|exe|zip|tar|gz|bz2)$/) } !skip { print }' \
         > "$PATCH_FILE"; then
         echo "[SKIP: diff fetch failed]"
-        rm -f "$PATCH_FILE"; SKIPPED=$((SKIPPED + 1)); continue
+        rm -f "$PATCH_FILE" "$BOUNCE_STDERR"; SKIPPED=$((SKIPPED + 1)); continue
     fi
 
     if [[ ! -s "$PATCH_FILE" ]]; then
         echo "[SKIP: empty / binary-only diff]"
-        rm -f "$PATCH_FILE"; SKIPPED=$((SKIPPED + 1)); continue
+        rm -f "$PATCH_FILE" "$BOUNCE_STDERR"; SKIPPED=$((SKIPPED + 1)); continue
     fi
 
+    # Trace the exact command so failures are immediately diagnosable.
+    set -x
     RESULT=$(timeout "${BOUNCE_TIMEOUT}s" "$JANITOR" bounce "$REPO_DIR" \
         --registry  "$REGISTRY"   \
         --patch     "$PATCH_FILE" \
@@ -219,17 +268,28 @@ while IFS= read -r PR; do
         --author    "$AUTHOR"     \
         --pr-body   "$BODY"       \
         --format    json          \
-        2>/dev/null) && EXIT_CODE=0 || EXIT_CODE=$?
+        2>"$BOUNCE_STDERR") && EXIT_CODE=0 || EXIT_CODE=$?
+    set +x
 
     rm -f "$PATCH_FILE"
 
     if [[ $EXIT_CODE -eq 124 ]]; then
         echo -e "${RED}[TIMEOUT >${BOUNCE_TIMEOUT}s]${NC}"
-        SKIPPED=$((SKIPPED + 1)); continue
+        rm -f "$BOUNCE_STDERR"; SKIPPED=$((SKIPPED + 1)); continue
     elif [[ $EXIT_CODE -ne 0 ]]; then
-        echo "[ERROR: bounce=$EXIT_CODE]"
-        ERRORS=$((ERRORS + 1)); continue
+        echo -e "${RED}[ERROR: bounce exited $EXIT_CODE — ABORTING]${NC}"
+        echo ""
+        echo "  ── janitor stderr ──────────────────────────────"
+        cat "$BOUNCE_STDERR"
+        echo "  ────────────────────────────────────────────────"
+        echo ""
+        echo "  Last 10 lines of bounce log (if any):"
+        tail -10 "$BOUNCE_LOG" 2>/dev/null || echo "  (no log yet)"
+        rm -f "$BOUNCE_STDERR"
+        exit 1
     fi
+
+    rm -f "$BOUNCE_STDERR"
 
     SCORE=$(   echo "$RESULT" | jq -r '.slop_score           // 0')
     SCORE_INT=${SCORE%.*}

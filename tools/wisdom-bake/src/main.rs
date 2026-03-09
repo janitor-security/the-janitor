@@ -37,9 +37,9 @@ fn load_json_rules(root: &Path) -> Result<WisdomSet> {
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
-            println!("Processing: {:?}", path);
+            println!("Processing: {path:?}");
             let content =
-                fs::read_to_string(path).with_context(|| format!("Failed to read {:?}", path))?;
+                fs::read_to_string(path).with_context(|| format!("Failed to read {path:?}"))?;
 
             // Try parsing as ImmortalityRulesWrapper
             if let Ok(wrapper) = serde_json::from_str::<ImmortalityRulesWrapper>(&content) {
@@ -58,10 +58,7 @@ fn load_json_rules(root: &Path) -> Result<WisdomSet> {
             // Fallback: Check if it's a raw list of ImmortalityRule (some frameworks might just be a list?)
             // The spec says "Format 3: Framework-Keyed Rules (JS/TS)".
             // We might need to handle that later. For now, we stick to the mandate.
-            eprintln!(
-                "Warning: Could not identify JSON schema for {:?}. Skipping.",
-                path
-            );
+            eprintln!("Warning: Could not identify JSON schema for {path:?}. Skipping.");
         }
     }
 
@@ -74,7 +71,7 @@ fn save_wisdom_set(wisdom_set: &mut WisdomSet) -> Result<()> {
 
     // 2. Serialize
     let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(wisdom_set)
-        .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Serialization failed: {e}"))?;
 
     // 3. Write to disk
     fs::write("wisdom.rkyv", bytes).context("Failed to write wisdom.rkyv")?;

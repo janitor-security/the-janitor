@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -49,6 +49,7 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
+ "tree-sitter-nix",
  "tree-sitter-objc",
  "tree-sitter-python",
  "tree-sitter-rust",
@@ -327,7 +328,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -362,7 +363,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -622,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -873,7 +874,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1360,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1419,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1731,7 +1732,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -1993,7 +1994,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2267,7 +2268,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anyhow",
  "junction",
@@ -2798,9 +2799,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-javascript"
-version = "0.23.1"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf40bf599e0416c16c125c3cec10ee5ddc7d1bb8b0c60fa5c4de249ad34dc1b1"
+checksum = "68204f2abc0627a90bdf06e605f5c470aa26fdcb2081ea553a04bdad756693f5"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -2991,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3461,7 +3462,7 @@ checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.11.0"
+version = "6.11.1"
 dependencies = [
  "anyhow",
  "common",

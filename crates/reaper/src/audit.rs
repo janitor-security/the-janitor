@@ -312,7 +312,7 @@ fn utc_now() -> String {
         .as_secs();
 
     let (y, mo, d, h, min, s) = epoch_to_ymd_hms(secs);
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, d, h, min, s)
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{min:02}:{s:02}Z")
 }
 
 /// Converts a Unix timestamp (seconds since 1970-01-01) to (year, month, day, hour, min, sec).

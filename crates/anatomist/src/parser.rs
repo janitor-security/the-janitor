@@ -57,6 +57,8 @@ static GO_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 static GLSL_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Objective-C entity extraction query.
 static OBJC_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+/// Static cache for the Nix entity extraction query.
+static NIX_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 
 /// S-expression for JS / JSX grammars.
 const JS_ENTITY_S_EXPR: &str = r#"
@@ -330,6 +332,24 @@ const OBJC_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("method.def", "method.name", EntityType::MethodDefinition), // unary ObjC method
 ];
 
+/// S-expression for Nix grammar entity extraction.
+///
+/// Captures top-level attribute bindings (`name = expr;`) from Nix source files.
+/// The first simple identifier in each attrpath is recorded as the entity name.
+/// This covers both `foo = ...;` (simple) and `foo.bar = ...;` (nested, captures `foo`).
+///
+/// Note: bindings inside `mkDerivation { ... }` calls are also captured; the grep
+/// shield (Stage 5) will rescue any that are referenced elsewhere.
+const NIX_ENTITY_S_EXPR: &str = r#"
+    (binding
+      attrpath: (attrpath
+        attr: (identifier) @bind.name)) @bind.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Nix grammar.
+const NIX_PATTERNS: &[(&str, &str, EntityType)] =
+    &[("bind.def", "bind.name", EntityType::Assignment)];
+
 fn get_c_query() -> Result<&'static Query, AnatomistError> {
     C_QUERY
         .get_or_init(|| {
@@ -383,6 +403,16 @@ fn get_objc_query() -> Result<&'static Query, AnatomistError> {
     OBJC_QUERY
         .get_or_init(|| {
             Query::new(&tree_sitter_objc::LANGUAGE.into(), OBJC_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
+}
+
+fn get_nix_query() -> Result<&'static Query, AnatomistError> {
+    NIX_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_nix::LANGUAGE.into(), NIX_ENTITY_S_EXPR)
                 .map_err(|e| e.to_string())
         })
         .as_ref()
@@ -473,7 +503,7 @@ impl ParserHost {
         parser
             .set_language(&tree_sitter_python::LANGUAGE.into())
             .map_err(|e| {
-                AnatomistError::ParseFailure(format!("Failed to load Python grammar: {}", e))
+                AnatomistError::ParseFailure(format!("Failed to load Python grammar: {e}"))
             })?;
 
         Ok(Self {
@@ -564,13 +594,13 @@ impl ParserHost {
             "go" => Self::extract_go_entities(source, &normalized_path),
             "glsl" | "vert" | "frag" => Self::extract_glsl_entities(source, &normalized_path),
             "m" | "mm" => Self::extract_objc_entities(source, &normalized_path),
+            // Nix: attribute-binding entity extraction.
+            "nix" => Self::extract_nix_entities(source, &normalized_path),
             // Polyglot-registered grammars without a dedicated entity extractor.
             // Parsing happens locally (grammar is in the registry); we return an
             // empty entity list rather than falling through to the Induction Bridge
             // and triggering a cloud POST.
-            "yaml" | "yml" | "sh" | "bash" | "tf" | "hcl" | "nix" | "gd" | "kt" | "kts" => {
-                Ok(vec![])
-            }
+            "yaml" | "yml" | "sh" | "bash" | "tf" | "hcl" | "gd" | "kt" | "kts" => Ok(vec![]),
             _ => {
                 // Unknown extension: attempt to learn via the Induction Bridge.
                 //
@@ -778,6 +808,28 @@ impl ParserHost {
         )
     }
 
+    /// Extracts attribute-binding entities from a Nix source buffer.
+    ///
+    /// Captures `name = expr;` bindings (simple and dotted attrpaths) at any
+    /// depth in the expression tree. The first identifier component of each
+    /// attrpath is recorded as the entity name with [`EntityType::Assignment`].
+    ///
+    /// This provides the symbol surface for nixpkgs-style repos where packages
+    /// are defined as top-level attribute-set bindings (e.g., `curl = callPackage ./curl {};`).
+    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    pub fn extract_nix_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_nix::LANGUAGE.into(),
+            get_nix_query()?,
+            file_path,
+            NIX_PATTERNS,
+        )
+    }
+
     /// Internal implementation shared by `dissect()` and `dissect_bytes()`.
     fn dissect_impl(
         &mut self,
@@ -951,7 +1003,7 @@ impl ParserHost {
         // Determine parent class (for methods)
         let (parent_class, qualified_name) =
             if let Some(class_name) = find_enclosing_class(&primary_node, source) {
-                let qualified = format!("{}.{}", class_name, name);
+                let qualified = format!("{class_name}.{name}");
                 (Some(class_name), qualified)
             } else {
                 (None, name.clone())
@@ -1467,8 +1519,9 @@ mod tests {
         use tempfile::NamedTempFile;
 
         // Minimal valid source for each new polyglot grammar.
+        // Note: "nix" is excluded here — it now has a real entity extractor and
+        // is covered by test_nix_binding_entities below.
         let cases: &[(&str, &[u8])] = &[
-            ("nix", b"{ pkgs }: pkgs.hello"),
             ("tf", b"resource \"aws_instance\" \"web\" {}"),
             ("hcl", b"variable \"region\" { default = \"us-east-1\" }"),
             ("yaml", b"key: value\n"),
@@ -1497,5 +1550,52 @@ mod tests {
                 ".{ext} must return empty entity list (no extractor yet)"
             );
         }
+    }
+
+    #[test]
+    fn test_nix_binding_entities() {
+        // A Nix attrset with two top-level bindings should yield two Assignment entities.
+        let source = b"{ pkgs }:\n{\n  curl = pkgs.callPackage ./curl {};\n  wget = pkgs.callPackage ./wget {};\n}";
+        let entities = ParserHost::extract_nix_entities(source, "pkgs/default.nix").unwrap();
+        assert_eq!(
+            entities.len(),
+            2,
+            "expected 2 bindings; got {}",
+            entities.len()
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"curl"), "missing 'curl' binding");
+        assert!(names.contains(&"wget"), "missing 'wget' binding");
+        for e in &entities {
+            assert_eq!(e.entity_type, EntityType::Assignment);
+            assert_eq!(e.file_path, "pkgs/default.nix");
+            assert!(e.end_byte > e.start_byte);
+        }
+    }
+
+    #[test]
+    fn test_nix_function_no_bindings() {
+        // A bare Nix function expression (no attrset bindings) yields no entities.
+        let source = b"{ pkgs }: pkgs.hello";
+        let entities = ParserHost::extract_nix_entities(source, "shell.nix").unwrap();
+        assert!(
+            entities.is_empty(),
+            "bare function should yield no binding entities"
+        );
+    }
+
+    #[test]
+    fn test_nix_mkderivation_binding() {
+        // mkDerivation-style file: pname, version, etc. are captured as bindings.
+        let source =
+            b"{ stdenv }:\nstdenv.mkDerivation {\n  pname = \"curl\";\n  version = \"8.0.0\";\n}";
+        let entities = ParserHost::extract_nix_entities(source, "pkgs/curl/default.nix").unwrap();
+        assert!(
+            !entities.is_empty(),
+            "mkDerivation bindings must be extracted"
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"pname"), "expected 'pname' binding");
+        assert!(names.contains(&"version"), "expected 'version' binding");
     }
 }

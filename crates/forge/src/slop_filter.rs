@@ -11,9 +11,16 @@
 //! ## Language Detection
 //! The patch language is detected from the `+++ b/<path>` header line by
 //! extension. Supported: `.py`, `.rs`, `.cpp/.cxx/.cc/.h/.hpp`, `.c`,
-//! `.java`, `.cs`, `.go`, `.js/.jsx`, `.glsl/.vert/.frag`.
+//! `.java`, `.cs`, `.go`, `.js/.jsx`, `.ts/.tsx`, `.glsl/.vert/.frag`.
 //! For unsupported extensions, [`agnostic_shield`] classifies the added bytes
 //! to detect embedded binary blobs.
+//!
+//! ## Parser Error Neutrality
+//! If the tree-sitter parse of a file's added source contains any `ERROR` or
+//! `MISSING` nodes, [`PatchBouncer`] returns a neutral [`SlopScore`] (all
+//! zeros) for that file.  This prevents false positives when a grammar version
+//! lags behind the language standard (e.g. TypeScript 6.0 syntax features not
+//! yet supported by the bundled grammar).
 //!
 //! ## Scoring Formula
 //! ```text
@@ -346,6 +353,14 @@ impl PRBouncer for PatchBouncer {
             Some(t) => t,
             None => return Ok(SlopScore::default()),
         };
+
+        // Parser Error Neutrality: if the AST contains ERROR or MISSING nodes the
+        // grammar could not fully understand this file (e.g. new TS 6.0 syntax not yet
+        // in our grammar version).  Structural analysis on a broken AST produces false
+        // positives — abort and return a neutral score rather than penalise the author.
+        if tree.root_node().has_error() {
+            return Ok(SlopScore::default());
+        }
 
         let query = Query::new(&cfg.language, cfg.query_src)
             .map_err(|e| anyhow::anyhow!("Query compile error for .{ext}: {e}"))?;
@@ -1001,13 +1016,16 @@ mod tests {
 
     #[test]
     fn test_hallucinated_fix_json_and_yaml_only() {
+        // yaml/yml are treated as CODE (Dependabot Action version bumps are legitimate
+        // security fixes).  A changeset that includes a yaml file must NOT be flagged
+        // even when the PR body contains a security keyword.
         let pr_body = "Patches a memory leak in the connection pool configuration.";
         let changed_exts = vec!["json".to_string(), "yaml".to_string()];
         let mut score = SlopScore::default();
         check_hallucinated_fix(&mut score, pr_body, &changed_exts, "");
         assert_eq!(
-            score.hallucinated_security_fix, 1,
-            "json+yaml only → hallucinated"
+            score.hallucinated_security_fix, 0,
+            "yaml is treated as code — json+yaml must not be flagged as hallucinated"
         );
     }
 

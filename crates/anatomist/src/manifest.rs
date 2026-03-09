@@ -59,14 +59,15 @@ const MANIFEST_NAMES: &[&str] = &[
 
 /// Scans `project_root` for manifest files and builds a `DependencyRegistry`.
 ///
-/// Walks at most 3 directory levels deep to handle monorepos with nested
-/// manifests (e.g., `packages/*/package.json`) without traversing `node_modules`
-/// or `target` directories.
+/// Walks at most 6 directory levels deep to handle deep monorepos and
+/// package-collection repositories (e.g., NixOS/nixpkgs where package manifests
+/// live at `pkgs/development/tools/<name>/package.json`).
+/// `node_modules`, `target`, and virtualenv directories are always pruned.
 pub fn scan_manifests(project_root: &Path) -> DependencyRegistry {
     let mut registry = DependencyRegistry::new();
 
     let walker = WalkDir::new(project_root)
-        .max_depth(3)
+        .max_depth(6)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| {

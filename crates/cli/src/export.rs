@@ -1,7 +1,10 @@
-//! CSV export for bounce log data.
+//! CSV export for bounce log and static-scan data.
 //!
-//! Reads `.janitor/bounce_log.ndjson` and streams each entry as a CSV row,
-//! suitable for loading into Excel, Google Sheets, or a pandas DataFrame.
+//! Primary path: reads `.janitor/bounce_log.ndjson` and streams each entry as
+//! a CSV row, suitable for loading into Excel, Google Sheets, or pandas.
+//!
+//! Static-scan fallback: when no bounce log exists, loads `.janitor/symbols.rkyv`
+//! and emits one CSV row per dead symbol (PR-specific columns left empty).
 //!
 //! ## Columns (14 total)
 //!
@@ -27,18 +30,15 @@ use std::path::Path;
 
 /// Export the bounce log at `<repo>/.janitor/bounce_log.ndjson` to a CSV file.
 ///
-/// Creates or overwrites `out`. Returns an error when the bounce log is absent
-/// or the output file cannot be written.
+/// Creates or overwrites `out`.  When the bounce log is absent or empty, falls
+/// back to loading `.janitor/symbols.rkyv` and exporting one row per dead symbol.
+/// PR-specific columns (`PR_Number`, `Author`) are left empty in static-scan rows.
 pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
     let janitor_dir = repo.join(".janitor");
     let entries = crate::report::load_bounce_log(&janitor_dir);
 
     if entries.is_empty() {
-        anyhow::bail!(
-            "No bounce log entries found at {}.\n\
-             Run `janitor bounce` first to populate the log.",
-            janitor_dir.join("bounce_log.ndjson").display()
-        );
+        return export_static_scan(&janitor_dir, out);
     }
 
     let mut wtr = csv::Writer::from_path(out)
@@ -90,15 +90,15 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
         let zombie_syms_str = entry.zombie_symbols_added.to_string();
         let zombie_deps_str = entry.zombie_deps.join(" | ");
         let violation_reasons = build_violation_reasons(entry);
-        let time_str = format!("{:.4}", time_saved_h);
-        let savings_str = format!("{:.2}", savings_usd);
+        let time_str = format!("{time_saved_h:.4}");
+        let savings_str = format!("{savings_usd:.2}");
 
         wtr.write_record([
             pr_num_str.as_str(),
             entry.author.as_deref().unwrap_or(""),
             score_str.as_str(),
-            "FALSE",        // Mesa_Triggered — SaaS reserved
-            "0",            // Trust_Delta   — SaaS reserved
+            "FALSE", // Mesa_Triggered — SaaS reserved
+            "0",     // Trust_Delta   — SaaS reserved
             unlinked_str.as_str(),
             dead_str.as_str(),
             clones_str.as_str(),
@@ -113,6 +113,107 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
 
     wtr.flush()?;
     println!("Exported {} entries → {}", entries.len(), out.display());
+    Ok(())
+}
+
+/// Static-scan fallback: load `.janitor/symbols.rkyv` and emit one CSV row per
+/// dead symbol.
+///
+/// Dead symbols are ranked by byte size descending (largest first).
+/// PR-specific columns (`PR_Number`, `Author`) are left empty.
+/// `Score` is set to `byte_size / 10` — mirroring the dead-symbol scoring weight
+/// used in bounce mode — so spreadsheet consumers can rank by the same metric.
+fn export_static_scan(janitor_dir: &Path, out: &Path) -> Result<()> {
+    use common::registry::{MappedRegistry, SymbolRegistry};
+
+    let rkyv_path = janitor_dir.join("symbols.rkyv");
+    if !rkyv_path.exists() {
+        anyhow::bail!(
+            "No bounce log or symbol registry found under {}.\n\
+             Run `janitor scan <path>` or `janitor bounce` first to populate data.",
+            janitor_dir.display()
+        );
+    }
+
+    eprintln!(
+        "No bounce log found — falling back to static scan registry ({})",
+        rkyv_path.display()
+    );
+
+    let mapped = MappedRegistry::open(&rkyv_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
+    let registry: SymbolRegistry =
+        rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize symbols.rkyv: {e}"))?;
+
+    // Collect dead symbols (no protection reason) sorted by byte size descending.
+    let mut dead: Vec<&common::registry::SymbolEntry> = registry
+        .entries
+        .iter()
+        .filter(|e| e.protected_by.is_none())
+        .collect();
+    dead.sort_by(|a, b| {
+        b.end_byte
+            .saturating_sub(b.start_byte)
+            .cmp(&a.end_byte.saturating_sub(a.start_byte))
+    });
+
+    let mut wtr = csv::Writer::from_path(out)
+        .map_err(|e| anyhow::anyhow!("Cannot create CSV file {}: {}", out.display(), e))?;
+
+    wtr.write_record([
+        "PR_Number",
+        "Author",
+        "Score",
+        "Mesa_Triggered",
+        "Trust_Delta",
+        "Unlinked_PR",
+        "Dead_Code_Count",
+        "Logic_Clones",
+        "Zombie_Syms",
+        "Zombie_Deps",
+        "Violation_Reasons",
+        "Time_Saved_Hours",
+        "Operational_Savings_USD",
+        "Timestamp",
+    ])?;
+
+    let timestamp = crate::utc_now_iso8601();
+
+    for entry in &dead {
+        let byte_size = entry.end_byte.saturating_sub(entry.start_byte);
+        // Score proxy: dead-symbol weight (×10) applied to byte size in units of 100 B.
+        let score = byte_size / 10;
+        let score_str = score.to_string();
+        let violation = format!(
+            "Dead Symbol: {} ({}:{})",
+            entry.qualified_name, entry.file_path, entry.start_line
+        );
+
+        wtr.write_record([
+            "", // PR_Number — N/A for static scan
+            "", // Author — N/A for static scan
+            score_str.as_str(),
+            "FALSE", // Mesa_Triggered
+            "0",     // Trust_Delta
+            "0",     // Unlinked_PR
+            "1",     // Dead_Code_Count — one dead symbol per row
+            "0",     // Logic_Clones
+            "0",     // Zombie_Syms
+            "",      // Zombie_Deps
+            violation.as_str(),
+            "0.0000", // Time_Saved_Hours
+            "0.00",   // Operational_Savings_USD
+            timestamp.as_str(),
+        ])?;
+    }
+
+    wtr.flush()?;
+    println!(
+        "Exported {} dead symbols (static scan) → {}",
+        dead.len(),
+        out.display()
+    );
     Ok(())
 }
 
@@ -164,7 +265,10 @@ fn build_violation_reasons(entry: &crate::report::BounceLogEntry) -> String {
 
     // ── Zombie dependencies (informational) ────────────────────────────────
     if !entry.zombie_deps.is_empty() {
-        reasons.push(format!("Zombie Dependency: {}", entry.zombie_deps.join(", ")));
+        reasons.push(format!(
+            "Zombie Dependency: {}",
+            entry.zombie_deps.join(", ")
+        ));
     }
 
     // ── Legacy residual heuristic ──────────────────────────────────────────

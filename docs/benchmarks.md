@@ -146,6 +146,37 @@ making dead-symbol counts reflect genuine unreferenced internal helpers only.
 
 ---
 
+## Why Local-First Architecture Matters
+
+Cloud-based SCA tools operate by shipping your code to a remote analysis cluster,
+waiting for results, and returning a report over a network round-trip.  The Janitor
+inverts this model entirely.
+
+**Everything runs on the machine that owns the code:**
+
+- `rkyv` zero-copy deserialization means the 235 MB rust-lang/rust registry is
+  memory-mapped and query-ready in under 300 ms — no serialization overhead, no
+  network latency, no cold start.
+- `memmap2::Mmap` provides OS-backed file access at page-fault granularity: the
+  kernel only loads the bytes your query actually touches.
+- The symbol registry is a single flat binary blob, not a graph database.  A
+  `HashSet<&str>` lookup against 30,000 registry entries takes ~5 µs.
+- The Physarum governor (`SystemHeart::beat()`) enforces RAM budgets locally,
+  preventing OOM on any CI runner without a remote rate-limiter or quota system.
+
+**Consequence**: The 33-second Godot scan is a cold-start number with zero warm
+cache, on consumer hardware, inside WSL2.  Cloud tools advertising "real-time"
+analysis are paying the network and RPC tax on every invocation.  The Janitor pays
+it once — during grammar compilation — and amortises it across the lifetime of the
+process via `OnceLock<Language>` statics.
+
+**Privacy corollary**: your source code never leaves the machine.  The only
+outbound traffic is the optional audit attestation POST to
+`https://api.thejanitor.app/v1/attest`, which carries only a cryptographic summary
+(PR metadata + score), never file contents.
+
+---
+
 ## Language Support Matrix
 
 | Language | Grammar | Status | Gauntlet Repo |

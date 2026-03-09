@@ -35,7 +35,7 @@ pub fn draw_dashboard(registry: &SymbolRegistry) -> Result<(), Box<dyn Error>> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        println!("{:?}", err);
+        println!("{err:?}");
     }
 
     Ok(())
@@ -106,7 +106,7 @@ where
             let status = Paragraph::new(vec![Line::from(vec![
                 Span::raw("Integrity Status: "),
                 Span::styled(
-                    format!("{} ({:.1}%)", sovereign_status_text, density),
+                    format!("{sovereign_status_text} ({density:.1}%)"),
                     Style::default()
                         .fg(sovereign_status_color)
                         .add_modifier(Modifier::BOLD),

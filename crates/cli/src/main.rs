@@ -366,7 +366,7 @@ enum TelemetryCmd {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     if let Err(e) = dotenvy::dotenv() {
-        eprintln!("warning: .env: {}", e);
+        eprintln!("warning: .env: {e}");
     }
 
     let _root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -542,7 +542,7 @@ fn cmd_scan(
         library,
         Some(&|event| match event {
             ScanEvent::GraphBuilt { files, symbols } => {
-                pb_g.finish_with_message(format!("Dissected {} files, {} symbols", files, symbols));
+                pb_g.finish_with_message(format!("Dissected {files} files, {symbols} symbols"));
                 pb_r.enable_steady_tick(Duration::from_millis(100));
             }
             ScanEvent::StageComplete(4) => {
@@ -696,7 +696,7 @@ fn cmd_scan(
         });
     }
     if let Err(e) = registry.save(&rkyv_path) {
-        eprintln!("warning: could not save symbols.rkyv: {}", e);
+        eprintln!("warning: could not save symbols.rkyv: {e}");
     }
 
     Ok(())
@@ -830,8 +830,8 @@ fn cmd_dedup(
     println!("| JANITOR DEDUP                            |");
     println!("+------------------------------------------+");
     println!("| Duplicate groups : {:>20} |", all_groups.len());
-    println!("| True duplicates  : {:>20} |", true_dups);
-    println!("| Structural pats. : {:>20} |", patterns);
+    println!("| True duplicates  : {true_dups:>20} |");
+    println!("| Structural pats. : {patterns:>20} |");
     println!("+------------------------------------------+");
 
     for group in &all_groups {
@@ -862,9 +862,8 @@ fn cmd_dedup(
                 .collect();
             for hash in &unsafe_groups {
                 println!(
-                    "\n  [HARD-GATE] {:016x}: C++/C#/GLSL deduplication is strictly advisory \
-                     to prevent SIMD/Template corruption.",
-                    hash
+                    "\n  [HARD-GATE] {hash:016x}: C++/C#/GLSL deduplication is strictly advisory \
+                     to prevent SIMD/Template corruption."
                 );
             }
         }
@@ -911,7 +910,7 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path, override_tax: bool) -> any
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
             vault::SigningOracle::enforce_maturity(&member.file_path, mtime_secs, override_tax)
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
     }
 
@@ -925,9 +924,8 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path, override_tax: bool) -> any
         }
         Err(e) => {
             eprintln!(
-                "Pre-flight verification FAILED: {}.\n\
-                 Pre-existing failures — Janitor did not cause them. Proceeding.",
-                e
+                "Pre-flight verification FAILED: {e}.\n\
+                 Pre-existing failures — Janitor did not cause them. Proceeding."
             );
             false
         }
@@ -953,12 +951,12 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path, override_tax: bool) -> any
             std::str::from_utf8(&source[body_start as usize..canon.end_byte as usize])
                 .unwrap_or("    pass\n");
 
-        let impl_block = format!("\ndef {}({}):\n{}", impl_name, params_str, original_body);
+        let impl_block = format!("\ndef {impl_name}({params_str}):\n{original_body}");
         let call_args = params_to_call_args(&params_str);
         let proxy_body = if call_args.is_empty() {
-            format!("    return {}()\n", impl_name)
+            format!("    return {impl_name}()\n")
         } else {
-            format!("    return {}({})\n", impl_name, call_args)
+            format!("    return {impl_name}({call_args})\n")
         };
 
         // Collect replacements per file (members may span multiple files for cross-file dups).
@@ -1015,26 +1013,17 @@ fn apply_dedup(groups: &[DupGroup], root_hint: &Path, override_tax: bool) -> any
         match run_tests(&project_root, runner) {
             Ok(()) => {
                 deleter.commit()?;
-                println!("APPLIED + VERIFIED: {}", file_path_str);
+                println!("APPLIED + VERIFIED: {file_path_str}");
             }
             Err(e) => {
                 if baseline_passed {
-                    eprintln!(
-                        "TEST FAILED (Janitor caused regression): {}. Rolling back...",
-                        e
-                    );
+                    eprintln!("TEST FAILED (Janitor caused regression): {e}. Rolling back...");
                     deleter.restore_all()?;
                     return Err(e);
                 } else {
-                    eprintln!(
-                        "Tests failed: {} (pre-existing failures — not caused by Janitor).",
-                        e
-                    );
+                    eprintln!("Tests failed: {e} (pre-existing failures — not caused by Janitor).");
                     deleter.commit()?;
-                    println!(
-                        "APPLIED (pre-existing failures not resolved): {}",
-                        file_path_str
-                    );
+                    println!("APPLIED (pre-existing failures not resolved): {file_path_str}");
                 }
             }
         }
@@ -1164,10 +1153,9 @@ fn cmd_clean(
             }
             Err(e) => {
                 eprintln!(
-                    "Pre-flight verification FAILED: {}.\n\
+                    "Pre-flight verification FAILED: {e}.\n\
                      Pre-existing failures detected — Janitor did not cause them.\n\
-                     Proceeding with cleanup; post-cleanup failures will be compared against this baseline.",
-                    e
+                     Proceeding with cleanup; post-cleanup failures will be compared against this baseline."
                 );
                 false
             }
@@ -1194,7 +1182,7 @@ fn cmd_clean(
             .map(|d| d.as_secs())
             .unwrap_or(0);
         vault::SigningOracle::enforce_maturity(file_str, mtime_secs, override_tax)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
     // 5a. Python repos: shadow simulation — write cleaned files into shadow tree and run
@@ -1211,7 +1199,7 @@ fn cmd_clean(
             let rel = abs.strip_prefix(manager.source_root()).unwrap_or(abs);
             let shadow_file = manager.shadow_root().join(rel);
             let original = std::fs::read(abs)
-                .with_context(|| format!("reading {} for shadow simulation", file_str))?;
+                .with_context(|| format!("reading {file_str} for shadow simulation"))?;
             let ranges: Vec<(usize, usize)> = entities
                 .iter()
                 .map(|e| (e.start_byte as usize, e.end_byte as usize))
@@ -1229,7 +1217,7 @@ fn cmd_clean(
         match run_tests(manager.shadow_root(), runner) {
             Ok(()) => println!("Shadow verification PASSED. Executing cleanup..."),
             Err(e) => {
-                eprintln!("Shadow verification FAILED: {}", e);
+                eprintln!("Shadow verification FAILED: {e}");
                 return Err(e);
             }
         }
@@ -1275,7 +1263,7 @@ fn cmd_clean(
                 deleters.push(deleter);
             }
             Err(e) => {
-                eprintln!("Cleanup error in {}: {}. Restoring backup...", file_str, e);
+                eprintln!("Cleanup error in {file_str}: {e}. Restoring backup...");
                 deleter.restore_all()?;
             }
         }
@@ -1301,7 +1289,7 @@ fn cmd_clean(
                     ),
                 }
             };
-            println!("Post-cleanup verification ({})...", runner_display);
+            println!("Post-cleanup verification ({runner_display})...");
             let verify_result = if let Some(cmd) = test_command {
                 run_custom_test(project_root, cmd)
             } else {
@@ -1312,8 +1300,7 @@ fn cmd_clean(
                 Err(e) => {
                     if baseline_passed {
                         eprintln!(
-                            "Post-cleanup verification FAILED (Janitor caused regression): {}. Restoring...",
-                            e
+                            "Post-cleanup verification FAILED (Janitor caused regression): {e}. Restoring..."
                         );
                         // Zero-knowledge telemetry: record each rolled-back entity's hash.
                         let janitor_dir = project_root.join(".janitor");
@@ -1333,8 +1320,7 @@ fn cmd_clean(
                         return Err(e);
                     } else {
                         eprintln!(
-                            "Post-cleanup verification FAILED: {} (pre-existing failures — not caused by Janitor).",
-                            e
+                            "Post-cleanup verification FAILED: {e} (pre-existing failures — not caused by Janitor)."
                         );
                     }
                 }
@@ -1347,7 +1333,7 @@ fn cmd_clean(
         d.commit()?;
     }
     for (file_str, n) in &deletion_counts {
-        println!("Removed {} symbols from {}", n, file_str);
+        println!("Removed {n} symbols from {file_str}");
     }
 
     audit_log.flush(token)?;
@@ -1394,12 +1380,12 @@ fn cmd_dashboard(project_root: &Path) -> anyhow::Result<()> {
     }
 
     let mapped = MappedRegistry::open(&rkyv_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
 
     let registry: SymbolRegistry = rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
-        .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
 
-    dashboard::draw_dashboard(&registry).map_err(|e| anyhow::anyhow!("TUI error: {}", e))
+    dashboard::draw_dashboard(&registry).map_err(|e| anyhow::anyhow!("TUI error: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -1418,10 +1404,10 @@ fn cmd_badge(project_root: &Path, output: Option<&Path>) -> anyhow::Result<()> {
     }
 
     let mapped = MappedRegistry::open(&rkyv_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
 
     let registry: SymbolRegistry = rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
-        .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
 
     let total = registry.entries.len();
     let dead = registry
@@ -1442,7 +1428,7 @@ fn cmd_badge(project_root: &Path, output: Option<&Path>) -> anyhow::Result<()> {
         _ => "#e05d44",
     };
 
-    let label = format!("{}%", health_pct);
+    let label = format!("{health_pct}%");
     // Approximate character width for the label region.
     let label_w: u32 = (label.len() as u32 * 7 + 10).max(32);
     let left_w: u32 = 90;
@@ -1516,10 +1502,7 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
                 );
             }
             Err(e) => {
-                eprintln!(
-                    "warning: git not available ({}). Falling back to ghost restore.",
-                    e
-                );
+                eprintln!("warning: git not available ({e}). Falling back to ghost restore.");
             }
         }
     }
@@ -1544,7 +1527,7 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
         let relative = entry
             .path()
             .strip_prefix(&ghost_dir)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
         let dest = project_root.join(relative);
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)?;
@@ -1557,7 +1540,7 @@ fn cmd_undo(project_root: &Path) -> anyhow::Result<()> {
     }
 
     if restored > 0 {
-        println!("{} file(s) restored from .janitor/ghost/.", restored);
+        println!("{restored} file(s) restored from .janitor/ghost/.");
     } else {
         println!("Ghost directory exists but is empty. Nothing to restore.");
     }
@@ -1789,7 +1772,7 @@ fn run_cargo_test(dir: &Path) -> anyhow::Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             Err(anyhow::anyhow!("cargo not found"))
         }
-        Err(e) => Err(anyhow::anyhow!("Failed to spawn cargo test: {}", e)),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn cargo test: {e}")),
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(anyhow::anyhow!(
             "cargo test exited with code {}",
@@ -1805,7 +1788,7 @@ fn run_go_test(dir: &Path) -> anyhow::Result<()> {
         .status();
     match status {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("go not found")),
-        Err(e) => Err(anyhow::anyhow!("Failed to spawn go test: {}", e)),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn go test: {e}")),
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(anyhow::anyhow!(
             "go test exited with code {}",
@@ -1821,7 +1804,7 @@ fn run_npm_test(dir: &Path) -> anyhow::Result<()> {
         .status();
     match status {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!("npm not found")),
-        Err(e) => Err(anyhow::anyhow!("Failed to spawn npm test: {}", e)),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn npm test: {e}")),
 
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(anyhow::anyhow!(
@@ -1845,7 +1828,7 @@ fn run_scons_test(dir: &Path) -> anyhow::Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow::anyhow!(
             "scons not found — install SCons (pip install scons) to enable test verification."
         )),
-        Err(e) => Err(anyhow::anyhow!("Failed to spawn scons: {}", e)),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn scons: {e}")),
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(anyhow::anyhow!(
             "scons tests exited with code {}",
@@ -1864,7 +1847,7 @@ fn run_custom_test(dir: &Path, cmd: &str) -> anyhow::Result<()> {
         .args(["-c", cmd])
         .current_dir(dir)
         .status()
-        .map_err(|e| anyhow::anyhow!("Failed to spawn test command `{}`: {}", cmd, e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to spawn test command `{cmd}`: {e}"))?;
     if status.success() {
         Ok(())
     } else {
@@ -2012,7 +1995,6 @@ fn cmd_bounce(
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::slop_filter::{bounce_git, PRBouncer, PatchBouncer};
-    use std::io::Read as _;
 
     // Load governance manifest — fallback to defaults if absent or malformed.
     let policy = JanitorPolicy::load(project_root);
@@ -2023,9 +2005,9 @@ fn cmd_bounce(
         .unwrap_or_else(|| project_root.join(".janitor").join("symbols.rkyv"));
     let registry: SymbolRegistry = if rkyv_path.exists() {
         let mapped = MappedRegistry::open(&rkyv_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
         rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
-            .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?
+            .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?
     } else {
         if registry_override.is_some() {
             eprintln!(
@@ -2106,12 +2088,14 @@ fn cmd_bounce(
                         String::from_utf8_lossy(&output.stderr).trim()
                     );
                 }
-                String::from_utf8(output.stdout)
-                    .context("`gh pr diff` output is not valid UTF-8")?
+                String::from_utf8_lossy(&output.stdout).into_owned()
             } else {
                 match patch_file {
-                    Some(pf) => std::fs::read_to_string(pf)
-                        .with_context(|| format!("reading patch file: {}", pf.display()))?,
+                    Some(pf) => {
+                        let bytes = std::fs::read(pf)
+                            .with_context(|| format!("reading patch file: {}", pf.display()))?;
+                        String::from_utf8_lossy(&bytes).into_owned()
+                    }
                     None => {
                         use std::io::IsTerminal as _;
                         if std::io::stdin().is_terminal() {
@@ -2120,11 +2104,12 @@ fn cmd_bounce(
                                  or --pr-number <N> --repo-slug <owner/repo>"
                             );
                         }
-                        let mut s = String::new();
+                        let mut buf = Vec::new();
+                        use std::io::Read as _;
                         std::io::stdin()
-                            .read_to_string(&mut s)
+                            .read_to_end(&mut buf)
                             .context("reading patch from stdin")?;
-                        s
+                        String::from_utf8_lossy(&buf).into_owned()
                     }
                 }
             };
@@ -2215,7 +2200,7 @@ fn cmd_bounce(
         println!(
             "{}",
             serde_json::to_string_pretty(&json_out)
-                .map_err(|e| anyhow::anyhow!("JSON serialization failed: {}", e))?
+                .map_err(|e| anyhow::anyhow!("JSON serialization failed: {e}"))?
         );
     } else {
         println!("+------------------------------------------+");
@@ -2404,11 +2389,11 @@ fn export_pdf(markdown: &str, out: &Path, title: &str) -> anyhow::Result<()> {
         .arg("--toc")
         .arg("--toc-depth=2")
         .arg("-V")
-        .arg(format!("title={}", title))
+        .arg(format!("title={title}"))
         .arg("-V")
-        .arg(format!("date={}", date))
+        .arg(format!("date={date}"))
         .arg("-V")
-        .arg(format!("version={}", version))
+        .arg(format!("version={version}"))
         .arg("-o")
         .arg(out);
 
@@ -2504,7 +2489,7 @@ fn cmd_report_global(
                 .with_context(|| format!("writing report to {}", path.display()))?;
             println!("Global report written: {}", path.display());
         }
-        None => print!("{}", content),
+        None => print!("{content}"),
     }
 
     Ok(())
@@ -2557,7 +2542,7 @@ fn cmd_report(
             false,
             Some(&|event| match event {
                 ScanEvent::GraphBuilt { files, symbols } => {
-                    eprintln!("  Dissected {} files, {} symbols", files, symbols);
+                    eprintln!("  Dissected {files} files, {symbols} symbols");
                 }
                 ScanEvent::StageComplete(4) => {
                     eprintln!("  Dependencies resolved");
@@ -2624,7 +2609,7 @@ fn cmd_report(
         let pdf_path = out
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("janitor_report.pdf"));
-        let pdf_title = format!("Intelligence Report: The {} Security Team", repo_name);
+        let pdf_title = format!("Intelligence Report: The {repo_name} Security Team");
         return export_pdf(&content, &pdf_path, &pdf_title);
     }
 
@@ -2638,7 +2623,7 @@ fn cmd_report(
                 .with_context(|| format!("writing report to {}", path.display()))?;
             println!("Report written: {}", path.display());
         }
-        None => print!("{}", content),
+        None => print!("{content}"),
     }
 
     Ok(())
@@ -2659,13 +2644,13 @@ fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
 
     let response = ureq::get(WISDOM_URL)
         .call()
-        .map_err(|e| anyhow::anyhow!("update-wisdom: GET {} failed: {}", WISDOM_URL, e))?;
+        .map_err(|e| anyhow::anyhow!("update-wisdom: GET {WISDOM_URL} failed: {e}"))?;
 
     let mut bytes: Vec<u8> = Vec::new();
     response
         .into_reader()
         .read_to_end(&mut bytes)
-        .map_err(|e| anyhow::anyhow!("update-wisdom: reading response body failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("update-wisdom: reading response body failed: {e}"))?;
 
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
@@ -2710,7 +2695,7 @@ pub(crate) fn utc_now_iso8601() -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let mo = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if mo <= 2 { y + 1 } else { y };
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, d, h, m, s)
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
 }
 
 /// Appends a single zero-knowledge telemetry entry to `.janitor/telemetry.json`.
@@ -2788,7 +2773,7 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
                  Install pytest in the target environment, or use a repo with a native test suite."
             ))
         }
-        Err(e) => Err(anyhow::anyhow!("Failed to spawn pytest: {}", e)),
+        Err(e) => Err(anyhow::anyhow!("Failed to spawn pytest: {e}")),
         Ok(s) if s.success() => Ok(()),
         // Exit 5 = no tests collected — vacuous pass, nothing to break.
         Ok(s) if s.code() == Some(5) => {
