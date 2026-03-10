@@ -10,17 +10,17 @@
 %%     [-V logo=/abs/path/to/logo.png] \
 %%     -o output.pdf
 
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 
 % ── Typography ────────────────────────────────────────────────────────────────
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{palatino}
 \usepackage{courier}
-\linespread{1.1}
+\linespread{1.0}
 
 % ── Page geometry ─────────────────────────────────────────────────────────────
-\usepackage[margin=2.5cm, top=3.5cm, bottom=3cm, headheight=16pt]{geometry}
+\usepackage[margin=1.9cm, top=2.0cm, bottom=1.5cm, headheight=14pt]{geometry}
 
 % ── Colour ────────────────────────────────────────────────────────────────────
 \usepackage[table]{xcolor}
@@ -34,13 +34,16 @@
 \usepackage{longtable,booktabs,array,tabularx}
 \usepackage{calc}   % required for \columnwidth arithmetic in longtable column specs
 \usepackage{xfp}    % provides \real{} used by pandoc for proportional column widths
-\renewcommand{\arraystretch}{1.3}
+\renewcommand{\arraystretch}{1.1}
 % Horizontal cell padding — prevents column content bleeding into adjacent cells
 % during PDF conversion of wide tables.
 \setlength{\tabcolsep}{6pt}
 % Suppress booktabs rule-gap warnings from pandoc-generated tables.
 \setlength{\aboverulesep}{0pt}
 \setlength{\belowrulesep}{0pt}
+% Compact longtable pre/post skip (default bigskipamount=12pt is too generous).
+\setlength{\LTpre}{2pt}
+\setlength{\LTpost}{2pt}
 
 % ── Graphics ──────────────────────────────────────────────────────────────────
 \usepackage{graphicx}
@@ -72,7 +75,7 @@ $endif$
   {}
   {0em}
   {}
-  [\vspace{2pt}\color{janitorNavy}\titlerule\vspace{4pt}]
+  [\vspace{1pt}\color{janitorNavy}\titlerule\vspace{2pt}]
 \titleformat{\subsection}
   {\normalsize\bfseries\color{janitorNavy}}
   {}
@@ -83,12 +86,17 @@ $endif$
   {}
   {0em}
   {}
+% Tight vertical spacing for section headings — maximise page real estate.
+\titlespacing*{\section}{0pt}{6pt plus 2pt minus 1pt}{3pt plus 1pt}
+\titlespacing*{\subsection}{0pt}{4pt plus 2pt minus 1pt}{2pt plus 1pt}
+\titlespacing*{\subsubsection}{0pt}{2pt plus 1pt minus 1pt}{0pt}
 
 % ── TOC styling ───────────────────────────────────────────────────────────────
 \usepackage{tocloft}
 \setlength{\cftsecindent}{0em}
-\renewcommand{\cftsecfont}{\bfseries\color{janitorNavy}}
-\renewcommand{\cftsecpagefont}{\bfseries\color{janitorNavy}}
+\setlength{\cftbeforesecskip}{2pt}
+\renewcommand{\cftsecfont}{\small\bfseries\color{janitorNavy}}
+\renewcommand{\cftsecpagefont}{\small\bfseries\color{janitorNavy}}
 
 % ── Hyperlinks ────────────────────────────────────────────────────────────────
 \usepackage[colorlinks=true,
@@ -152,7 +160,7 @@ $endif$
 
 % ── Misc ──────────────────────────────────────────────────────────────────────
 \usepackage{parskip}
-\setlength{\parskip}{6pt plus 2pt minus 1pt}
+\setlength{\parskip}{4pt plus 1pt minus 1pt}
 \usepackage{microtype}
 
 % ── pandoc highlighting macros (injected at compile time) ─────────────────────
@@ -188,6 +196,7 @@ $endif$
 
 % ── Table of contents ─────────────────────────────────────────────────────────
 $if(toc)$
+\setcounter{tocdepth}{$if(toc-depth)$$toc-depth$$else$2$endif$}
 \tableofcontents
 \newpage
 $endif$

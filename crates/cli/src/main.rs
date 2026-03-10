@@ -2450,6 +2450,10 @@ fn export_pdf(markdown: &str, out: &Path, title: &str) -> anyhow::Result<()> {
         .arg(format!("date={date}"))
         .arg("-V")
         .arg(format!("version={version}"))
+        .arg("-V")
+        .arg("geometry:margin=0.75in")
+        .arg("-V")
+        .arg("fontsize=10pt")
         .arg("-o")
         .arg(out);
 
