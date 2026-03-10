@@ -1022,19 +1022,24 @@
 </tbody>
 </table>
 <p><strong>Social Forensics</strong> runs on top: every added comment line is scanned for AI-ism phrases (<code>"Note that"</code>, <code>"It's worth mentioning"</code>, <code>"As an AI"</code>) and corporate-speak markers via a zero-allocation AhoCorasick automaton. PR bodies are scanned for issue link compliance (<code>Closes #N</code>, <code>Fixes #N</code>).</p>
-<p><strong>Live Godot Engine audit — 50 open PRs, February 2026:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>PRs analyzed          : 50
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Unlinked PRs          : 41  (82% — no Closes/Fixes #N)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Antipatterns flagged  : 10
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>AI comment violations : 0   (Godot contributors are clean)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Logic clones          : 2 PRs
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Highest slop score    : 70  (PR #116833 — TitanNano)
+<p><strong>Global Audit 2026 — 2,090 live PRs across 22 Tier-1 repositories:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Repos audited         : 22 (godot, nixpkgs, vscode, k8s, pytorch, kafka, rust,
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                            tauri, redis, next.js, home-assistant, ansible,
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                            workers-sdk, langchain, deno, rails, laravel,
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                            apple/swift, aspnetcore, okhttp, terraform, neovim)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>PRs analyzed          : 2,090
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Total Slop Score      : 38,685
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Antipatterns blocked  : 124 (confirmed structural defects — zero false positives)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>Engine panics         : 0
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>OOM events            : 0
 </code></pre></div>
-<p>These are real, open, unmerged pull requests against a 3.5M LOC production codebase. The gate works.</p>
+<p>These are real, open pull requests against 22 production codebases — including the Rust compiler, the Linux package ecosystem, and the Swift compiler. The gate works.</p>
+<p><a href="ultimate_gauntlet_results/">Full audit results →</a></p>
 <hr />
 <h2 id="the-technical-stack">THE TECHNICAL STACK</h2>
 <h3 id="the-anatomist">The Anatomist</h3>
-<p>Parses via zero-copy Tree-sitter CSTs across <strong>12 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash</strong>. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
+<p>Parses via zero-copy Tree-sitter CSTs across <strong>23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more</strong> — with v6.12.5 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
+<p><code>OnceLock&lt;Language&gt;</code> statics: each grammar occupies <strong>8 bytes of static overhead</strong> (an uninitialised pointer slot on 64-bit) until first use. Total: <strong>184 bytes of static overhead</strong> for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
 <thead>
@@ -1075,6 +1080,8 @@
 <p>Anything that survives all five gates is a confirmed dead symbol. No false positives from GDCLASS registration macros, function pointer dispatch, or runtime-registered plugins.</p>
 <h3 id="the-forge">The Forge</h3>
 <p>BLAKE3 structural hashing with alpha-normalization detects logic clones — functions with identical structure and different names. Chemotaxis ordering prioritizes high-calorie files (<code>.rs</code>, <code>.py</code>, <code>.go</code>, <code>.ts</code>) in the analysis pass. The <code>slop_hunter</code> detects language-specific antipatterns via Tree-sitter AST walks: hallucinated Python imports, vacuous Rust <code>unsafe</code> blocks, goroutine closure traps.</p>
+<p><strong>Universal Bot Shield</strong> — <code>is_automation_account()</code> applies a 4-layer classification before analysis: <code>app/</code> prefix (GitHub Apps), <code>[bot]</code> suffix, configurable <code>trusted_bot_authors</code>, and per-repo <code>[forge].automation_accounts</code> in <code>janitor.toml</code>. Bot PRs receive full structural analysis; no code is exempt from review.</p>
+<p><strong>Agnostic IaC Shield</strong> — <code>ByteLatticeAnalyzer</code> detects binary blobs and high-entropy payloads (encrypted data, shellcode) injected into source patches. IaC file extensions (<code>.nix</code>, <code>.lock</code>, <code>.json</code>, <code>.toml</code>, <code>.yaml</code>, <code>.yml</code>, <code>.csv</code>) bypass the entropy gate — these formats contain legitimate high-density hashes (nix sha256, lockfile digests) that would otherwise produce false <code>AnomalousBlob</code> detections. Files above 7.0 bits/byte windowed entropy or containing null bytes are flagged regardless of extension.</p>
 <h3 id="the-reaper">The Reaper</h3>
 <p>Surgical byte-range deletion. Sorted bottom-to-top by <code>start_byte</code> to preserve upstream offsets. UTF-8 hardened via <code>str::is_char_boundary()</code>. Atomic backup to <code>.janitor/ghost/</code> before first write. Rollback via <code>janitor undo</code> restores exact pre-deletion state.</p>
 <h3 id="the-daemon">The Daemon</h3>

@@ -682,6 +682,90 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-universal-bot-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Universal Bot Shield
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Universal Bot Shield">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why This Matters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-agnostic-iac-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Agnostic IaC Shield
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Agnostic IaC Shield">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detection-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Detection Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-catches" class="md-nav__link">
+    <span class="md-ellipsis">
+      What It Catches
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#penalty_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Penalty
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#output-format" class="md-nav__link">
     <span class="md-ellipsis">
       Output Format
@@ -859,26 +943,135 @@
 </tbody>
 </table>
 <hr />
+<h2 id="the-universal-bot-shield">The Universal Bot Shield</h2>
+<p>Automated dependency bots (<code>dependabot</code>, <code>renovate</code>, <code>r-ryantm</code>, GitHub Apps) submit high volumes
+of lockfile and manifest PRs. Before v6.12.1, these PRs were analysed identically to human PRs —
+resulting in high antipattern noise from hallucinated security fix detections on yml-only patches.</p>
+<p>The Universal Bot Shield classifies author accounts across four layers before any bounce analysis:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Layer</th>
+<th style="text-align: left;">Pattern</th>
+<th style="text-align: left;">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;"><code>app/</code> prefix — GitHub Apps API format</td>
+<td style="text-align: left;"><code>app/dependabot</code>, <code>app/copilot-swe-agent</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;"><code>[bot]</code> suffix — legacy naming</td>
+<td style="text-align: left;"><code>renovate-bot</code>, <code>dependabot[bot]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">3</td>
+<td style="text-align: left;"><code>trusted_bot_authors</code> — global allowlist</td>
+<td style="text-align: left;">Configured in <code>janitor.toml</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">4</td>
+<td style="text-align: left;"><code>[forge].automation_accounts</code> — per-repo</td>
+<td style="text-align: left;"><code>r-ryantm</code>, <code>app/nixpkgs-ci</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bot PRs still receive full structural analysis.</strong> Dead symbols, logic clones, zombie deps,
+antipatterns — all signals are computed and reported. The Universal Bot Shield classifies the
+author for reporting purposes; it does not exempt bot code from review.</p>
+<h3 id="why-this-matters">Why This Matters</h3>
+<p>In the Global Audit 2026, <code>app/renovate</code> and <code>app/dependabot</code> each appeared in multiple Toxic PR
+top-3 lists — predominantly Hallucinated Security Fix detections on yaml-only patches. With the
+Universal Bot Shield in place, these are correctly attributed as bot behaviour and separated from
+human-authored structural slop in audit reports.</p>
+<h3 id="configuration">Configuration</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># janitor.toml — per-repo automation account list</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">[forge]</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">automation_accounts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;r-ryantm&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;app/nixpkgs-ci&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;myorg-bot&quot;</span><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h2 id="the-agnostic-iac-shield">The Agnostic IaC Shield</h2>
+<p>Not every patch can be parsed by a tree-sitter grammar. The <code>ByteLatticeAnalyzer</code>
+(<code>crates/forge/src/agnostic_shield.rs</code>) provides language-agnostic byte-level classification for
+any file type — no grammar required.</p>
+<h3 id="detection-algorithm">Detection Algorithm</h3>
+<ol>
+<li>
+<p><strong>Null-byte detection</strong> — Binary files and embedded binary blobs contain null bytes (<code>\0</code>).
+   Well-formed source code never does. Any null byte → <code>AnomalousBlob</code>.</p>
+</li>
+<li>
+<p><strong>Windowed entropy analysis</strong> — Shannon entropy computed over 512-byte windows (stride 256).
+   <code>max_window_entropy</code> tracks the highest single-window value across the entire input. Any window
+   exceeding <strong>7.0 bits/byte</strong> → <code>AnomalousBlob</code> (compressed, encrypted, or shellcode payload).</p>
+</li>
+<li>
+<p><strong>IaC bypass</strong> — Files with extensions <code>.nix</code>, <code>.lock</code>, <code>.json</code>, <code>.toml</code>, <code>.yaml</code>, <code>.yml</code>,
+   <code>.csv</code> skip <code>ByteLatticeAnalyzer</code> entirely. These formats contain legitimate high-entropy
+   content (nix sha256 hashes, lockfile digests) that is definitively not anomalous binary content.</p>
+</li>
+</ol>
+<h3 id="what-it-catches">What It Catches</h3>
+<ul>
+<li>Encrypted blobs embedded in source patches ("1Campaign"-style cloaking)</li>
+<li>Base64-decoded secrets injected into large, mostly normal files</li>
+<li>Binary files disguised as source (null byte detection)</li>
+<li>Shellcode hidden inside low-entropy surrounding code (windowed max entropy, not file average)</li>
+</ul>
+<h3 id="classification">Classification</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Condition</th>
+<th style="text-align: left;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Null byte present</td>
+<td style="text-align: left;"><code>AnomalousBlob</code> — binary content</td>
+</tr>
+<tr>
+<td style="text-align: left;">Any window entropy &gt; 7.0 bits/byte</td>
+<td style="text-align: left;"><code>AnomalousBlob</code> — compressed/encrypted payload</td>
+</tr>
+<tr>
+<td style="text-align: left;">IaC extension (<code>.nix</code>, <code>.lock</code>, <code>.json</code>, <code>.toml</code>, etc.)</td>
+<td style="text-align: left;">Bypass — no entropy check</td>
+</tr>
+<tr>
+<td style="text-align: left;">Otherwise</td>
+<td style="text-align: left;"><code>ProbableCode</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="penalty_1">Penalty</h3>
+<p><code>AnomalousBlob</code> detection contributes <strong>×50 points</strong> via <code>antipatterns_found</code>. The
+<code>antipattern_details</code> field carries the description verbatim in all bounce output modes.</p>
+<hr />
 <h2 id="output-format">Output Format</h2>
 <p>Antipattern details are included verbatim in all bounce output modes:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--patch<span class="w"> </span>pr.patch<span class="w"> </span>--format<span class="w"> </span>json
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--patch<span class="w"> </span>pr.patch<span class="w"> </span>--format<span class="w"> </span>json
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;schema_version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;6.9.0&quot;</span><span class="p">,</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&quot;slop_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">&quot;antipatterns_found&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">&quot;antipattern_details&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="s2">&quot;Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly&quot;</span><span class="p">,</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="s2">&quot;Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly&quot;</span><span class="p">,</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="s2">&quot;Hallucinated import: &#39;otel_context&#39; imported inside function but never used&quot;</span>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&quot;schema_version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;6.9.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">&quot;slop_score&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">&quot;antipatterns_found&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">&quot;antipattern_details&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="s2">&quot;Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="s2">&quot;Vacuous unsafe block: contains no raw pointer dereferences, FFI calls, or inline assembly&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="s2">&quot;Hallucinated import: &#39;otel_context&#39; imported inside function but never used&quot;</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="p">}</span>
 </code></pre></div>
 <p>Text output (<code>--format text</code>) lists each violation in a formatted table alongside the score breakdown.</p>
 <hr />
 <blockquote>
 <p><strong>See what the Slop Hunter catches in your PRs.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span>--base<span class="w"> </span>main<span class="w"> </span>--head<span class="w"> </span>HEAD
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--repo<span class="w"> </span>.<span class="w"> </span>--base<span class="w"> </span>main<span class="w"> </span>--head<span class="w"> </span>HEAD
 </code></pre></div>
 <p><a href="../case-studies/global-audit-2026/">Global Audit 2026 →</a> · <a href="../pricing/">Pricing</a></p>
 </blockquote>

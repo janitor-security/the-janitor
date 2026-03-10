@@ -342,6 +342,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Executive Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Highlights
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -891,6 +906,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Executive Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Highlights
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1212,6 +1242,37 @@ Every architectural decision has been made under the assumption that the input i
 adversarial. The result is a system with <strong>no shell execution surface</strong>, <strong>no mutable
 disk state during analysis</strong>, <strong>post-quantum signed audit trails</strong>, and a <strong>CI/CD
 pipeline that continuously audits itself</strong>.</p>
+<h3 id="security-highlights">Security Highlights</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Control</th>
+<th style="text-align: left;">Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>ML-DSA-65 Token Gate</strong></td>
+<td style="text-align: left;">Post-quantum (NIST FIPS 204) signed bearer token. Binary embeds only the 32-byte public verifying key — private key never on end-user machine. All destructive operations require a valid token.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Zero-Emission Local Scans</strong></td>
+<td style="text-align: left;"><code>janitor bounce</code> with <code>--patch</code> or <code>--base</code>/<code>--head</code> flags sends <strong>zero outbound traffic</strong> to the target repository. No webhooks. No telemetry to the scanned repo. Source code is memory-mapped locally and never transmitted.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Agnostic IaC Shield</strong></td>
+<td style="text-align: left;"><code>ByteLatticeAnalyzer</code> detects binary blobs and encrypted payloads in patches without requiring a grammar. IaC files (<code>.nix</code>, <code>.lock</code>, <code>.json</code>, <code>.toml</code>) bypass entropy analysis — eliminating lockfile false positives while maintaining full coverage of injected binary content.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Universal Bot Shield</strong></td>
+<td style="text-align: left;"><code>is_automation_account()</code> 4-layer bot classification — bot PRs receive full structural analysis, correctly attributed for reporting. No code is exempt from the engine.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Physarum Backpressure</strong></td>
+<td style="text-align: left;"><code>SystemHeart::beat()</code> enforces an 8 GB RAM ceiling across all analysis operations. Requests held (not dropped) when RAM &gt; 90% — prevents OOM termination without manual capacity planning.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="1-zero-copy-architecture-ram-only-ast-pipeline">1. Zero-Copy Architecture: RAM-Only AST Pipeline</h2>
 <h3 id="threat-modelled">Threat Modelled</h3>
