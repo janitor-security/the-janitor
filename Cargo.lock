@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -50,11 +50,15 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
+ "tree-sitter-lua",
  "tree-sitter-nix",
  "tree-sitter-objc",
+ "tree-sitter-php",
  "tree-sitter-python",
+ "tree-sitter-ruby",
  "tree-sitter-rust",
  "tree-sitter-scala",
+ "tree-sitter-swift",
  "tree-sitter-typescript",
  "ureq",
  "walkdir",
@@ -330,7 +334,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -365,7 +369,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -624,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -869,7 +873,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -890,10 +894,14 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
+ "tree-sitter-lua",
  "tree-sitter-objc",
+ "tree-sitter-php",
  "tree-sitter-python",
+ "tree-sitter-ruby",
  "tree-sitter-rust",
  "tree-sitter-scala",
+ "tree-sitter-swift",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
 ]
@@ -909,7 +917,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1366,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1425,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -1581,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1747,7 +1755,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -1761,11 +1769,15 @@ dependencies = [
  "tree-sitter-java",
  "tree-sitter-javascript",
  "tree-sitter-kotlin-ng",
+ "tree-sitter-lua",
  "tree-sitter-nix",
  "tree-sitter-objc",
+ "tree-sitter-php",
  "tree-sitter-python",
+ "tree-sitter-ruby",
  "tree-sitter-rust",
  "tree-sitter-scala",
+ "tree-sitter-swift",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
 ]
@@ -2006,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2280,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "junction",
@@ -2836,6 +2848,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
+name = "tree-sitter-lua"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8daaf5f4235188a58603c39760d5fa5d4b920d36a299c934adddae757f32a10c"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-nix"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2856,10 +2878,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-php"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d8c17c3ab69052c5eeaa7ff5cd972dd1bc25d1b97ee779fec391ad3b5df5592"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-python"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bf85fd39652e740bf60f46f4cda9492c3a9ad75880575bf14960f775cb74a1c"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-ruby"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be0484ea4ef6bb9c575b4fdabde7e31340a8d2dbc7d52b321ac83da703249f95"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -2880,6 +2922,16 @@ name = "tree-sitter-scala"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7516aeb3d1f40ede8e3045b163e86993b3434514dd06c34c0b75e782d9a0b251"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-swift"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ef216011c3e3df4fa864736f347cb8d509b1066cf0c8549fb1fd81ac9832e59"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -3014,7 +3066,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3410,7 +3462,7 @@ checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.12.4"
+version = "6.12.5"
 dependencies = [
  "anyhow",
  "common",

@@ -267,6 +267,48 @@ fn lang_for_ext(ext: &str) -> Option<LangConfig> {
                   body: (compound_statement) @fn.body)
             "#,
         }),
+        // Ruby: instance methods, singleton (class) methods. Body is body_statement.
+        "rb" => Some(LangConfig {
+            language: tree_sitter_ruby::LANGUAGE.into(),
+            query_src: r#"
+                (method
+                  name: (_) @fn.name
+                  body: (body_statement) @fn.body)
+                (singleton_method
+                  name: (_) @fn.name
+                  body: (body_statement) @fn.body)
+            "#,
+        }),
+        // PHP: top-level functions and class methods.
+        "php" => Some(LangConfig {
+            language: tree_sitter_php::LANGUAGE_PHP.into(),
+            query_src: r#"
+                (function_definition
+                  name: (name) @fn.name
+                  body: (compound_statement) @fn.body)
+                (method_declaration
+                  name: (name) @fn.name
+                  body: (compound_statement) @fn.body)
+            "#,
+        }),
+        // Swift: free functions and class/struct methods.
+        "swift" => Some(LangConfig {
+            language: tree_sitter_swift::LANGUAGE.into(),
+            query_src: r#"
+                (function_declaration
+                  name: (simple_identifier) @fn.name
+                  body: (function_body) @fn.body)
+            "#,
+        }),
+        // Lua: named function declarations (simple identifier form).
+        "lua" => Some(LangConfig {
+            language: tree_sitter_lua::LANGUAGE.into(),
+            query_src: r#"
+                (function_declaration
+                  name: (identifier) @fn.name
+                  body: (block) @fn.body)
+            "#,
+        }),
         _ => None,
     }
 }

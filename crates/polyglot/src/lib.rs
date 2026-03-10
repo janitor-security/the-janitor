@@ -7,7 +7,7 @@
 //! ## Supported Languages
 //! Python, Rust, TypeScript, TSX, JavaScript, JSX, C++, C, Java, C#, Go,
 //! GLSL (vertex/fragment shaders), Objective-C/C++, YAML, Bash, Scala,
-//! HCL/Terraform, Nix, GDScript, Kotlin.
+//! Ruby, PHP, Swift, Lua, HCL/Terraform, Nix, GDScript, Kotlin.
 //!
 //! ## Usage
 //! ```ignore
@@ -22,6 +22,8 @@ use tree_sitter::Language;
 // ---------------------------------------------------------------------------
 // Module-level OnceLock statics — one per supported grammar.
 // Must be module-level: Rust does not permit `static` items inside `impl` blocks.
+// Empty OnceLock<Language> costs one pointer-sized word (8 bytes on 64-bit) until
+// first use; the Language value itself is a thin wrapper around a raw pointer.
 // ---------------------------------------------------------------------------
 
 static PYTHON: OnceLock<Language> = OnceLock::new();
@@ -39,6 +41,10 @@ static OBJC: OnceLock<Language> = OnceLock::new();
 static YAML: OnceLock<Language> = OnceLock::new();
 static BASH: OnceLock<Language> = OnceLock::new();
 static SCALA: OnceLock<Language> = OnceLock::new();
+static RUBY: OnceLock<Language> = OnceLock::new();
+static PHP: OnceLock<Language> = OnceLock::new();
+static SWIFT: OnceLock<Language> = OnceLock::new();
+static LUA: OnceLock<Language> = OnceLock::new();
 static HCL: OnceLock<Language> = OnceLock::new();
 static NIX: OnceLock<Language> = OnceLock::new();
 static GDSCRIPT: OnceLock<Language> = OnceLock::new();
@@ -88,6 +94,10 @@ impl LazyGrammarRegistry {
                 Some(BASH.get_or_init(|| tree_sitter_bash::LANGUAGE.into()))
             }
             "scala" => Some(SCALA.get_or_init(|| tree_sitter_scala::LANGUAGE.into())),
+            "rb" => Some(RUBY.get_or_init(|| tree_sitter_ruby::LANGUAGE.into())),
+            "php" => Some(PHP.get_or_init(|| tree_sitter_php::LANGUAGE_PHP.into())),
+            "swift" => Some(SWIFT.get_or_init(|| tree_sitter_swift::LANGUAGE.into())),
+            "lua" => Some(LUA.get_or_init(|| tree_sitter_lua::LANGUAGE.into())),
             "tf" | "hcl" => Some(HCL.get_or_init(|| tree_sitter_hcl::LANGUAGE.into())),
             "nix" => Some(NIX.get_or_init(|| tree_sitter_nix::LANGUAGE.into())),
             "gd" => Some(GDSCRIPT.get_or_init(|| tree_sitter_gdscript::LANGUAGE.into())),
@@ -140,8 +150,8 @@ mod tests {
         let supported = [
             "py", "rs", "ts", "tsx", "js", "jsx", "cpp", "cxx", "cc", "h", "hpp", "c", "java",
             "cs", "go", "glsl", "vert", "frag", "m", "mm", "yaml", "yml", "sh", "bash", "cmd",
-            "zsh",   // New grammars
-            "scala", // Gauntlet grammars
+            "zsh", "scala", // Tier-1 mobile / legacy enterprise
+            "rb", "php", "swift", "lua", // Gauntlet grammars
             "tf", "hcl", "nix", "gd", "kt", "kts",
         ];
         for ext in supported {

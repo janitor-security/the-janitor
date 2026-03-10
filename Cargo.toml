@@ -3,7 +3,7 @@ members = ["crates/*", "tools/wisdom-bake", "tools/mint-token", "tools/parallel-
 resolver = "2"
 
 [workspace.package]
-version = "6.12.4"
+version = "6.12.5"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
@@ -41,6 +41,11 @@ tree-sitter-objc = "3.0.2"
 tree-sitter-yaml = "0.7.2"
 tree-sitter-bash = "0.23"
 tree-sitter-scala = "0.24"
+tree-sitter-ruby = "0.23"
+tree-sitter-php = "0.24"
+tree-sitter-swift = "0.7"
+tree-sitter-lua = "0.5"
+# tree-sitter-dockerfile = "0.2" — REJECTED: exports old language() fn API, incompatible with ts 0.26
 tree-sitter-hcl = "1.1.0"
 tree-sitter-nix = "0.3.0"
 tree-sitter-gdscript = "6.1.0"

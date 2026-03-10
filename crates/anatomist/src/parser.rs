@@ -63,6 +63,14 @@ static NIX_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 static SCALA_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 /// Static cache for the Bash entity extraction query.
 static BASH_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+/// Static cache for the Ruby entity extraction query.
+static RUBY_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+/// Static cache for the PHP entity extraction query.
+static PHP_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+/// Static cache for the Swift entity extraction query.
+static SWIFT_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
+/// Static cache for the Lua entity extraction query.
+static LUA_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();
 
 /// S-expression for JS / JSX grammars.
 const JS_ENTITY_S_EXPR: &str = r#"
@@ -394,6 +402,97 @@ const BASH_ENTITY_S_EXPR: &str = r#"
 const BASH_PATTERNS: &[(&str, &str, EntityType)] =
     &[("fn.def", "fn.name", EntityType::FunctionDefinition)];
 
+/// S-expression for Ruby grammar entity extraction.
+///
+/// Captures instance methods, singleton (class-level) methods, class bodies,
+/// and module bodies. The `name` field is `(_)` because `_method_name` is an
+/// abstract supertype covering `identifier`, `constant`, `operator`, etc.
+const RUBY_ENTITY_S_EXPR: &str = r#"
+    (method
+      name: (_) @fn.name) @fn.def
+
+    (singleton_method
+      name: (_) @fn.name) @fn.def
+
+    (class
+      name: (_) @class.name) @class.def
+
+    (module
+      name: (_) @module.name) @module.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Ruby grammar.
+///
+/// MUST mirror the S-expression pattern order exactly (one entry per pattern):
+///   0 → method, 1 → singleton_method, 2 → class, 3 → module
+const RUBY_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // 0: method
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // 1: singleton_method
+    ("class.def", "class.name", EntityType::ClassDefinition), // 2: class
+    ("module.def", "module.name", EntityType::ClassDefinition), // 3: module
+];
+
+/// S-expression for PHP grammar entity extraction.
+///
+/// Captures top-level function definitions, class method declarations, and class
+/// declarations. Uses `name: (name)` — PHP's identifier node kind is `name`.
+const PHP_ENTITY_S_EXPR: &str = r#"
+    (function_definition
+      name: (name) @fn.name) @fn.def
+
+    (method_declaration
+      name: (name) @fn.name) @fn.def
+
+    (class_declaration
+      name: (name) @class.name) @class.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for PHP grammar.
+///
+/// MUST mirror the S-expression pattern order exactly (one entry per pattern):
+///   0 → function_definition, 1 → method_declaration, 2 → class_declaration
+const PHP_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // 0: function_definition
+    ("fn.def", "fn.name", EntityType::FunctionDefinition), // 1: method_declaration
+    ("class.def", "class.name", EntityType::ClassDefinition), // 2: class_declaration
+];
+
+/// S-expression for Swift grammar entity extraction.
+///
+/// Captures free functions (simple_identifier name) and class/struct/protocol
+/// declarations (type_identifier name). Sourced from tree-sitter-swift tags.scm.
+const SWIFT_ENTITY_S_EXPR: &str = r#"
+    (function_declaration
+      name: (simple_identifier) @fn.name) @fn.def
+
+    (class_declaration
+      name: (type_identifier) @class.name) @class.def
+
+    (protocol_declaration
+      name: (type_identifier) @protocol.name) @protocol.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Swift grammar.
+const SWIFT_PATTERNS: &[(&str, &str, EntityType)] = &[
+    ("fn.def", "fn.name", EntityType::FunctionDefinition),
+    ("class.def", "class.name", EntityType::ClassDefinition),
+    ("protocol.def", "protocol.name", EntityType::ClassDefinition),
+];
+
+/// S-expression for Lua grammar entity extraction.
+///
+/// Captures named function declarations (simple `identifier` form).
+/// Module-qualified (`dot_index_expression`) and method (`method_index_expression`)
+/// forms are captured via a separate alternative in the name field.
+const LUA_ENTITY_S_EXPR: &str = r#"
+    (function_declaration
+      name: (identifier) @fn.name) @fn.def
+"#;
+
+/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Lua grammar.
+const LUA_PATTERNS: &[(&str, &str, EntityType)] =
+    &[("fn.def", "fn.name", EntityType::FunctionDefinition)];
+
 fn get_c_query() -> Result<&'static Query, AnatomistError> {
     C_QUERY
         .get_or_init(|| {
@@ -477,6 +576,46 @@ fn get_bash_query() -> Result<&'static Query, AnatomistError> {
     BASH_QUERY
         .get_or_init(|| {
             Query::new(&tree_sitter_bash::LANGUAGE.into(), BASH_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
+}
+
+fn get_ruby_query() -> Result<&'static Query, AnatomistError> {
+    RUBY_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_ruby::LANGUAGE.into(), RUBY_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
+}
+
+fn get_php_query() -> Result<&'static Query, AnatomistError> {
+    PHP_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_php::LANGUAGE_PHP.into(), PHP_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
+}
+
+fn get_swift_query() -> Result<&'static Query, AnatomistError> {
+    SWIFT_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_swift::LANGUAGE.into(), SWIFT_ENTITY_S_EXPR)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| AnatomistError::ParseFailure(e.clone()))
+}
+
+fn get_lua_query() -> Result<&'static Query, AnatomistError> {
+    LUA_QUERY
+        .get_or_init(|| {
+            Query::new(&tree_sitter_lua::LANGUAGE.into(), LUA_ENTITY_S_EXPR)
                 .map_err(|e| e.to_string())
         })
         .as_ref()
@@ -664,6 +803,14 @@ impl ParserHost {
             "scala" => Self::extract_scala_entities(source, &normalized_path),
             // Bash / shell: function_definition extraction.
             "sh" | "bash" | "cmd" | "zsh" => Self::extract_bash_entities(source, &normalized_path),
+            // Ruby: method, singleton_method, class, module.
+            "rb" => Self::extract_ruby_entities(source, &normalized_path),
+            // PHP: function_definition, method_declaration, class_declaration.
+            "php" => Self::extract_php_entities(source, &normalized_path),
+            // Swift: function_declaration, class_declaration, protocol_declaration.
+            "swift" => Self::extract_swift_entities(source, &normalized_path),
+            // Lua: function_declaration (simple identifier form).
+            "lua" => Self::extract_lua_entities(source, &normalized_path),
             // Polyglot-registered grammars without a dedicated entity extractor.
             // Parsing happens locally (grammar is in the registry); we return an
             // empty entity list rather than falling through to the Induction Bridge
@@ -932,6 +1079,79 @@ impl ParserHost {
             get_bash_query()?,
             file_path,
             BASH_PATTERNS,
+        )
+    }
+
+    /// Extracts `method`, `singleton_method`, `class`, and `module` entities from a Ruby
+    /// source buffer.
+    ///
+    /// `name` field is matched with `(_)` because `_method_name` is an abstract supertype.
+    /// `protected_by` is `None` for all returned entities.
+    pub fn extract_ruby_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_ruby::LANGUAGE.into(),
+            get_ruby_query()?,
+            file_path,
+            RUBY_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_definition`, `method_declaration`, and `class_declaration` entities
+    /// from a PHP source buffer.
+    ///
+    /// Uses `LANGUAGE_PHP` (the full PHP grammar with HTML context) from `tree-sitter-php`.
+    /// `protected_by` is `None` for all returned entities.
+    pub fn extract_php_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_php::LANGUAGE_PHP.into(),
+            get_php_query()?,
+            file_path,
+            PHP_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_declaration`, `class_declaration`, and `protocol_declaration` entities
+    /// from a Swift source buffer.
+    ///
+    /// Uses `simple_identifier` for function names and `type_identifier` for class/protocol names
+    /// per the tree-sitter-swift grammar.
+    /// `protected_by` is `None` for all returned entities.
+    pub fn extract_swift_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_swift::LANGUAGE.into(),
+            get_swift_query()?,
+            file_path,
+            SWIFT_PATTERNS,
+        )
+    }
+
+    /// Extracts `function_declaration` entities from a Lua source buffer.
+    ///
+    /// Captures simple-identifier named functions only. Module-qualified (`M.fn`)
+    /// and method (`M:fn`) forms are not captured at this time.
+    /// `protected_by` is `None` for all returned entities.
+    pub fn extract_lua_entities(
+        source: &[u8],
+        file_path: &str,
+    ) -> Result<Vec<Entity>, AnatomistError> {
+        extract_named_entities(
+            source,
+            tree_sitter_lua::LANGUAGE.into(),
+            get_lua_query()?,
+            file_path,
+            LUA_PATTERNS,
         )
     }
 
@@ -1766,5 +1986,147 @@ deploy() {
             entities.is_empty(),
             "script with no functions must yield empty entity list"
         );
+    }
+
+    #[test]
+    fn test_ruby_entity_extraction() {
+        let source = b"
+class UserService
+  def initialize(repo)
+    @repo = repo
+  end
+
+  def find_user(id)
+    @repo.find(id)
+  end
+end
+
+module Helpers
+  def self.format(val)
+    val.to_s
+  end
+end
+";
+        let entities = ParserHost::extract_ruby_entities(source, "app/user_service.rb").unwrap();
+        assert!(
+            !entities.is_empty(),
+            "Ruby entities must be extracted; got 0"
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(
+            names.contains(&"UserService"),
+            "expected class 'UserService'"
+        );
+        assert!(
+            names.contains(&"initialize"),
+            "expected method 'initialize'"
+        );
+        assert!(names.contains(&"find_user"), "expected method 'find_user'");
+        assert!(names.contains(&"Helpers"), "expected module 'Helpers'");
+        for e in &entities {
+            assert_eq!(e.file_path, "app/user_service.rb");
+            assert!(e.end_byte > e.start_byte);
+        }
+    }
+
+    #[test]
+    fn test_php_entity_extraction() {
+        let source = b"<?php
+class OrderProcessor {
+    public function process($order) {
+        return $order->execute();
+    }
+}
+
+function validate_input($data) {
+    return !empty($data);
+}
+";
+        let entities = ParserHost::extract_php_entities(source, "src/OrderProcessor.php").unwrap();
+        assert!(
+            !entities.is_empty(),
+            "PHP entities must be extracted; got 0"
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(
+            names.contains(&"OrderProcessor"),
+            "expected class 'OrderProcessor'"
+        );
+        assert!(names.contains(&"process"), "expected method 'process'");
+        assert!(
+            names.contains(&"validate_input"),
+            "expected function 'validate_input'"
+        );
+        for e in &entities {
+            assert_eq!(e.file_path, "src/OrderProcessor.php");
+            assert!(e.end_byte > e.start_byte);
+        }
+    }
+
+    #[test]
+    fn test_swift_entity_extraction() {
+        let source = b"
+class NetworkClient {
+    func fetch(url: URL) -> Data? {
+        return nil
+    }
+}
+
+protocol Serializable {
+    func serialize() -> String
+}
+
+func buildRequest(path: String) -> URLRequest {
+    URLRequest(url: URL(string: path)!)
+}
+";
+        let entities =
+            ParserHost::extract_swift_entities(source, "Sources/NetworkClient.swift").unwrap();
+        assert!(
+            !entities.is_empty(),
+            "Swift entities must be extracted; got 0"
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(
+            names.contains(&"NetworkClient"),
+            "expected class 'NetworkClient'"
+        );
+        assert!(
+            names.contains(&"Serializable"),
+            "expected protocol 'Serializable'"
+        );
+        assert!(
+            names.contains(&"buildRequest"),
+            "expected function 'buildRequest'"
+        );
+        for e in &entities {
+            assert_eq!(e.file_path, "Sources/NetworkClient.swift");
+            assert!(e.end_byte > e.start_byte);
+        }
+    }
+
+    #[test]
+    fn test_lua_entity_extraction() {
+        let source = b"
+function greet(name)
+    print('Hello, ' .. name)
+end
+
+function add(a, b)
+    return a + b
+end
+";
+        let entities = ParserHost::extract_lua_entities(source, "scripts/utils.lua").unwrap();
+        assert!(
+            !entities.is_empty(),
+            "Lua entities must be extracted; got 0"
+        );
+        let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"greet"), "expected function 'greet'");
+        assert!(names.contains(&"add"), "expected function 'add'");
+        for e in &entities {
+            assert_eq!(e.file_path, "scripts/utils.lua");
+            assert!(e.end_byte > e.start_byte);
+        }
     }
 }
