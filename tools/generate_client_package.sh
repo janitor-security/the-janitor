@@ -94,6 +94,7 @@ info "PDF output : $PDF_OUT"
 echo ""
 
 # ── 1. Clone if absent ────────────────────────────────────────────────────────
+DID_CLONE=false
 if [[ ! -d "$REPO_DIR" ]]; then
     step "Cloning https://github.com/${REPO_SLUG} --depth 1 → $REPO_DIR ..."
     if ! git clone --depth 1 \
@@ -103,6 +104,7 @@ if [[ ! -d "$REPO_DIR" ]]; then
     fi
     CLONE_SIZE=$(du -sh "$REPO_DIR" 2>/dev/null | cut -f1 || echo "?")
     info "Clone complete (${CLONE_SIZE} on disk)."
+    DID_CLONE=true
 else
     info "Local clone found: $REPO_DIR (skipping clone)"
 fi
@@ -153,7 +155,7 @@ if [[ ! -f "$CACHE_FILE" ]]; then
         --repo  "$REPO_SLUG" \
         --state all \
         --limit "$PR_LIMIT" \
-        --json  number,author,body,state \
+        --json  number,author,body,state,mergeable \
         > "$CACHE_FILE"
     CACHED=$(jq 'length' "$CACHE_FILE")
     info "Cached $CACHED PRs → $CACHE_FILE"
@@ -237,22 +239,26 @@ fi
 
 # ── 5. Per-PR bounce loop ─────────────────────────────────────────────────────
 PROCESSED=0; SKIPPED=0; ERRORS=0
-UNLINKED_COUNT=0; ANTI_COUNT=0; ZOMBIE_COUNT=0; ACTIONABLE_COUNT=0
-HIGH_SCORE=0; HIGH_PR=0
 
 INDEX=0
 while IFS= read -r PR; do
     NUMBER=$(echo "$PR" | jq -r '.number')
     AUTHOR=$(echo "$PR" | jq -r '.author.login // "unknown"')
-    BODY=$(echo   "$PR" | jq -r '.body // ""' | head -c "$BODY_MAX_BYTES" | tr -d '\000')
+    BODY=$(echo      "$PR" | jq -r '.body // ""' | head -c "$BODY_MAX_BYTES" | tr -d '\000')
     # GitHub state values: OPEN, MERGED, CLOSED — normalise to lowercase for CLI.
-    STATE=$(echo  "$PR" | jq -r '.state // "OPEN"' | tr '[:upper:]' '[:lower:]')
+    STATE=$(echo     "$PR" | jq -r '.state // "OPEN"' | tr '[:upper:]' '[:lower:]')
+    MERGEABLE=$(echo "$PR" | jq -r '.mergeable // ""')
 
     INDEX=$((INDEX + 1))
 
     # Skip PRs already in progress file.
     if [[ -n "${DONE_PRS[$NUMBER]-}" ]]; then
         continue
+    fi
+
+    # Skip CONFLICTING PRs — their diffs are rebasing artifacts, not signal.
+    if [[ "$MERGEABLE" == "CONFLICTING" ]]; then
+        SKIPPED=$((SKIPPED + 1)); continue
     fi
 
     printf "  [%4d/%d] #%-5s %-20s  " "$INDEX" "$TOTAL" "$NUMBER" "($AUTHOR)"
@@ -262,7 +268,7 @@ while IFS= read -r PR; do
     BOUNCE_STDERR=$(mktemp /tmp/pkg_stderr_XXXXXX.txt)
 
     if ! gh pr diff "$NUMBER" --repo "$REPO_SLUG" 2>/dev/null \
-        | awk '/^diff --git/ { skip = ($3 ~ /^a\/thirdparty\// || $3 ~ /^a\/third_party\// || $3 ~ /^a\/vendor\// || $3 ~ /^a\/tests\// || $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff|bin|a|so|dll|exe|zip|tar|gz|bz2)$/) } !skip { print }' \
+        | awk '/^diff --git/ { skip = ($3 ~ /^a\/thirdparty\// || $3 ~ /^a\/third_party\// || $3 ~ /^a\/vendor\// || $3 ~ /^a\/tests\// || $3 ~ /\.(png|jpg|jpeg|svg|gif|ico|webp|ttf|otf|woff|woff2|bin|a|so|dll|exe|zip|tar|gz|bz2|xz)$/) } !skip { print }' \
         > "$PATCH_FILE"; then
         echo "[SKIP: diff fetch failed]"
         rm -f "$PATCH_FILE" "$BOUNCE_STDERR"; SKIPPED=$((SKIPPED + 1)); continue
@@ -308,23 +314,10 @@ while IFS= read -r PR; do
     rm -f "$BOUNCE_STDERR"
 
     SCORE=$(   echo "$RESULT" | jq -r '.slop_score           // 0')
-    SCORE_INT=${SCORE%.*}
     ANTI=$(    echo "$RESULT" | jq -r '.antipatterns_found   // 0')
     UNLINK=$(  echo "$RESULT" | jq -r '.unlinked_pr          // 0')
     ZOMBIES=$( echo "$RESULT" | jq -r '.zombie_symbols_added // 0')
     HALL=$(    echo "$RESULT" | jq -r '.hallucinated_security_fix // 0')
-
-    [[ "$UNLINK"  == "1" ]] && UNLINKED_COUNT=$((UNLINKED_COUNT + 1))
-    [[ "$ANTI"    -gt 0 ]] 2>/dev/null && ANTI_COUNT=$((ANTI_COUNT + ANTI))
-    [[ "$ZOMBIES" -gt 0 ]] 2>/dev/null && ZOMBIE_COUNT=$((ZOMBIE_COUNT + ZOMBIES))
-
-    if [[ "$SCORE_INT" -ge 100 ]] || [[ "$ZOMBIES" -gt 0 ]] || [[ "$HALL" -gt 0 ]]; then
-        ACTIONABLE_COUNT=$((ACTIONABLE_COUNT + 1))
-    fi
-
-    if [[ "$SCORE_INT" -gt "$HIGH_SCORE" ]] 2>/dev/null; then
-        HIGH_SCORE=$SCORE_INT; HIGH_PR=$NUMBER
-    fi
 
     # Compact output — flags only when non-zero.
     FLAGS=""
@@ -345,21 +338,14 @@ while IFS= read -r PR; do
 done < <(jq -c '.[]' "$CACHE_FILE")
 
 # ── Summary ───────────────────────────────────────────────────────────────────
-HOURS_SAVED=$(awk "BEGIN { printf \"%.1f\", $ACTIONABLE_COUNT * 12 / 60 }")
-MONEY_SAVED=$(awk "BEGIN { printf \"%.0f\", $ACTIONABLE_COUNT * 12 / 60 * 100 }")
-
+# Counts only — ROI/actionable metrics come from `janitor report` which is the
+# authoritative source.  No business logic in this script.
 echo ""
 echo -e "${GRN}══════════════════════════════════════════════════${NC}"
 echo   "  Bounce complete — $REPO_SLUG"
-echo   "  PRs processed      : $PROCESSED / $TOTAL"
-echo   "  PRs skipped        : $SKIPPED"
-echo   "  Errors             : $ERRORS"
-echo   "  Actionable         : $ACTIONABLE_COUNT"
-echo   "  Unlinked PRs       : $UNLINKED_COUNT"
-echo   "  Antipatterns       : $ANTI_COUNT"
-echo   "  Zombie symbols     : $ZOMBIE_COUNT"
-[[ "$HIGH_PR" -gt 0 ]] && echo "  Highest slop score : $HIGH_SCORE  (PR #$HIGH_PR)"
-echo   "  Hours reclaimed    : ${HOURS_SAVED}h  (\$${MONEY_SAVED})"
+echo   "  PRs processed : $PROCESSED / $TOTAL"
+echo   "  PRs skipped   : $SKIPPED (conflict/empty/timeout)"
+echo   "  Errors        : $ERRORS"
 echo -e "${GRN}══════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -427,6 +413,13 @@ else
 fi
 echo -e "${GRN}══════════════════════════════════════════════════${NC}"
 echo ""
-echo "  To reset and re-run from scratch:"
-echo "    rm $PROGRESS_FILE $CACHE_FILE"
-echo ""
+
+# ── 8. Cleanup cloned repo ────────────────────────────────────────────────────
+# If this script performed the clone, delete the working tree now that all
+# output files have been written.  Pre-existing clones are left untouched.
+if $DID_CLONE; then
+    step "Removing cloned repo: $REPO_DIR"
+    rm -rf "$REPO_DIR"
+    rm -f  "$PROGRESS_FILE" "$CACHE_FILE"
+    info "Cleanup complete. Output files retained at $OUTPUT_DIR"
+fi
