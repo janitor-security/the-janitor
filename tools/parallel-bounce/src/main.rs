@@ -79,8 +79,10 @@ struct AuthorLogin {
 
 #[derive(Debug, Deserialize, Default)]
 struct BounceJson {
+    /// Composite slop score.  Stored as `f64` in the bounce JSON; `u32` would
+    /// cause serde_json to reject the float literal and silently default to 0.
     #[serde(default)]
-    slop_score: u32,
+    slop_score: f64,
     #[serde(default)]
     unlinked_pr: u32,
     #[serde(default)]
