@@ -6,7 +6,7 @@
 
 # The Janitor
 
-**v6.12.6 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.**
+**v6.12.7 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.**
 
 ---
 

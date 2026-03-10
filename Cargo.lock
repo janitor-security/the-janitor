@@ -25,7 +25,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -334,7 +334,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -369,7 +369,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -873,7 +873,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -917,7 +917,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1374,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "base64",
@@ -1589,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1755,7 +1755,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "junction",
@@ -3066,7 +3066,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3462,7 +3462,7 @@ checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 
 [[package]]
 name = "wisdom-bake"
-version = "6.12.6"
+version = "6.12.7"
 dependencies = [
  "anyhow",
  "common",

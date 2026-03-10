@@ -2039,14 +2039,19 @@ fn cmd_bounce(
     let policy = JanitorPolicy::load(project_root);
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
+    // `registry_loaded` tracks whether the rkyv file was actually present on disk.
+    // Zombie dependency detection is gated on this flag: evaluating zombie deps against
+    // a diff-only blob set without a full-codebase registry produces false positives when
+    // a PR bumps a manifest but does not touch the source files that consume the dependency.
     let rkyv_path = registry_override
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| project_root.join(".janitor").join("symbols.rkyv"));
-    let registry: SymbolRegistry = if rkyv_path.exists() {
+    let (registry, registry_loaded): (SymbolRegistry, bool) = if rkyv_path.exists() {
         let mapped = MappedRegistry::open(&rkyv_path)
             .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
-        rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
-            .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?
+        let reg = rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
+            .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
+        (reg, true)
     } else {
         if registry_override.is_some() {
             eprintln!(
@@ -2060,7 +2065,7 @@ fn cmd_bounce(
                 project_root.display()
             );
         }
-        SymbolRegistry::new()
+        (SymbolRegistry::new(), false)
     };
 
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
@@ -2287,7 +2292,15 @@ fn cmd_bounce(
 
     // Persist to bounce_log.ndjson for `janitor report` aggregation.
     // PR-scoped zombie dep scan — O(PR-diff bytes), no full-tree WalkDir.
-    let zombie_deps = anatomist::manifest::find_zombie_deps_in_blobs(&bounce_blobs);
+    // Gated on `registry_loaded`: without a full-codebase SymbolRegistry the scanner
+    // only sees files in the diff. A PR that bumps a manifest without touching the
+    // source files consuming that dependency would hallucinate zombies. Skip the check
+    // rather than emit false positives.
+    let zombie_deps = if registry_loaded {
+        anatomist::manifest::find_zombie_deps_in_blobs(&bounce_blobs)
+    } else {
+        Vec::new()
+    };
     let janitor_dir = project_root.join(".janitor");
     let pr_state = pr_state_str
         .parse::<report::PrState>()

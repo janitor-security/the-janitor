@@ -6,28 +6,33 @@
 //! for a patched file's language.
 //!
 //! ## Algorithm
-//! 1. **Shannon entropy** — computed over 512-byte sliding windows (stride 256).
-//!    Code entropy typically falls in [2.0, 5.5]; compressed/encrypted data sits near 8.0.
-//!    `max_window_entropy` tracks the highest single-window value across the entire input.
-//! 2. **Bigram diagonal analysis** — builds a 256×256 byte-pair frequency matrix and
-//!    measures how many counts fall on the main diagonal (byte pairs `(x, x)`).
-//!    Human-written code has characteristic diagonal concentration patterns; random
-//!    bytes do not.
+//! 1. **Null-byte detection** — binary files and embedded binary blobs contain
+//!    null bytes; well-formed source code never does.
+//! 2. **Shannon entropy** — computed over 512-byte sliding windows (stride 256).
+//!    `max_window_entropy` tracks the highest single-window value across the entire
+//!    input.  Compressed or encrypted data has entropy approaching 8.0 bits/byte.
 //!
 //! ## Classification
 //! | Condition | Result |
 //! |-----------|--------|
-//! | Per-window entropy < 2.0 or > 5.5 | [`AnomalousBlob`] — degenerate byte distribution |
-//! | Per-window diagonal density ≤ 0.05 | [`AnomalousBlob`] — no code-like bigram structure |
-//! | `max_window_entropy` > 7.8 | [`AnomalousBlob`] — localized entropy spike; cloaked payload |
+//! | Byte array contains a null byte (`\0`) | [`AnomalousBlob`] — binary content |
+//! | Any per-window entropy > 7.0 | [`AnomalousBlob`] — compressed/encrypted payload |
 //! | Otherwise | [`ProbableCode`] |
 //!
+//! ## Design Rationale
+//! The original lower-bound entropy check (`< 2.0`) was removed because highly
+//! structured text — `.csproj` XML, repetitive `CODEOWNERS` lists, lockfile
+//! manifests — legitimately falls below 2.0 bits/byte and is definitively *not*
+//! anomalous.  Binary files and compressed payloads are characterised by *high*
+//! entropy and null bytes, not low entropy.
+//!
 //! ## Cloaked-Payload Detection
-//! A naive average-entropy check over the whole file can miss high-entropy payloads
-//! (encrypted blobs, shellcode, base64-encoded secrets) hidden inside large, mostly
-//! normal files — the low-entropy code dilutes the signal.  `max_window_entropy`
-//! measures the *worst* 512-byte window; a spike above 7.8 flags the file regardless
-//! of how benign the surrounding content is ("1Campaign"-style cloaking).
+//! A naive full-file entropy average can miss high-entropy payloads (encrypted
+//! blobs, shellcode, base64-decoded secrets) hidden inside large, mostly normal
+//! files — the low-entropy code dilutes the signal.  `max_window_entropy`
+//! measures the *worst* 512-byte window; a spike above 7.0 flags the file
+//! regardless of how benign the surrounding content is ("1Campaign"-style
+//! cloaking).
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -36,10 +41,10 @@
 /// Byte-content classification produced by [`ByteLatticeAnalyzer`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextClass {
-    /// Entropy and bigram structure are consistent with human-written source code.
+    /// No null bytes and entropy consistent with human-written source code.
     ProbableCode,
-    /// High entropy or degenerate bigram structure — likely binary, compressed,
-    /// or encrypted data embedded in a code patch.
+    /// Null bytes present, or high-entropy window detected — likely binary,
+    /// compressed, or encrypted data embedded in a code patch.
     AnomalousBlob,
 }
 
@@ -55,10 +60,19 @@ impl ByteLatticeAnalyzer {
             return TextClass::ProbableCode;
         }
 
-        // Analyse in 512-byte sliding windows (stride 256).
-        // `max_window_entropy` accumulates the highest per-window Shannon
-        // entropy seen across the entire input — used for cloaked-payload
-        // spike detection after the per-window structural checks pass.
+        // Null bytes are the defining characteristic of binary content.
+        // Well-formed source code — regardless of language — never contains
+        // literal null bytes in its text representation.
+        if bytes.contains(&0u8) {
+            return TextClass::AnomalousBlob;
+        }
+
+        // Windowed entropy analysis (512-byte windows, stride 256).
+        // Track the highest per-window Shannon entropy across the entire input.
+        // A spike above 7.0 bits/byte indicates compressed, encrypted, or
+        // otherwise non-text data regardless of the surrounding content.
+        // Only the upper bound is enforced — structured text (XML, CODEOWNERS,
+        // lockfiles) legitimately has low entropy and must not be penalised.
         let window_size = 512;
         let stride = 256;
         let mut offset = 0;
@@ -69,25 +83,8 @@ impl ByteLatticeAnalyzer {
             let window = &bytes[offset..end];
 
             let entropy = compute_entropy(window);
-            // Track the highest single-window entropy seen across the whole input.
             if entropy > max_window_entropy {
                 max_window_entropy = entropy;
-            }
-
-            let (diagonal, total_bigrams) = compute_bigram_diagonal(window);
-
-            // Degenerate entropy: too low (constant bytes) or too high for code.
-            if !(2.0..=5.5).contains(&entropy) {
-                return TextClass::AnomalousBlob;
-            }
-            // Low diagonal density → no code-like bigram structure.
-            // Only meaningful for windows with enough bigrams (≥ 64); skip for
-            // short inputs where the statistic is too noisy to be reliable.
-            if total_bigrams >= 64 {
-                let diagonal_density = diagonal as f64 / total_bigrams as f64;
-                if diagonal_density <= 0.05 {
-                    return TextClass::AnomalousBlob;
-                }
             }
 
             if offset + stride >= bytes.len() {
@@ -96,12 +93,7 @@ impl ByteLatticeAnalyzer {
             offset += stride;
         }
 
-        // Cloaked-payload spike guard: a localized window with entropy > 7.8
-        // indicates encrypted, compressed, or otherwise cloaked binary data
-        // regardless of how benign the surrounding content appears.
-        // This is a named invariant separate from the per-window range check
-        // so that it survives future relaxation of the code-entropy bounds.
-        if max_window_entropy > 7.8 {
+        if max_window_entropy > 7.0 {
             return TextClass::AnomalousBlob;
         }
 
@@ -130,25 +122,6 @@ fn compute_entropy(window: &[u8]) -> f64 {
             -p * p.log2()
         })
         .sum()
-}
-
-/// Build a 256×256 bigram frequency matrix and return `(diagonal_count, total_bigrams)`.
-///
-/// The diagonal counts byte pairs `(x, x)` — consecutive identical bytes.
-/// Typical code (lots of repeated characters like spaces, `e`, `;`) has measurably
-/// higher diagonal concentration than random byte sequences.
-fn compute_bigram_diagonal(window: &[u8]) -> (u16, u16) {
-    if window.len() < 2 {
-        return (0, 0);
-    }
-    let mut diagonal: u16 = 0;
-    let total = (window.len() - 1) as u16;
-    for pair in window.windows(2) {
-        if pair[0] == pair[1] {
-            diagonal = diagonal.saturating_add(1);
-        }
-    }
-    (diagonal, total)
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +173,19 @@ mod tests {
         assert!(
             e < 0.01,
             "uniform bytes must have near-zero entropy, got {e}"
+        );
+    }
+
+    /// Structured text (XML, CODEOWNERS, lockfiles) has low Shannon entropy
+    /// and must not be flagged as anomalous — the lower-bound check was removed.
+    #[test]
+    fn test_low_entropy_structured_text_is_probable_code() {
+        // Simulate a repetitive CODEOWNERS file — entropy < 2.0 bits/byte.
+        let codeowners = b"* @team-platform\n".repeat(40);
+        assert_eq!(
+            ByteLatticeAnalyzer::classify(&codeowners),
+            TextClass::ProbableCode,
+            "Repetitive structured text must not be flagged as AnomalousBlob"
         );
     }
 

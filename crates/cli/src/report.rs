@@ -1108,7 +1108,7 @@ pub fn render_global_markdown(data: &GlobalReportData, _gauntlet_root: &str) -> 
     // ── Per-repo summary breakdown ─────────────────────────────────────────
     out.push_str("## Repository Breakdown\n\n");
     out.push_str(
-        "```{=latex}\n\\footnotesize\n\\setlength{\\tabcolsep}{4pt}\n\\renewcommand{\\arraystretch}{0.75}\n\\setcounter{LTchunksize}{100}\n```\n\n",
+        "```{=latex}\n\\small\n\\setlength{\\tabcolsep}{4pt}\n\\renewcommand{\\arraystretch}{1.0}\n\\setcounter{LTchunksize}{100}\n```\n\n",
     );
     out.push_str("| Repository | PRs | Total Slop | Antipatterns | Zombies | Worst PR |\n");
     out.push_str("|------------|-----|-----------|--------------|---------|----------|\n");
@@ -1158,7 +1158,7 @@ pub fn render_global_markdown(data: &GlobalReportData, _gauntlet_root: &str) -> 
 
         // Top 10 Sloppiest PRs table.
         out.push_str("### Top 10 Sloppiest PRs\n\n");
-        out.push_str("```{=latex}\n\\footnotesize\n\\renewcommand{\\arraystretch}{0.75}\n```\n\n");
+        out.push_str("```{=latex}\n\\small\n\\renewcommand{\\arraystretch}{1.2}\n```\n\n");
         if repo.top_sloppiest.is_empty() {
             out.push_str("*No flagged PRs in this repository.*\n\n");
         } else {
@@ -1180,7 +1180,7 @@ pub fn render_global_markdown(data: &GlobalReportData, _gauntlet_root: &str) -> 
 
         // Top 10 Cleanest Contributors table.
         out.push_str("### Top 10 Cleanest Contributors\n\n");
-        out.push_str("```{=latex}\n\\footnotesize\n\\renewcommand{\\arraystretch}{0.75}\n```\n\n");
+        out.push_str("```{=latex}\n\\small\n\\renewcommand{\\arraystretch}{1.2}\n```\n\n");
         if repo.top_clean_authors.is_empty() {
             out.push_str("*No clean (score = 0) human PRs in this repository.*\n\n");
         } else {
