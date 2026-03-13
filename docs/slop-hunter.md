@@ -205,6 +205,84 @@ The PR is blocked. The maintainer receives a clear explanation. The signal-to-no
 
 ---
 
+## The Universal Bot Shield
+
+Automated dependency bots (`dependabot`, `renovate`, `r-ryantm`, GitHub Apps) submit high volumes
+of lockfile and manifest PRs. Before v6.12.1, these PRs were analysed identically to human PRs —
+resulting in high antipattern noise from hallucinated security fix detections on yml-only patches.
+
+The Universal Bot Shield classifies author accounts across four layers before any bounce analysis:
+
+| Layer | Pattern | Example |
+|:------|:--------|:--------|
+| 1 | `app/` prefix — GitHub Apps API format | `app/dependabot`, `app/copilot-swe-agent` |
+| 2 | `[bot]` suffix — legacy naming | `renovate-bot`, `dependabot[bot]` |
+| 3 | `trusted_bot_authors` — global allowlist | Configured in `janitor.toml` |
+| 4 | `[forge].automation_accounts` — per-repo | `r-ryantm`, `app/nixpkgs-ci` |
+
+**Bot PRs still receive full structural analysis.** Dead symbols, logic clones, zombie deps,
+antipatterns — all signals are computed and reported. The Universal Bot Shield classifies the
+author for reporting purposes; it does not exempt bot code from review.
+
+### Why This Matters
+
+In the Global Audit 2026, `app/renovate` and `app/dependabot` each appeared in multiple Toxic PR
+top-3 lists — predominantly Hallucinated Security Fix detections on yaml-only patches. With the
+Universal Bot Shield in place, these are correctly attributed as bot behaviour and separated from
+human-authored structural slop in audit reports.
+
+### Configuration
+
+```toml
+# janitor.toml — per-repo automation account list
+[forge]
+automation_accounts = ["r-ryantm", "app/nixpkgs-ci", "myorg-bot"]
+```
+
+---
+
+## The Agnostic IaC Shield
+
+Not every patch can be parsed by a tree-sitter grammar. The `ByteLatticeAnalyzer`
+(`crates/forge/src/agnostic_shield.rs`) provides language-agnostic byte-level classification for
+any file type — no grammar required.
+
+### Detection Algorithm
+
+1. **Null-byte detection** — Binary files and embedded binary blobs contain null bytes (`\0`).
+   Well-formed source code never does. Any null byte → `AnomalousBlob`.
+
+2. **Windowed entropy analysis** — Shannon entropy computed over 512-byte windows (stride 256).
+   `max_window_entropy` tracks the highest single-window value across the entire input. Any window
+   exceeding **7.0 bits/byte** → `AnomalousBlob` (compressed, encrypted, or shellcode payload).
+
+3. **IaC bypass** — Files with extensions `.nix`, `.lock`, `.json`, `.toml`, `.yaml`, `.yml`,
+   `.csv` skip `ByteLatticeAnalyzer` entirely. These formats contain legitimate high-entropy
+   content (nix sha256 hashes, lockfile digests) that is definitively not anomalous binary content.
+
+### What It Catches
+
+- Encrypted blobs embedded in source patches ("1Campaign"-style cloaking)
+- Base64-decoded secrets injected into large, mostly normal files
+- Binary files disguised as source (null byte detection)
+- Shellcode hidden inside low-entropy surrounding code (windowed max entropy, not file average)
+
+### Classification
+
+| Condition | Result |
+|:----------|:-------|
+| Null byte present | `AnomalousBlob` — binary content |
+| Any window entropy > 7.0 bits/byte | `AnomalousBlob` — compressed/encrypted payload |
+| IaC extension (`.nix`, `.lock`, `.json`, `.toml`, etc.) | Bypass — no entropy check |
+| Otherwise | `ProbableCode` |
+
+### Penalty
+
+`AnomalousBlob` detection contributes **×50 points** via `antipatterns_found`. The
+`antipattern_details` field carries the description verbatim in all bounce output modes.
+
+---
+
 ## Output Format
 
 Antipattern details are included verbatim in all bounce output modes:

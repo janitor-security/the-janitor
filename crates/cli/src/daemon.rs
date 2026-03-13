@@ -383,6 +383,7 @@ pub mod unix {
                             state: crate::report::PrState::Open,
                             is_bot: false,
                             repo_slug: String::new(),
+                            suppressed_by_domain: score.suppressed_by_domain,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

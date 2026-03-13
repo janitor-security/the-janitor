@@ -14,6 +14,16 @@ adversarial. The result is a system with **no shell execution surface**, **no mu
 disk state during analysis**, **post-quantum signed audit trails**, and a **CI/CD
 pipeline that continuously audits itself**.
 
+### Security Highlights
+
+| Control | Implementation |
+|:--------|:--------------|
+| **ML-DSA-65 Token Gate** | Post-quantum (NIST FIPS 204) signed bearer token. Binary embeds only the 32-byte public verifying key — private key never on end-user machine. All destructive operations require a valid token. |
+| **Zero-Emission Local Scans** | `janitor bounce` with `--patch` or `--base`/`--head` flags sends **zero outbound traffic** to the target repository. No webhooks. No telemetry to the scanned repo. Source code is memory-mapped locally and never transmitted. |
+| **Agnostic IaC Shield** | `ByteLatticeAnalyzer` detects binary blobs and encrypted payloads in patches without requiring a grammar. IaC files (`.nix`, `.lock`, `.json`, `.toml`) bypass entropy analysis — eliminating lockfile false positives while maintaining full coverage of injected binary content. |
+| **Universal Bot Shield** | `is_automation_account()` 4-layer bot classification — bot PRs receive full structural analysis, correctly attributed for reporting. No code is exempt from the engine. |
+| **Physarum Backpressure** | `SystemHeart::beat()` enforces an 8 GB RAM ceiling across all analysis operations. Requests held (not dropped) when RAM > 90% — prevents OOM termination without manual capacity planning. |
+
 ---
 
 ## 1. Zero-Copy Architecture: RAM-Only AST Pipeline

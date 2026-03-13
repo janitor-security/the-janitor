@@ -88,6 +88,121 @@ const NON_CODE_EXTENSIONS: &[&str] = &[
     "xml", "", // extensionless files: LICENSE, OWNERS, CODEOWNERS, NOTICE, etc.
 ];
 
+// ---------------------------------------------------------------------------
+// Domain classification — Context-Aware Rule Matrix
+// ---------------------------------------------------------------------------
+
+/// Domain bitmask: first-party source — code authored in this repository.
+///
+/// Memory-safety and code-quality rules apply only to code you own.
+/// Files in `vendor/`, `thirdparty/`, `node_modules/`, and similar directories
+/// are classified [`DOMAIN_VENDORED`] and are excluded from these rules.
+pub const DOMAIN_FIRST_PARTY: u8 = 0b001;
+
+/// Domain bitmask: vendored third-party code.
+///
+/// Triggered by paths containing: `vendor/`, `thirdparty/`, `third_party/`,
+/// `node_modules/`, `external/`, `deps/`, `Pods/`, `Carthage/`.
+pub const DOMAIN_VENDORED: u8 = 0b010;
+
+/// Domain bitmask: test infrastructure.
+///
+/// Triggered by paths containing: `test/`, `tests/`, `spec/`, `specs/`,
+/// `_test.`, `_spec.`, `testdata/`, `fixtures/`, `__tests__/`.
+pub const DOMAIN_TEST: u8 = 0b100;
+
+/// Domain bitmask sentinel: all domains — rule applies regardless of file origin.
+///
+/// Supply-chain and infrastructure rules (wildcard CIDR, anomalous binary blobs,
+/// unverified security bumps) carry this mask so they fire on vendored and
+/// test files as well as first-party source.
+pub const DOMAIN_ALL: u8 = 0b111;
+
+/// Path-segment patterns that classify a file as vendored third-party code.
+const VENDORED_PATTERNS: &[&str] = &[
+    "/vendor/",
+    "/thirdparty/",
+    "/third_party/",
+    "/node_modules/",
+    "/external/",
+    "/deps/",
+    "/Pods/",
+    "/Carthage/",
+];
+
+/// Path-segment patterns that classify a file as test infrastructure.
+const TEST_PATTERNS: &[&str] = &[
+    "/test/",
+    "/tests/",
+    "/spec/",
+    "/specs/",
+    "_test.",
+    "_spec.",
+    "/testdata/",
+    "/fixtures/",
+    "/__tests__/",
+    ".test.",
+    ".spec.",
+];
+
+static VENDORED_AC: OnceLock<AhoCorasick> = OnceLock::new();
+static TEST_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn vendored_ac() -> &'static AhoCorasick {
+    VENDORED_AC.get_or_init(|| {
+        AhoCorasickBuilder::new()
+            .build(VENDORED_PATTERNS)
+            .expect("static vendored path patterns are valid")
+    })
+}
+
+fn test_ac() -> &'static AhoCorasick {
+    TEST_AC.get_or_init(|| {
+        AhoCorasickBuilder::new()
+            .build(TEST_PATTERNS)
+            .expect("static test path patterns are valid")
+    })
+}
+
+/// Routes a file path to its domain bitmask for S-expression rule masking.
+///
+/// | Path contains | Domain returned |
+/// |--------------|-----------------|
+/// | `vendor/`, `thirdparty/`, `node_modules/`, … | [`DOMAIN_VENDORED`] |
+/// | `tests/`, `_test.`, `spec/`, … | [`DOMAIN_TEST`] |
+/// | Everything else | [`DOMAIN_FIRST_PARTY`] |
+///
+/// Vendored patterns take priority over test patterns — `vendor/foo_test.go`
+/// is classified as [`DOMAIN_VENDORED`].
+pub struct DomainRouter;
+
+impl DomainRouter {
+    /// Classify a file path into its domain bitmask.
+    ///
+    /// `path` may be relative (as in a unified-diff `+++ b/<path>` header) or
+    /// absolute.  A leading `/` is prepended when absent so that patterns like
+    /// `"/vendor/"` match both `vendor/foo.rs` and `src/vendor/foo.rs`.
+    pub fn classify(path: &str) -> u8 {
+        let normalised;
+        let haystack: &str = if path.starts_with('/') {
+            path
+        } else {
+            normalised = format!("/{path}");
+            &normalised
+        };
+
+        if vendored_ac().is_match(haystack) {
+            return DOMAIN_VENDORED;
+        }
+        if test_ac().is_match(haystack) {
+            return DOMAIN_TEST;
+        }
+        DOMAIN_FIRST_PARTY
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 static SECURITY_AC: OnceLock<AhoCorasick> = OnceLock::new();
 
 fn security_ac() -> &'static AhoCorasick {
@@ -284,6 +399,7 @@ pub fn detect_hallucinated_fix(
             keyword,
             file_extensions.join(", ")
         ),
+        domain: DOMAIN_ALL,
     })
 }
 
@@ -1013,5 +1129,76 @@ diff --git a/src/lib.rs b/src/lib.rs
             b"// Compute the checksum of a byte slice.\nfn checksum(data: &[u8]) -> u32 { 0 }\n";
         let v = scanner().scan_source(src, "rs");
         assert!(v.is_empty(), "clean source must produce no violations");
+    }
+
+    // --- DomainRouter ---
+
+    #[test]
+    fn test_domain_router_first_party_default() {
+        assert_eq!(DomainRouter::classify("src/lib.rs"), DOMAIN_FIRST_PARTY);
+        assert_eq!(
+            DomainRouter::classify("core/engine.cpp"),
+            DOMAIN_FIRST_PARTY
+        );
+        assert_eq!(DomainRouter::classify("main.go"), DOMAIN_FIRST_PARTY);
+    }
+
+    #[test]
+    fn test_domain_router_vendored_paths() {
+        assert_eq!(DomainRouter::classify("vendor/foo/bar.rs"), DOMAIN_VENDORED);
+        assert_eq!(
+            DomainRouter::classify("third_party/openssl/ssl.c"),
+            DOMAIN_VENDORED
+        );
+        assert_eq!(
+            DomainRouter::classify("thirdparty/zlib/zlib.h"),
+            DOMAIN_VENDORED
+        );
+        assert_eq!(
+            DomainRouter::classify("node_modules/lodash/index.js"),
+            DOMAIN_VENDORED
+        );
+        assert_eq!(
+            DomainRouter::classify("external/abseil/base/base.h"),
+            DOMAIN_VENDORED
+        );
+        assert_eq!(
+            DomainRouter::classify("deps/openssl/src/lib.rs"),
+            DOMAIN_VENDORED
+        );
+    }
+
+    #[test]
+    fn test_domain_router_test_paths() {
+        assert_eq!(
+            DomainRouter::classify("tests/integration_test.rs"),
+            DOMAIN_TEST
+        );
+        assert_eq!(DomainRouter::classify("test/unit/foo_test.go"), DOMAIN_TEST);
+        assert_eq!(
+            DomainRouter::classify("spec/models/user_spec.rb"),
+            DOMAIN_TEST
+        );
+        assert_eq!(DomainRouter::classify("src/foo_test.go"), DOMAIN_TEST);
+        assert_eq!(DomainRouter::classify("src/bar_spec.rb"), DOMAIN_TEST);
+        assert_eq!(
+            DomainRouter::classify("__tests__/Button.test.js"),
+            DOMAIN_TEST
+        );
+    }
+
+    #[test]
+    fn test_domain_router_vendored_takes_priority_over_test() {
+        // A test file inside a vendor directory is classified as VENDORED.
+        assert_eq!(
+            DomainRouter::classify("vendor/somelib/tests/test_helper.rs"),
+            DOMAIN_VENDORED
+        );
+    }
+
+    #[test]
+    fn test_domain_router_vendors_directory_not_matched() {
+        // "vendors" (with 's') must not be classified as vendored — only "vendor/".
+        assert_eq!(DomainRouter::classify("vendors/foo.rs"), DOMAIN_FIRST_PARTY);
     }
 }

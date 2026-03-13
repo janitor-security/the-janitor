@@ -1,5 +1,13 @@
 [workspace]
-members = ["crates/*", "tools/wisdom-bake", "tools/mint-token", "tools/parallel-bounce", "tools/gauntlet-runner"]
+members = [
+    "crates/*",
+    "crates/experimental/advanced_threats",
+    "tools/wisdom-bake",
+    "tools/mint-token",
+    "tools/parallel-bounce",
+    "tools/gauntlet-runner",
+]
+exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
@@ -64,6 +72,9 @@ petgraph = "0.7"
 
 # String matching
 aho-corasick = "1.1"
+
+# Arena allocator (bump allocation for zero-global-alloc hot paths)
+bumpalo = { version = "3", features = ["collections"] }
 
 # JSON / hashing utilities
 serde_json = "1.0"

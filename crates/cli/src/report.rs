@@ -154,6 +154,17 @@ pub struct BounceLogEntry {
     /// variable.  Empty string when neither is available.
     #[serde(default)]
     pub repo_slug: String,
+    /// Number of antipattern findings suppressed by domain routing.
+    ///
+    /// Memory-safety rules (e.g. raw `new`, vacuous `unsafe`) are not applied to
+    /// vendored (`vendor/`, `node_modules/`) or test (`tests/`, `spec/`) files.
+    /// This field records how many findings were withheld — present in the report
+    /// as a "Domain Routing" context line so the operator knows the engine is
+    /// selective, not blind.
+    ///
+    /// Always `0` for log entries written before this field was introduced.
+    #[serde(default)]
+    pub suppressed_by_domain: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -521,6 +532,27 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             "> Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost. \
              Source: [Workslop research](https://builtin.com/articles/what-is-workslop).\n\n",
         );
+
+        // Domain Routing summary — shown when any findings were withheld.
+        let total_suppressed: u32 = data.entries.iter().map(|e| e.suppressed_by_domain).sum();
+        if total_suppressed > 0 {
+            out.push_str("### Domain Routing\n\n");
+            out.push_str(
+                "| Category | Findings |\n\
+                 |----------|----------|\n",
+            );
+            out.push_str(&format!(
+                "| **Core Regressions** (first-party code) | Counted above |\n\
+                 | **Vendored / Test** (suppressed by domain mask) | **{total_suppressed}** |\n"
+            ));
+            out.push('\n');
+            out.push_str(
+                "> Memory-safety rules (`new`/`delete`, vacuous `unsafe`, hallucinated imports, \
+                 etc.) are not applied to `vendor/`, `thirdparty/`, `node_modules/`, `tests/`, \
+                 or `spec/` paths. Supply-chain rules (Unverified Security Bump, AnomalousBlob, \
+                 wildcard CIDR) fire on all domains.\n\n",
+            );
+        }
     }
 
     // ── Top 10 Sloppiest Contributors ──────────────────────────────────────

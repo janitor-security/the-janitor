@@ -2325,6 +2325,7 @@ fn cmd_bounce(
             .map(|s| s.to_owned())
             .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
             .unwrap_or_default(),
+        suppressed_by_domain: score.suppressed_by_domain,
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
 

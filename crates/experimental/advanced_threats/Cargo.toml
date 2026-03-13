@@ -1,0 +1,17 @@
+[package]
+name = "advanced_threats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aho-corasick.workspace = true
+petgraph.workspace = true
+bumpalo.workspace = true
+tree-sitter.workspace = true
+anyhow.workspace = true
+fips204 = "0.4"
+
+[dev-dependencies]
+tree-sitter-javascript.workspace = true

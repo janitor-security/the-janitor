@@ -34,6 +34,8 @@ use std::sync::OnceLock;
 
 use tree_sitter::{Language, Node, Query, QueryCursor, StreamingIterator};
 
+use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -47,6 +49,13 @@ pub struct SlopFinding {
     pub end_byte: usize,
     /// Human-readable description of the antipattern.
     pub description: String,
+    /// Domain bitmask indicating which file origins this finding is relevant for.
+    ///
+    /// Most antipatterns are [`crate::metadata::DOMAIN_FIRST_PARTY`] — they flag
+    /// memory-safety or code-quality issues that only apply to code you own.
+    /// Infrastructure and supply-chain rules use [`crate::metadata::DOMAIN_ALL`]
+    /// so they fire on vendored and test files too.
+    pub domain: u8,
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +272,7 @@ fn find_python_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                             description: format!(
                                 "Hallucinated import: '{name}' imported inside function but never used"
                             ),
+                            domain: DOMAIN_FIRST_PARTY,
                         });
                     }
                 }
@@ -411,6 +421,7 @@ fn find_rust_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                     description: "Vacuous unsafe block: contains no raw pointer dereferences, \
                                   FFI calls, or inline assembly"
                         .to_string(),
+                    domain: DOMAIN_FIRST_PARTY,
                 });
             }
         }
@@ -502,6 +513,7 @@ fn find_go_goroutine_loops(node: Node<'_>, source: &[u8], findings: &mut Vec<Slo
                             "Goroutine closure trap: `go func()` in loop may capture loop \
                              variable(s) {loop_vars:?} by reference — use explicit parameter passing"
                         ),
+                        domain: DOMAIN_FIRST_PARTY,
                     });
                     return; // Don't recurse into the same loop
                 }
@@ -638,6 +650,7 @@ fn walk_yaml_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
                          `hosts: [\"*\"]`; restrict to explicit hostnames",
                         k = kind.as_deref().unwrap_or("unknown")
                     ),
+                    domain: DOMAIN_ALL,
                 });
             }
         } else if key_text == "spec" {
@@ -658,6 +671,7 @@ fn walk_yaml_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
                                      via `spec.hosts: [\"*\"]`; restrict to explicit hostnames",
                                     k = kind.as_deref().unwrap_or("unknown")
                                 ),
+                                domain: DOMAIN_ALL,
                             });
                         }
                     }
@@ -802,6 +816,7 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                         description: "Empty catch block: exception is silently swallowed — \
                                       log or rethrow it"
                             .to_string(),
+                        domain: DOMAIN_FIRST_PARTY,
                     });
                 }
             }
@@ -845,6 +860,7 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                         "System.out.{method_text}: console debug logging in production — \
                          use a structured logger (SLF4J, Log4j, etc.)"
                     ),
+                    domain: DOMAIN_FIRST_PARTY,
                 });
             }
             _ => {}
@@ -904,6 +920,7 @@ fn find_csharp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                 "async void method `{method_name}`: unhandled exceptions crash the process — \
                  use async Task instead (or async void only for event handlers)"
             ),
+            domain: DOMAIN_FIRST_PARTY,
         });
     }
 
@@ -966,6 +983,7 @@ fn find_cpp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                 start_byte: cap.node.start_byte(),
                 end_byte: cap.node.end_byte(),
                 description: description.to_string(),
+                domain: DOMAIN_FIRST_PARTY,
             });
         }
     }
@@ -1016,6 +1034,7 @@ fn find_bash_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
                 "Unquoted variable `${var_text}`: subject to word splitting and glob expansion — \
                  quote it: \"${var_text}\""
             ),
+            domain: DOMAIN_FIRST_PARTY,
         });
     }
 
@@ -1077,6 +1096,7 @@ fn find_eval_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding
                     description: "eval() call: executes arbitrary code from a string — \
                                   code injection risk; use JSON.parse() or a safe alternative"
                         .to_string(),
+                    domain: DOMAIN_FIRST_PARTY,
                 });
                 return; // don't recurse into the eval call itself
             }
@@ -1128,6 +1148,7 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
                             description: d.to_string(),
+                            domain: DOMAIN_FIRST_PARTY,
                         });
                         return;
                     }
@@ -1183,6 +1204,7 @@ fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
                           exposes resource to the entire internet — \
                           restrict to specific IP ranges"
                 .to_string(),
+            domain: DOMAIN_ALL,
         })
         .collect()
 }

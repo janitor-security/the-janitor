@@ -122,6 +122,20 @@ pub struct SlopScore {
     /// to exploit security-scanner bypass heuristics without shipping actual fixes.
     /// Carries a fixed penalty of ×100 — the highest per-finding weight.
     pub hallucinated_security_fix: u32,
+
+    /// Number of antipattern findings suppressed by domain routing.
+    ///
+    /// When a file is classified as [`crate::metadata::DOMAIN_VENDORED`] or
+    /// [`crate::metadata::DOMAIN_TEST`], memory-safety rules
+    /// (e.g. raw `new`/`delete`, vacuous `unsafe`, hallucinated imports) with
+    /// [`crate::metadata::DOMAIN_FIRST_PARTY`] domain masks are not applied.
+    ///
+    /// This counter records how many findings were withheld — surfaced in the
+    /// intelligence report as "Domain Routing" context so the operator knows the
+    /// engine is not blind, just selective.
+    ///
+    /// Does **not** contribute to [`Self::score()`].
+    pub suppressed_by_domain: u32,
 }
 
 impl SlopScore {
@@ -332,6 +346,51 @@ fn extract_patch_ext(patch: &str) -> &str {
     ""
 }
 
+/// Extract the full file path from the `+++ b/<path>` line in a unified diff.
+///
+/// Returns an empty string when no `+++ b/` header is found or the path is
+/// `/dev/null` (deleted-file sentinel).  Used by domain routing in
+/// [`PatchBouncer`] to classify the file's context before rule application.
+fn extract_patch_path(patch: &str) -> String {
+    for line in patch.lines() {
+        if let Some(path) = line
+            .strip_prefix("+++ b/")
+            .or_else(|| line.strip_prefix("+++ "))
+        {
+            let path = path.trim();
+            if !path.is_empty() && path != "/dev/null" {
+                return path.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+// ---------------------------------------------------------------------------
+// SlopRule — domain-masked antipattern carrier
+// ---------------------------------------------------------------------------
+
+/// Internal wrapper that pairs an antipattern finding with its applicable
+/// [`crate::metadata::DOMAIN_*`] bitmask for the S-expression rule matrix.
+///
+/// [`PatchBouncer::bounce`] evaluates each rule against the classified domain
+/// of the file under analysis:
+///
+/// ```text
+/// if (rule.domain_mask & file_domain) != 0 { emit finding }
+/// ```
+///
+/// Rules with [`crate::metadata::DOMAIN_ALL`] fire on every file (supply-chain
+/// and infrastructure checks).  Rules with [`crate::metadata::DOMAIN_FIRST_PARTY`]
+/// are memory-safety and code-quality gates that only apply to code you own —
+/// vendored and test files are exempt.
+struct SlopRule {
+    /// The antipattern finding to potentially emit.
+    finding: crate::slop_hunter::SlopFinding,
+    /// Bitmask of domains for which this rule is active.
+    domain_mask: u8,
+}
+
 // ---------------------------------------------------------------------------
 // PatchBouncer (default implementation)
 // ---------------------------------------------------------------------------
@@ -513,12 +572,32 @@ impl PRBouncer for PatchBouncer {
             }
         }
 
+        // Domain routing: classify this file's context so memory-safety rules are
+        // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
+        // fire regardless of domain.
+        let file_path = extract_patch_path(patch);
+        let file_domain = crate::metadata::DomainRouter::classify(&file_path);
+
         // Language-specific antipattern detection via slop_hunter.
-        // Collect descriptions so callers can surface named violations, not just counts.
-        let slop_findings = crate::slop_hunter::find_slop(ext, source);
-        let antipatterns_found = slop_findings.len() as u32;
+        // Wrap each finding in a SlopRule and apply the domain bitmask matrix.
+        let raw_findings = crate::slop_hunter::find_slop(ext, source);
+        let mut suppressed_by_domain: u32 = 0;
+        let mut accepted: Vec<crate::slop_hunter::SlopFinding> =
+            Vec::with_capacity(raw_findings.len());
+        for f in raw_findings {
+            let rule = SlopRule {
+                domain_mask: f.domain,
+                finding: f,
+            };
+            if (rule.domain_mask & file_domain) != 0 {
+                accepted.push(rule.finding);
+            } else {
+                suppressed_by_domain += 1;
+            }
+        }
+        let antipatterns_found = accepted.len() as u32;
         let antipattern_details: Vec<String> =
-            slop_findings.into_iter().map(|f| f.description).collect();
+            accepted.into_iter().map(|f| f.description).collect();
 
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =
@@ -607,6 +686,7 @@ impl PRBouncer for PatchBouncer {
             zombie_symbols_added,
             antipatterns_found,
             antipattern_details,
+            suppressed_by_domain,
             ..SlopScore::default()
         })
     }
@@ -800,6 +880,7 @@ pub fn bounce_git(
             total.logic_clones_found += score.logic_clones_found;
             total.zombie_symbols_added += score.zombie_symbols_added;
             total.antipatterns_found += score.antipatterns_found;
+            total.suppressed_by_domain += score.suppressed_by_domain;
             total
                 .antipattern_details
                 .append(&mut score.antipattern_details);
@@ -928,6 +1009,36 @@ mod tests {
             score.logic_clones_found, 1,
             "C# logic clones must be detectable"
         );
+    }
+
+    #[test]
+    fn test_vendored_cpp_raw_new_suppressed_by_domain() {
+        // A `new` expression in vendor/ must NOT fire the C++ antipattern rule —
+        // the DOMAIN_FIRST_PARTY mask on that rule is filtered out for DOMAIN_VENDORED files.
+        let src = "void* p = new MyClass();\n";
+        let patch = make_patch("vendor/somelib/src/alloc.cpp", src);
+        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert_eq!(
+            score.antipatterns_found, 0,
+            "raw new in vendor/ must be domain-suppressed"
+        );
+        assert_eq!(
+            score.suppressed_by_domain, 1,
+            "suppressed_by_domain must record the withheld finding"
+        );
+    }
+
+    #[test]
+    fn test_first_party_cpp_raw_new_fires() {
+        // The same `new` expression in first-party code must still be flagged.
+        let src = "void* p = new MyClass();\n";
+        let patch = make_patch("src/engine/alloc.cpp", src);
+        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert_eq!(
+            score.antipatterns_found, 1,
+            "raw new in first-party src/ must fire"
+        );
+        assert_eq!(score.suppressed_by_domain, 0);
     }
 
     #[test]
