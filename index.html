@@ -957,7 +957,7 @@
 
 <p><img alt="Janitor Terminal Demo" src="assets/janitor_demo.webp" /></p>
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v6.12.7 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.</strong></p>
+<p><strong>v6.12.8 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.</strong></p>
 <hr />
 <blockquote>
 <p><strong>Sonar finds style violations.</strong>
@@ -1038,7 +1038,7 @@
 <hr />
 <h2 id="the-technical-stack">THE TECHNICAL STACK</h2>
 <h3 id="the-anatomist">The Anatomist</h3>
-<p>Parses via zero-copy Tree-sitter CSTs across <strong>23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more</strong> — with v6.12.5 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
+<p>Parses via zero-copy Tree-sitter CSTs across <strong>23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more</strong> — with v6.12.8 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
 <p><code>OnceLock&lt;Language&gt;</code> statics: each grammar occupies <strong>8 bytes of static overhead</strong> (an uninitialised pointer slot on 64-bit) until first use. Total: <strong>184 bytes of static overhead</strong> for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
