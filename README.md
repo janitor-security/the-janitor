@@ -1,5 +1,5 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v6.12.7 — Rust-Native. Zero-Copy. Enforcement at the Gate.**
+**v6.12.8 — Rust-Native. Zero-Copy. Enforcement at the Gate.**
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
