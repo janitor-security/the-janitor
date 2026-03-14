@@ -420,6 +420,24 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#swarm-clustering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Swarm Clustering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#domain-segregated-audit-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Domain-Segregated Audit Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-reaper" class="md-nav__link">
     <span class="md-ellipsis">
       The Reaper
@@ -866,6 +884,24 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#swarm-clustering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Swarm Clustering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#domain-segregated-audit-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Domain-Segregated Audit Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-reaper" class="md-nav__link">
     <span class="md-ellipsis">
       The Reaper
@@ -957,7 +993,7 @@
 
 <p><img alt="Janitor Terminal Demo" src="assets/janitor_demo.webp" /></p>
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v6.12.8 — Rust-Native. Zero-Copy. Structural Enforcement at the Gate.</strong></p>
+<p><strong>v6.13.0 — Rust-Native. Zero-Copy. Structural Determinism at the Gate.</strong></p>
 <hr />
 <blockquote>
 <p><strong>Sonar finds style violations.</strong>
@@ -1082,6 +1118,13 @@
 <p>BLAKE3 structural hashing with alpha-normalization detects logic clones — functions with identical structure and different names. Chemotaxis ordering prioritizes high-calorie files (<code>.rs</code>, <code>.py</code>, <code>.go</code>, <code>.ts</code>) in the analysis pass. The <code>slop_hunter</code> detects language-specific antipatterns via Tree-sitter AST walks: hallucinated Python imports, vacuous Rust <code>unsafe</code> blocks, goroutine closure traps.</p>
 <p><strong>Universal Bot Shield</strong> — <code>is_automation_account()</code> applies a 4-layer classification before analysis: <code>app/</code> prefix (GitHub Apps), <code>[bot]</code> suffix, configurable <code>trusted_bot_authors</code>, and per-repo <code>[forge].automation_accounts</code> in <code>janitor.toml</code>. Bot PRs receive full structural analysis; no code is exempt from review.</p>
 <p><strong>Agnostic IaC Shield</strong> — <code>ByteLatticeAnalyzer</code> detects binary blobs and high-entropy payloads (encrypted data, shellcode) injected into source patches. IaC file extensions (<code>.nix</code>, <code>.lock</code>, <code>.json</code>, <code>.toml</code>, <code>.yaml</code>, <code>.yml</code>, <code>.csv</code>) bypass the entropy gate — these formats contain legitimate high-density hashes (nix sha256, lockfile digests) that would otherwise produce false <code>AnomalousBlob</code> detections. Files above 7.0 bits/byte windowed entropy or containing null bytes are flagged regardless of extension.</p>
+<h3 id="swarm-clustering">Swarm Clustering</h3>
+<p>Detects and mathematically clusters Agentic Swarm attacks using <strong>64-bit Locality-Sensitive Hashing</strong>. Every PR diff is sketched into a 64-component MinHash signature over byte 3-grams. The <code>LshIndex</code> (8 bands × 8 rows, ArcSwap lock-free) stores these signatures across the entire audit session. Any two patches with Jaccard similarity ≥ 0.85 are flagged as structural clones — instantly identifying <strong>100% topological duplicates</strong> across thousands of PRs.</p>
+<p>When the same LLM-generated change is submitted under different PR numbers from coordinated accounts, the Jaccard distance collapses to near-zero. Swarm Clustering catches this deterministically, without heuristics: the math either confirms structural identity or it does not. Colliding PR numbers are written into <code>collided_pr_numbers</code> in the bounce log and surfaced in the GitHub Check Run output.</p>
+<h3 id="domain-segregated-audit-engine">Domain-Segregated Audit Engine</h3>
+<p><strong>Bypasses vendored C/C++ libraries with zero-copy Aho-Corasick path routing, guaranteeing zero false positives on legitimate upstream CVE patches.</strong></p>
+<p>The Domain Router classifies every file blob in a PR diff before analysis begins. Blobs whose paths match vendored directory prefixes (<code>thirdparty/</code>, <code>third_party/</code>, <code>vendor/</code>) are assigned <code>DOMAIN_VENDORED</code> and routed through a dedicated analysis pass — memory-safety rules that would flag raw pointer arithmetic in application code are suppressed for vendored upstream C sources. This is the correct behaviour: a Godot Engine CVE patch touching <code>thirdparty/mbedtls/</code> is a legitimate security fix, not slop.</p>
+<p>Prior to v6.13.0, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v6.13.0 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (<code>.png</code>, <code>.so</code>, <code>.exe</code>, <code>.wasm</code>) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.</p>
 <h3 id="the-reaper">The Reaper</h3>
 <p>Surgical byte-range deletion. Sorted bottom-to-top by <code>start_byte</code> to preserve upstream offsets. UTF-8 hardened via <code>str::is_char_boundary()</code>. Atomic backup to <code>.janitor/ghost/</code> before first write. Rollback via <code>janitor undo</code> restores exact pre-deletion state.</p>
 <h3 id="the-daemon">The Daemon</h3>
