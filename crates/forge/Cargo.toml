@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 common = { path = "../common" }
+backlog_pruner = { path = "../experimental/backlog_pruner" }
 blake3.workspace = true
 tree-sitter.workspace = true
 tree-sitter-python.workspace = true
@@ -35,3 +36,4 @@ memmap2.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 aho-corasick.workspace = true
+zstd = "0.13"

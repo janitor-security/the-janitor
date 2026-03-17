@@ -173,6 +173,14 @@ pub struct BounceLogEntry {
     /// Empty for log entries written before this field was introduced.
     #[serde(default)]
     pub collided_pr_numbers: Vec<u32>,
+
+    /// Necrotic garbage-collection flag from the Backlog Pruner.
+    ///
+    /// One of `"SEMANTIC_NULL"` (cosmetic-only change), `"GHOST_COLLISION"`
+    /// (targets decayed architecture), or `"UNWIRED_ISLAND"` (unreachable new
+    /// code).  `None` when no necrotic condition was detected.
+    #[serde(default)]
+    pub necrotic_flag: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -207,8 +215,11 @@ pub struct ReportData {
     /// An "actionable" PR is one that meets at least one of:
     /// - `slop_score >= 100` (Blocked)
     /// - `zombie_symbols_added > 0` (Shotgun re-injection)
-    /// - an antipattern description containing "Hallucinated" (Hallucination)
+    /// - an antipattern description containing "Unverified Security Bump"
+    /// - `necrotic_flag.is_some()` (Garbage Collection verdict)
     pub total_reclaimed_minutes: f64,
+    /// Indices of entries that carry a `necrotic_flag`, sorted by slop_score descending.
+    pub necrotic_indices: Vec<usize>,
     /// Top 10 contributors ranked by cumulative slop score descending.
     pub sloppiest_users: Vec<UserStats>,
 }
@@ -342,12 +353,23 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
     sloppiest_users.sort_by(|a, b| b.total_slop_score.cmp(&a.total_slop_score));
     sloppiest_users.truncate(10);
 
+    // Necrotic PRs — entries flagged by the Backlog Pruner.
+    let mut necrotic_indices: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.necrotic_flag.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    // Sort by slop_score descending so the top-10 table shows worst offenders first.
+    necrotic_indices.sort_by(|&a, &b| entries[b].slop_score.cmp(&entries[a].slop_score));
+
     ReportData {
         entries,
         slop_top_indices,
         clone_pairs,
         zombie_indices,
         total_reclaimed_minutes,
+        necrotic_indices,
         sloppiest_users,
     }
 }
@@ -372,6 +394,7 @@ fn is_actionable(e: &BounceLogEntry) -> bool {
         || e.antipatterns
             .iter()
             .any(|a| a.contains("Unverified Security Bump"))
+        || e.necrotic_flag.is_some()
 }
 
 /// Returns a short, human-readable label for the dominant violation in a bounce entry.
@@ -532,7 +555,7 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push_str("| Metric | Value |\n");
         out.push_str("|--------|-------|\n");
         out.push_str(&format!(
-            "| Actionable intercepts (Blocked / Zombie / Hallucination) | **{actionable}** |\n"
+            "| Actionable intercepts (Blocked / Zombie / Hallucination / Necrotic) | **{actionable}** |\n"
         ));
         out.push_str(&format!(
             "| **Total engineering time reclaimed** | **{hours:.1} hours** |\n"
@@ -662,6 +685,43 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push('\n');
     }
 
+    // ── Section 1b: Necrotic PRs (Garbage Collection) ─────────────────────
+    if !data.necrotic_indices.is_empty() {
+        out.push('\n');
+        out.push_str("### Necrotic PRs (Garbage Collection)\n\n");
+        out.push_str(
+            "*Flagged by the Backlog Pruner: cosmetic-only changes (`SEMANTIC_NULL`), \
+             PRs targeting decayed architecture (`GHOST_COLLISION`), and unreachable \
+             new code additions (`UNWIRED_ISLAND`).*\n\n",
+        );
+        out.push_str("| Rank | PR | Author | Slop Score | Necrotic Flag |\n");
+        out.push_str("|------|----|--------|------------|---------------|\n");
+        for (rank, &i) in data.necrotic_indices.iter().take(10).enumerate() {
+            let e = &data.entries[i];
+            let pr = e
+                .pr_number
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| "-".to_owned());
+            let author = html_escape(&trunc_author(e.author.as_deref().unwrap_or("-"), 20));
+            let flag = e.necrotic_flag.as_deref().unwrap_or("-");
+            out.push_str(&format!(
+                "| {} | {} | {} | {} | `{}` |\n",
+                rank + 1,
+                pr,
+                author,
+                e.slop_score,
+                flag,
+            ));
+        }
+        let necrotic_overflow = data.necrotic_indices.len().saturating_sub(10);
+        if necrotic_overflow > 0 {
+            out.push_str(&format!(
+                "\n*…and {necrotic_overflow} more necrotic entries. See CSV for full list.*\n"
+            ));
+        }
+        out.push('\n');
+    }
+
     // ── Section 2: Structural Clones ───────────────────────────────────────
     out.push_str("## Structural Clones — Near-Duplicate PRs\n\n");
     out.push_str(
@@ -743,7 +803,7 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
 pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
     let hours = data.total_reclaimed_minutes / 60.0;
     serde_json::json!({
-        "schema_version": "6.9.0",
+        "schema_version": "7.0.0",
         "repository": repo_name,
         "total_prs_analyzed": data.entries.len(),
         "workslop": {
@@ -927,7 +987,7 @@ pub fn render_scan_json(
     let total_dead_bytes: u64 = dead.iter().map(|e| e.byte_size as u64).sum();
 
     serde_json::json!({
-        "schema_version": "6.9.0",
+        "schema_version": "7.0.0",
         "repository": repo_name,
         "total_entities": total_entities,
         "dead_symbol_count": dead.len(),
@@ -1250,7 +1310,7 @@ pub fn render_global_markdown(data: &GlobalReportData, _gauntlet_root: &str) -> 
 pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde_json::Value {
     let hours = data.total_reclaimed_minutes / 60.0;
     serde_json::json!({
-        "schema_version": "6.9.0",
+        "schema_version": "7.0.0",
         "gauntlet_root": gauntlet_root,
         "total_repos": data.repos.len(),
         "total_prs": data.total_prs,

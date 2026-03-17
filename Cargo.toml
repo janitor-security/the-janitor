@@ -3,6 +3,7 @@ members = [
     "crates/*",
     "crates/experimental/advanced_threats",
     "crates/experimental/backlog_pruner",
+    "crates/experimental/phantom_ffi_gate",
     "tools/wisdom-bake",
     "tools/mint-token",
     "tools/parallel-bounce",
@@ -12,7 +13,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "6.13.0"
+version = "7.1.0"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
@@ -91,6 +92,9 @@ arc-swap = "1.7"
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
 git2 = "0.20"
+
+# Data parallelism
+rayon = "1.10"
 
 # Progress reporting
 indicatif = "0.17"

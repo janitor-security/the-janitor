@@ -225,6 +225,56 @@ fn collect_features(node: Node<'_>, _source: &[u8], depth: u32, counters: &mut [
 }
 
 // ---------------------------------------------------------------------------
+// Entropy gate — structural token counting
+// ---------------------------------------------------------------------------
+
+/// Minimum number of structural (non-cosmetic) AST tokens required for a
+/// patch to form a unique cryptographic signature.
+///
+/// Patches below this threshold — pure markdown edits, translation files,
+/// whitespace-only diffs — contain no discriminating structural information
+/// and produce the degenerate `0x0000_0000_0000_0000` SimHash fingerprint.
+/// They must bypass the swarm clustering index to prevent null-vector
+/// collisions between structurally unrelated PRs.
+pub const MIN_STRUCTURAL_TOKENS: usize = 5;
+
+/// Count the number of structural (non-cosmetic) AST tokens in `node`'s subtree.
+///
+/// Structural tokens are nodes whose kind is **not** in [`SIM_SKIP_KINDS`]
+/// (identifiers, string literals, comments, and numeric literals are excluded).
+/// The count is used as a pre-flight entropy gate before swarm clustering.
+pub fn count_structural_tokens(node: Node<'_>) -> usize {
+    let mut count = 0usize;
+    count_structural_inner(node, &mut count);
+    count
+}
+
+fn count_structural_inner(node: Node<'_>, count: &mut usize) {
+    if SIM_SKIP_KINDS.contains(&node.kind()) {
+        return;
+    }
+    *count += 1;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        count_structural_inner(child, count);
+    }
+}
+
+/// Compute a 64-bit SimHash fingerprint, returning `None` if the node
+/// contains fewer than [`MIN_STRUCTURAL_TOKENS`] structural tokens.
+///
+/// A `None` result means the patch lacks sufficient AST entropy to form a
+/// unique cryptographic signature.  Callers must not insert the patch into
+/// the swarm clustering [`LshIndex`][crate::pr_collider::LshIndex] when
+/// this returns `None`.
+pub fn compute_simhash_checked(node: Node<'_>, source: &[u8]) -> Option<u64> {
+    if count_structural_tokens(node) < MIN_STRUCTURAL_TOKENS {
+        return None;
+    }
+    Some(compute_simhash(node, source))
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -313,6 +363,72 @@ mod tests {
         let h1 = simhash_of("def foo(x):\n    return x * 2\n");
         let h2 = simhash_of("def foo(x):\n    return x * 2\n");
         assert_eq!(h1, h2, "SimHash must be deterministic");
+    }
+
+    #[test]
+    fn test_count_structural_tokens_code_node() {
+        // A real function body should have well above the threshold.
+        let src = b"def add(a, b):\n    return a + b\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let count = count_structural_tokens(tree.root_node());
+        assert!(
+            count >= MIN_STRUCTURAL_TOKENS,
+            "real code must have at least {MIN_STRUCTURAL_TOKENS} structural tokens, got {count}"
+        );
+    }
+
+    #[test]
+    fn test_count_structural_tokens_identifier_only() {
+        // A bare name expression (`x`) should count as zero structural tokens
+        // because "identifier" is in SIM_SKIP_KINDS.  The root `module` node
+        // is structural (1), so the count is 1 — below the threshold.
+        let src = b"x\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let count = count_structural_tokens(tree.root_node());
+        // Root `module` + `expression_statement` are structural; `identifier` is not.
+        assert!(
+            count < MIN_STRUCTURAL_TOKENS,
+            "identifier-only source must be below threshold, got {count}"
+        );
+    }
+
+    #[test]
+    fn test_compute_simhash_checked_returns_none_for_sparse_ast() {
+        // A single bare identifier has fewer structural tokens than the gate.
+        let src = b"x\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let result = compute_simhash_checked(tree.root_node(), src);
+        assert!(
+            result.is_none(),
+            "sparse AST must return None from compute_simhash_checked"
+        );
+    }
+
+    #[test]
+    fn test_compute_simhash_checked_returns_some_for_code() {
+        let src = b"def foo(x):\n    if x > 0:\n        return x * 2\n    return 0\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let result = compute_simhash_checked(tree.root_node(), src);
+        assert!(
+            result.is_some(),
+            "real code must return Some from compute_simhash_checked"
+        );
     }
 
     #[test]

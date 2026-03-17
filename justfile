@@ -226,6 +226,142 @@ run-gauntlet *ARGS:
 	cargo build --release -p gauntlet-runner
 	./target/release/gauntlet-runner {{ARGS}}
 
+# Hyper-Gauntlet — libgit2 O(1) network-bypass omni-strike across all targets.
+#
+# Clones each repo once (blobless), populates refs/remotes/origin/pr/*, then
+# scores every PR directly from the packfile — zero `gh pr diff` subshells.
+#
+# Usage:
+#   just hyper-gauntlet                     # 5000 PRs per repo (default)
+#   just hyper-gauntlet --pr-limit 500      # custom limit
+#   just hyper-gauntlet --targets my.txt    # custom targets file
+#
+hyper-gauntlet *ARGS:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if [[ -z "${IN_NIX_SHELL:-}" ]] && command -v nix &>/dev/null; then
+	    echo "↳ Entering Nix hermetic shell..."
+	    exec nix develop --command just hyper-gauntlet {{ARGS}}
+	fi
+	cargo build --release -p gauntlet-runner -p cli
+	./target/release/gauntlet-runner --hyper --pr-limit 5000 {{ARGS}}
+
+# 7. HYPER-DRIVE — libgit2 O(N) local PR batch bouncer (zero network after clone)
+#
+# Phase 1 fetch populates refs/remotes/origin/pr/* from GitHub pull-request heads.
+# Phase 2 runs the Janitor bounce engine in parallel over every PR ref.
+#
+# Usage:
+#   just hyper-audit godotengine/godot        # all PRs, auto-detect base
+#   just hyper-audit godotengine/godot 5000   # cap at 5000 PRs
+#   just hyper-audit NixOS/nixpkgs 200        # cap at 200 PRs
+#
+# REPO_SLUG — GitHub owner/repo (clone placed in $GAUNTLET_DIR/<repo-name>)
+# LIMIT     — max PRs to process (default: 0 = unlimited)
+hyper-audit REPO_SLUG LIMIT="0" OUT_DIR="":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	REPO_SLUG="{{REPO_SLUG}}"
+	REPO_NAME="${REPO_SLUG##*/}"
+	REPO_SLUG_SAFE="${REPO_SLUG//\//_}"
+	GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet}"
+	REPO_DIR="$GAUNTLET_DIR/$REPO_NAME"
+	JANITOR="${JANITOR:-$(pwd)/target/release/janitor}"
+	OUT_DIR_ARG="{{OUT_DIR}}"
+	OUT_DIR="${OUT_DIR_ARG:-$(pwd)}"
+	PDF_OUT="$OUT_DIR/${REPO_SLUG_SAFE}_intelligence_report.pdf"
+	CSV_OUT="$OUT_DIR/${REPO_SLUG_SAFE}_audit.csv"
+
+	if [[ ! -x "$JANITOR" ]]; then
+	    echo "janitor not built — run: just build"
+	    exit 1
+	fi
+
+	# ── Phase 0: full clone if .git absent ───────────────────────────────────
+	mkdir -p "$GAUNTLET_DIR"
+	if [[ ! -d "$REPO_DIR/.git" ]]; then
+	    echo "==> Cloning $REPO_SLUG (full)..."
+	    # Remove any non-git directory (legacy .janitor/ artefacts) — git clone
+	    # aborts on non-empty targets.
+	    rm -rf "$REPO_DIR"
+	    git clone "https://github.com/$REPO_SLUG.git" "$REPO_DIR"
+	    echo "    Clone complete."
+	fi
+
+	# ── Phase 1: fetch base branch + targeted PR refs ────────────────────────
+	echo "==> Phase 1: fetching refs for $REPO_SLUG ..."
+	# 1a. Unset any residual partial-clone filter (harmless no-op on full clones).
+	git -C "$REPO_DIR" config --local --unset-all remote.origin.promisor        2>/dev/null || true
+	git -C "$REPO_DIR" config --local --unset-all remote.origin.partialclonefilter 2>/dev/null || true
+	# 1b. Fetch base branch (full — update master/main tip with blobs).
+	git -C "$REPO_DIR" fetch origin \
+	    '+refs/heads/master:refs/remotes/origin/master' \
+	    '+refs/heads/main:refs/remotes/origin/main' \
+	    --no-tags --force --quiet 2>/dev/null || true
+	# 1c. Harvest the N newest PR numbers via gh and build targeted refspecs.
+	#     A wildcard refspec (+refs/pull/*/head:...) downloads ALL historical
+	#     PR blobs — for large repos this is 100k+ PRs = many GB.
+	#     Targeted refspecs bound the download to exactly LIMIT PRs.
+	LIMIT_ARG="{{LIMIT}}"
+	GH_LIMIT="${LIMIT_ARG:-100}"
+	[[ "$GH_LIMIT" == "0" ]] && GH_LIMIT=100
+	echo "    Harvesting ${GH_LIMIT} most recent PR numbers via gh..."
+	PR_NUMBERS=$(gh pr list --repo "$REPO_SLUG" --state all \
+	    --limit "$GH_LIMIT" --json number | jq -r '.[].number')
+	if [[ -z "$PR_NUMBERS" ]]; then
+	    echo "    warning: no PRs returned — nothing to fetch"
+	else
+	    REFSPECS=""
+	    for N in $PR_NUMBERS; do
+	        REFSPECS="$REFSPECS +refs/pull/$N/head:refs/remotes/origin/pr/$N"
+	    done
+	    echo "    Fetching $(echo "$PR_NUMBERS" | wc -w) PR refs (targeted)..."
+	    # shellcheck disable=SC2086
+	    git -C "$REPO_DIR" fetch origin --no-tags --force --quiet $REFSPECS
+	fi
+	PR_REF_COUNT=$(git -C "$REPO_DIR" for-each-ref \
+	    'refs/remotes/origin/pr/*' 2>/dev/null | wc -l || echo "0")
+	echo "    ${PR_REF_COUNT} PR refs available."
+
+	# ── Phase 2: hyper-drive bounce ──────────────────────────────────────────
+	echo "==> Phase 2: launching hyper-drive (limit={{LIMIT}})..."
+	mkdir -p "$REPO_DIR/.janitor"
+	rm -f "$REPO_DIR/.janitor/bounce_log.ndjson"
+	"$JANITOR" hyper-drive \
+	    "$REPO_DIR"              \
+	    --limit    "{{LIMIT}}"   \
+	    --repo-slug "$REPO_SLUG"
+
+	# ── Phase 3: intelligence artifacts (PDF + CSV) ───────────────────────────
+	echo ""
+	echo "==> Phase 3: generating intelligence artifacts..."
+	echo "    PDF → $PDF_OUT"
+	echo "    CSV → $CSV_OUT"
+	"$JANITOR" report \
+	    --repo   "$REPO_DIR" \
+	    --top    50          \
+	    --format pdf         \
+	    --out    "$PDF_OUT"
+	echo "    PDF written: $PDF_OUT"
+	"$JANITOR" export \
+	    --repo "$REPO_DIR" \
+	    --out  "$CSV_OUT"
+	echo "    CSV written: $CSV_OUT"
+
+	# ── Phase 4: scorch earth — reclaim SSD ──────────────────────────────────
+	# Delete the git packfile data (.git/).  The .janitor/bounce_log.ndjson is
+	# preserved so the bounce log can be re-used for future report generation.
+	echo "==> Phase 4: scorch earth..."
+	rm -rf "$REPO_DIR/.git"
+	echo "    .git deleted → SSD space reclaimed"
+
+	echo ""
+	echo "══════════════════════════════════════════════════"
+	echo "  HYPER-DRIVE COMPLETE — $REPO_SLUG"
+	echo "  PDF : $PDF_OUT"
+	echo "  CSV : $CSV_OUT"
+	echo "══════════════════════════════════════════════════"
+
 # 6. DOCUMENTATION
 deploy-docs:
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force

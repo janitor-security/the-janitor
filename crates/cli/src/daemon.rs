@@ -386,6 +386,7 @@ pub mod unix {
                             repo_slug: String::new(),
                             suppressed_by_domain: score.suppressed_by_domain,
                             collided_pr_numbers: near_matches,
+                            necrotic_flag: score.necrotic_flag,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

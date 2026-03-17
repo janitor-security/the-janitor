@@ -146,6 +146,15 @@ pub struct SlopScore {
     ///
     /// Does **not** contribute to [`Self::score()`].
     pub collided_pr_numbers: Vec<u32>,
+
+    /// Necrotic garbage-collection flag assigned by the Backlog Pruner.
+    ///
+    /// One of `"SEMANTIC_NULL"`, `"GHOST_COLLISION"`, or `"UNWIRED_ISLAND"`.
+    /// `None` when no necrotic condition was detected or when the patch lacked
+    /// sufficient context to run the pruner checks.
+    ///
+    /// Does **not** contribute to [`Self::score()`].
+    pub necrotic_flag: Option<String>,
 }
 
 impl SlopScore {
@@ -536,6 +545,28 @@ impl PRBouncer for PatchBouncer {
             return Ok(SlopScore::default());
         }
 
+        // NCD Entropy Gate — O(N) compressibility check before the AST crawl.
+        //
+        // zstd-compress the added source at level 3.  A compression ratio below
+        // MIN_ENTROPY_RATIO (0.15) means the patch is highly self-similar: the
+        // canonical signal for AI-generated boilerplate or auto-templated code.
+        // The finding is accumulated here and merged into the final antipattern
+        // list at score assembly — the AST analysis still runs to capture all
+        // co-present slop signals.
+        let ncd_findings: Vec<String> = {
+            use crate::slop_hunter::{check_entropy, MIN_ENTROPY_RATIO};
+            let ratio = check_entropy(source);
+            if ratio < MIN_ENTROPY_RATIO {
+                vec![format!(
+                    "HighGenerativeVerbosity: NCD entropy ratio {ratio:.3} < threshold \
+                     {MIN_ENTROPY_RATIO} — patch is highly compressible, consistent \
+                     with AI-generated or auto-templated boilerplate (security:ncd_anomaly)."
+                )]
+            } else {
+                vec![]
+            }
+        };
+
         let mut parser = tree_sitter::Parser::new();
         parser
             .set_language(&cfg.language)
@@ -690,13 +721,168 @@ impl PRBouncer for PatchBouncer {
             }
         }
 
+        // ── Necrotic Pruning Matrix ──────────────────────────────────────────────
+        // Invokes the three Backlog Pruner garbage-collection checks.  Results are
+        // attached as a non-scoring `necrotic_flag` for downstream reporting.
+        //
+        // Check priority (first match wins): GHOST_COLLISION > UNWIRED_ISLAND > SEMANTIC_NULL
+        let necrotic_flag: Option<String> = 'necrotic: {
+            // Extract removed source from `-` diff lines (excluding `---` header).
+            let removed: String = patch
+                .lines()
+                .filter(|l| l.starts_with('-') && !l.starts_with("---"))
+                .map(|l| &l[1..])
+                .collect::<Vec<_>>()
+                .join("\n");
+            let removed_bytes = removed.as_bytes();
+
+            // Parse removed source with the same grammar.
+            let base_tree: Option<tree_sitter::Tree> =
+                if !removed.trim().is_empty() && removed_bytes.len() <= 1_048_576 {
+                    let mut bp = tree_sitter::Parser::new();
+                    if bp.set_language(&cfg.language).is_ok() {
+                        bp.parse(removed_bytes, None)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+            // Collect function names extracted from removed source.
+            let removed_fn_names: HashSet<String> = {
+                let mut names = HashSet::new();
+                if let Some(ref bt) = base_tree {
+                    if !bt.root_node().has_error() {
+                        if let Ok(q) = Query::new(&cfg.language, cfg.query_src) {
+                            let mut rc = tree_sitter::QueryCursor::new();
+                            let mut rm = rc.matches(&q, bt.root_node(), removed_bytes);
+                            let cnames = q.capture_names();
+                            while let Some(m) = rm.next() {
+                                if let Some(nc) = m
+                                    .captures
+                                    .iter()
+                                    .find(|c| cnames[c.index as usize] == "fn.name")
+                                {
+                                    if let Ok(name) = nc.node.utf8_text(removed_bytes) {
+                                        names.insert(name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                names
+            };
+
+            // ── 1. GHOST_COLLISION ─────────────────────────────────────────────
+            // Fires when >50% of modified functions (present in both removed and
+            // added lines) are absent from the master registry — the PR is targeting
+            // architecture that has decayed on master.
+            if !fn_data.is_empty() && !registry.entries.is_empty() {
+                let modified_fns: Vec<String> = fn_data
+                    .iter()
+                    .filter(|(n, _, _)| removed_fn_names.contains(n.as_str()))
+                    .map(|(n, _, _)| n.clone())
+                    .collect();
+                if !modified_fns.is_empty() {
+                    use backlog_pruner::ghost_collision::{
+                        is_ghost_collision, MasterEntry, MasterIndex,
+                    };
+                    // Use zero hashes on both sides — only the name-presence
+                    // check contributes to decay ratio (divergence is suppressed).
+                    let null_hash = [0u8; 32];
+                    let pr_hashes = vec![null_hash; modified_fns.len()];
+                    let master = MasterIndex::new(
+                        registry
+                            .entries
+                            .iter()
+                            .map(|e| MasterEntry {
+                                qualified_name: e.name.clone(),
+                                structural_hash: null_hash,
+                            })
+                            .collect(),
+                    );
+                    if is_ghost_collision(&modified_fns, &pr_hashes, &master) {
+                        break 'necrotic Some("GHOST_COLLISION".to_string());
+                    }
+                }
+            }
+
+            // ── 2. UNWIRED_ISLAND ──────────────────────────────────────────────
+            // Fires when the patch introduces truly new functions (not in removed
+            // lines, not known to the registry) with no lifecycle-hook exemption.
+            // An empty MasterCallGraph means all non-lifecycle new functions have
+            // in_degree == 0 — they have no callers in the tracked codebase.
+            if !fn_data.is_empty() && !registry.entries.is_empty() {
+                use backlog_pruner::unwired_island::{is_unwired_island, MasterCallGraph};
+                let known_names: HashSet<&str> =
+                    registry.entries.iter().map(|e| e.name.as_str()).collect();
+                let island_candidates: Vec<String> = fn_data
+                    .iter()
+                    .filter(|(n, _, _)| {
+                        !removed_fn_names.contains(n.as_str()) && !known_names.contains(n.as_str())
+                    })
+                    .map(|(n, _, _)| n.clone())
+                    .collect();
+                if !island_candidates.is_empty() {
+                    let empty_graph = MasterCallGraph::new(&[]);
+                    if is_unwired_island(&island_candidates, &empty_graph) {
+                        break 'necrotic Some("UNWIRED_ISLAND".to_string());
+                    }
+                }
+            }
+
+            // ── 3. SEMANTIC_NULL ───────────────────────────────────────────────
+            // Fires when the removed source and added source share identical
+            // structural skeletons — the PR changes only cosmetic tokens.
+            if let Some(ref bt) = base_tree {
+                if !bt.root_node().has_error() && !tree.root_node().has_error() {
+                    use backlog_pruner::semantic_null::is_semantic_null;
+                    if is_semantic_null(bt.root_node(), tree.root_node()) {
+                        break 'necrotic Some("SEMANTIC_NULL".to_string());
+                    }
+                }
+            }
+
+            None
+        };
+
+        // Net-Negative Exemption — waive the structural clone penalty for cleanup PRs.
+        //
+        // Mass-deletion of identical boilerplate (e.g. removing duplicate initialisers,
+        // clearing auto-generated constants) hashes to the same structural skeleton and
+        // spuriously inflates `logic_clones_found`.  If the PR removes more than twice
+        // as many lines as it adds, it is overwhelmingly a cleanup: waive the clone
+        // penalty so human maintainers are not penalised for good hygiene work.
+        let lines_added = patch
+            .lines()
+            .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+            .count() as u64;
+        let lines_deleted = patch
+            .lines()
+            .filter(|l| l.starts_with('-') && !l.starts_with("---"))
+            .count() as u64;
+        let raw_clone_count = patch_internal_clones + fuzzy_near_clones + global_clone_count;
+        let logic_clones_found = if lines_deleted > lines_added.saturating_mul(2) {
+            0
+        } else {
+            raw_clone_count
+        };
+
+        // Merge NCD entropy gate findings into the antipattern totals.
+        let antipatterns_found = antipatterns_found + ncd_findings.len() as u32;
+        let mut antipattern_details = antipattern_details;
+        antipattern_details.extend(ncd_findings);
+
         Ok(SlopScore {
             dead_symbols_added,
-            logic_clones_found: patch_internal_clones + fuzzy_near_clones + global_clone_count,
+            logic_clones_found,
             zombie_symbols_added,
             antipatterns_found,
             antipattern_details,
             suppressed_by_domain,
+            necrotic_flag,
             ..SlopScore::default()
         })
     }

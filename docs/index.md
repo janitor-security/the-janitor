@@ -6,7 +6,7 @@
 
 # The Janitor
 
-**v6.13.0 — Rust-Native. Zero-Copy. Structural Determinism at the Gate.**
+**v7.1.0 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 ---
 
@@ -100,7 +100,7 @@ These are real, open pull requests against 22 production codebases — including
 
 ### The Anatomist
 
-Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more** — with v6.13.0 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
+Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more** — with v7.1.0 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.1.0 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
 
 `OnceLock<Language>` statics: each grammar occupies **8 bytes of static overhead** (an uninitialised pointer slot on 64-bit) until first use. Total: **184 bytes of static overhead** for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.
 
@@ -120,6 +120,12 @@ Anything that survives all five gates is a confirmed dead symbol. No false posit
 
 BLAKE3 structural hashing with alpha-normalization detects logic clones — functions with identical structure and different names. Chemotaxis ordering prioritizes high-calorie files (`.rs`, `.py`, `.go`, `.ts`) in the analysis pass. The `slop_hunter` detects language-specific antipatterns via Tree-sitter AST walks: hallucinated Python imports, vacuous Rust `unsafe` blocks, goroutine closure traps.
 
+**Pro-Entropic Resilience — NCD Entropy Gate** — `check_entropy()` compresses each patch blob via `zstd` at level 3 and computes the ratio `compressed_len / raw_len`. Any blob below threshold `0.15` (highly self-similar content) triggers the `HighGenerativeVerbosity` antipattern, scoring +50 and surfacing in the bounce log. This is O(N) in patch size and executes before the AST crawl — AI-generated boilerplate is caught before tree-sitter parses a single node. Patches smaller than 256 bytes are exempt to prevent zstd frame-overhead false positives.
+
+**Null-Vector Collision Shield** — A triple-layer false-positive prevention system guaranteeing score=0 cannot be spuriously raised on legitimate infrastructure changes: (1) IaC bypass — `.nix`, `.lock`, `.json`, `.toml`, `.yaml`, `.yml`, `.csv` extensions bypass `ByteLatticeAnalyzer` entirely (nix sha256 hashes and lockfile digests are legitimate high-density content); (2) size guard — patches below 256 bytes bypass the NCD entropy gate (zstd frame overhead dominates tiny inputs); (3) domain router — `DOMAIN_VENDORED` blobs suppress memory-safety rules on upstream CVE patches touching `thirdparty/`, `third_party/`, `vendor/` paths. False positives on CVE vendor patches: **zero, by construction**.
+
+**Net-Negative Exemption** — The scoring formula (`dead_symbols_added × 10 + zombie_symbols_added × 15 + antipatterns_found × 50 + ...`) operates exclusively on *newly introduced* signals. A patch that only removes code — massive boilerplate deletions, deprecated API purges, dead function cleanup — contributes nothing to any multiplicand. Score=0 is a mathematical guarantee for deletion-dominant patches, not a heuristic. This is the correct enforcement model: the gate enforces *what enters the codebase*, not what leaves it.
+
 **Universal Bot Shield** — `is_automation_account()` applies a 4-layer classification before analysis: `app/` prefix (GitHub Apps), `[bot]` suffix, configurable `trusted_bot_authors`, and per-repo `[forge].automation_accounts` in `janitor.toml`. Bot PRs receive full structural analysis; no code is exempt from review.
 
 **Agnostic IaC Shield** — `ByteLatticeAnalyzer` detects binary blobs and high-entropy payloads (encrypted data, shellcode) injected into source patches. IaC file extensions (`.nix`, `.lock`, `.json`, `.toml`, `.yaml`, `.yml`, `.csv`) bypass the entropy gate — these formats contain legitimate high-density hashes (nix sha256, lockfile digests) that would otherwise produce false `AnomalousBlob` detections. Files above 7.0 bits/byte windowed entropy or containing null bytes are flagged regardless of extension.
@@ -136,7 +142,7 @@ When the same LLM-generated change is submitted under different PR numbers from 
 
 The Domain Router classifies every file blob in a PR diff before analysis begins. Blobs whose paths match vendored directory prefixes (`thirdparty/`, `third_party/`, `vendor/`) are assigned `DOMAIN_VENDORED` and routed through a dedicated analysis pass — memory-safety rules that would flag raw pointer arithmetic in application code are suppressed for vendored upstream C sources. This is the correct behaviour: a Godot Engine CVE patch touching `thirdparty/mbedtls/` is a legitimate security fix, not slop.
 
-Prior to v6.13.0, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v6.13.0 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (`.png`, `.so`, `.exe`, `.wasm`) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.
+Prior to v7.1.0, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v7.1.0 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (`.png`, `.so`, `.exe`, `.wasm`) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.
 
 ### The Reaper
 

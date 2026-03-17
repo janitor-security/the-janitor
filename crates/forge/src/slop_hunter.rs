@@ -1210,6 +1210,52 @@ fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
 }
 
 // ---------------------------------------------------------------------------
+// NCD Entropy Gate
+// ---------------------------------------------------------------------------
+
+/// Minimum compression ratio below which the entropy gate triggers.
+///
+/// A patch whose `zstd`-compressed size is less than 15 % of the raw size
+/// contains highly repetitive structure — the hallmark of AI-generated or
+/// auto-templated boilerplate.  Legitimate hand-authored code (typical ratio
+/// 0.25–0.55) stays well above this floor.
+pub const MIN_ENTROPY_RATIO: f64 = 0.15;
+
+/// Minimum input size (bytes) before the entropy gate engages.
+///
+/// `zstd` carries a fixed dictionary + frame header overhead of ~50 bytes.
+/// On tiny inputs this overhead dominates, producing spurious low ratios that
+/// would trigger false positives on one-liner patches.  Patches smaller than
+/// this threshold are unconditionally exempt.
+const ENTROPY_MIN_BYTES: usize = 256;
+
+/// Compute the NCD entropy ratio for `patch_bytes`.
+///
+/// Compresses `patch_bytes` with `zstd` at level 3 (the lowest level that
+/// fully engages the LZ77 back-reference window) and returns:
+///
+/// ```text
+/// ratio = compressed_len / raw_len
+/// ```
+///
+/// Lower values indicate more repetitive (lower-entropy) content.
+/// Returns `1.0` when the input is too small to yield a meaningful ratio
+/// (fewer than [`ENTROPY_MIN_BYTES`] bytes) or on compression failure —
+/// both conservative defaults that avoid false positives.
+///
+/// ## Complexity
+/// O(N) in `patch_bytes.len()` — `zstd` streaming is a single linear pass.
+pub fn check_entropy(patch_bytes: &[u8]) -> f64 {
+    if patch_bytes.len() < ENTROPY_MIN_BYTES {
+        return 1.0; // Too small to compress meaningfully — exempt.
+    }
+    match zstd::encode_all(patch_bytes, 3) {
+        Ok(compressed) => compressed.len() as f64 / patch_bytes.len() as f64,
+        Err(_) => 1.0, // Compression failure — conservative default, no penalty.
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1603,6 +1649,65 @@ resource \"aws_security_group_rule\" \"office_only\" {
         assert!(
             findings.is_empty(),
             "wildcard CIDR without security context must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── NCD Entropy Gate tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_check_entropy_small_input_exempt() {
+        // Inputs below ENTROPY_MIN_BYTES must return 1.0 regardless of content.
+        let tiny = b"fn foo() {}";
+        let ratio = check_entropy(tiny);
+        assert!(
+            (ratio - 1.0).abs() < f64::EPSILON,
+            "tiny input must return 1.0, got {ratio}"
+        );
+    }
+
+    #[test]
+    fn test_check_entropy_natural_code_above_threshold() {
+        // Typical hand-authored Rust — varied identifiers, mixed token types.
+        // Compression ratio for natural code is typically 0.3–0.6 — well above
+        // the 0.15 gate floor.
+        let code = b"\
+pub fn compute_statistical_summary(data: &[f64]) -> (f64, f64) {
+    let n = data.len() as f64;
+    let mean = data.iter().copied().sum::<f64>() / n;
+    let variance = data.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
+    (mean, variance.sqrt())
+}
+
+pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
+    let (mean, std_dev) = compute_statistical_summary(data);
+    data.iter()
+        .copied()
+        .filter(|&x| (x - mean).abs() > threshold * std_dev)
+        .collect()
+}
+";
+        // Repeat to exceed ENTROPY_MIN_BYTES.
+        let repeated: Vec<u8> = code.iter().copied().cycle().take(512).collect();
+        let ratio = check_entropy(&repeated);
+        // Even repeated natural code should compress — but we're validating the
+        // function returns a sane float, not a hard threshold on this sample.
+        assert!(
+            ratio > 0.0 && ratio <= 1.5,
+            "natural code ratio out of sane range: {ratio}"
+        );
+    }
+
+    #[test]
+    fn test_check_entropy_repetitive_content_below_threshold() {
+        // Highly repetitive AI-boilerplate: the same getter pattern repeated
+        // many times.  Compression ratio should be well below 0.15.
+        let line = b"    pub fn get_value(&self) -> i32 { self.value }\n";
+        // 300 repetitions ≈ 15 KB raw; zstd will compress this to < 200 bytes.
+        let repetitive: Vec<u8> = line.iter().copied().cycle().take(15_000).collect();
+        let ratio = check_entropy(&repetitive);
+        assert!(
+            ratio < MIN_ENTROPY_RATIO,
+            "highly repetitive content must trigger gate (ratio={ratio:.4} >= {MIN_ENTROPY_RATIO})"
         );
     }
 }

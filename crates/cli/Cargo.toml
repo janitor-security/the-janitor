@@ -33,3 +33,5 @@ blake3.workspace = true
 indicatif.workspace = true
 ureq.workspace = true
 csv = "1.3"
+git2.workspace = true
+rayon.workspace = true

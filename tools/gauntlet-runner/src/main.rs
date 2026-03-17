@@ -128,6 +128,12 @@ struct Config {
     gauntlet_dir: PathBuf,
     /// Directory where the final PDF and CSV artifacts are written.
     out_dir: PathBuf,
+    /// When `true`, bypass `gh pr diff`/rayon and use `janitor hyper-drive` instead.
+    ///
+    /// Clones each repo if absent, populates `refs/remotes/origin/pr/*` via a
+    /// packfile fetch, then invokes the libgit2 in-memory bounce engine.
+    /// Zero network calls during scoring after the initial fetch.
+    hyper: bool,
 }
 
 fn parse_args() -> Result<Config, String> {
@@ -151,6 +157,7 @@ fn parse_args() -> Result<Config, String> {
         std::env::var("GAUNTLET_DIR").unwrap_or_else(|_| format!("{home}/dev/gauntlet")),
     );
     let mut out_dir = PathBuf::from(std::env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".into()));
+    let mut hyper = false;
 
     let mut i = 1usize;
     while i < args.len() {
@@ -188,11 +195,15 @@ fn parse_args() -> Result<Config, String> {
                 i += 1;
                 out_dir = PathBuf::from(args.get(i).ok_or("--out-dir requires a directory path")?);
             }
+            "--hyper" => {
+                hyper = true;
+            }
             unknown => {
                 return Err(format!(
                     "Unknown argument: {unknown}\n\
                      Usage: gauntlet-runner [--targets FILE] [--pr-limit N] \
-                     [--timeout S] [--janitor PATH] [--gauntlet-dir DIR] [--out-dir DIR]"
+                     [--timeout S] [--janitor PATH] [--gauntlet-dir DIR] [--out-dir DIR] \
+                     [--hyper]"
                 ));
             }
         }
@@ -206,6 +217,7 @@ fn parse_args() -> Result<Config, String> {
         janitor_bin,
         gauntlet_dir,
         out_dir,
+        hyper,
     })
 }
 
@@ -260,11 +272,16 @@ fn main() {
     }
 
     eprintln!(
-        "gauntlet-runner: {} repos | pr-limit={} | timeout={}s | gauntlet-dir={}",
+        "gauntlet-runner: {} repos | pr-limit={} | timeout={}s | gauntlet-dir={} | mode={}",
         targets.len(),
         cfg.pr_limit,
         cfg.timeout_s,
-        cfg.gauntlet_dir.display()
+        cfg.gauntlet_dir.display(),
+        if cfg.hyper {
+            "hyper-drive"
+        } else {
+            "parallel-bounce"
+        }
     );
 
     // Ensure the gauntlet root exists.
@@ -291,155 +308,413 @@ fn main() {
         };
 
         eprintln!(
-            "\n==> [{repo_slug}]  fetching up to {} PRs...",
+            "\n==> [{repo_slug}]  mode={}  limit={}",
+            if cfg.hyper {
+                "hyper-drive"
+            } else {
+                "parallel-bounce"
+            },
             cfg.pr_limit
         );
 
         let repo_dir = cfg.gauntlet_dir.join(repo_name);
-        // Create the repo directory so the janitor binary can write its
-        // `.janitor/bounce_log.ndjson` log even without a full git clone.
-        if let Err(e) = std::fs::create_dir_all(&repo_dir) {
-            eprintln!(
-                "  error: Cannot create repo dir `{}`: {e} — skipping",
-                repo_dir.display()
-            );
-            continue;
-        }
+        // Bounce log path — used by both modes when the directory already exists.
+        let log_path = repo_dir.join(".janitor").join("bounce_log.ndjson");
 
-        // ── Fetch PR metadata ────────────────────────────────────────────────
-        let prs = match fetch_pr_list(repo_slug, cfg.pr_limit) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("  error: {e} — skipping {repo_slug}");
-                total_errors += 1;
+        if cfg.hyper {
+            // ── Hyper-Drive execution arm ─────────────────────────────────────
+            let repo_dir_str = repo_dir.to_str().unwrap_or(".");
+
+            // Phase 1: idempotent blobless clone guard.
+            //
+            // Guard on `.git` specifically — NOT `repo_dir.exists()`.
+            // Legacy runs leave a `.janitor/` directory without a `.git/`.
+            // Remove any such directory first so git clone has a clean target.
+            let git_dir = repo_dir.join(".git");
+            if !git_dir.exists() {
+                let clone_url = format!("https://github.com/{repo_slug}.git");
+
+                // Remove any existing non-git directory (legacy .janitor/ artefacts
+                // or partial runs) — git clone aborts on non-empty targets.
+                if repo_dir.exists() {
+                    eprintln!("  Removing legacy directory before blobless clone...");
+                    if let Err(e) = std::fs::remove_dir_all(&repo_dir) {
+                        eprintln!(
+                            "  error: Cannot remove `{}`: {e} — skipping {repo_slug}",
+                            repo_dir.display()
+                        );
+                        total_errors += 1;
+                        continue;
+                    }
+                }
+
+                eprintln!("  Cloning {clone_url} (full)...");
+                let status = Command::new("git")
+                    .args(["clone", &clone_url, repo_dir_str])
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .status();
+                match status {
+                    Ok(s) if s.success() => eprintln!("  Clone complete."),
+                    Ok(s) => {
+                        eprintln!("  error: git clone exited {s} — skipping {repo_slug}");
+                        total_errors += 1;
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("  error: git clone exec failed: {e} — skipping {repo_slug}");
+                        total_errors += 1;
+                        continue;
+                    }
+                }
+            } else {
+                eprintln!("  Git repo exists, skipping clone.");
+            }
+
+            // Remove the partial-clone blob filter so the subsequent fetch
+            // downloads full blobs for PR head commits.  libgit2 cannot
+            // lazy-fetch missing objects — blobs must be physically present
+            // in the local packfile or `simulate_merge` returns BlobNotFound.
+            let _ = Command::new("git")
+                .args([
+                    "-C",
+                    repo_dir_str,
+                    "config",
+                    "--local",
+                    "--unset-all",
+                    "remote.origin.promisor",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let _ = Command::new("git")
+                .args([
+                    "-C",
+                    repo_dir_str,
+                    "config",
+                    "--local",
+                    "--unset-all",
+                    "remote.origin.partialclonefilter",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+
+            // ── Clean slate: purge stale bounce log ───────────────────────────
+            // `janitor hyper-drive` is append-only — purge any residual log from
+            // prior runs so ghost entries cannot pollute the aggregate report.
+            if log_path.exists() {
+                if let Err(e) = std::fs::remove_file(&log_path) {
+                    eprintln!(
+                        "  warning: Could not purge stale bounce log `{}`: {e}",
+                        log_path.display()
+                    );
+                } else {
+                    eprintln!("  Stale log purged → {}", log_path.display());
+                }
+            }
+
+            // Phase 2: dual refspec — restore standard branch tracking first,
+            // then add PR tracking.  `--replace-all` on the first command
+            // clears any stale entries; `--add` appends the PR refspec so
+            // both refs/heads/* and refs/pull/*/head are fetched.
+            let _ = Command::new("git")
+                .args([
+                    "-C",
+                    repo_dir_str,
+                    "config",
+                    "--local",
+                    "--replace-all",
+                    "remote.origin.fetch",
+                    "+refs/heads/*:refs/remotes/origin/*",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let _ = Command::new("git")
+                .args([
+                    "-C",
+                    repo_dir_str,
+                    "config",
+                    "--local",
+                    "--add",
+                    "remote.origin.fetch",
+                    "+refs/pull/*/head:refs/remotes/origin/pr/*",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+
+            // Phase 3a: fetch base branch (full — blobs required for merge-base).
+            eprintln!("  Fetching base branch...");
+            let _ = Command::new("git")
+                .args([
+                    "-C",
+                    repo_dir_str,
+                    "fetch",
+                    "origin",
+                    "+refs/heads/master:refs/remotes/origin/master",
+                    "+refs/heads/main:refs/remotes/origin/main",
+                    "--no-tags",
+                    "--force",
+                    "--quiet",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .status();
+
+            // Phase 3b: targeted PR fetch — query gh for the N newest PR
+            // numbers and build one refspec per PR.  A wildcard refspec would
+            // download ALL historical PR blobs (100k+ PRs = multi-GB).
+            eprintln!(
+                "  Fetching {} most recent PR refs (targeted)...",
+                cfg.pr_limit
+            );
+            let pr_numbers = match fetch_pr_list(repo_slug, cfg.pr_limit) {
+                Ok(prs) if prs.is_empty() => {
+                    eprintln!("  warning: no PRs returned for {repo_slug} — skipping");
+                    continue;
+                }
+                Ok(prs) => prs.into_iter().map(|p| p.number).collect::<Vec<_>>(),
+                Err(e) => {
+                    eprintln!("  error: gh pr list failed: {e} — skipping {repo_slug}");
+                    total_errors += 1;
+                    continue;
+                }
+            };
+            eprintln!("  {} PR numbers harvested via gh.", pr_numbers.len());
+
+            // Build one refspec per PR number.  All refspecs fit in a single
+            // git fetch invocation (500 × ~60 bytes ≈ 30 KB — well within the
+            // Linux ARG_MAX of 2 MB).
+            let refspecs: Vec<String> = pr_numbers
+                .iter()
+                .map(|n| format!("+refs/pull/{n}/head:refs/remotes/origin/pr/{n}"))
+                .collect();
+
+            let mut fetch_args = vec![
+                "-C".to_string(),
+                repo_dir_str.to_string(),
+                "fetch".to_string(),
+                "origin".to_string(),
+                "--no-tags".to_string(),
+                "--force".to_string(),
+                "--quiet".to_string(),
+            ];
+            fetch_args.extend(refspecs);
+
+            let status = Command::new("git")
+                .args(&fetch_args)
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    eprintln!("  Targeted PR fetch complete.");
+                }
+                Ok(s) => {
+                    eprintln!("  error: git fetch exited {s} — skipping {repo_slug}");
+                    total_errors += 1;
+                    continue;
+                }
+                Err(e) => {
+                    eprintln!("  error: git fetch exec failed: {e} — skipping {repo_slug}");
+                    total_errors += 1;
+                    continue;
+                }
+            }
+
+            // Phase 4: memory-mapped strike.
+            eprintln!("  Launching hyper-drive (limit={})...", cfg.pr_limit);
+            let status = Command::new(&cfg.janitor_bin)
+                .args([
+                    "hyper-drive",
+                    repo_dir_str,
+                    "--limit",
+                    &cfg.pr_limit.to_string(),
+                    "--repo-slug",
+                    repo_slug,
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    eprintln!("  Done  [hyper-drive OK]");
+                    // Count as a single "processed" unit for the summary line.
+                    total_processed += 1;
+                }
+                Ok(s) => {
+                    eprintln!("  error: hyper-drive exited {s}");
+                    total_errors += 1;
+                }
+                Err(e) => {
+                    eprintln!("  error: hyper-drive exec failed: {e}");
+                    total_errors += 1;
+                }
+            }
+
+            // Phase 5: scorch earth — delete git packfile data to reclaim SSD.
+            // .janitor/ is preserved so the global aggregation step can still
+            // read bounce_log.ndjson after all repos have been processed.
+            let git_dir_to_delete = repo_dir.join(".git");
+            if git_dir_to_delete.exists() {
+                eprintln!("  Scorch earth: deleting .git to reclaim SSD space...");
+                if let Err(e) = std::fs::remove_dir_all(&git_dir_to_delete) {
+                    eprintln!("  warning: Could not delete .git: {e}");
+                } else {
+                    eprintln!("  .git deleted → SSD space reclaimed");
+                }
+            }
+        } else {
+            // ── Standard parallel-bounce execution arm ────────────────────────
+
+            // Create the repo directory so the janitor binary can write its
+            // `.janitor/bounce_log.ndjson` log even without a full git clone.
+            if let Err(e) = std::fs::create_dir_all(&repo_dir) {
+                eprintln!(
+                    "  error: Cannot create repo dir `{}`: {e} — skipping",
+                    repo_dir.display()
+                );
                 continue;
             }
-        };
 
-        let total = prs.len();
-        eprintln!("  {total} PRs fetched (after conflict filter) for {repo_slug}");
-        eprintln!(
-            "  Engine log → {}/.janitor/bounce_log.ndjson",
-            repo_dir.display()
-        );
-
-        // ── Clean slate: purge stale bounce log ──────────────────────────────
-        // `janitor bounce` is append-only.  Delete any residual log before
-        // dispatching the rayon pool so that ghost entries from prior runs
-        // cannot pollute this repo's aggregate report.
-        let log_path = repo_dir.join(".janitor").join("bounce_log.ndjson");
-        if log_path.exists() {
-            if let Err(e) = std::fs::remove_file(&log_path) {
-                eprintln!(
-                    "  warning: Could not purge stale bounce log `{}`: {e}",
-                    log_path.display()
-                );
-            } else {
-                eprintln!("  Stale log purged → {}", log_path.display());
+            // ── Clean slate: purge stale bounce log ───────────────────────────
+            // `janitor bounce` is append-only — delete any residual log before
+            // dispatching the rayon pool so ghost entries from prior runs
+            // cannot pollute this repo's aggregate report.
+            if log_path.exists() {
+                if let Err(e) = std::fs::remove_file(&log_path) {
+                    eprintln!(
+                        "  warning: Could not purge stale bounce log `{}`: {e}",
+                        log_path.display()
+                    );
+                } else {
+                    eprintln!("  Stale log purged → {}", log_path.display());
+                }
             }
-        }
 
-        // ── Atomic counters for this repo ────────────────────────────────────
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        let processed = Arc::new(AtomicUsize::new(0));
-        let skipped = Arc::new(AtomicUsize::new(0));
-        let errors = Arc::new(AtomicUsize::new(0));
+            eprintln!("  fetching up to {} PRs...", cfg.pr_limit);
 
-        // Shared config references for rayon closure.
-        let janitor_bin = &cfg.janitor_bin;
-        let repo_dir_ref = &repo_dir;
-        let repo_slug_ref = repo_slug.as_str();
-        let timeout_s = cfg.timeout_s;
+            // ── Fetch PR metadata ─────────────────────────────────────────────
+            let prs = match fetch_pr_list(repo_slug, cfg.pr_limit) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("  error: {e} — skipping {repo_slug}");
+                    total_errors += 1;
+                    continue;
+                }
+            };
 
-        // ── 2-thread rayon pool (RAM gate) ───────────────────────────────────
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .thread_name(|i| format!("bounce-worker-{i}"))
-            .build()
-            .expect("rayon pool build failed");
+            let total = prs.len();
+            eprintln!("  {total} PRs fetched (after conflict filter) for {repo_slug}");
+            eprintln!(
+                "  Engine log → {}/.janitor/bounce_log.ndjson",
+                repo_dir.display()
+            );
 
-        pool.install(|| {
-            prs.par_iter().for_each(|pr| {
-                let number = pr.number;
-                let author = pr
-                    .author
-                    .as_ref()
-                    .and_then(|a| a.login.as_deref())
-                    .unwrap_or("unknown");
-                let body = pr.body.as_deref().unwrap_or("");
-                let state = pr.state.as_deref().unwrap_or("OPEN").to_ascii_lowercase();
+            // ── Atomic counters for this repo ─────────────────────────────────
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            let processed = Arc::new(AtomicUsize::new(0));
+            let skipped = Arc::new(AtomicUsize::new(0));
+            let errors = Arc::new(AtomicUsize::new(0));
 
-                // ── Fetch diff (git-lock protected) ──────────────────────────
-                let patch_bytes = {
-                    let _guard = match git_lock().lock() {
-                        Ok(g) => g,
-                        Err(_) => {
-                            eprintln!("  #{number:<6} GIT LOCK POISONED — skipping");
+            // Shared config references for rayon closure.
+            let janitor_bin = &cfg.janitor_bin;
+            let repo_dir_ref = &repo_dir;
+            let repo_slug_ref = repo_slug.as_str();
+            let timeout_s = cfg.timeout_s;
+
+            // ── 2-thread rayon pool (RAM gate) ────────────────────────────────
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .thread_name(|i| format!("bounce-worker-{i}"))
+                .build()
+                .expect("rayon pool build failed");
+
+            pool.install(|| {
+                prs.par_iter().for_each(|pr| {
+                    let number = pr.number;
+                    let author = pr
+                        .author
+                        .as_ref()
+                        .and_then(|a| a.login.as_deref())
+                        .unwrap_or("unknown");
+                    let body = pr.body.as_deref().unwrap_or("");
+                    let state = pr.state.as_deref().unwrap_or("OPEN").to_ascii_lowercase();
+
+                    // ── Fetch diff (git-lock protected) ───────────────────────
+                    let patch_bytes = {
+                        let _guard = match git_lock().lock() {
+                            Ok(g) => g,
+                            Err(_) => {
+                                eprintln!("  #{number:<6} GIT LOCK POISONED — skipping");
+                                skipped.fetch_add(1, Ordering::Relaxed);
+                                return;
+                            }
+                        };
+                        fetch_diff(repo_slug_ref, number)
+                    };
+
+                    let patch_bytes = match patch_bytes {
+                        Ok(b) if b.is_empty() => {
+                            eprintln!("  #{number:<6} [{author}] SKIP: empty/binary-only diff");
+                            skipped.fetch_add(1, Ordering::Relaxed);
+                            return;
+                        }
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("  #{number:<6} [{author}] SKIP: {e}");
                             skipped.fetch_add(1, Ordering::Relaxed);
                             return;
                         }
                     };
-                    fetch_diff(repo_slug_ref, number)
-                };
 
-                let patch_bytes = match patch_bytes {
-                    Ok(b) if b.is_empty() => {
-                        eprintln!("  #{number:<6} [{author}] SKIP: empty/binary-only diff");
-                        skipped.fetch_add(1, Ordering::Relaxed);
-                        return;
-                    }
-                    Ok(b) => b,
-                    Err(e) => {
-                        eprintln!("  #{number:<6} [{author}] SKIP: {e}");
-                        skipped.fetch_add(1, Ordering::Relaxed);
-                        return;
-                    }
-                };
+                    // ── Bounce (runs fully in parallel) ───────────────────────
+                    let result = run_bounce(
+                        janitor_bin,
+                        repo_dir_ref,
+                        &patch_bytes,
+                        number,
+                        author,
+                        body,
+                        &state,
+                        repo_slug_ref,
+                        timeout_s,
+                    );
 
-                // ── Bounce (runs fully in parallel) ──────────────────────────
-                let result = run_bounce(
-                    janitor_bin,
-                    repo_dir_ref,
-                    &patch_bytes,
-                    number,
-                    author,
-                    body,
-                    &state,
-                    repo_slug_ref,
-                    timeout_s,
-                );
-
-                match result {
-                    Ok(bj) => {
-                        let mut flags = String::new();
-                        if bj.unlinked_pr != 0 {
-                            flags.push_str(" [NO-ISSUE]");
+                    match result {
+                        Ok(bj) => {
+                            let mut flags = String::new();
+                            if bj.unlinked_pr != 0 {
+                                flags.push_str(" [NO-ISSUE]");
+                            }
+                            if bj.antipatterns_found > 0 {
+                                flags.push_str(&format!(" [ANTI×{}]", bj.antipatterns_found));
+                            }
+                            eprintln!(
+                                "  #{number:<6} [{author:<20}] OK   state={state}  score={}{flags}",
+                                bj.slop_score
+                            );
+                            processed.fetch_add(1, Ordering::Relaxed);
                         }
-                        if bj.antipatterns_found > 0 {
-                            flags.push_str(&format!(" [ANTI×{}]", bj.antipatterns_found));
+                        Err(e) => {
+                            eprintln!("  #{number:<6} [{author:<20}] ERR  {e}");
+                            errors.fetch_add(1, Ordering::Relaxed);
                         }
-                        eprintln!(
-                            "  #{number:<6} [{author:<20}] OK   state={state}  score={}{flags}",
-                            bj.slop_score
-                        );
-                        processed.fetch_add(1, Ordering::Relaxed);
                     }
-                    Err(e) => {
-                        eprintln!("  #{number:<6} [{author:<20}] ERR  {e}");
-                        errors.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
+                });
             });
-        });
 
-        let p = processed.load(Ordering::Relaxed);
-        let s = skipped.load(Ordering::Relaxed);
-        let e = errors.load(Ordering::Relaxed);
-        eprintln!("  Done  processed={p}  skipped={s}  errors={e}");
+            let p = processed.load(Ordering::Relaxed);
+            let s = skipped.load(Ordering::Relaxed);
+            let e = errors.load(Ordering::Relaxed);
+            eprintln!("  Done  processed={p}  skipped={s}  errors={e}");
 
-        total_processed += p;
-        total_skipped += s;
-        total_errors += e;
+            total_processed += p;
+            total_skipped += s;
+            total_errors += e;
+        }
     }
 
     eprintln!(

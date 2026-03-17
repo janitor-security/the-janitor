@@ -47,6 +47,22 @@ pub struct PrDeltaSignature {
 }
 
 impl PrDeltaSignature {
+    /// Returns `true` if `data` yields at least [`MIN_SHINGLE_ENTROPY`] byte
+    /// 3-gram windows, indicating sufficient entropy for swarm clustering.
+    ///
+    /// Patches below this threshold (single-word typo fixes, lone comment
+    /// additions, pure whitespace edits) must not be inserted into or queried
+    /// against the [`LshIndex`] — their MinHash sketches are too sparse to
+    /// discriminate unrelated PRs and cause null-vector false collisions.
+    pub fn has_entropy(data: &[u8]) -> bool {
+        if data.len() < 3 {
+            return false;
+        }
+        // windows(3).count() == data.len() - 2 for len >= 3.  O(1) — no
+        // iteration required.
+        (data.len() - 2) >= MIN_SHINGLE_ENTROPY
+    }
+
     /// Compute a MinHash sketch from raw bytes (patch/diff content).
     ///
     /// Uses 64 independent hash seeds over byte 3-grams.  Falls back to
@@ -73,6 +89,15 @@ impl PrDeltaSignature {
         Self { min_hashes }
     }
 }
+
+/// Minimum number of byte 3-gram windows a patch must contain for its
+/// [`PrDeltaSignature`] to be considered sufficiently entropic for swarm
+/// clustering.
+///
+/// Patches below this threshold — single-word typo fixes, pure whitespace
+/// edits, lone comment additions — produce MinHash sketches too sparse to
+/// discriminate unrelated PRs and must bypass the [`LshIndex`].
+const MIN_SHINGLE_ENTROPY: usize = 5;
 
 /// Precomputed hash seeds for MinHash (64 independent seeds).
 const HASH_SEEDS: [u64; NUM_HASHES] = {
@@ -285,6 +310,38 @@ mod tests {
             "query for inserted signature must return a hit"
         );
         assert_eq!(results[0], 42, "query must return the inserted PR number");
+    }
+
+    #[test]
+    fn test_has_entropy_rejects_short_patches() {
+        assert!(
+            !PrDeltaSignature::has_entropy(&[]),
+            "empty patch must have no entropy"
+        );
+        assert!(
+            !PrDeltaSignature::has_entropy(b"hi"),
+            "2-byte patch must have no entropy (len < 3)"
+        );
+        // Exactly at boundary: len=6 → 4 windows (len-2=4) < 5 → false.
+        assert!(
+            !PrDeltaSignature::has_entropy(b"abcdef"),
+            "6-byte patch yields 4 windows, below threshold"
+        );
+    }
+
+    #[test]
+    fn test_has_entropy_accepts_code_patches() {
+        // A real code patch is always far above the 5-window threshold.
+        let patch = b"def foo():\n    return 42\n";
+        assert!(
+            PrDeltaSignature::has_entropy(patch),
+            "real code patch must pass entropy gate"
+        );
+        // Minimal passing case: len=7 → 5 windows == threshold.
+        assert!(
+            PrDeltaSignature::has_entropy(b"abcdefg"),
+            "7-byte patch yields exactly 5 windows, must pass"
+        );
     }
 
     #[test]

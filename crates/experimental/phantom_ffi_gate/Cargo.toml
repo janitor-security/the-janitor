@@ -1,0 +1,18 @@
+[package]
+name = "phantom_ffi_gate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+blake3.workspace = true
+memmap2.workspace = true
+rkyv.workspace = true
+tree-sitter.workspace = true
+tree-sitter-cpp.workspace = true
+tree-sitter-python.workspace = true
+# ML-DSA-65 post-quantum signing oracle (FIPS 204).
+# default-rng feature pulls in rand_core/getrandom for OS-entropy key generation.
+fips204 = "0.4"

@@ -1,5 +1,5 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v6.13.0 — Rust-Native. Zero-Copy. Enforcement at the Gate.**
+**v7.1.0 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
@@ -27,6 +27,15 @@ The threat model has changed. Your enforcement layer has not.
 ## The Enforcement Layer
 
 The Janitor is not a linter. It is a **structural firewall** that runs on your hardware, on every pull request — before the merge button is available.
+
+### Pro-Entropic Resilience
+
+The v7.1.0 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.15`. Any blob crossing that threshold triggers `HighGenerativeVerbosity` (+50 points) before tree-sitter parses a single node.
+
+Two complementary shields eliminate false positives on legitimate non-application content:
+
+- **Null-Vector Collision Shield** — IaC bypass (`.nix`, `.lock`, `.json`, `.toml`, `.yaml`, `.yml`, `.csv`) + 256-byte size guard + `DOMAIN_VENDORED` router. CVE vendor patches touching `thirdparty/` score zero by construction. No legitimate infrastructure change can produce a spurious non-zero score.
+- **Net-Negative Exemption** — All score multipliers act exclusively on *newly introduced* symbols and patterns. Deletion-dominant patches — boilerplate purges, dead API removal, deprecated-code cleanup — mathematically cannot trigger any scoring signal. Score=0 is a proof, not a heuristic.
 
 ### Zero-Copy Execution
 
@@ -99,6 +108,7 @@ janitor clean ./src --force-purge
 | **Registry Persistence** | rkyv + memmap2 | mmap-direct deserialization; no heap allocation for reads |
 | **Structural Hashing** | BLAKE3 (alpha-normalized AST) | Logic-clone detection across identifier rename boundaries |
 | **Fuzzy Dedup** | AstSimHasher (SimHash over CST tokens) | Classified as `Refactor`, `Zombie`, or `NewCode` |
+| **NCD Entropy Gate** | zstd level-3 compression ratio | O(N) boilerplate detector; fires before AST parse; ratio < 0.15 → `HighGenerativeVerbosity` |
 | **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
 | **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
