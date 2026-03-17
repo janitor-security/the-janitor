@@ -428,11 +428,34 @@ fn build_violation_reasons(entry: &crate::report::BounceLogEntry) -> String {
         reasons.push("Unlinked PR".to_owned());
     }
 
+    // ── Necrotic flag (Backlog Pruner verdict) ─────────────────────────────
+    if let Some(ref flag) = entry.necrotic_flag {
+        reasons.push(format!("Necrotic: {flag}"));
+    }
+
     // ── Zombie dependencies (informational) ────────────────────────────────
     if !entry.zombie_deps.is_empty() {
         reasons.push(format!(
             "Zombie Dependency: {}",
             entry.zombie_deps.join(", ")
+        ));
+    }
+
+    // ── Clone collisions (per-PR LSH hit list, informational) ──────────────
+    if !entry.collided_pr_numbers.is_empty() {
+        let hits: Vec<String> = entry
+            .collided_pr_numbers
+            .iter()
+            .map(|n| format!("#{n}"))
+            .collect();
+        reasons.push(format!("Clone collision: {}", hits.join(", ")));
+    }
+
+    // ── Domain routing suppression (engine transparency) ──────────────────
+    if entry.suppressed_by_domain > 0 {
+        reasons.push(format!(
+            "Domain-suppressed findings: {}",
+            entry.suppressed_by_domain
         ));
     }
 

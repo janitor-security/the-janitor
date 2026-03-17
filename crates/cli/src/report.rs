@@ -1130,7 +1130,12 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
         .map(|(repo_name, entries)| {
             let pr_count = entries.len();
             let total_slop_score: u64 = entries.iter().map(|e| e.slop_score as u64).sum();
-            let antipatterns_found: u32 = entries.iter().map(|e| e.antipatterns.len() as u32).sum();
+            let antipatterns_found: u32 = entries
+                .iter()
+                .map(|e| {
+                    e.antipatterns.len() as u32 + if e.necrotic_flag.is_some() { 1 } else { 0 }
+                })
+                .sum();
             let dead_symbols_added: u32 = entries.iter().map(|e| e.dead_symbols_added).sum();
             let zombie_dep_prs: u32 =
                 entries.iter().filter(|e| !e.zombie_deps.is_empty()).count() as u32;
