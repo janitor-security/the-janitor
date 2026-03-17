@@ -32,6 +32,24 @@ use anyhow::Result;
 use std::io::Write as _;
 use std::path::Path;
 
+/// Sanitize a free-text field for safe CSV embedding.
+///
+/// The `csv` crate wraps fields containing newlines in RFC 4180 double-quotes,
+/// but many downstream consumers (Excel, pandas `read_csv` without `quoting`
+/// option, Looker) treat in-field newlines as row breaks and corrupt the grid.
+/// This function normalises all newline sequences to a single space so every
+/// cell occupies exactly one logical row.
+#[inline]
+fn csv_sanitize(s: &str) -> String {
+    // Replace every CR and LF character with a space so free-text fields never
+    // introduce logical row breaks when the CSV is opened in Excel, pandas, or
+    // Looker.  A pattern array in a single `replace` call satisfies clippy's
+    // `collapsible_str_replace` lint while handling both bare CR, bare LF, and
+    // CRLF sequences (the latter becomes two spaces, which is acceptable for
+    // display purposes).
+    s.replace(['\r', '\n'], " ")
+}
+
 /// UTF-8 Byte Order Mark — prepended to every CSV file so that Microsoft Excel
 /// and other enterprise spreadsheet tools auto-detect UTF-8 encoding rather than
 /// falling back to the system code page (which renders em-dashes and similar
@@ -119,13 +137,14 @@ pub fn cmd_export_global(gauntlet_root: &Path, out: &Path) -> Result<()> {
             let savings_usd = time_saved_h * HOURLY_COST_USD;
 
             let pr_num_str = entry.pr_number.map(|n| n.to_string()).unwrap_or_default();
+            let author_str = csv_sanitize(entry.author.as_deref().unwrap_or(""));
             let score_str = entry.slop_score.to_string();
             let unlinked_str = entry.unlinked_pr.to_string();
             let dead_str = entry.dead_symbols_added.to_string();
             let clones_str = entry.logic_clones_found.to_string();
             let zombie_syms_str = entry.zombie_symbols_added.to_string();
-            let zombie_deps_str = entry.zombie_deps.join(" | ");
-            let violation_reasons = build_violation_reasons(entry);
+            let zombie_deps_str = csv_sanitize(&entry.zombie_deps.join(" | "));
+            let violation_reasons = csv_sanitize(&build_violation_reasons(entry));
             let time_str = format!("{time_saved_h:.4}");
             let savings_str = format!("{savings_usd:.2}");
             let state_str = entry.state.to_string();
@@ -133,7 +152,7 @@ pub fn cmd_export_global(gauntlet_root: &Path, out: &Path) -> Result<()> {
 
             wtr.write_record([
                 pr_num_str.as_str(),
-                entry.author.as_deref().unwrap_or(""),
+                author_str.as_str(),
                 score_str.as_str(),
                 "FALSE",
                 "0",
@@ -218,13 +237,14 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
         let savings_usd = time_saved_h * HOURLY_COST_USD;
 
         let pr_num_str = entry.pr_number.map(|n| n.to_string()).unwrap_or_default();
+        let author_str = csv_sanitize(entry.author.as_deref().unwrap_or(""));
         let score_str = entry.slop_score.to_string();
         let unlinked_str = entry.unlinked_pr.to_string();
         let dead_str = entry.dead_symbols_added.to_string();
         let clones_str = entry.logic_clones_found.to_string();
         let zombie_syms_str = entry.zombie_symbols_added.to_string();
-        let zombie_deps_str = entry.zombie_deps.join(" | ");
-        let violation_reasons = build_violation_reasons(entry);
+        let zombie_deps_str = csv_sanitize(&entry.zombie_deps.join(" | "));
+        let violation_reasons = csv_sanitize(&build_violation_reasons(entry));
         let time_str = format!("{time_saved_h:.4}");
         let savings_str = format!("{savings_usd:.2}");
         let state_str = entry.state.to_string();
@@ -232,7 +252,7 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
 
         wtr.write_record([
             pr_num_str.as_str(),
-            entry.author.as_deref().unwrap_or(""),
+            author_str.as_str(),
             score_str.as_str(),
             "FALSE", // Mesa_Triggered — SaaS reserved
             "0",     // Trust_Delta   — SaaS reserved
@@ -327,10 +347,10 @@ fn export_static_scan(janitor_dir: &Path, out: &Path) -> Result<()> {
         // Score proxy: dead-symbol weight (×10) applied to byte size in units of 100 B.
         let score = byte_size / 10;
         let score_str = score.to_string();
-        let violation = format!(
+        let violation = csv_sanitize(&format!(
             "Dead Symbol: {} ({}:{})",
             entry.qualified_name, entry.file_path, entry.start_line
-        );
+        ));
 
         wtr.write_record([
             "", // PR_Number — N/A for static scan

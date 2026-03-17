@@ -163,8 +163,14 @@ impl SlopScore {
     /// Higher scores indicate lower patch quality. A score of zero means the
     /// patch passes all checks cleanly.
     pub fn score(&self) -> u32 {
+        // Clamp logic_clones_found to 50 before multiplication to prevent
+        // runaway scores on adversarial or degenerate inputs (e.g. a PR that
+        // copies the same function 10 000 times).  A real patch with 50+ clone
+        // pairs is already conclusively slop at 250 points; the ceiling adds
+        // no information beyond that.
+        let clamped_clones = self.logic_clones_found.min(50);
         self.dead_symbols_added * 10
-            + self.logic_clones_found * 5
+            + clamped_clones * 5
             + self.zombie_symbols_added * 15
             + self.antipatterns_found * 50
             + self.comment_violations * 5

@@ -345,6 +345,26 @@ fn bounce_one(
     pr_num: u32,
     repo_slug: &str,
 ) -> Option<BounceLogEntry> {
+    // Extract the commit author directly from the Git object so the PDF Top
+    // Contributors list is populated when running in hyper-drive (offline) mode,
+    // which bypasses the GitHub API and has no other source of author metadata.
+    //
+    // Explicit if-let nesting is required to give the borrow checker a clear
+    // drop sequence: `repo` outlives `commit` which outlives the `Signature`
+    // temporary.  Chained closures / IIFE with `?` confuse NLL across these
+    // libgit2 lifetime boundaries.
+    let author: Option<String> = {
+        let mut name: Option<String> = None;
+        if let Ok(repo) = Repository::open(repo_path) {
+            if let Ok(oid) = Oid::from_str(pr_sha) {
+                if let Ok(commit) = repo.find_commit(oid) {
+                    name = commit.author().name().map(str::to_owned);
+                }
+            }
+        }
+        name
+    };
+
     // Compute the merge base to isolate the PR's actual changes.
     let merge_base_sha = compute_merge_base(repo_path, global_base_sha, pr_sha)
         .map_err(|e| eprintln!("hyper-drive PR#{pr_num}: merge-base failed: {e}"))
@@ -366,7 +386,7 @@ fn bounce_one(
 
     Some(BounceLogEntry {
         pr_number: Some(pr_num as u64),
-        author: None,
+        author,
         timestamp: utc_now_iso8601(),
         slop_score,
         dead_symbols_added: score.dead_symbols_added,
