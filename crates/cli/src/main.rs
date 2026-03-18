@@ -590,6 +590,55 @@ struct StaticThreatEntry {
     detail: &'static str,
 }
 
+/// Returns `true` if the line immediately before `byte_offset` in `data`
+/// contains a `// janitor:ignore <label>` or `# janitor:ignore <label>` pragma.
+///
+/// Solves the Antivirus Paradox: security detector source files that contain
+/// their own pattern literals would self-trigger on every scan.  A single
+/// pragma line suppresses the finding without creating a path exclusion blind spot.
+fn has_suppression_pragma(data: &[u8], byte_offset: usize, label: &str) -> bool {
+    let scan_end = byte_offset.min(data.len());
+    // Locate the start of the line that contains byte_offset.
+    let line_start = data[..scan_end]
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, &b)| b == b'\n')
+        .map(|(i, _)| i + 1)
+        .unwrap_or(0);
+
+    if line_start == 0 {
+        return false; // byte_offset is on the first line — no preceding line exists.
+    }
+
+    // The preceding line ends just before the newline that opens line_start.
+    let prev_end = line_start - 1;
+    // Strip optional carriage return (Windows CRLF line endings).
+    let prev_end = if prev_end > 0 && data[prev_end - 1] == b'\r' {
+        prev_end - 1
+    } else {
+        prev_end
+    };
+    let prev_start = data[..prev_end]
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, &b)| b == b'\n')
+        .map(|(i, _)| i + 1)
+        .unwrap_or(0);
+
+    let prev_line = &data[prev_start..prev_end];
+    let pragma_rs = format!("// janitor:ignore {label}");
+    let pragma_sh = format!("# janitor:ignore {label}");
+
+    prev_line
+        .windows(pragma_rs.len())
+        .any(|w| w == pragma_rs.as_bytes())
+        || prev_line
+            .windows(pragma_sh.len())
+            .any(|w| w == pragma_sh.as_bytes())
+}
+
 fn cmd_scan(
     project_root: &Path,
     library: bool,
@@ -679,6 +728,7 @@ fn cmd_scan(
     //
     // Walks all source files in the project root, applying two O(N) detectors:
     //   • unicode_gate — BiDi controls, zero-width chars, Cyrillic homoglyphs
+    // janitor:ignore security:lotl_execution_anomaly
     //   • lotl_hunter  — PowerShell -EncodedCommand, base64-decode-exec chains,
     //                    /tmp/ and /dev/shm/ staging-area binary execution
     // Files > 1 MiB are skipped (same circuit breaker as PatchBouncer).
@@ -717,21 +767,33 @@ fn cmd_scan(
                 Ok(m) => m,
                 Err(_) => continue,
             };
-            if let Some(r) = unicode_gate::scan(&mmap, filename) {
-                threats.push(StaticThreatEntry {
-                    file_path: path.to_string_lossy().into_owned(),
-                    detector: r.label,
-                    byte_offset: r.byte_offset,
-                    detail: r.description,
-                });
+            // Binary immunity: PDFs, PNGs, executables contain null bytes or
+            // high-entropy windows that would produce false threat positives.
+            // ByteLatticeAnalyzer detects both via null-byte and entropy checks.
+            if forge::agnostic_shield::ByteLatticeAnalyzer::classify(&mmap[..])
+                == forge::agnostic_shield::TextClass::AnomalousBlob
+            {
+                continue;
             }
-            if let Some(r) = lotl_hunter::scan(&mmap, filename) {
-                threats.push(StaticThreatEntry {
-                    file_path: path.to_string_lossy().into_owned(),
-                    detector: r.label,
-                    byte_offset: r.byte_offset,
-                    detail: r.technique,
-                });
+            if let Some(r) = unicode_gate::scan(&mmap[..], filename) {
+                if !has_suppression_pragma(&mmap[..], r.byte_offset, r.label) {
+                    threats.push(StaticThreatEntry {
+                        file_path: path.to_string_lossy().into_owned(),
+                        detector: r.label,
+                        byte_offset: r.byte_offset,
+                        detail: r.description,
+                    });
+                }
+            }
+            if let Some(r) = lotl_hunter::scan(&mmap[..], filename) {
+                if !has_suppression_pragma(&mmap[..], r.byte_offset, r.label) {
+                    threats.push(StaticThreatEntry {
+                        file_path: path.to_string_lossy().into_owned(),
+                        detector: r.label,
+                        byte_offset: r.byte_offset,
+                        detail: r.technique,
+                    });
+                }
             }
         }
         threats

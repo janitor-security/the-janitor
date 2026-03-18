@@ -50,6 +50,7 @@ fn unicode_gate_catches_zero_width_space_in_python_function_name() {
     );
 }
 
+// janitor:ignore security:invisible_unicode_injection
 /// A Rust identifier containing the Cyrillic 'о' (U+043E) substituted for
 /// the ASCII 'o' must be flagged as a homoglyph attack.
 #[test]
@@ -115,23 +116,21 @@ fn unicode_gate_passes_clean_ascii_patch() {
 // LotL Hunter — Scenario Tests
 // ---------------------------------------------------------------------------
 
-/// A YAML CI file embedding an obfuscated Bash execution string
-/// (`echo <b64> | base64 -d | bash`) must be flagged as a LotL anomaly.
-///
-/// This is a realistic GitHub Actions / GitLab CI injection pattern where an
-/// attacker replaces a build step's `run:` value with a payload that downloads
-/// and executes an arbitrary binary in the runner.
+/// A YAML CI file embedding an obfuscated Bash execution string must be flagged
+/// as a LotL anomaly (realistic GitHub Actions / GitLab CI injection pattern).
 #[test]
 fn lotl_hunter_catches_base64_exec_in_yaml_ci() {
-    // Realistic YAML CI payload with a base64-encoded execution chain.
-    let yaml_ci = b"\
-- name: Install dependencies\n\
-  run: pip install -r requirements.txt\n\
-- name: Configure\n\
-  run: echo SGVsbG8gV29ybGQ= | base64 -d | bash\n\
-";
+    // Preamble — benign CI steps.
+    let preamble: &[u8] =
+        b"- name: Install dependencies\n  run: pip install -r requirements.txt\n- name: Configure\n";
+    // Trigger line: base64 decode-exec chain (the actual LotL payload).
+    // janitor:ignore security:lotl_execution_anomaly
+    let trigger: &[u8] = b"  run: echo SGVsbG8gV29ybGQ= | base64 -d | bash\n";
+    let mut yaml_ci = preamble.to_vec();
+    yaml_ci.extend_from_slice(trigger);
+    let yaml_ci = yaml_ci;
 
-    let report = lotl_hunter::scan(yaml_ci, "ci.yml")
+    let report = lotl_hunter::scan(&yaml_ci, "ci.yml")
         .expect("LotL hunter must flag base64 decode-exec in YAML");
 
     assert_eq!(

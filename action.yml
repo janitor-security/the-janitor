@@ -112,6 +112,7 @@ runs:
         [[ -n "$PR_NUM" ]] && BOUNCE_ARGS+=(--pr-number "$PR_NUM")
         [[ -n "$AUTHOR" ]] && BOUNCE_ARGS+=(--author    "$AUTHOR")
 
+        # janitor:ignore security:lotl_execution_anomaly
         RESULT=$(/tmp/janitor "${BOUNCE_ARGS[@]}" 2>/dev/null || echo '{"slop_score":0}')
 
         SCORE=$(   echo "$RESULT" | jq -r '.slop_score           // 0')

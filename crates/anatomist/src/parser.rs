@@ -344,23 +344,8 @@ const OBJC_PATTERNS: &[(&str, &str, EntityType)] = &[
     ("method.def", "method.name", EntityType::MethodDefinition), // unary ObjC method
 ];
 
-/// S-expression for Nix grammar entity extraction.
-///
-/// Captures top-level attribute bindings (`name = expr;`) from Nix source files.
-/// The first simple identifier in each attrpath is recorded as the entity name.
-/// This covers both `foo = ...;` (simple) and `foo.bar = ...;` (nested, captures `foo`).
-///
-/// Note: bindings inside `mkDerivation { ... }` calls are also captured; the grep
-/// shield (Stage 5) will rescue any that are referenced elsewhere.
-const NIX_ENTITY_S_EXPR: &str = r#"
-    (binding
-      attrpath: (attrpath
-        attr: (identifier) @bind.name)) @bind.def
-"#;
-
-/// Pattern-index → (def_cap, name_cap, entity_type) mapping for Nix grammar.
-const NIX_PATTERNS: &[(&str, &str, EntityType)] =
-    &[("bind.def", "bind.name", EntityType::Assignment)];
+// Nix S-expression query and patterns are defined in crate::languages::nix.
+// See that module for the rationale and grammar coverage notes.
 
 /// S-expression for Scala grammar entity extraction.
 ///
@@ -555,8 +540,11 @@ fn get_objc_query() -> Result<&'static Query, AnatomistError> {
 fn get_nix_query() -> Result<&'static Query, AnatomistError> {
     NIX_QUERY
         .get_or_init(|| {
-            Query::new(&tree_sitter_nix::LANGUAGE.into(), NIX_ENTITY_S_EXPR)
-                .map_err(|e| e.to_string())
+            Query::new(
+                &tree_sitter_nix::LANGUAGE.into(),
+                crate::languages::nix::ENTITY_S_EXPR,
+            )
+            .map_err(|e| e.to_string())
         })
         .as_ref()
         .map_err(|e| AnatomistError::ParseFailure(e.clone()))
@@ -1031,18 +1019,23 @@ impl ParserHost {
     ///
     /// This provides the symbol surface for nixpkgs-style repos where packages
     /// are defined as top-level attribute-set bindings (e.g., `curl = callPackage ./curl {};`).
-    /// `protected_by` is `None` for all returned entities; protection is assigned by later stages.
+    ///
+    /// All returned entities carry `protected_by = Some(Protection::WisdomRule)`.
+    /// Nix is a purely functional configuration language — every binding is active
+    /// build-time configuration, never dead code.
     pub fn extract_nix_entities(
         source: &[u8],
         file_path: &str,
     ) -> Result<Vec<Entity>, AnatomistError> {
-        extract_named_entities(
+        let mut entities = extract_named_entities(
             source,
             tree_sitter_nix::LANGUAGE.into(),
             get_nix_query()?,
             file_path,
-            NIX_PATTERNS,
-        )
+            crate::languages::nix::PATTERNS,
+        )?;
+        crate::languages::nix::shield_all(&mut entities);
+        Ok(entities)
     }
 
     /// Extracts `def`, `class`, `object`, and `val` entities from a Scala source buffer.

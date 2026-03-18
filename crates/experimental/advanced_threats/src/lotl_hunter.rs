@@ -6,6 +6,7 @@
 //! ## Layer 1 — AhoCorasick Fast Path (O(N), zero heap alloc in scan loop)
 //!
 //! Single-pass scan for definitive high-confidence LotL indicators:
+// janitor:ignore security:lotl_execution_anomaly
 //! - PowerShell encoded command flags (`-EncodedCommand`, `-enc`)
 //! - Base64 decode pipes to shell (`base64 -d | sh`, `base64 --decode | bash`)
 //! - Chained pipe-decode-exec variants

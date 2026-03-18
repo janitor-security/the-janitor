@@ -16,6 +16,7 @@
 //!   zero-width spaces, and Cyrillic homoglyphs used in ASCII identifier spoofing.
 //!
 //! - [`lotl_hunter`]: Living-off-the-Land Execution Anomaly Detector. Two-layer:
+// janitor:ignore security:lotl_execution_anomaly
 //!   AhoCorasick fast path for PowerShell -EncodedCommand / base64-decode-exec chains,
 //!   plus `tree-sitter-bash` structural AST analysis for `/tmp/` / `/dev/shm/`
 //!   staging-area binary execution.

@@ -69,6 +69,7 @@ pub const THREAT_LABEL: &str = "security:invisible_unicode_injection";
 //   U+2069 POP DIRECTIONAL ISOLATE       → \xe2\x81\xa9
 //
 // Cyrillic homoglyphs visually identical to ASCII (supply-chain name spoofing)
+// janitor:ignore security:invisible_unicode_injection
 //   U+0430 'а' Cyrillic small a          → \xd0\xb0
 //   U+0435 'е' Cyrillic small e          → \xd0\xb5
 //   U+043E 'о' Cyrillic small o          → \xd0\xbe
@@ -146,7 +147,8 @@ fn automaton() -> &'static AhoCorasick {
 /// O(N) in the length of `data`.  Zero heap allocations in the scan loop.
 pub fn scan(data: &[u8], filename: &str) -> Option<ThreatReport> {
     // Translation files legitimately contain Unicode in any script.
-    if filename.ends_with(".po") || filename.ends_with(".pot") {
+    // CSV files frequently carry a UTF-8 BOM (\xef\xbb\xbf) emitted by Excel.
+    if filename.ends_with(".po") || filename.ends_with(".pot") || filename.ends_with(".csv") {
         return None;
     }
 
