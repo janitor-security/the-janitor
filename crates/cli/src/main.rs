@@ -582,6 +582,14 @@ async fn main() -> anyhow::Result<()> {
 // scan
 // ---------------------------------------------------------------------------
 
+/// At-rest threat finding emitted by the Unicode Gate or LotL Hunter.
+struct StaticThreatEntry {
+    file_path: String,
+    detector: &'static str,
+    byte_offset: usize,
+    detail: &'static str,
+}
+
 fn cmd_scan(
     project_root: &Path,
     library: bool,
@@ -667,6 +675,68 @@ fn cmd_scan(
         }
     }
 
+    // Phase 6.5: At-Rest Threat Scan — Unicode injection + LotL execution anomalies.
+    //
+    // Walks all source files in the project root, applying two O(N) detectors:
+    //   • unicode_gate — BiDi controls, zero-width chars, Cyrillic homoglyphs
+    //   • lotl_hunter  — PowerShell -EncodedCommand, base64-decode-exec chains,
+    //                    /tmp/ and /dev/shm/ staging-area binary execution
+    // Files > 1 MiB are skipped (same circuit breaker as PatchBouncer).
+    let static_threats: Vec<StaticThreatEntry> = {
+        use advanced_threats::{lotl_hunter, unicode_gate};
+        use walkdir::WalkDir;
+        const SKIP_DIRS: &[&str] = &[".git", "target", "node_modules", ".janitor", "site"];
+        let mut threats: Vec<StaticThreatEntry> = Vec::new();
+
+        for entry in WalkDir::new(project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.file_type().is_dir() {
+                    let name = e.file_name().to_str().unwrap_or("");
+                    !SKIP_DIRS.contains(&name)
+                } else {
+                    true
+                }
+            })
+            .flatten()
+        {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.len() > 1_048_576 {
+                continue;
+            }
+            let path = entry.path();
+            let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let Ok(f) = std::fs::File::open(path) else {
+                continue;
+            };
+            let mmap = match unsafe { memmap2::Mmap::map(&f) } {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if let Some(r) = unicode_gate::scan(&mmap, filename) {
+                threats.push(StaticThreatEntry {
+                    file_path: path.to_string_lossy().into_owned(),
+                    detector: r.label,
+                    byte_offset: r.byte_offset,
+                    detail: r.description,
+                });
+            }
+            if let Some(r) = lotl_hunter::scan(&mmap, filename) {
+                threats.push(StaticThreatEntry {
+                    file_path: path.to_string_lossy().into_owned(),
+                    detector: r.label,
+                    byte_offset: r.byte_offset,
+                    detail: r.technique,
+                });
+            }
+        }
+        threats
+    };
+
     if format == "json" {
         // Machine-readable output for Janitor Sentinel / GitHub Checks integration.
         let slop_score = if result.total == 0 {
@@ -706,6 +776,13 @@ fn cmd_scan(
                 "custom_antipatterns": scan_policy.custom_antipatterns,
                 "refactor_bonus": scan_policy.refactor_bonus,
             },
+            "static_threats": static_threats.iter().map(|t| serde_json::json!({
+                "threat_type": "STATIC_THREAT",
+                "file_path": t.file_path,
+                "detector": t.detector,
+                "byte_offset": t.byte_offset,
+                "detail": t.detail,
+            })).collect::<Vec<_>>(),
         });
         println!("{}", serde_json::to_string_pretty(&json_out)?);
     } else {
@@ -740,6 +817,22 @@ fn cmd_scan(
         } else {
             for path in &result.orphan_files {
                 println!("  {path}");
+            }
+        }
+
+        println!("\n+------------------------------------------+");
+        println!("| STATIC THREATS                           |");
+        println!("+------------------------------------------+");
+        println!("| Count          : {:>22} |", static_threats.len());
+        println!("+------------------------------------------+");
+        if static_threats.is_empty() {
+            println!("No static threats detected.");
+        } else {
+            for t in &static_threats {
+                println!(
+                    "  [{}] {} @ byte {} — {}",
+                    t.detector, t.file_path, t.byte_offset, t.detail
+                );
             }
         }
 

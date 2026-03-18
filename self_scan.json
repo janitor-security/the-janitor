@@ -1,0 +1,204 @@
+{
+  "dead_symbols": [
+    {
+      "byte_range": [
+        212,
+        247
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "follows",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        260,
+        307
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "flake-utils",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        760,
+        836
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "rustToolchain",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        1564,
+        1746
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "texPackages",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        1772,
+        5422
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "devShells",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        1846,
+        3566
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "buildInputs",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        3934,
+        3970
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "OPENSSL_DIR",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        3981,
+        4025
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "OPENSSL_LIB_DIR",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        4036,
+        4088
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "OPENSSL_INCLUDE_DIR",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        4285,
+        4381
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "PKG_CONFIG_PATH",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    },
+    {
+      "byte_range": [
+        4592,
+        5411
+      ],
+      "file_path": "/home/ghrammr/dev/the-janitor/flake.nix",
+      "id": "shellHook",
+      "reason": "DEAD_SYMBOL",
+      "structural_hash": 0
+    }
+  ],
+  "merkle_root": "c336e07b3daa376b32c7dd6a5e259a9c2338140b71c06870dc3892095095b16c",
+  "policy": {
+    "allowed_zombies": true,
+    "custom_antipatterns": [],
+    "min_slop_score": 20,
+    "pqc_enforced": false,
+    "refactor_bonus": 0,
+    "require_issue_link": false
+  },
+  "schema_version": "6.9.0",
+  "slop_score": 0.011022044088176353,
+  "static_threats": [
+    {
+      "byte_offset": 2604,
+      "detail": "U+0435 Cyrillic 'е' (homoglyph of ASCII 'e')",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./docs/assets/nixpkgs_intelligence_report.pdf",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 0,
+      "detail": "U+FEFF ZERO WIDTH NO-BREAK SPACE (BOM)",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./docs/assets/godot_full_audit.csv",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 2565,
+      "detail": "U+0435 Cyrillic 'е' (homoglyph of ASCII 'e')",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./docs/assets/godot_intelligence_report.pdf",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 46558,
+      "detail": "U+0435 Cyrillic 'е' (homoglyph of ASCII 'e')",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./docs/assets/logo.png",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 2071,
+      "detail": "U+043E Cyrillic 'о' (homoglyph of ASCII 'o')",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./crates/experimental/advanced_threats/tests/unicode_lotl_isolation.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 4574,
+      "detail": "chained base64 decode-exec to bash",
+      "detector": "security:lotl_execution_anomaly",
+      "file_path": "./crates/experimental/advanced_threats/tests/unicode_lotl_isolation.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 1059,
+      "detail": "PowerShell -EncodedCommand: base64 payload execution",
+      "detector": "security:lotl_execution_anomaly",
+      "file_path": "./crates/experimental/advanced_threats/src/lib.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 429,
+      "detail": "PowerShell -EncodedCommand: base64 payload execution",
+      "detector": "security:lotl_execution_anomaly",
+      "file_path": "./crates/experimental/advanced_threats/src/lotl_hunter.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 3254,
+      "detail": "U+0430 Cyrillic 'а' (homoglyph of ASCII 'a')",
+      "detector": "security:invisible_unicode_injection",
+      "file_path": "./crates/experimental/advanced_threats/src/unicode_gate.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 26588,
+      "detail": "PowerShell -EncodedCommand: base64 payload execution",
+      "detector": "security:lotl_execution_anomaly",
+      "file_path": "./crates/cli/src/main.rs",
+      "threat_type": "STATIC_THREAT"
+    },
+    {
+      "byte_offset": 4908,
+      "detail": "direct execution of binary from world-writable staging directory (/tmp/ or /dev/shm/)",
+      "detector": "security:lotl_execution_anomaly",
+      "file_path": "./action.yml",
+      "threat_type": "STATIC_THREAT"
+    }
+  ]
+}

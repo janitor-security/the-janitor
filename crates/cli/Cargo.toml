@@ -19,6 +19,7 @@ common = { path = "../common" }
 reaper = { path = "../reaper" }
 vault = { path = "../vault" }
 dashboard = { path = "../dashboard" }
+advanced_threats = { path = "../experimental/advanced_threats" }
 arc-swap.workspace = true
 memmap2.workspace = true
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
