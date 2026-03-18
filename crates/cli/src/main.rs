@@ -199,7 +199,17 @@ enum Commands {
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
         /// Project root (reads .janitor/symbols.rkyv).
-        path: PathBuf,
+        ///
+        /// When `--wopr` is set this becomes the gauntlet base directory.
+        /// Defaults to `~/dev/gauntlet/` when omitted in WOPR mode.
+        path: Option<PathBuf>,
+        /// Launch the WOPR Defcon Interface multi-tenant command center.
+        ///
+        /// Opens a target-selection menu over all repositories found under the
+        /// gauntlet base directory.  Navigate with ↑/↓, lock on with Enter,
+        /// return with Esc/Backspace, quit with q.
+        #[arg(long)]
+        wopr: bool,
     },
     /// Generate a Code Health SVG badge from the last scan result.
     Badge {
@@ -483,7 +493,22 @@ async fn main() -> anyhow::Result<()> {
                 &segs,
             )?;
         }
-        Commands::Dashboard { path } => cmd_dashboard(path)?,
+        Commands::Dashboard { path, wopr } => {
+            if *wopr {
+                let base = path.clone().unwrap_or_else(|| {
+                    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
+                        .join("dev")
+                        .join("gauntlet")
+                });
+                dashboard::wopr_view::draw_wopr(&base)
+                    .map_err(|e| anyhow::anyhow!("WOPR TUI error: {e}"))?;
+            } else {
+                let p = path
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("path is required in dashboard mode"))?;
+                cmd_dashboard(p)?;
+            }
+        }
         Commands::Badge { path, output } => cmd_badge(path, output.as_deref())?,
         Commands::Undo { path } => cmd_undo(path)?,
         Commands::Telemetry { cmd } => match cmd {

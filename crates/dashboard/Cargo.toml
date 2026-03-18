@@ -9,3 +9,5 @@ repository.workspace = true
 ratatui = "0.30"
 crossterm = "0.28"
 common = { path = "../common" }
+include_deflator = { path = "../experimental/include_deflator" }
+serde_json.workspace = true

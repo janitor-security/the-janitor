@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn shield_all_sets_wisdom_rule_on_each_entity() {
         let source = b"{\n  pname = \"curl\";\n  version = \"8.0.0\";\n  meta.license = null;\n}";
-        let mut entities = ParserHost::extract_nix_entities(source, "default.nix").unwrap();
+        let entities = ParserHost::extract_nix_entities(source, "default.nix").unwrap();
         assert!(
             !entities.is_empty(),
             "must extract at least one binding from attrset"

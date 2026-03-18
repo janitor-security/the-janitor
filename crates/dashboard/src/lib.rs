@@ -1,3 +1,5 @@
+pub mod wopr_view;
+
 use common::registry::SymbolRegistry;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},

@@ -1,0 +1,16 @@
+[package]
+name = "include_deflator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+blake3.workspace = true
+bumpalo.workspace = true
+petgraph.workspace = true
+tree-sitter.workspace = true
+tree-sitter-c.workspace = true
+tree-sitter-cpp.workspace = true
+walkdir.workspace = true
