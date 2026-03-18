@@ -14,7 +14,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "7.3.0"
+version = "7.3.1"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"

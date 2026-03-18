@@ -42,8 +42,6 @@ use ratatui::{
     Terminal,
 };
 
-use include_deflator::graph::IncludeGraphBuilder;
-
 // ─── Timing constants ─────────────────────────────────────────────────────────
 
 /// How often the selection list rescans for new/removed targets and active status.
@@ -278,26 +276,16 @@ impl WoprState {
     fn try_build_graph(&mut self) {
         self.last_graph_attempt = Instant::now();
 
-        let mut builder = IncludeGraphBuilder::new();
-        let _ = builder.scan_dir(&self.path);
-        let graph = builder.build();
-
-        let n = graph.node_count();
-        if n == 0 {
+        // Load the pre-computed silo ranking written by `janitor hyper-drive`.
+        // The file is absent when hyper-drive has not yet run — poll every 5s
+        // until it appears.
+        let json_path = self.path.join(".janitor").join("wopr_graph.json");
+        let Ok(json_str) = std::fs::read_to_string(&json_path) else {
             return;
-        }
-
-        let mut ranked: Vec<(String, usize, usize)> = (0..n as u32)
-            .map(|idx| {
-                let label = graph.label(idx).to_string();
-                let direct = graph.direct_includes(idx).len();
-                let reach = graph.transitive_reach(idx);
-                (label, direct, reach)
-            })
-            .collect();
-        ranked.sort_by_key(|(_, _, r)| std::cmp::Reverse(*r));
-        ranked.truncate(10);
-
+        };
+        let Ok(ranked) = serde_json::from_str::<Vec<(String, usize, usize)>>(&json_str) else {
+            return;
+        };
         self.ranked = ranked;
         self.graph_ready = true;
     }
@@ -651,7 +639,7 @@ where
             let msg = if graph_ready {
                 "  NO C++ FILES DETECTED IN TARGET PATH"
             } else {
-                "  AWAITING C++ GRAPH ... RETRYING IN 5s"
+                "  AWAITING HYPER-DRIVE GRAPH GENERATION..."
             };
             vec![Row::new(vec![Cell::from(msg)]).style(Style::default().fg(Color::DarkGray))]
         } else {

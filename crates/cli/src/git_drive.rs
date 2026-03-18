@@ -25,8 +25,10 @@
 //! ```
 //! The `just hyper-audit` recipe performs this automatically.
 
+use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::{anyhow, Result};
@@ -35,8 +37,9 @@ use rayon::prelude::*;
 
 use common::registry::{MappedRegistry, SymbolRegistry};
 use forge::slop_filter::bounce_git;
+use include_deflator::graph::IncludeGraphBuilder;
 
-use crate::report::{self, BounceLogEntry, PrState};
+use crate::report::{BounceLogEntry, PrState};
 use crate::utc_now_iso8601;
 
 // ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ pub fn cmd_hyper_drive(
     // ── Step 3: load symbol registry ─────────────────────────────────────
     let registry = load_registry(repo_path)?;
 
-    // ── Step 4: rayon parallel bounce ────────────────────────────────────
+    // ── Step 4: open bounce log for streaming writes ──────────────────────
     let slug = repo_slug.map(str::to_owned).unwrap_or_else(|| {
         repo_path
             .file_name()
@@ -98,10 +101,28 @@ pub fn cmd_hyper_drive(
             .unwrap_or_default()
     });
 
+    let janitor_dir = repo_path.join(".janitor");
+    std::fs::create_dir_all(&janitor_dir)
+        .map_err(|e| anyhow!("Cannot create .janitor dir: {e}"))?;
+
+    let log_path = janitor_dir.join("bounce_log.ndjson");
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| anyhow!("Cannot open bounce log {}: {e}", log_path.display()))?;
+
+    // Wrap in a BufWriter behind a mutex so rayon workers can write without
+    // blocking each other for the duration of a syscall.
+    let writer: Arc<Mutex<BufWriter<std::fs::File>>> =
+        Arc::new(Mutex::new(BufWriter::new(log_file)));
+
+    // ── Step 5: rayon parallel bounce — write + flush every entry ─────────
     let t1 = Instant::now();
     let repo_path_arc: &Path = repo_path;
     let total_prs = pr_entries.len();
     let processed = AtomicUsize::new(0);
+    let written = AtomicUsize::new(0);
 
     // Cap at 4 threads — each worker opens its own git2::Repository handle
     // and may buffer up to 1 MiB of blob data.  4 × 1 MiB = 4 MiB peak
@@ -112,51 +133,84 @@ pub fn cmd_hyper_drive(
         .build()
         .map_err(|e| anyhow!("Cannot build rayon thread pool: {e}"))?;
 
-    let results: Vec<BounceLogEntry> = pool.install(|| {
-        pr_entries
-            .par_iter()
-            .filter_map(|(pr_num, pr_sha)| {
-                let entry = bounce_one(repo_path_arc, &base_sha, pr_sha, &registry, *pr_num, &slug);
-                let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                eprintln!(
-                    "[{}/{}] PR #{} {}",
-                    count,
-                    total_prs,
-                    pr_num,
-                    if entry.is_some() { "OK" } else { "SKIP" }
-                );
-                entry
-            })
-            .collect()
+    pool.install(|| {
+        pr_entries.par_iter().for_each(|(pr_num, pr_sha)| {
+            let entry = bounce_one(repo_path_arc, &base_sha, pr_sha, &registry, *pr_num, &slug);
+            let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
+            eprintln!(
+                "[{}/{}] PR #{} {}",
+                count,
+                total_prs,
+                pr_num,
+                if entry.is_some() { "OK" } else { "SKIP" }
+            );
+            if let Some(ref e) = entry {
+                match serde_json::to_string(e) {
+                    Ok(line) => {
+                        if let Ok(mut guard) = writer.lock() {
+                            if writeln!(guard, "{line}").is_ok() {
+                                // Flush after every entry — guarantees that a SIGABRT
+                                // or core dump cannot lose a completed PR result.
+                                let _ = guard.flush();
+                                written.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("hyper-drive PR#{pr_num}: serialize failed: {err}");
+                    }
+                }
+            }
+        });
     });
 
+    // Final flush — drains any remaining BufWriter capacity.
+    if let Ok(mut guard) = writer.lock() {
+        let _ = guard.flush();
+    }
+
+    let n_written = written.load(Ordering::Relaxed);
     let elapsed_ms = t1.elapsed().as_secs_f64() * 1000.0;
     eprintln!(
         "janitor hyper-drive: {} PRs bounced in {:.1}ms ({:.1}ms/PR) [{} threads]",
-        results.len(),
+        n_written,
         elapsed_ms,
-        if results.is_empty() {
+        if n_written == 0 {
             0.0
         } else {
-            elapsed_ms / results.len() as f64
+            elapsed_ms / n_written as f64
         },
         rayon::current_num_threads(),
     );
+    eprintln!(
+        "janitor hyper-drive: wrote {} entries to {}",
+        n_written,
+        log_path.display()
+    );
 
-    // ── Step 5: write results ─────────────────────────────────────────────
-    let janitor_dir = repo_path.join(".janitor");
-    std::fs::create_dir_all(&janitor_dir)
-        .map_err(|e| anyhow!("Cannot create .janitor dir: {e}"))?;
-
-    for entry in &results {
-        report::append_bounce_log(&janitor_dir, entry);
+    // ── Step 6: build and serialize WOPR include graph ────────────────────
+    // Runs after hyper-drive so the graph captures the final repository state.
+    // Written to `.janitor/wopr_graph.json`; the WOPR dashboard loads this file
+    // on demand instead of re-scanning source (which may be deleted by then).
+    let wopr_path = janitor_dir.join("wopr_graph.json");
+    match build_wopr_graph(repo_path) {
+        Ok(ranked) => match serde_json::to_string(&ranked) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(&wopr_path, json) {
+                    eprintln!("hyper-drive: cannot write wopr_graph.json: {e}");
+                } else {
+                    eprintln!(
+                        "janitor hyper-drive: WOPR graph written ({} silos) → {}",
+                        ranked.len(),
+                        wopr_path.display()
+                    );
+                }
+            }
+            Err(e) => eprintln!("hyper-drive: WOPR graph serialization failed: {e}"),
+        },
+        Err(e) => eprintln!("hyper-drive: WOPR graph build skipped: {e}"),
     }
 
-    eprintln!(
-        "janitor hyper-drive: wrote {} entries to {}/bounce_log.ndjson",
-        results.len(),
-        janitor_dir.display()
-    );
     eprintln!(
         "janitor hyper-drive: total wall time = {:.2}s",
         t0.elapsed().as_secs_f64()
@@ -404,4 +458,41 @@ fn bounce_one(
         collided_pr_numbers: score.collided_pr_numbers,
         necrotic_flag: score.necrotic_flag,
     })
+}
+
+// ---------------------------------------------------------------------------
+// WOPR graph builder
+// ---------------------------------------------------------------------------
+
+/// Scan `repo_path` for C/C++ `#include` relationships and return the top-10
+/// nodes by transitive reach, pre-ranked for the WOPR dashboard.
+///
+/// Serialized to `.janitor/wopr_graph.json` by [`cmd_hyper_drive`] after the
+/// bounce run completes.  The WOPR dashboard loads this file instead of
+/// re-scanning the source tree (which may be absent if the repository was
+/// purged after analysis to reclaim SSD space).
+///
+/// Returns an empty `Vec` when no C/C++ files are found — the dashboard
+/// displays `"AWAITING HYPER-DRIVE GRAPH GENERATION..."` in that case.
+fn build_wopr_graph(repo_path: &Path) -> Result<Vec<(String, usize, usize)>> {
+    let mut builder = IncludeGraphBuilder::new();
+    let _ = builder.scan_dir(repo_path);
+    let graph = builder.build();
+
+    let n = graph.node_count();
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut ranked: Vec<(String, usize, usize)> = (0..n as u32)
+        .map(|idx| {
+            let label = graph.label(idx).to_string();
+            let direct = graph.direct_includes(idx).len();
+            let reach = graph.transitive_reach(idx);
+            (label, direct, reach)
+        })
+        .collect();
+    ranked.sort_by_key(|(_, _, r)| std::cmp::Reverse(*r));
+    ranked.truncate(10);
+    Ok(ranked)
 }

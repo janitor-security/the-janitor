@@ -427,7 +427,7 @@ async fn main() -> anyhow::Result<()> {
     // overflow the default 2 MB stack when traversals approach the 512-depth
     // abort limit.  unwrap_or(()) — a pre-existing global pool is benign.
     rayon::ThreadPoolBuilder::new()
-        .stack_size(8 * 1024 * 1024)
+        .stack_size(32 * 1024 * 1024)
         .build_global()
         .unwrap_or(());
 

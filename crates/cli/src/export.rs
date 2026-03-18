@@ -141,7 +141,7 @@ pub fn cmd_export_global(gauntlet_root: &Path, out: &Path) -> Result<()> {
             let score_str = entry.slop_score.to_string();
             let unlinked_str = entry.unlinked_pr.to_string();
             let dead_str = entry.dead_symbols_added.to_string();
-            let clones_str = entry.logic_clones_found.to_string();
+            let clones_str = entry.logic_clones_found.min(50).to_string();
             let zombie_syms_str = entry.zombie_symbols_added.to_string();
             let zombie_deps_str = csv_sanitize(&entry.zombie_deps.join(" | "));
             let violation_reasons = csv_sanitize(&build_violation_reasons(entry));
