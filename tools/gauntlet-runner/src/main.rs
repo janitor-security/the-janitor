@@ -348,9 +348,9 @@ fn main() {
                     }
                 }
 
-                eprintln!("  Cloning {clone_url} (full)...");
+                eprintln!("  Cloning {clone_url} (full packfile, no checkout)...");
                 let status = Command::new("git")
-                    .args(["clone", &clone_url, repo_dir_str])
+                    .args(["clone", "--no-checkout", &clone_url, repo_dir_str])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .status();
@@ -578,16 +578,33 @@ fn main() {
                 }
             }
 
-            // Phase 5: scorch earth — delete git packfile data to reclaim SSD.
-            // .janitor/ is preserved so the global aggregation step can still
-            // read bounce_log.ndjson after all repos have been processed.
-            let git_dir_to_delete = repo_dir.join(".git");
-            if git_dir_to_delete.exists() {
-                eprintln!("  Scorch earth: deleting .git to reclaim SSD space...");
-                if let Err(e) = std::fs::remove_dir_all(&git_dir_to_delete) {
-                    eprintln!("  warning: Could not delete .git: {e}");
-                } else {
-                    eprintln!("  .git deleted → SSD space reclaimed");
+            // Phase 5: absolute scorch earth — annihilate every entry in
+            // repo_dir EXCEPT `.janitor/` so bounce_log.ndjson survives for
+            // the global aggregation step.  This removes the full 2.5 GB git
+            // packfile database, any accidentally-checked-out source tree, and
+            // any other residual artefacts in a single pass.
+            eprintln!("  Scorch earth: purging all non-.janitor entries...");
+            match std::fs::read_dir(&repo_dir) {
+                Ok(entries) => {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        if name == ".janitor" {
+                            continue; // preserve bounce log
+                        }
+                        let path = entry.path();
+                        let result = if path.is_dir() {
+                            std::fs::remove_dir_all(&path)
+                        } else {
+                            std::fs::remove_file(&path)
+                        };
+                        if let Err(e) = result {
+                            eprintln!("  warning: Could not delete `{}`: {e}", path.display());
+                        }
+                    }
+                    eprintln!("  Scorch complete → only .janitor/ survives");
+                }
+                Err(e) => {
+                    eprintln!("  warning: Could not read repo_dir for scorch: {e}");
                 }
             }
         } else {
