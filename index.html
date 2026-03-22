@@ -383,6 +383,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-actuarial-risk-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE ACTUARIAL RISK MATRIX
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-integrity-dashboard-wopr" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE INTEGRITY DASHBOARD (WOPR)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-technical-stack" class="md-nav__link">
     <span class="md-ellipsis">
       THE TECHNICAL STACK
@@ -847,6 +865,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-actuarial-risk-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE ACTUARIAL RISK MATRIX
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-integrity-dashboard-wopr" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE INTEGRITY DASHBOARD (WOPR)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-technical-stack" class="md-nav__link">
     <span class="md-ellipsis">
       THE TECHNICAL STACK
@@ -993,7 +1029,7 @@
 
 <p><img alt="Janitor Terminal Demo" src="assets/janitor_demo.webp" /></p>
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v7.4.0 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.</strong></p>
+<p><strong>v7.8.6 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.</strong></p>
 <hr />
 <blockquote>
 <p><strong>Sonar finds style violations.</strong>
@@ -1058,23 +1094,66 @@
 </tbody>
 </table>
 <p><strong>Social Forensics</strong> runs on top: every added comment line is scanned for AI-ism phrases (<code>"Note that"</code>, <code>"It's worth mentioning"</code>, <code>"As an AI"</code>) and corporate-speak markers via a zero-allocation AhoCorasick automaton. PR bodies are scanned for issue link compliance (<code>Closes #N</code>, <code>Fixes #N</code>).</p>
-<p><strong>Global Audit 2026 — 2,090 live PRs across 22 Tier-1 repositories:</strong></p>
+<p><strong>Global Audit 2026 — 33,000+ live PRs across 22 enterprise repositories, on an 8 GB laptop:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Repos audited         : 22 (godot, nixpkgs, vscode, k8s, pytorch, kafka, rust,
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                            tauri, redis, next.js, home-assistant, ansible,
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                            workers-sdk, langchain, deno, rails, laravel,
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                            apple/swift, aspnetcore, okhttp, terraform, neovim)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>PRs analyzed          : 2,090
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Total Slop Score      : 38,685
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Antipatterns blocked  : 124 (confirmed structural defects — zero false positives)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>PRs analyzed          : 33,000+  (live production PRs — no synthetic benchmarks)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Hardware              : 8 GB laptop
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Antipatterns blocked  : confirmed structural defects — zero false positives
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>Engine panics         : 0
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>OOM events            : 0
 </code></pre></div>
 <p>These are real, open pull requests against 22 production codebases — including the Rust compiler, the Linux package ecosystem, and the Swift compiler. The gate works.</p>
 <p><a href="ultimate_gauntlet_results/">Full audit results →</a></p>
 <hr />
+<h2 id="the-actuarial-risk-matrix">THE ACTUARIAL RISK MATRIX</h2>
+<p>The Janitor doesn't just find vulnerabilities — it generates a financial ledger. Every intercepted threat is categorized and priced on a two-tier billing model:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Category</th>
+<th style="text-align: left;">Trigger</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Critical Threat</strong></td>
+<td style="text-align: left;"><code>security:</code> antipattern OR Swarm collision (<code>collided_pr_numbers</code> non-empty)</td>
+<td style="text-align: right;"><strong>$150 / incident</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Necrotic GC</strong></td>
+<td style="text-align: left;">Dead-code ghost flagged by Necrotic Pruning Matrix, not a security threat</td>
+<td style="text-align: right;"><strong>$20 / PR</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Boilerplate clone</td>
+<td style="text-align: left;">Logic clone with no security signal</td>
+<td style="text-align: right;">$0</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Total Economic Impact</strong> = <code>(critical_threats × $150) + (gc_only × $20)</code></p>
+<p>The ledger is machine-generated, per-PR, and written to <code>.janitor/bounce_log.ndjson</code> atomically on every bounce event. <code>janitor report --format json</code> emits <code>critical_threats_count</code>, <code>ci_compute_saved_usd</code>, and <code>total_economic_impact_usd</code> for downstream dashboards and executive briefings. <code>janitor export</code> produces a 14-column CSV with <code>Operational_Savings_USD</code> per row — load directly into Excel or pandas.</p>
+<p>Audited <strong>33,000 PRs across 22 enterprise repositories on an 8 GB laptop.</strong></p>
+<hr />
+<h2 id="the-integrity-dashboard-wopr">THE INTEGRITY DASHBOARD (WOPR)</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>janitor dashboard &lt;repo&gt;
+</code></pre></div>
+<p>Visualize C/C++ compile-time blast radius and track structural Swarm clones in real-time. The WOPR (War Operations Plan Response) dashboard, built on Ratatui, renders:</p>
+<ul>
+<li><strong>Top-10 <code>#include</code> dependency silos</strong> ranked by transitive reach — files whose modification ripples furthest through the compile graph.</li>
+<li><strong>Live Swarm clone feed</strong> — MinHash LSH collision events as they are detected, showing colliding PR numbers in real-time.</li>
+<li><strong>Physarum backpressure indicator</strong> — current RAM pressure tier (Flow / Constrict / Stop) and active analysis slot count.</li>
+</ul>
+<p>The graph is built from in-memory libgit2 tree walks at the start of every <code>hyper-drive</code> run. No filesystem checkout is required; all data is read from the Git pack index.</p>
+<hr />
 <h2 id="the-technical-stack">THE TECHNICAL STACK</h2>
 <h3 id="the-anatomist">The Anatomist</h3>
-<p>Parses via zero-copy Tree-sitter CSTs across <strong>23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more</strong> — with v7.4.0 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.4.0 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
+<p>Parses via zero-copy Tree-sitter CSTs across <strong>23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more</strong> — with v7.8.6 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.8.6 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy <code>Entity</code> with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.</p>
 <p><code>OnceLock&lt;Language&gt;</code> statics: each grammar occupies <strong>8 bytes of static overhead</strong> (an uninitialised pointer slot on 64-bit) until first use. Total: <strong>184 bytes of static overhead</strong> for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.</p>
 <h3 id="the-6-stage-dead-symbol-pipeline">The 6-Stage Dead Symbol Pipeline</h3>
 <table>
@@ -1127,7 +1206,7 @@
 <h3 id="domain-segregated-audit-engine">Domain-Segregated Audit Engine</h3>
 <p><strong>Bypasses vendored C/C++ libraries with zero-copy Aho-Corasick path routing, guaranteeing zero false positives on legitimate upstream CVE patches.</strong></p>
 <p>The Domain Router classifies every file blob in a PR diff before analysis begins. Blobs whose paths match vendored directory prefixes (<code>thirdparty/</code>, <code>third_party/</code>, <code>vendor/</code>) are assigned <code>DOMAIN_VENDORED</code> and routed through a dedicated analysis pass — memory-safety rules that would flag raw pointer arithmetic in application code are suppressed for vendored upstream C sources. This is the correct behaviour: a Godot Engine CVE patch touching <code>thirdparty/mbedtls/</code> is a legitimate security fix, not slop.</p>
-<p>Prior to v7.4.0, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v7.4.0 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (<code>.png</code>, <code>.so</code>, <code>.exe</code>, <code>.wasm</code>) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.</p>
+<p>Prior to v7.8.6, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v7.8.6 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (<code>.png</code>, <code>.so</code>, <code>.exe</code>, <code>.wasm</code>) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.</p>
 <h3 id="the-reaper">The Reaper</h3>
 <p>Surgical byte-range deletion. Sorted bottom-to-top by <code>start_byte</code> to preserve upstream offsets. UTF-8 hardened via <code>str::is_char_boundary()</code>. Atomic backup to <code>.janitor/ghost/</code> before first write. Rollback via <code>janitor undo</code> restores exact pre-deletion state.</p>
 <h3 id="the-daemon">The Daemon</h3>
@@ -1168,43 +1247,43 @@
 <hr />
 <h2 id="installation">INSTALLATION</h2>
 <p><strong>From source (Rust 1.82+, <code>just</code> required):</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/GhrammR/the-janitor
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>the-janitor
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>just<span class="w"> </span>build
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Binary: target/release/janitor</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/GhrammR/the-janitor
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>the-janitor
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>just<span class="w"> </span>build
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Binary: target/release/janitor</span>
 </code></pre></div>
 <p><strong>Pre-built binary:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Download from Releases, then:</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>janitor<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>mv<span class="w"> </span>janitor<span class="w"> </span>/usr/local/bin/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Download from Releases, then:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>janitor<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>mv<span class="w"> </span>janitor<span class="w"> </span>/usr/local/bin/
 </code></pre></div>
 <hr />
 <h2 id="commands">COMMANDS</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Structural dead symbol audit</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>json<span class="o">]</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># PR enforcement gate — score a diff against the registry</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--patch<span class="w"> </span>&lt;file&gt;<span class="w"> </span>--pr-number<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--author<span class="w"> </span>&lt;handle&gt;<span class="w"> </span>--pr-body<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BODY</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>json
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Zombie dependency detection across npm / cargo / pip / spin / wrangler</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--format<span class="w"> </span>json<span class="w">  </span><span class="c1"># zombie_deps in output</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Structural clone detection</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Safe Proxy deduplication (explicit flag required)</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Shadow-simulate deletion → test suite → physical removal</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Generate historical slop / clone / zombie intelligence report</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>janitor<span class="w"> </span>report<span class="w"> </span><span class="o">[</span>--repo<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--top<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>markdown<span class="p">|</span>json<span class="o">]</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="c1"># Long-lived daemon for low-latency CI (Unix socket, Physarum backpressure)</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>janitor<span class="w"> </span>serve<span class="w"> </span><span class="o">[</span>--socket<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--registry<span class="w"> </span>&lt;file&gt;<span class="o">]</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="c1"># Ratatui TUI dashboard</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Structural dead symbol audit</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>json<span class="o">]</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># PR enforcement gate — score a diff against the registry</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--patch<span class="w"> </span>&lt;file&gt;<span class="w"> </span>--pr-number<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--author<span class="w"> </span>&lt;handle&gt;<span class="w"> </span>--pr-body<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BODY</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>json
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Zombie dependency detection across npm / cargo / pip / spin / wrangler</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--format<span class="w"> </span>json<span class="w">  </span><span class="c1"># zombie_deps in output</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Structural clone detection</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1"># Safe Proxy deduplication (explicit flag required)</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Shadow-simulate deletion → test suite → physical removal</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="c1"># Generate historical slop / clone / zombie intelligence report</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>janitor<span class="w"> </span>report<span class="w"> </span><span class="o">[</span>--repo<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--top<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>markdown<span class="p">|</span>json<span class="o">]</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="c1"># Long-lived daemon for low-latency CI (Unix socket, Physarum backpressure)</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>janitor<span class="w"> </span>serve<span class="w"> </span><span class="o">[</span>--socket<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--registry<span class="w"> </span>&lt;file&gt;<span class="o">]</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="c1"># Ratatui TUI dashboard</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
 </code></pre></div>
 <hr />
 <h2 id="the-proof">THE PROOF</h2>
