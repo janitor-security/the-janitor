@@ -697,16 +697,16 @@ fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec
 // NCD Entropy Gate
 // ---------------------------------------------------------------------------
 
-/// Minimum compression ratio below which the entropy gate triggers.
+/// Compression ratio threshold below which a patch is flagged as
+/// `antipattern:ncd_anomaly`. A ratio of 0.05 means the patch compresses
+/// to <5% of its original size — achievable only by extreme repetition
+/// (e.g. 15KB of identical lines).
 ///
-/// A patch whose `zstd`-compressed size is less than 5 % of the raw size
-/// contains highly repetitive structure — the hallmark of AI-generated or
-/// auto-templated boilerplate.  The threshold is intentionally conservative
-/// (0.05 rather than 0.15) to account for the repetitive Git diff metadata
-/// headers (`@@`, `---`, `+++`) that appear at the top of every unified diff
-/// and compress very aggressively, lowering the apparent ratio for short but
-/// legitimate patches.  Legitimate hand-authored code (typical ratio 0.25–0.55)
-/// stays well above this floor even after diff header inflation is factored in.
+/// CALIBRATION NOTE: This threshold has not been validated against the
+/// 33K-PR gauntlet corpus. Run `janitor report --global` on a full gauntlet
+/// run and count NCD findings. If near zero, recalibrate upward toward 0.15
+/// (the README's original claim). Threshold change requires a version bump
+/// and a note in SOVEREIGN_BRIEFING.md.
 pub const MIN_ENTROPY_RATIO: f64 = 0.05;
 
 /// Minimum input size (bytes) before the entropy gate engages.
