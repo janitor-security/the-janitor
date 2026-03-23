@@ -6,7 +6,7 @@
 
 # The Janitor
 
-**v7.8.7 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v7.9.1 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 ---
 
@@ -134,7 +134,7 @@ The graph is built from in-memory libgit2 tree walks at the start of every `hype
 
 ### The Anatomist
 
-Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more** — with v7.8.7 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.8.7 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
+Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more** — with v7.9.1 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.9.1 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
 
 `OnceLock<Language>` statics: each grammar occupies **8 bytes of static overhead** (an uninitialised pointer slot on 64-bit) until first use. Total: **184 bytes of static overhead** for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.
 
@@ -176,7 +176,7 @@ When the same LLM-generated change is submitted under different PR numbers from 
 
 The Domain Router classifies every file blob in a PR diff before analysis begins. Blobs whose paths match vendored directory prefixes (`thirdparty/`, `third_party/`, `vendor/`) are assigned `DOMAIN_VENDORED` and routed through a dedicated analysis pass — memory-safety rules that would flag raw pointer arithmetic in application code are suppressed for vendored upstream C sources. This is the correct behaviour: a Godot Engine CVE patch touching `thirdparty/mbedtls/` is a legitimate security fix, not slop.
 
-Prior to v7.8.7, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v7.8.7 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (`.png`, `.so`, `.exe`, `.wasm`) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.
+Prior to v7.9.1, pipeline tools stripped vendored hunks from the diff before the engine ever saw them. The engine's domain router was starved of the blobs it needed to classify them correctly. The v7.9.1 ingestion pipeline purification removes all directory-based pre-filtering. Only unparseable binary-extension blobs (`.png`, `.so`, `.exe`, `.wasm`) are stripped before the engine. Everything else passes through raw so the domain router can make the correct call.
 
 ### The Reaper
 
