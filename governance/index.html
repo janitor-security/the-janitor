@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://thejanitor.app/terms/">
+        <link rel="canonical" href="https://thejanitor.app/governance/">
       
       
-        <link rel="prev" href="../pricing/">
+        <link rel="prev" href="../case-studies/godot/">
       
       
-        <link rel="next" href="../privacy/">
+        <link rel="next" href="../sentinel-setup/">
       
       
       <link rel="icon" href="../assets/logo.svg">
@@ -24,7 +24,7 @@
     
     
       
-        <title>Terms - The Janitor</title>
+        <title>janitor.toml Reference - The Janitor</title>
       
     
     
@@ -107,7 +107,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#terms-conditions" class="md-skip">
+        <a href="#janitortoml-governance-documentation" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +142,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Terms
+              janitor.toml Reference
             
           </span>
         </div>
@@ -416,8 +416,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -427,11 +429,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -445,7 +447,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Configuration
@@ -456,10 +458,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../governance/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    janitor.toml Reference
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -468,6 +490,122 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Field Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-level-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top-level fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forge-sub-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      [forge] sub-table
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automation-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      Automation Shield
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pqc_enforced" class="md-nav__link">
+    <span class="md-ellipsis">
+      pqc_enforced
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-antipatterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Antipatterns
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#webhook-sub-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      [webhook] sub-table
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#billing-sub-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      [billing] sub-table
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#effective-gate-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      Effective Gate Formula
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -572,8 +710,6 @@
       
   
   
-    
-  
   
   
     
@@ -585,11 +721,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -603,7 +739,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Legal
@@ -614,30 +750,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Terms
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../terms/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -646,170 +762,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-acceptance-of-terms" class="md-nav__link">
-    <span class="md-ellipsis">
-      1. Acceptance of Terms
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-nature-of-business" class="md-nav__link">
-    <span class="md-ellipsis">
-      2. Nature of Business
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-no-custom-services" class="md-nav__link">
-    <span class="md-ellipsis">
-      3. No Custom Services
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-nature-of-the-product" class="md-nav__link">
-    <span class="md-ellipsis">
-      4. Nature of the Product
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-license" class="md-nav__link">
-    <span class="md-ellipsis">
-      5. License
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-digital-license-keys-tokens" class="md-nav__link">
-    <span class="md-ellipsis">
-      6. Digital License Keys (Tokens)
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-permitted-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      7. Permitted Use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-prohibited-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      8. Prohibited Use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#9-no-warranty" class="md-nav__link">
-    <span class="md-ellipsis">
-      9. No Warranty
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#10-limitation-of-liability" class="md-nav__link">
-    <span class="md-ellipsis">
-      10. Limitation of Liability
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#11-indemnification" class="md-nav__link">
-    <span class="md-ellipsis">
-      11. Indemnification
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#12-support-sla" class="md-nav__link">
-    <span class="md-ellipsis">
-      12. Support &amp; SLA
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#13-refund-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      13. Refund Policy
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#14-governing-law" class="md-nav__link">
-    <span class="md-ellipsis">
-      14. Governing Law
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#15-changes-to-terms" class="md-nav__link">
-    <span class="md-ellipsis">
-      15. Changes to Terms
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#16-contact" class="md-nav__link">
-    <span class="md-ellipsis">
-      16. Contact
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -870,144 +822,96 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-acceptance-of-terms" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
-      1. Acceptance of Terms
+      Quick Start
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-nature-of-business" class="md-nav__link">
+  <a href="#field-reference" class="md-nav__link">
     <span class="md-ellipsis">
-      2. Nature of Business
+      Field Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-level-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top-level fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forge-sub-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      [forge] sub-table
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automation-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      Automation Shield
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-no-custom-services" class="md-nav__link">
+  <a href="#pqc_enforced" class="md-nav__link">
     <span class="md-ellipsis">
-      3. No Custom Services
+      pqc_enforced
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-nature-of-the-product" class="md-nav__link">
+  <a href="#custom-antipatterns" class="md-nav__link">
     <span class="md-ellipsis">
-      4. Nature of the Product
+      Custom Antipatterns
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-license" class="md-nav__link">
+  <a href="#webhook-sub-table" class="md-nav__link">
     <span class="md-ellipsis">
-      5. License
+      [webhook] sub-table
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-digital-license-keys-tokens" class="md-nav__link">
+  <a href="#billing-sub-table" class="md-nav__link">
     <span class="md-ellipsis">
-      6. Digital License Keys (Tokens)
+      [billing] sub-table
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-permitted-use" class="md-nav__link">
+  <a href="#effective-gate-formula" class="md-nav__link">
     <span class="md-ellipsis">
-      7. Permitted Use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-prohibited-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      8. Prohibited Use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#9-no-warranty" class="md-nav__link">
-    <span class="md-ellipsis">
-      9. No Warranty
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#10-limitation-of-liability" class="md-nav__link">
-    <span class="md-ellipsis">
-      10. Limitation of Liability
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#11-indemnification" class="md-nav__link">
-    <span class="md-ellipsis">
-      11. Indemnification
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#12-support-sla" class="md-nav__link">
-    <span class="md-ellipsis">
-      12. Support &amp; SLA
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#13-refund-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      13. Refund Policy
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#14-governing-law" class="md-nav__link">
-    <span class="md-ellipsis">
-      14. Governing Law
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#15-changes-to-terms" class="md-nav__link">
-    <span class="md-ellipsis">
-      15. Changes to Terms
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#16-contact" class="md-nav__link">
-    <span class="md-ellipsis">
-      16. Contact
+      Effective Gate Formula
     </span>
   </a>
   
@@ -1031,125 +935,230 @@
   
 
 
-<h1 id="terms-conditions">Terms &amp; Conditions</h1>
-<p><strong>Effective Date:</strong> 2026-02-25
-<strong>Entity:</strong> The Janitor (operated by GhrammR)
-<strong>Contact:</strong> legal@thejanitor.app</p>
-<hr />
-<h2 id="1-acceptance-of-terms">1. Acceptance of Terms</h2>
-<p>By downloading, installing, or using The Janitor binary, the Janitor Sentinel API, or any associated tooling ("the Software"), you agree to these Terms &amp; Conditions ("Terms"). If you do not agree, do not use the Software.</p>
-<hr />
-<h2 id="2-nature-of-business">2. Nature of Business</h2>
-<p><strong>The Janitor is a Software-as-a-Service (SaaS) and downloadable digital product provider.</strong></p>
-<p>We develop, publish, and license automated software-analysis tooling delivered as compiled binary executables and token-gated SaaS subscriptions. All tiers — Junior Janitor (free), Lead Specialist, and Industrial Core — are self-serve digital products transacted electronically via our payment processor (Lemon Squeezy).</p>
-<p>No physical goods, physical media, or in-person services are sold or delivered.</p>
-<hr />
-<h2 id="3-no-custom-services">3. No Custom Services</h2>
-<p><strong>We do not provide custom software development, consulting, or agency services. All software is provided "as-is" as a self-serve digital product.</strong></p>
-<p>The Janitor does not accept statements of work, professional-services engagements, retainer agreements, or any arrangement in which we develop, review, or modify code on behalf of a customer. Purchasing any tier grants a license to use the Software; it does not create an employment, contractor, or consulting relationship of any kind.</p>
-<p>Support is limited to documentation, community channels, and the tier SLA defined in §12 (Industrial Core only). No human-assisted code review, manual audit, or bespoke integration work is included in or available under any tier.</p>
-<hr />
-<h2 id="4-nature-of-the-product">4. Nature of the Product</h2>
-<p>The Janitor performs automated dead-symbol detection, structural clone analysis, shadow-tree simulation, and code cleanup operations. All analysis runs locally on your hardware. The Janitor does not receive, transmit, store, or process your source code on any remote server.</p>
-<p>Remote network calls are limited to:</p>
-<ul>
-<li><strong>Token verification</strong>: a single POST to <code>https://api.thejanitor.app/v1/verify</code> when <code>--token</code> is supplied.</li>
-<li><strong>Audit attestation</strong>: a POST to <code>https://api.thejanitor.app/v1/attest</code> when a signed audit log is requested (Lead Specialist / Industrial Core tiers).</li>
-<li><strong>Wisdom synchronisation</strong>: a GET from <code>https://api.thejanitor.app/v1/wisdom.rkyv</code> when <code>janitor update-wisdom</code> is invoked.</li>
-<li><strong>Anonymous telemetry</strong>: a minimal zero-knowledge hash submitted on rollback events (opt-out: delete <code>.janitor/telemetry.json</code>).</li>
-</ul>
-<p>No source file contents, file paths, or symbol names are transmitted in any of the above calls.</p>
-<hr />
-<h2 id="5-license">5. License</h2>
-<p>The Software is licensed under the <strong>Business Source License 1.1 (BUSL-1.1)</strong>, the full text of which is available at <a href="https://spdx.org/licenses/BUSL-1.1.html">https://spdx.org/licenses/BUSL-1.1.html</a> and in the <code>LICENSE</code> file distributed with the Software.</p>
-<p>Key terms of the BUSL-1.1 as they apply to The Janitor:</p>
-<ul>
-<li><strong>Non-production use</strong> is free and unrestricted for all users.</li>
-<li><strong>Production / commercial use</strong> of the signed attestation pipeline requires a valid commercial license (Lead Specialist or Industrial Core tier).</li>
-<li><strong>Change Date:</strong> <code>2030-02-15</code>. On that date the license converts to MIT and remains MIT in perpetuity.</li>
-</ul>
-<p>The Junior Janitor tier (scan, clean, dedup, badge, dashboard — without signed attestations) is permanently free for personal, internal, and commercial use with no production-use restriction.</p>
-<hr />
-<h2 id="6-digital-license-keys-tokens">6. Digital License Keys (Tokens)</h2>
-<p>Lead Specialist and Industrial Core tiers grant a <strong>digital license key</strong> ("token") that unlocks the signed attestation pipeline within the Software. Tokens are:</p>
-<ul>
-<li>A base64-encoded ML-DSA-65 (NIST FIPS 204) signature verified locally by the binary.</li>
-<li>Non-transferable and issued to a specific licensee.</li>
-<li>Subject to revocation by keypair rotation if the licensee violates these Terms.</li>
-<li>Not a subscription to any ongoing service or support obligation beyond the tier SLA (Industrial Core only).</li>
-</ul>
-<p>Tokens are delivered electronically upon purchase. There is no physical component to any license tier.</p>
-<hr />
-<h2 id="7-permitted-use">7. Permitted Use</h2>
-<p>You may use the Software to:</p>
-<ul>
-<li>Analyse your own codebases or codebases you are authorised to modify.</li>
-<li>Integrate the binary into your internal CI/CD pipelines.</li>
-<li>Distribute scan reports or audit logs generated by the Software internally or to your clients (subject to tier restrictions on signed attestations).</li>
-</ul>
-<hr />
-<h2 id="8-prohibited-use">8. Prohibited Use</h2>
-<p>You may not:</p>
-<ul>
-<li>Redistribute the Software as part of a SaaS product or hosted service without a commercial license.</li>
-<li>Issue signed attestations generated by the Software to third parties as part of a paid product without a Lead Specialist or Industrial Core license.</li>
-<li>Reverse-engineer, decompile, or extract the embedded ML-DSA-65 verifying key for the purpose of forging tokens.</li>
-<li>Use the Software to analyse codebases you do not have authorisation to modify.</li>
-</ul>
-<hr />
-<h2 id="9-no-warranty">9. No Warranty</h2>
-<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH YOU.</p>
-<p>The Software modifies source files. You are solely responsible for maintaining version control and backups. The shadow-tree simulation and ghost-backup protocol are provided as a safety mechanism but do not constitute a warranty against data loss.</p>
-<p>Automated static analysis produces deterministic results bounded by the completeness of its symbol reference graph. The Janitor cannot guarantee zero false positives or zero false negatives across all possible language constructs and project configurations. All cleanup operations should be reviewed by a qualified engineer before deployment to production environments.</p>
-<hr />
-<h2 id="10-limitation-of-liability">10. Limitation of Liability</h2>
-<p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE JANITOR OR ITS CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, LOSS OF PROFITS, LOSS OF DATA, CODEBASE CORRUPTION, BUILD FAILURES, PRODUCTION OUTAGES, OR BUSINESS INTERRUPTION) ARISING OUT OF OR IN CONNECTION WITH THE USE OR INABILITY TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</p>
-<p>IN NO EVENT SHALL THE AGGREGATE LIABILITY OF THE JANITOR TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THESE TERMS OR THE SOFTWARE EXCEED THE GREATER OF (A) THE TOTAL FEES YOU PAID FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR (B) ONE HUNDRED US DOLLARS (USD $100).</p>
-<hr />
-<h2 id="11-indemnification">11. Indemnification</h2>
-<p>You agree to indemnify and hold harmless The Janitor and its contributors from any claims, damages, or expenses (including reasonable legal fees) arising from your use of the Software in violation of these Terms or applicable law.</p>
-<hr />
-<h2 id="12-support-sla">12. Support &amp; SLA</h2>
+<h1 id="janitortoml-governance-documentation">janitor.toml — Governance Documentation</h1>
+<p>Policy-as-code for The Janitor. A <code>janitor.toml</code> at the repository root
+overrides the engine's global defaults. It is version-controlled, reviewable,
+and diffable by the entire team.</p>
+<h2 id="quick-start">Quick Start</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># janitor.toml — place at repository root</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Slop score threshold. PRs with a raw score above this value fail the gate.</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">min_slop_score</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Require every PR to reference a GitHub issue (#N) in the body.</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">require_issue_link</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Downgrade zombie-symbol vetoes to warnings for active refactor cycles.</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">allowed_zombies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Raise the gate by this amount for PRs tagged [REFACTOR] or [FIXES-DEBT].</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">refactor_bonus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># Require a PQC attestation bond (ML-DSA-65 / CycloneDX v1.5) — needs Sentinel.</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">pqc_enforced</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Paths to custom .scm tree-sitter query files that define project-specific antipatterns.</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">custom_antipatterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Handles exempt from the unlinked-PR penalty (not bots — use [forge] for that).</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="n">trusted_bot_authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="k">[forge]</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="c1"># Ecosystem accounts that lack the [bot] suffix but are non-human contributors.</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="n">automation_accounts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</code></pre></div>
+<h2 id="field-reference">Field Reference</h2>
+<h3 id="top-level-fields">Top-level fields</h3>
 <table>
 <thead>
 <tr>
-<th>Tier</th>
-<th>Support</th>
-<th>SLA</th>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Junior Janitor</strong> (Free)</td>
-<td>Documentation + community channels</td>
-<td>None</td>
+<td><code>min_slop_score</code></td>
+<td><code>u32</code></td>
+<td><code>100</code></td>
+<td>Raw slop score ceiling. PRs above this threshold fail the gate. Lower = stricter.</td>
 </tr>
 <tr>
-<td><strong>Lead Specialist</strong></td>
-<td>Email (legal@thejanitor.app)</td>
-<td>Best-effort, 5 business days</td>
+<td><code>require_issue_link</code></td>
+<td><code>bool</code></td>
+<td><code>false</code></td>
+<td>When <code>true</code>, PRs with no <code>#&lt;digits&gt;</code> reference in the body are blocked, regardless of score.</td>
 </tr>
 <tr>
-<td><strong>Industrial Core</strong></td>
-<td>Dedicated channel</td>
-<td>Defined in enterprise agreement</td>
+<td><code>allowed_zombies</code></td>
+<td><code>bool</code></td>
+<td><code>false</code></td>
+<td>When <code>true</code>, zombie-symbol re-introductions are downgraded to a Warning instead of a hard Veto. Set only during active symbol-resurrection refactors.</td>
+</tr>
+<tr>
+<td><code>refactor_bonus</code></td>
+<td><code>u32</code></td>
+<td><code>0</code></td>
+<td>Points added to <code>min_slop_score</code> for PRs tagged <code>[REFACTOR]</code> or <code>[FIXES-DEBT]</code>. Raises the effective gate for intentional cleanup.</td>
+</tr>
+<tr>
+<td><code>pqc_enforced</code></td>
+<td><code>bool</code></td>
+<td><code>false</code></td>
+<td>When <code>true</code>, blocks PRs where the ML-DSA-65 / CycloneDX v1.5 Integrity Bond could not be issued. Requires Janitor Sentinel.</td>
+</tr>
+<tr>
+<td><code>custom_antipatterns</code></td>
+<td><code>[String]</code></td>
+<td><code>[]</code></td>
+<td>Paths to custom <code>.scm</code> tree-sitter query files (relative to repo root). Each <code>@slop</code>-capturing pattern adds +50 to the score per match.</td>
+</tr>
+<tr>
+<td><code>trusted_bot_authors</code></td>
+<td><code>[String]</code></td>
+<td><code>[]</code></td>
+<td>Handles exempt from the unlinked-PR penalty. Case-insensitive exact match. For accounts without <code>[bot]</code> suffix.</td>
 </tr>
 </tbody>
 </table>
-<p>Support covers questions about Software behaviour. It does not include custom development, integration consulting, or code review services (see §3).</p>
-<hr />
-<h2 id="13-refund-policy">13. Refund Policy</h2>
-<p>Digital license tokens are non-refundable once issued, as delivery and activation are instantaneous. If you believe you were charged in error, contact <strong>legal@thejanitor.app</strong> within 30 days of purchase. Refund eligibility is determined solely at our discretion in accordance with the policies of our payment processor (Lemon Squeezy).</p>
-<hr />
-<h2 id="14-governing-law">14. Governing Law</h2>
-<p>These Terms are governed by and construed in accordance with applicable law. Any disputes shall be resolved in the jurisdiction of the operator's registered domicile.</p>
-<hr />
-<h2 id="15-changes-to-terms">15. Changes to Terms</h2>
-<p>These Terms may be updated. The Effective Date at the top of this document will reflect the most recent revision. Continued use of the Software after a revision constitutes acceptance of the updated Terms.</p>
-<hr />
-<h2 id="16-contact">16. Contact</h2>
-<p>License questions: <strong>legal@thejanitor.app</strong>
-Commercial inquiries: <strong>sales@thejanitor.app</strong></p>
+<h3 id="forge-sub-table"><code>[forge]</code> sub-table</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>automation_accounts</code></td>
+<td><code>[String]</code></td>
+<td><code>[]</code></td>
+<td>Ecosystem automation accounts exempt from the unlinked-PR penalty. Example: <code>["r-ryantm", "app/nixpkgs-ci"]</code>. Full slop analysis still runs; only the issue-link check is bypassed. Case-insensitive exact match.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="automation-shield">Automation Shield</h2>
+<p>The engine automatically detects bot authors via four layers (evaluated in order,
+all zero-allocation):</p>
+<ol>
+<li><strong><code>app/</code> prefix</strong> — any author starting with <code>app/</code> is a GitHub App
+   installation (e.g. <code>app/dependabot</code>, <code>app/renovate</code>, <code>app/github-actions</code>).
+   No configuration required.</li>
+<li><strong><code>[bot]</code> suffix</strong> — any author ending with <code>[bot]</code> is automatically detected
+   (e.g. <code>dependabot[bot]</code>, <code>renovate[bot]</code>). No configuration required.</li>
+<li><strong><code>trusted_bot_authors</code></strong> — handles listed at the top level of <code>janitor.toml</code>.
+   Backward-compatible with existing manifests.</li>
+<li><strong><code>[forge].automation_accounts</code></strong> — handles listed in the <code>[forge]</code> sub-section.
+   Designed for ecosystem accounts without the <code>[bot]</code> suffix (e.g. <code>r-ryantm</code>).</li>
+</ol>
+<p>When detected, the account is exempt from the unlinked-PR penalty (+20 pts). All
+other detection (dead symbols, logic clones, antipatterns) still runs.</p>
+<h2 id="pqc_enforced">pqc_enforced</h2>
+<p>Setting <code>pqc_enforced = true</code> requires <strong>Janitor Sentinel</strong> (the GitHub App SaaS
+layer). The Sentinel generates a persistent ML-DSA-65 key (<code>governor.key</code>) on first
+run and signs every CycloneDX v1.5 CBOM bond.</p>
+<p>When this flag is set and the bond cannot be issued (e.g. the Governor is
+unreachable), the PR is blocked:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>BLOCKED by repository-defined governance policy (janitor.toml).
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Reason: pqc_enforced = true. The ML-DSA-65 Integrity Bond could not be issued.
+</code></pre></div>
+<h2 id="custom-antipatterns">Custom Antipatterns</h2>
+<p>Point <code>custom_antipatterns</code> at <code>.scm</code> files containing tree-sitter queries:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">custom_antipatterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="s2">&quot;tools/queries/no_global_state.scm&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="s2">&quot;.janitor/queries/no_direct_sql.scm&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">]</span>
+</code></pre></div>
+<p>Each file must contain patterns with an <code>@slop</code> capture. Every match scores +50
+against the composite slop score.</p>
+<h2 id="webhook-sub-table"><code>[webhook]</code> sub-table</h2>
+<p>Configures outbound webhook delivery of bounce findings to SIEM systems, Slack, or Microsoft Teams.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>url</code></td>
+<td><code>String</code></td>
+<td><code>""</code></td>
+<td>Destination URL. Empty string disables delivery. Supports HTTPS and HTTP.</td>
+</tr>
+<tr>
+<td><code>secret</code></td>
+<td><code>String</code></td>
+<td><code>""</code></td>
+<td>HMAC-SHA256 signing secret. Use <code>"env:VAR_NAME"</code> to read from an environment variable at runtime (recommended for production). Payloads are delivered unsigned when empty.</td>
+</tr>
+<tr>
+<td><code>events</code></td>
+<td><code>[String]</code></td>
+<td><code>["critical_threat"]</code></td>
+<td>Event filter. Recognised values: <code>"critical_threat"</code>, <code>"necrotic_flag"</code>, <code>"all"</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The signature is delivered in the <code>X-Janitor-Signature-256</code> header as <code>sha256=&lt;hex&gt;</code>. The event type
+is delivered in the <code>X-Janitor-Event</code> header.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[webhook]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">url</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://hooks.slack.com/services/...&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">secret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;env:JANITOR_WEBHOOK_SECRET&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;critical_threat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;necrotic_flag&quot;</span><span class="p">]</span>
+</code></pre></div>
+<h2 id="billing-sub-table"><code>[billing]</code> sub-table</h2>
+<p>Overrides the default actuarial ledger rates. Change these to match your organisation's measured
+incident cost before presenting to finance or executive stakeholders.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>triage_minutes_per_finding</code></td>
+<td><code>f64</code></td>
+<td><code>12.0</code></td>
+<td>Senior-engineer minutes consumed per finding. Used to compute <code>Time_Saved_Hours</code> in the CSV export. Source: Workslop research 2026.</td>
+</tr>
+<tr>
+<td><code>critical_threat_usd</code></td>
+<td><code>f64</code></td>
+<td><code>150.0</code></td>
+<td>Billing rate for Critical Threats (security antipattern or Swarm collision).</td>
+</tr>
+<tr>
+<td><code>necrotic_usd</code></td>
+<td><code>f64</code></td>
+<td><code>20.0</code></td>
+<td>Billing rate for Necrotic GC (bot-automatable dead-code, no human triage required).</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[billing]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">triage_minutes_per_finding</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">20.0</span><span class="w">  </span><span class="c1"># your org&#39;s measured value</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">critical_threat_usd</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="mf">200.0</span><span class="w"> </span><span class="c1"># adjust to your incident response cost</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">necrotic_usd</span><span class="w">               </span><span class="o">=</span><span class="w"> </span><span class="mf">15.0</span>
+</code></pre></div>
+<h2 id="effective-gate-formula">Effective Gate Formula</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>effective_gate = min_slop_score + (refactor_bonus IF [REFACTOR] or [FIXES-DEBT] in body)
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>PR passes      = raw_slop_score &lt; effective_gate
+</code></pre></div>
+<p>The <code>refactor_bonus</code> floors at <code>min_slop_score</code> — the gate never goes below the
+configured threshold even for tagged PRs.</p>
 
 
 
