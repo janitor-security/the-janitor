@@ -268,7 +268,7 @@ gc_value_usd            = gc_only_count × $20
 total_economic_impact   = ci_compute_saved_usd + gc_value_usd
 ```
 
-### CSV Column Schema (14 columns, exact order)
+### CSV Column Schema (16 columns, exact order)
 
 ```
  1. PR_Number
@@ -279,12 +279,30 @@ total_economic_impact   = ci_compute_saved_usd + gc_value_usd
  6. Logic_Clones
  7. Antipattern_IDs       pipe-delimited rule labels (e.g. security:compiled_payload_anomaly|antipattern:ncd_anomaly)
  8. Collided_PRs          pipe-delimited collided PR numbers; empty if none
- 9. Time_Saved_Hours      necrotic_count × 12 min ÷ 60 (Workslop research 2026)
-10. Operational_Savings_USD ($150 critical / $20 GC-only / $0 otherwise)
+ 9. Time_Saved_Hours      necrotic_count × triage_minutes_per_finding ÷ 60 (default 12 min; configurable via [billing] in janitor.toml)
+10. Operational_Savings_USD ($150 critical / $20 GC-only / $0 otherwise; rates configurable via [billing] in janitor.toml)
 11. Timestamp
 12. PR_State
 13. Is_Bot
 14. Repo_Slug
+15. Commit_SHA            Git SHA of the PR head at bounce time; from --head or GITHUB_SHA; empty when unavailable
+16. Policy_Hash           BLAKE3 hex digest of janitor.toml at bounce time; empty when no manifest present (SOC 2 audit trail)
+```
+
+**`[billing]` TOML table** (override actuarial defaults):
+```toml
+[billing]
+triage_minutes_per_finding = 12.0   # senior-engineer minutes per finding (Workslop 2026 default)
+critical_threat_usd        = 150.0  # billing rate for Critical Threats
+necrotic_usd               = 20.0   # billing rate for Necrotic GC flags
+```
+
+**`[webhook]` TOML table** (SIEM / Slack / Teams integration):
+```toml
+[webhook]
+url    = "https://hooks.slack.com/services/..."
+secret = "env:JANITOR_WEBHOOK_SECRET"   # or literal string for dev
+events = ["critical_threat"]            # "critical_threat" | "necrotic_flag" | "all"
 ```
 
 ### PDF Report Structure
@@ -440,7 +458,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-7.9.2
+7.9.3
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.

@@ -6,7 +6,7 @@
 //! Static-scan fallback: when no bounce log exists, loads `.janitor/symbols.rkyv`
 //! and emits one CSV row per dead symbol (PR-specific columns left empty).
 //!
-//! ## Columns (14 total)
+//! ## Columns (16 total)
 //!
 //! | # | Column | Notes |
 //! |---|--------|-------|
@@ -24,6 +24,8 @@
 //! | 12 | `PR_State` | `open`, `merged`, or `closed` |
 //! | 13 | `Is_Bot` | `TRUE` when author is in `trusted_bot_authors` (janitor.toml) |
 //! | 14 | `Repo_Slug` | GitHub `owner/repo` slug |
+//! | 15 | `Commit_SHA` | Git commit SHA of the PR head at bounce time; empty when unavailable |
+//! | 16 | `Policy_Hash` | BLAKE3 hex digest of `janitor.toml` at bounce time; empty when no manifest present |
 
 use anyhow::Result;
 use std::io::Write as _;
@@ -64,8 +66,8 @@ fn bom_csv_writer(path: &Path) -> Result<csv::Writer<std::io::BufWriter<std::fs:
     Ok(csv::Writer::from_writer(buf))
 }
 
-/// CSV header row — 14 columns.
-const CSV_HEADER: [&str; 14] = [
+/// CSV header row — 16 columns.
+const CSV_HEADER: [&str; 16] = [
     "PR_Number",
     "Author",
     "Score",
@@ -80,6 +82,8 @@ const CSV_HEADER: [&str; 14] = [
     "PR_State",
     "Is_Bot",
     "Repo_Slug",
+    "Commit_SHA",
+    "Policy_Hash",
 ];
 
 /// Derive the `Threat_Class` string for a bounce log entry.
@@ -173,6 +177,8 @@ fn write_entry_row(
         state_str.as_str(),
         is_bot_str,
         entry.repo_slug.as_str(),
+        entry.commit_sha.as_str(),
+        entry.policy_hash.as_str(),
     ])?;
     Ok(())
 }
@@ -320,6 +326,8 @@ fn export_static_scan(janitor_dir: &Path, out: &Path) -> Result<()> {
             "open",  // PR_State — N/A for static scan
             "FALSE", // Is_Bot — N/A for static scan
             "",      // Repo_Slug — N/A for static scan
+            "",      // Commit_SHA — N/A for static scan
+            "",      // Policy_Hash — N/A for static scan
         ])?;
     }
 
