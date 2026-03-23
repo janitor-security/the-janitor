@@ -1,5 +1,5 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v7.8.6 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v7.8.7 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
@@ -48,7 +48,7 @@ Visualize C/C++ compile-time blast radius and track structural Swarm clones in r
 
 ### Pro-Entropic Resilience
 
-The v7.8.6 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.15`. Any blob crossing that threshold triggers `HighGenerativeVerbosity` (+50 points) before tree-sitter parses a single node.
+The v7.8.7 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.05`. Any blob crossing that threshold triggers `antipattern:ncd_anomaly` (+10 points) before tree-sitter parses a single node.
 
 Two complementary shields eliminate false positives on legitimate non-application content:
 
@@ -132,7 +132,7 @@ janitor clean ./src --force-purge
 | **Registry Persistence** | rkyv + memmap2 | mmap-direct deserialization; no heap allocation for reads |
 | **Structural Hashing** | BLAKE3 (alpha-normalized AST) | Logic-clone detection across identifier rename boundaries |
 | **Fuzzy Dedup** | AstSimHasher (SimHash over CST tokens) | Classified as `Refactor`, `Zombie`, or `NewCode` |
-| **NCD Entropy Gate** | zstd level-3 compression ratio | O(N) boilerplate detector; fires before AST parse; ratio < 0.15 → `HighGenerativeVerbosity` |
+| **NCD Entropy Gate** | zstd level-3 compression ratio | O(N) boilerplate detector; fires before AST parse; ratio < 0.05 → `antipattern:ncd_anomaly` (+10 pts) |
 | **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
 | **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
