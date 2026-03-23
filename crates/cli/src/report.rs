@@ -1552,6 +1552,152 @@ fn fmt_bytes(b: u64) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// SARIF 2.1.0 renderer
+// ---------------------------------------------------------------------------
+
+/// Render `entries` as a SARIF 2.1.0 JSON string.
+///
+/// Output formats: `markdown` (default), `json`, `pdf`, `cbom`, `sarif`.
+///
+/// ## Schema
+/// Produces a single SARIF run with:
+/// - `tool.driver.rules[]` — one entry per unique antipattern label.
+/// - `results[]` — one entry per `(BounceLogEntry, antipattern)` pair plus
+///   an additional result for each Swarm collision.
+///
+/// ## Level mapping
+/// - `"error"` — antipattern label contains `"security:"`.
+/// - `"warning"` — all other antipatterns.
+///
+/// ## Swarm collisions
+/// Non-empty `collided_pr_numbers` emit an additional result with
+/// `ruleId = "swarm:structural_collision"` at level `"error"`.
+///
+/// ## Zero new dependencies
+/// Uses only `serde_json::json!()` — no additional crates required.
+pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
+    use serde_json::{json, Value};
+    use std::collections::BTreeSet;
+
+    // Collect all unique antipattern labels (stable order via BTreeSet).
+    let mut all_labels: BTreeSet<String> = BTreeSet::new();
+    for e in entries {
+        for ap in &e.antipatterns {
+            all_labels.insert(ap.clone());
+        }
+        if !e.collided_pr_numbers.is_empty() {
+            all_labels.insert("swarm:structural_collision".to_string());
+        }
+    }
+
+    // Build rules array.
+    let rules: Vec<Value> = all_labels
+        .iter()
+        .map(|label| {
+            let level = if label.contains("security:") {
+                "error"
+            } else {
+                "warning"
+            };
+            json!({
+                "id": label,
+                "name": label,
+                "shortDescription": { "text": label },
+                "defaultConfiguration": { "level": level }
+            })
+        })
+        .collect();
+
+    // Build results array.
+    let mut results: Vec<Value> = Vec::new();
+    for e in entries {
+        let pr_num = e.pr_number.unwrap_or(0);
+        let author = e.author.as_deref().unwrap_or("-");
+        let score_str = e.slop_score.to_string();
+        let repo = e.repo_slug.as_str();
+
+        for ap in &e.antipatterns {
+            let level = if ap.contains("security:") {
+                "error"
+            } else {
+                "warning"
+            };
+            let uri = if repo.is_empty() {
+                format!("pr/{pr_num}")
+            } else {
+                format!("{repo}/pr/{pr_num}")
+            };
+            results.push(json!({
+                "ruleId": ap,
+                "level": level,
+                "message": {
+                    "text": format!("PR #{pr_num} by {author}: {ap}")
+                },
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": { "uri": uri }
+                        }
+                    }
+                ],
+                "partialFingerprints": {
+                    "janitorScore": score_str
+                }
+            }));
+        }
+
+        // Swarm collision result.
+        if !e.collided_pr_numbers.is_empty() {
+            let uri = if repo.is_empty() {
+                format!("pr/{pr_num}")
+            } else {
+                format!("{repo}/pr/{pr_num}")
+            };
+            results.push(json!({
+                "ruleId": "swarm:structural_collision",
+                "level": "error",
+                "message": {
+                    "text": format!(
+                        "PR #{pr_num} by {author}: structural clone collision with PRs {:?}",
+                        e.collided_pr_numbers
+                    )
+                },
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": { "uri": uri }
+                        }
+                    }
+                ],
+                "partialFingerprints": {
+                    "janitorScore": score_str
+                }
+            }));
+        }
+    }
+
+    let doc = json!({
+        "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "janitor",
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "informationUri": "https://thejanitor.app",
+                        "rules": rules
+                    }
+                },
+                "results": results
+            }
+        ]
+    });
+
+    serde_json::to_string_pretty(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

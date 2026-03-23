@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
+mod cbom;
 mod daemon;
 mod export;
 mod git_drive;
@@ -285,11 +286,14 @@ enum Commands {
         /// Number of PRs to include in the Slop Top list.
         #[arg(long, default_value = "50")]
         top: usize,
-        /// Output format: `markdown` (default), `json`, or `pdf`.
+        /// Output format: `markdown` (default), `json`, `pdf`, `cbom`, or `sarif`.
         ///
         /// The `pdf` format requires `pandoc` and a LaTeX distribution
         /// (texlive-latex-recommended on Debian/Ubuntu, BasicTeX on macOS).
         /// Output defaults to `janitor_report.pdf` when `--out` is not specified.
+        ///
+        /// The `cbom` format emits a CycloneDX v1.5 JSON document.
+        /// The `sarif` format emits a SARIF 2.1.0 JSON document.
         #[arg(long, default_value = "markdown")]
         format: String,
         /// Write the report to this file instead of stdout.
@@ -2870,6 +2874,28 @@ fn cmd_report_global(
     Ok(())
 }
 
+/// Write `content` to `path` if `Some`, otherwise print to stdout.
+fn write_or_print(content: &[u8], out: Option<&Path>) -> anyhow::Result<()> {
+    match out {
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
+            }
+            std::fs::write(path, content)
+                .with_context(|| format!("writing output to {}", path.display()))?;
+            println!("Output written: {}", path.display());
+        }
+        None => {
+            use std::io::Write as _;
+            std::io::stdout()
+                .write_all(content)
+                .context("writing output to stdout")?;
+        }
+    }
+    Ok(())
+}
+
 /// Primary mode: reads `.janitor/bounce_log.ndjson` and renders Slop Top 50,
 /// Structural Clones, and Zombie Dependencies.
 ///
@@ -2970,6 +2996,15 @@ fn cmd_report(
         }
     } else {
         // ── Bounce-log mode ───────────────────────────────────────────────
+        // CBOM and SARIF formats need the raw entries — handle before aggregation.
+        if format == "cbom" {
+            let cbom_content = cbom::render_cbom(&entries, &repo_name);
+            return write_or_print(cbom_content.as_bytes(), out);
+        }
+        if format == "sarif" {
+            let sarif_content = report::render_sarif(&entries);
+            return write_or_print(sarif_content.as_bytes(), out);
+        }
         let data = report::aggregate(entries, top);
         if format == "json" {
             serde_json::to_string_pretty(&report::render_json(&data, &repo_name))
