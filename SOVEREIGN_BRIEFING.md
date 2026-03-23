@@ -440,7 +440,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-7.9.1
+7.9.2
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
