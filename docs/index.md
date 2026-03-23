@@ -35,7 +35,16 @@ Three capabilities your current toolchain cannot replicate:
 
 ### Zero-Copy Execution
 
-Every analysis — reference graph construction, dead symbol detection, structural clone hashing — executes via **memory-mapped file access**. Your source code is never copied to heap, never serialized, never transmitted. No network call is made at any point in the dead-symbol pipeline. The analysis surface is your local machine. There is no exfiltration vector to audit.
+Every analysis — reference graph construction, dead symbol detection, structural clone hashing — executes via **memory-mapped file access**. No network call is made at any point in the dead-symbol pipeline. The analysis surface is your local machine. There is no exfiltration vector to audit.
+
+**Two deployment models — choose based on your security requirements:**
+
+| Model | Where analysis runs | Source code leaves your environment? |
+|---|---|---|
+| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | Never — all analysis is local |
+| **Janitor Sentinel** (GitHub App) | Janitor's Fly.io infrastructure | Yes — repo is cloned serverside |
+
+The CLI and GitHub Action models provide full zero-upload guarantees. Janitor Sentinel is the managed deployment — source code is analysed on Janitor infrastructure and never retained beyond the duration of the scan.
 
 **Benchmark:** Scanned the Godot Engine — **3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python** — in **33 seconds**, consuming **58 MB of peak RAM**. On a standard CI runner. With zero OOM events and zero panics.
 
@@ -154,7 +163,7 @@ Anything that survives all five gates is a confirmed dead symbol. No false posit
 
 BLAKE3 structural hashing with alpha-normalization detects logic clones — functions with identical structure and different names. Chemotaxis ordering prioritizes high-calorie files (`.rs`, `.py`, `.go`, `.ts`) in the analysis pass. The `slop_hunter` detects language-specific antipatterns via Tree-sitter AST walks: hallucinated Python imports, vacuous Rust `unsafe` blocks, goroutine closure traps.
 
-**Pro-Entropic Resilience — NCD Entropy Gate** — `check_entropy()` compresses each patch blob via `zstd` at level 3 and computes the ratio `compressed_len / raw_len`. Any blob below threshold `0.15` (highly self-similar content) triggers the `HighGenerativeVerbosity` antipattern, scoring +50 and surfacing in the bounce log. This is O(N) in patch size and executes before the AST crawl — AI-generated boilerplate is caught before tree-sitter parses a single node. Patches smaller than 256 bytes are exempt to prevent zstd frame-overhead false positives.
+**Pro-Entropic Resilience — NCD Entropy Gate** — `check_entropy()` compresses each patch blob via `zstd` at level 3 and computes the ratio `compressed_len / raw_len`. Any blob below threshold `0.15` (highly self-similar content) triggers the `antipattern:ncd_anomaly` label, scoring +10 points and surfacing in the bounce log. This is O(N) in patch size and executes before the AST crawl — AI-generated boilerplate is caught before tree-sitter parses a single node. Patches smaller than 256 bytes are exempt to prevent zstd frame-overhead false positives.
 
 **Null-Vector Collision Shield** — A triple-layer false-positive prevention system guaranteeing score=0 cannot be spuriously raised on legitimate infrastructure changes: (1) IaC bypass — `.nix`, `.lock`, `.json`, `.toml`, `.yaml`, `.yml`, `.csv` extensions bypass `ByteLatticeAnalyzer` entirely (nix sha256 hashes and lockfile digests are legitimate high-density content); (2) size guard — patches below 256 bytes bypass the NCD entropy gate (zstd frame overhead dominates tiny inputs); (3) domain router — `DOMAIN_VENDORED` blobs suppress memory-safety rules on upstream CVE patches touching `thirdparty/`, `third_party/`, `vendor/` paths. False positives on CVE vendor patches: **zero, by construction**.
 
@@ -188,7 +197,7 @@ A long-lived Unix Domain Socket server keeps the symbol registry memory-resident
 
 ### Data Sovereignty
 
-All operations run locally. Your source code is memory-mapped on your hardware and never transmitted. The signed attestation token is verified by a 32-byte public key embedded in the binary. No telemetry. No cloud dependency. No exfiltration surface.
+All operations run locally when using the CLI or GitHub Action. Your source code is memory-mapped on your hardware and never transmitted when using the CLI or GitHub Action. See deployment models above. The signed attestation token is verified by a 32-byte public key embedded in the binary. No telemetry. No cloud dependency. No exfiltration surface.
 
 ---
 

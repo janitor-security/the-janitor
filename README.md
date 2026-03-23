@@ -48,7 +48,7 @@ Visualize C/C++ compile-time blast radius and track structural Swarm clones in r
 
 ### Pro-Entropic Resilience
 
-The v7.9.2 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.05`. Any blob crossing that threshold triggers `antipattern:ncd_anomaly` (+10 points) before tree-sitter parses a single node.
+The v7.9.2 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.15`. Any blob crossing that threshold triggers `antipattern:ncd_anomaly` (+10 points) before tree-sitter parses a single node.
 
 Two complementary shields eliminate false positives on legitimate non-application content:
 
@@ -57,7 +57,16 @@ Two complementary shields eliminate false positives on legitimate non-applicatio
 
 ### Zero-Copy Execution
 
-Every analysis executes via **memory-mapped file access**. Source code is never copied to heap, never serialized, never transmitted. No network call is made during the dead-symbol pipeline.
+Every analysis executes via **memory-mapped file access**. No network call is made during the dead-symbol pipeline.
+
+**Two deployment models — choose based on your security requirements:**
+
+| Model | Where analysis runs | Source code leaves your environment? |
+|---|---|---|
+| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | Never — all analysis is local |
+| **Janitor Sentinel** (GitHub App) | Janitor's Fly.io infrastructure | Yes — repo is cloned serverside |
+
+The CLI and GitHub Action models provide full zero-upload guarantees. Janitor Sentinel is the managed deployment — source code is analysed on Janitor infrastructure and never retained beyond the duration of the scan.
 
 **Benchmark:** 3.5 million lines of Godot Engine — **33 seconds, 58 MB peak RAM.** On a standard CI runner. Zero panics.
 
@@ -132,7 +141,7 @@ janitor clean ./src --force-purge
 | **Registry Persistence** | rkyv + memmap2 | mmap-direct deserialization; no heap allocation for reads |
 | **Structural Hashing** | BLAKE3 (alpha-normalized AST) | Logic-clone detection across identifier rename boundaries |
 | **Fuzzy Dedup** | AstSimHasher (SimHash over CST tokens) | Classified as `Refactor`, `Zombie`, or `NewCode` |
-| **NCD Entropy Gate** | zstd level-3 compression ratio | O(N) boilerplate detector; fires before AST parse; ratio < 0.05 → `antipattern:ncd_anomaly` (+10 pts) |
+| **NCD Entropy Gate** | zstd level-3 compression ratio | O(N) boilerplate detector; fires before AST parse; ratio < 0.15 → `antipattern:ncd_anomaly` (+10 pts) |
 | **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
 | **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
