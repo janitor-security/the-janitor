@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "advanced_threats"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -172,7 +172,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "backlog_pruner"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "blake3",
@@ -360,7 +360,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "advanced_threats",
  "anatomist",
@@ -402,7 +402,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "common"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "common",
  "crossterm 0.28.1",
@@ -920,7 +920,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "advanced_threats",
  "aho-corasick",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "include_deflator"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "blake3",
@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "base64",
@@ -1672,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1838,7 +1838,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -2101,7 +2101,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2385,7 +2385,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "junction",
@@ -3159,7 +3159,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3555,7 +3555,7 @@ checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 
 [[package]]
 name = "wisdom-bake"
-version = "7.9.3"
+version = "7.9.4"
 dependencies = [
  "anyhow",
  "common",

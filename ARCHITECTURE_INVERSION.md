@@ -115,22 +115,26 @@ until legacy mode is fully retired.
 
 ## Implementation Sequence
 
-1. **Governor: add `POST /v1/analysis-token`** (2–3 days)
-   - Issue a JWT signed with the Governor's Ed25519 key, scoped to `{repo_full}:{pr_number}:{head_sha}`.
-   - 5-minute TTL.  One token per PR event.
+1. **Governor: add `POST /v1/analysis-token`** — IMPLEMENTED in v7.9.4
+   - Issues a JWT signed with the Governor's Ed25519 key, scoped to `{repo_full}:{pr_number}:{head_sha}`.
+   - 5-minute TTL.  Rate-limited: one token per (repo, PR) per 60 s.
+   - Controlled by `GOVERNOR_INVERT_MODE=1`; returns 404 in legacy mode.
 
-2. **CLI: add `--report-url` to `cmd_bounce`** (1 day)
-   - After `append_bounce_log`, if `--report-url` is set, POST the `BounceLogEntry` to the URL
-     with `Authorization: Bearer <token>`.
+2. **CLI: add `--report-url` to `cmd_bounce`** — IMPLEMENTED in v7.9.4
+   - After `append_bounce_log`, if `--report-url` and `--analysis-token` are set, POSTs the
+     `BounceLogEntry` to the URL with `Authorization: Bearer <token>`.
+   - Non-fatal: source code stays on the runner regardless of POST outcome.
 
-3. **Governor: add `POST /v1/report`** (2–3 days)
-   - Verify the JWT.  Verify `BounceLogEntry.commit_sha` matches the token's `head_sha` claim.
-   - Issue CBOM via the existing `pqc.rs` signing path.
-   - Update GitHub Check Run.
+3. **Governor: add `POST /v1/report`** — IMPLEMENTED in v7.9.4
+   - Verifies the JWT.  Verifies `BounceLogEntry.commit_sha` matches the token's `head_sha` claim.
+   - Retrieves `(check_run_id, install_octo)` from `pending_checks` DashMap.
+   - Updates GitHub Check Run with score summary.
+   - Only active when `GOVERNOR_INVERT_MODE=1`.
 
-4. **GitHub Action: wire the token exchange** (1 day)
-   - Add a pre-bounce step: `curl -X POST $GOVERNOR_URL/v1/analysis-token ...` → store token.
-   - Pass `--report-url $GOVERNOR_URL/v1/report --token $TOKEN` to `janitor bounce`.
+4. **GitHub Action: wire the token exchange** — IMPLEMENTED in v7.9.4
+   - New inputs: `governor_url` (default: `https://the-governor.fly.dev`), `invert_mode` (default: `false`).
+   - Pre-bounce step fetches analysis token from `/v1/analysis-token`.
+   - Token passed to `janitor bounce --report-url --analysis-token`.
 
 5. **Governor: retire legacy clone path** (1 sprint after inverted mode is stable in prod)
    - Remove `handle_pull_request()` clone block.
@@ -157,4 +161,4 @@ After full transition, the following can be truthfully claimed for all deploymen
 
 ---
 
-*Authored 2026-03-23. Current Governor version: see `the-governor/Cargo.toml`.*
+*Authored 2026-03-23. Implementation (Steps 1–4) completed in v7.9.4 (2026-03-23). Current Governor version: see `the-governor/Cargo.toml`.*
