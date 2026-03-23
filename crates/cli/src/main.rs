@@ -1642,8 +1642,6 @@ fn cmd_clean(
 // ---------------------------------------------------------------------------
 
 fn cmd_dashboard(project_root: &Path) -> anyhow::Result<()> {
-    use common::registry::{MappedRegistry, SymbolRegistry};
-
     let rkyv_path = project_root.join(".janitor").join("symbols.rkyv");
 
     if !rkyv_path.exists() {
@@ -1676,13 +1674,8 @@ fn cmd_dashboard(project_root: &Path) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mapped = MappedRegistry::open(&rkyv_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open symbols.rkyv: {e}"))?;
-
-    let registry: SymbolRegistry = rkyv::deserialize::<_, rkyv::rancor::Error>(mapped.archived())
-        .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
-
-    dashboard::draw_dashboard(&registry).map_err(|e| anyhow::anyhow!("TUI error: {e}"))
+    // symbols.rkyv exists — launch the WOPR multi-repo TUI from the project root.
+    dashboard::wopr_view::draw_wopr(project_root).map_err(|e| anyhow::anyhow!("TUI error: {e}"))
 }
 
 // ---------------------------------------------------------------------------

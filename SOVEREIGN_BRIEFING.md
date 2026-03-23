@@ -307,19 +307,7 @@ Log file polled for changes every **2 seconds**.
 | `Esc` / `Backspace` | Return to TargetSelection |
 | `q` | Quit |
 
-### Mode 3 — Static Dashboard (`draw_dashboard`)
-
-Legacy single-screen view over a pre-loaded `SymbolRegistry`. Not tabbed.
-Layout: Status block (top) → BarChart left + Top-10 dead functions list right → footer.
-
-| Widget | Content |
-|---|---|
-| Status | `SOVEREIGN` (density > 90%) or `VULNERABLE` — coloured |
-| BarChart | Total symbols vs Dead candidates |
-| List | Top 10 largest unprotected symbols by byte size |
-| Footer | `Press 'q' to exit` |
-
-**Key Bindings:** `q` to quit.
+*(Mode 3 — Static Dashboard `draw_dashboard` removed in v7.9.1. The WOPR TUI is the sole production view.)*
 
 ---
 
