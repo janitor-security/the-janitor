@@ -59,7 +59,27 @@ Grammar library: `tree-sitter 0.26` (workspace pinned).
 
 ---
 
-## II. EXECUTION PIPELINE — HYPER-GAUNTLET
+## II. POLICY LAYER
+
+`janitor.toml` at the repository root encodes maintainer-controlled slop tolerance as
+version-controlled, reviewable configuration. Loaded by `JanitorPolicy::load()` in
+`crates/common/src/policy.rs`. Full field reference: `docs/governance.md` /
+[https://thejanitor.app/governance](https://thejanitor.app/governance).
+
+| Field | Default | Purpose |
+|---|---|---|
+| `min_slop_score` | 100 | Gate threshold — raw score ceiling |
+| `require_issue_link` | false | Block PRs with no `#N` reference |
+| `allowed_zombies` | false | Downgrade zombie veto to warning |
+| `pqc_enforced` | false | Block PR when ML-DSA-65 bond fails (needs Sentinel) |
+| `refactor_bonus` | 0 | Raise gate for `[REFACTOR]`/`[FIXES-DEBT]` PRs |
+| `custom_antipatterns` | [] | Project-specific `.scm` query files |
+| `trusted_bot_authors` | [] | Handles exempt from unlinked-PR penalty |
+| `[forge].automation_accounts` | [] | Ecosystem accounts without `[bot]` suffix |
+
+---
+
+## III. EXECUTION PIPELINE — HYPER-GAUNTLET
 
 Entry point: `tools/gauntlet-runner` binary, invoked via `just hyper-gauntlet` or `just run-gauntlet`.
 
@@ -153,7 +173,7 @@ Thread B: janitor export --global               → <gauntlet_dir>/export.csv
 
 ---
 
-## III. THE THREAT MATRIX
+## IV. THE THREAT MATRIX
 
 All threats detected by `PatchBouncer::bounce()` in `crates/forge/src/slop_filter.rs`.
 
@@ -204,7 +224,7 @@ Detected by `find_slop(lang, source)` in `crates/forge/src/slop_hunter.rs`:
 
 ---
 
-## IV. THE ACTUARIAL LEDGER
+## V. THE ACTUARIAL LEDGER
 
 ### Classification Function (`crates/cli/src/report.rs`)
 
@@ -295,7 +315,7 @@ total_economic_impact   = ci_compute_saved_usd + gc_value_usd
 
 ---
 
-## V. THE COMMAND & CONTROL INTERFACE
+## VI. THE COMMAND & CONTROL INTERFACE
 
 Invoked via: `janitor dashboard`
 Crate: `crates/dashboard`
@@ -339,7 +359,7 @@ Log file polled for changes every **2 seconds**.
 
 ---
 
-## VI. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST
+## VII. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST
 
 ```
 just shell
@@ -404,7 +424,7 @@ just sync
 
 ---
 
-## VII. R&D VAULT — EXPERIMENTAL CRATES
+## VIII. R&D VAULT — EXPERIMENTAL CRATES
 
 Located at `crates/experimental/`. All four are workspace members but only `advanced_threats` is wired into the production `forge` pipeline.
 
@@ -417,7 +437,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 
 ---
 
-## VIII. FINAL VERSION
+## IX. FINAL VERSION
 
 ```
 7.9.1

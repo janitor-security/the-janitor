@@ -28,6 +28,8 @@ nav:
   - Intelligence Reports:
     - Global Audit 2026: case-studies/global-audit-2026.md
     - Godot Engine: case-studies/godot.md
+  - Configuration:
+    - janitor.toml Reference: governance.md
   - Pricing & Licensing: pricing.md
   - Legal:
     - Terms: terms.md
