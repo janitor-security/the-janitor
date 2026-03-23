@@ -2841,6 +2841,20 @@ fn cmd_report_global(
         repo_logs.len()
     );
 
+    // CBOM and SARIF formats need the raw entries — handle before aggregation.
+    if format == "cbom" || format == "sarif" {
+        let all_entries: Vec<report::BounceLogEntry> = repo_logs
+            .into_iter()
+            .flat_map(|(_, entries)| entries)
+            .collect();
+        let content = if format == "cbom" {
+            cbom::render_cbom(&all_entries, &gauntlet_str)
+        } else {
+            report::render_sarif(&all_entries)
+        };
+        return write_or_print(content.as_bytes(), out);
+    }
+
     let data = report::aggregate_global(repo_logs);
 
     let content = if format == "json" {
