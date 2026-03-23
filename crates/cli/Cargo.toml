@@ -32,6 +32,8 @@ dotenvy = "0.15"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 blake3.workspace = true
+hmac.workspace = true
+sha2.workspace = true
 indicatif.workspace = true
 ureq.workspace = true
 csv = "1.3"

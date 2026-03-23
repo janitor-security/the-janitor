@@ -28,6 +28,7 @@ uuid = { version = "1.10", features = ["v4"] }
 
 # Cryptography
 blake3 = "1.5"
+hmac = "0.12"
 
 # Serialization (Zero-Copy)
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

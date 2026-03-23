@@ -14,7 +14,9 @@
 //!
 //! Output formats: `markdown` (default) and `json`.
 
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -41,6 +43,81 @@ pub const MINUTES_PER_TRIAGE: f64 = 12.0;
 /// Critical Threats are billed at **$150** per intercept in the TEI ledger.
 pub fn is_critical_threat(e: &BounceLogEntry) -> bool {
     e.antipatterns.iter().any(|a| a.contains("security:")) || !e.collided_pr_numbers.is_empty()
+}
+
+/// Fire an outbound webhook POST if configured in `janitor.toml`.
+///
+/// - Signs the payload with HMAC-SHA256 using the configured secret.
+/// - Resolves `"env:VAR_NAME"` secrets from the environment at call time.
+/// - Filters events by `webhook.events` before sending.
+/// - Best-effort: logs a warning on failure, never panics, never blocks the bounce result.
+/// - Non-blocking: spawns a thread for the HTTP POST so the CLI exits promptly.
+pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::policy::JanitorPolicy) {
+    let cfg = &policy.webhook;
+    let is_critical = is_critical_threat(entry);
+    let is_necrotic = entry.necrotic_flag.is_some();
+
+    if !cfg.should_fire(is_critical, is_necrotic) {
+        return;
+    }
+
+    // ── Resolve secret ───────────────────────────────────────────────────
+    let secret = if cfg.secret.starts_with("env:") {
+        let var_name = &cfg.secret[4..];
+        match std::env::var(var_name) {
+            Ok(v) => v,
+            Err(_) => {
+                eprintln!(
+                    "warning: webhook secret env var '{var_name}' not set — delivering unsigned"
+                );
+                String::new()
+            }
+        }
+    } else {
+        cfg.secret.clone()
+    };
+
+    // ── Serialize payload ────────────────────────────────────────────────
+    let payload = match serde_json::to_string(entry) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("warning: failed to serialise webhook payload: {e}");
+            return;
+        }
+    };
+
+    // ── HMAC-SHA256 signature ─────────────────────────────────────────────
+    let sig_header = if !secret.is_empty() {
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+        mac.update(payload.as_bytes());
+        let result = mac.finalize().into_bytes();
+        let hex: String = result.iter().map(|b| format!("{b:02x}")).collect();
+        format!("sha256={hex}")
+    } else {
+        String::new()
+    };
+
+    let url = cfg.url.clone();
+    let event_name = if is_critical {
+        "critical_threat"
+    } else {
+        "necrotic_flag"
+    };
+
+    // ── Non-blocking POST ─────────────────────────────────────────────────
+    std::thread::spawn(move || {
+        let mut builder = ureq::post(&url)
+            .set("Content-Type", "application/json")
+            .set("X-Janitor-Event", event_name);
+        if !sig_header.is_empty() {
+            builder = builder.set("X-Janitor-Signature-256", &sig_header);
+        }
+        match builder.send_string(&payload) {
+            Ok(_) => {}
+            Err(e) => eprintln!("warning: webhook delivery failed: {e}"),
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +269,24 @@ pub struct BounceLogEntry {
     /// code).  `None` when no necrotic condition was detected.
     #[serde(default)]
     pub necrotic_flag: Option<String>,
+
+    /// Git commit SHA of the PR head at bounce time.
+    ///
+    /// Populated from `--head <sha>` in git-native mode, or from the
+    /// `GITHUB_SHA` environment variable in GitHub Actions.
+    /// Empty string when neither is available.
+    #[serde(default)]
+    pub commit_sha: String,
+
+    /// BLAKE3 hex digest of the `janitor.toml` file contents at bounce time.
+    ///
+    /// Provides a cryptographic reference to the policy that was in effect
+    /// when this decision was made — directly answers the SOC 2 auditor
+    /// question: "What policy was active at the time of this scan?"
+    ///
+    /// Empty string when no `janitor.toml` is present (default policy applied).
+    #[serde(default)]
+    pub policy_hash: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -1875,5 +1970,67 @@ mod tests {
         let orphans: Vec<String> = (0..20).map(|i| format!("src/file_{i}.rs")).collect();
         let output = render_scan_markdown(&[], 0, &orphans, "test-repo", 50);
         assert!(!output.contains("more entries"), "no overflow when <= 50");
+    }
+}
+
+#[cfg(test)]
+mod webhook_tests {
+    use super::*;
+    use common::policy::WebhookConfig;
+
+    fn make_entry(antipatterns: Vec<String>, necrotic: Option<String>) -> BounceLogEntry {
+        BounceLogEntry {
+            pr_number: Some(1),
+            author: Some("test".to_string()),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            slop_score: 0,
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            unlinked_pr: 0,
+            antipatterns,
+            comment_violations: vec![],
+            min_hashes: vec![],
+            zombie_deps: vec![],
+            state: PrState::Open,
+            is_bot: false,
+            repo_slug: String::new(),
+            suppressed_by_domain: 0,
+            collided_pr_numbers: vec![],
+            necrotic_flag: necrotic,
+            commit_sha: String::new(),
+            policy_hash: String::new(),
+        }
+    }
+
+    #[test]
+    fn webhook_no_fire_when_url_empty() {
+        let entry = make_entry(vec!["security:strcpy".to_string()], None);
+        let policy = common::policy::JanitorPolicy::default();
+        // Should not panic; url is empty so returns early
+        fire_webhook_if_configured(&entry, &policy);
+    }
+
+    #[test]
+    fn webhook_no_fire_when_event_not_matched() {
+        let entry = make_entry(vec![], Some("SEMANTIC_NULL".to_string()));
+        let mut policy = common::policy::JanitorPolicy::default();
+        policy.webhook = WebhookConfig {
+            url: "https://example.com/hook".to_string(),
+            secret: String::new(),
+            events: vec!["critical_threat".to_string()], // necrotic not in filter
+        };
+        // necrotic flag present, but filter only wants critical_threat — should not fire
+        assert!(!policy.webhook.should_fire(false, true));
+    }
+
+    #[test]
+    fn webhook_fires_for_critical() {
+        let policy_cfg = WebhookConfig {
+            url: "https://example.com/hook".to_string(),
+            secret: String::new(),
+            events: vec!["critical_threat".to_string()],
+        };
+        assert!(policy_cfg.should_fire(true, false));
     }
 }

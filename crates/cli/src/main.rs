@@ -2631,8 +2631,24 @@ fn cmd_bounce(
         suppressed_by_domain: score.suppressed_by_domain,
         collided_pr_numbers: score.collided_pr_numbers,
         necrotic_flag: score.necrotic_flag,
+        commit_sha: head
+            .map(|s| s.to_owned())
+            .or_else(|| std::env::var("GITHUB_SHA").ok())
+            .unwrap_or_default(),
+        policy_hash: {
+            let toml_path = project_root.join("janitor.toml");
+            if toml_path.exists() {
+                match std::fs::read(&toml_path) {
+                    Ok(bytes) => blake3::hash(&bytes).to_hex().to_string(),
+                    Err(_) => String::new(),
+                }
+            } else {
+                String::new()
+            }
+        },
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
+    report::fire_webhook_if_configured(&log_entry, &policy);
 
     Ok(())
 }

@@ -138,6 +138,8 @@ mod tests {
             suppressed_by_domain: 0,
             collided_pr_numbers: vec![],
             necrotic_flag: None,
+            commit_sha: String::new(),
+            policy_hash: String::new(),
         }
     }
 

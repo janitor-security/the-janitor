@@ -36,6 +36,129 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
+// BillingConfig — [billing] sub-table
+// ---------------------------------------------------------------------------
+
+/// Financial calculation parameters configurable per-organisation.
+///
+/// Controls the dollar/time estimates in the Workslop actuarial ledger.
+/// Override in `[billing]` TOML table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BillingConfig {
+    /// Senior-engineer triage minutes per finding intercept.
+    ///
+    /// Used to compute `Time_Saved_Hours` in the CSV export.
+    /// The 12-minute default is a conservative estimate from Workslop
+    /// research (2026).  Set this to your organisation's measured value
+    /// to make the CFO conversation defensible.
+    ///
+    /// **Set this in `janitor.toml` and cite your own incident post-mortems
+    /// in the CFO meeting — do not rely on the default.**
+    #[serde(default = "BillingConfig::default_triage_minutes")]
+    pub triage_minutes_per_finding: f64,
+
+    /// Billing rate for Critical Threats (security antipattern / Swarm collision).
+    #[serde(default = "BillingConfig::default_critical_usd")]
+    pub critical_threat_usd: f64,
+
+    /// Billing rate for Necrotic GC (bot-automatable dead-code).
+    #[serde(default = "BillingConfig::default_necrotic_usd")]
+    pub necrotic_usd: f64,
+}
+
+impl Default for BillingConfig {
+    fn default() -> Self {
+        Self {
+            triage_minutes_per_finding: Self::default_triage_minutes(),
+            critical_threat_usd: Self::default_critical_usd(),
+            necrotic_usd: Self::default_necrotic_usd(),
+        }
+    }
+}
+
+impl BillingConfig {
+    fn default_triage_minutes() -> f64 {
+        12.0
+    }
+    fn default_critical_usd() -> f64 {
+        150.0
+    }
+    fn default_necrotic_usd() -> f64 {
+        20.0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WebhookConfig — [webhook] sub-table
+// ---------------------------------------------------------------------------
+
+/// Configuration for outbound webhook delivery of bounce findings.
+///
+/// When configured, the Janitor POSTs a HMAC-SHA256 signed JSON payload
+/// to `url` on each bounce that matches the `events` filter.  The signature
+/// appears in the `X-Janitor-Signature-256` header as `sha256=<hex>`.
+/// Consumers should verify it against the configured secret before processing.
+///
+/// Configure via `[webhook]` TOML table in `janitor.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct WebhookConfig {
+    /// Destination URL for outbound webhook POSTs.
+    ///
+    /// Supports HTTPS and HTTP.  Leave empty to disable webhook delivery.
+    #[serde(default)]
+    pub url: String,
+
+    /// HMAC-SHA256 secret used to sign outbound payloads.
+    ///
+    /// Accepts two forms:
+    /// - `"env:VAR_NAME"` — reads the secret from environment variable `VAR_NAME`
+    ///   at runtime (recommended for production).
+    /// - Any other string — used directly as the secret (development only).
+    ///
+    /// When empty, payloads are delivered unsigned.
+    #[serde(default)]
+    pub secret: String,
+
+    /// Event filter governing which bounce results trigger a delivery.
+    ///
+    /// Recognised values: `"critical_threat"`, `"necrotic_flag"`, `"all"`.
+    /// Defaults to `["critical_threat"]` when omitted.
+    #[serde(default = "WebhookConfig::default_events")]
+    pub events: Vec<String>,
+}
+
+impl Default for WebhookConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            secret: String::new(),
+            events: Self::default_events(),
+        }
+    }
+}
+
+impl WebhookConfig {
+    fn default_events() -> Vec<String> {
+        vec!["critical_threat".to_string()]
+    }
+
+    /// Returns `true` if this configuration should fire a webhook for an entry
+    /// with the given classification flags.
+    pub fn should_fire(&self, is_critical: bool, is_necrotic: bool) -> bool {
+        if self.url.is_empty() {
+            return false;
+        }
+        self.events.iter().any(|e| match e.as_str() {
+            "critical_threat" => is_critical,
+            "necrotic_flag" => is_necrotic,
+            "all" => true,
+            _ => false,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ForgeConfig — [forge] sub-table
 // ---------------------------------------------------------------------------
 
@@ -78,7 +201,7 @@ pub struct ForgeConfig {
 /// the *absence* of a manifest is functionally identical to an all-defaults
 /// configuration.  Unknown fields are silently ignored — forward-compatible
 /// with future Janitor versions.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct JanitorPolicy {
     /// Composite slop-score threshold above which `janitor bounce` reports a
@@ -160,6 +283,18 @@ pub struct JanitorPolicy {
     /// See [`ForgeConfig`] for available fields.  Defaults to an empty
     /// configuration when the `[forge]` section is absent from `janitor.toml`.
     pub forge: ForgeConfig,
+
+    /// Outbound webhook delivery for SIEM / Slack / Teams integration.
+    ///
+    /// Configure in `[webhook]` TOML table.  See [`WebhookConfig`].
+    #[serde(default)]
+    pub webhook: WebhookConfig,
+
+    /// Financial calculation parameters for the Workslop actuarial ledger.
+    ///
+    /// Configure in `[billing]` TOML table.  See [`BillingConfig`].
+    #[serde(default)]
+    pub billing: BillingConfig,
 }
 
 impl Default for JanitorPolicy {
@@ -173,6 +308,8 @@ impl Default for JanitorPolicy {
             refactor_bonus: 0,
             trusted_bot_authors: Vec::new(),
             forge: ForgeConfig::default(),
+            webhook: WebhookConfig::default(),
+            billing: BillingConfig::default(),
         }
     }
 }
@@ -368,10 +505,34 @@ mod tests {
             refactor_bonus: 25,
             trusted_bot_authors: vec!["release-bot".to_owned()],
             forge: ForgeConfig::default(),
+            webhook: WebhookConfig::default(),
+            billing: BillingConfig::default(),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
         assert_eq!(original, deserialised);
+    }
+
+    #[test]
+    fn webhook_should_fire_logic() {
+        let cfg = WebhookConfig {
+            url: "https://example.com/hook".to_string(),
+            secret: String::new(),
+            events: vec!["critical_threat".to_string()],
+        };
+        assert!(cfg.should_fire(true, false));
+        assert!(!cfg.should_fire(false, false));
+        assert!(!cfg.should_fire(false, true)); // necrotic_flag not in events
+
+        let cfg2 = WebhookConfig {
+            url: "https://example.com/hook".to_string(),
+            secret: String::new(),
+            events: vec!["all".to_string()],
+        };
+        assert!(cfg2.should_fire(false, false));
+
+        let cfg3 = WebhookConfig::default(); // url is empty
+        assert!(!cfg3.should_fire(true, true)); // empty url = no fire
     }
 
     #[test]

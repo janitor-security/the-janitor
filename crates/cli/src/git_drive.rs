@@ -516,6 +516,8 @@ fn bounce_one(
             suppressed_by_domain: 0,
             collided_pr_numbers: Vec::new(),
             necrotic_flag: Some("SEMANTIC_NULL".to_string()),
+            commit_sha: pr_sha.to_string(),
+            policy_hash: String::new(),
         });
     }
 
@@ -552,6 +554,8 @@ fn bounce_one(
         suppressed_by_domain: score.suppressed_by_domain,
         collided_pr_numbers: score.collided_pr_numbers,
         necrotic_flag: score.necrotic_flag,
+        commit_sha: pr_sha.to_string(),
+        policy_hash: String::new(),
     })
 }
 
