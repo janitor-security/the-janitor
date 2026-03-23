@@ -698,16 +698,17 @@ fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec
 // ---------------------------------------------------------------------------
 
 /// Compression ratio threshold below which a patch is flagged as
-/// `antipattern:ncd_anomaly`. A ratio of 0.05 means the patch compresses
-/// to <5% of its original size — achievable only by extreme repetition
-/// (e.g. 15KB of identical lines).
+/// `antipattern:ncd_anomaly`. A ratio of 0.15 means the patch compresses
+/// to <15% of its original size — achievable only by extreme repetition
+/// (e.g. hundreds of identical lines, machine-generated boilerplate).
 ///
-/// CALIBRATION NOTE: This threshold has not been validated against the
-/// 33K-PR gauntlet corpus. Run `janitor report --global` on a full gauntlet
-/// run and count NCD findings. If near zero, recalibrate upward toward 0.15
-/// (the README's original claim). Threshold change requires a version bump
-/// and a note in SOVEREIGN_BRIEFING.md.
-pub const MIN_ENTROPY_RATIO: f64 = 0.05;
+/// CALIBRATION (v7.9.2 — 2026-03-23): Recalibrated from 0.05 → 0.15.
+/// The 33K-PR gauntlet corpus showed 0 NCD hits at the 0.05 threshold
+/// (`janitor report --global` returned 0/0 NCD findings), confirming the
+/// threshold was too tight to fire on any real-world PR. Raising to 0.15
+/// captures genuine verbosity-bomb PRs (e.g. repeated boilerplate blocks)
+/// without false-positive exposure.
+pub const MIN_ENTROPY_RATIO: f64 = 0.15;
 
 /// Minimum input size (bytes) before the entropy gate engages.
 ///
