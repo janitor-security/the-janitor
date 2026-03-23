@@ -745,9 +745,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-changes-to-this-policy" class="md-nav__link">
+  <a href="#8-data-collection-by-deployment-model" class="md-nav__link">
     <span class="md-ellipsis">
-      8. Changes to This Policy
+      8. Data Collection by Deployment Model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-changes-to-this-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Changes to This Policy
     </span>
   </a>
   
@@ -859,9 +868,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-changes-to-this-policy" class="md-nav__link">
+  <a href="#8-data-collection-by-deployment-model" class="md-nav__link">
     <span class="md-ellipsis">
-      8. Changes to This Policy
+      8. Data Collection by Deployment Model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-changes-to-this-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Changes to This Policy
     </span>
   </a>
   
@@ -975,7 +993,43 @@
 <p>If you have questions about this Privacy Policy or wish to exercise any applicable data rights, contact:</p>
 <p><strong>privacy@thejanitor.app</strong></p>
 <hr />
-<h2 id="8-changes-to-this-policy">8. Changes to This Policy</h2>
+<h2 id="8-data-collection-by-deployment-model">8. Data Collection by Deployment Model</h2>
+<p>The Janitor operates in two distinct deployment modes with different data handling properties:</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>CLI + GitHub Action</th>
+<th>Janitor Sentinel (GitHub App)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Source code transmitted</td>
+<td>Never</td>
+<td>Temporarily cloned to Janitor infrastructure</td>
+</tr>
+<tr>
+<td>Source code retained</td>
+<td>N/A</td>
+<td>Deleted immediately after scan (duration of analysis only)</td>
+</tr>
+<tr>
+<td>Bounce log</td>
+<td>Written locally to <code>.janitor/bounce_log.ndjson</code></td>
+<td>Score + metadata only transmitted to Governor</td>
+</tr>
+<tr>
+<td>CBOM issued</td>
+<td>No (unsigned)</td>
+<td>Yes — ML-DSA-65 signed</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sentinel mode</strong>: When you install Janitor Sentinel as a GitHub App, source code is temporarily cloned to Janitor's Fly.io infrastructure to perform the structural analysis. The clone is deleted immediately after the analysis completes — it is never written to persistent storage. Only the structural analysis result (slop score, antipattern labels, collided PR numbers) is retained in the Governor's database.</p>
+<p><strong>Post-Architecture-Inversion (v7.9.4+)</strong>: After the architecture inversion is deployed with <code>GOVERNOR_INVERT_MODE=1</code>, Sentinel mode will match the CLI/Action model — no source code will be transmitted to Janitor infrastructure.</p>
+<hr />
+<h2 id="9-changes-to-this-policy">9. Changes to This Policy</h2>
 <p>This policy may be updated. The Effective Date at the top of this document reflects the most recent revision. Material changes will be noted in the project's release notes.</p>
 
 
