@@ -15,6 +15,7 @@
 //! Requires libgit2 (`git2` crate).  This crate is a C binding and requires
 //! `libgit2-dev` to be installed in the build environment.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -43,7 +44,21 @@ const SLOP_VECTOR_PRIORITY: &[&str] = &[
 #[derive(Debug)]
 pub struct MergeSnapshot {
     /// Changed and added files: path → raw blob bytes.
+    ///
+    /// Contains the full HEAD blob for each changed file.  Routed ONLY to the
+    /// `IncludeGraphBuilder` (include-graph analysis) and `semantic_null_pr_check`
+    /// (full-file AST comparison).  MUST NOT be fed directly into `PatchBouncer`
+    /// — doing so causes NCD and clone detection to evaluate unchanged file history
+    /// rather than the PR delta, inflating scores on small PRs in large files.
     pub blobs: HashMap<PathBuf, Vec<u8>>,
+    /// Per-file unified diff text: path → actual patch string.
+    ///
+    /// Populated by `simulate_merge` via `diff.foreach` — contains only the
+    /// genuinely added, removed, and context lines for each changed file,
+    /// exactly as git computed them.  This is the payload that `PatchBouncer`
+    /// MUST receive: it ensures NCD entropy, clone detection, and `slop_hunter`
+    /// evaluate only the code introduced by the PR.
+    pub patches: HashMap<PathBuf, String>,
     /// Deleted file paths (no content — file was removed).
     pub deleted: Vec<PathBuf>,
     /// Total bytes loaded across all blobs.
@@ -156,8 +171,84 @@ pub fn simulate_merge(
         }
     }
 
+    // ── Per-file diff text (Payload Bifurcation) ──────────────────────────────
+    //
+    // Build a unified diff string for each changed file using `diff.foreach`.
+    // This is the payload that `bounce_git` feeds to `PatchBouncer::bounce` —
+    // it contains ONLY the genuinely added/removed/context lines, not the full
+    // blob.  Prevents NCD and clone detection from inflating scores by evaluating
+    // historical file content that the PR did not touch.
+    //
+    // `RefCell` is required because `diff.foreach` accepts three separate closure
+    // arguments (file_cb, hunk_cb, line_cb) that all need mutable access to the
+    // `patches` map.  The callbacks are invoked sequentially — never concurrently —
+    // so `RefCell::borrow_mut()` never panics at runtime.
+    let patches: RefCell<HashMap<PathBuf, String>> = RefCell::new(HashMap::new());
+
+    let _ = diff.foreach(
+        &mut |delta, _progress| {
+            use git2::Delta;
+            // Only create patch entries for non-deleted files.
+            if !matches!(
+                delta.status(),
+                Delta::Added | Delta::Modified | Delta::Renamed | Delta::Typechange | Delta::Copied
+            ) {
+                return true;
+            }
+            if let Some(path) = delta.new_file().path() {
+                let path_str = path.to_str().unwrap_or("");
+                // Initialise the entry with the unified diff header.  The `---`
+                // line uses the new-file path in all cases (matches PatchBouncer's
+                // `extract_patch_path` which reads the `+++` header).
+                patches.borrow_mut().insert(
+                    path.to_path_buf(),
+                    format!("--- a/{path_str}\n+++ b/{path_str}\n"),
+                );
+            }
+            true
+        },
+        None,
+        Some(&mut |delta, hunk| {
+            if let Some(path) = delta.new_file().path() {
+                if let Some(patch) = patches.borrow_mut().get_mut(&path.to_path_buf()) {
+                    // `hunk.header()` is the raw `@@ -x,y +a,b @@\n` bytes.
+                    let header = std::str::from_utf8(hunk.header()).unwrap_or("@@ @@\n");
+                    patch.push_str(header);
+                }
+            }
+            true
+        }),
+        Some(&mut |delta, _hunk, line| {
+            // Map git2 diff line origin to unified-diff prefix characters.
+            // Skip file-header ('F'), hunk-header ('H'), binary ('B'), and
+            // no-newline ('\\') origins — hunk headers were appended above.
+            let prefix = match line.origin() {
+                '+' => "+",
+                '-' => "-",
+                ' ' | '=' => " ", // context / context-with-no-newline-at-eof
+                _ => return true,
+            };
+            if let Some(path) = delta.new_file().path() {
+                if let Some(patch) = patches.borrow_mut().get_mut(&path.to_path_buf()) {
+                    let content = std::str::from_utf8(line.content()).unwrap_or("");
+                    patch.push_str(prefix);
+                    patch.push_str(content);
+                    // git2 `line.content()` already includes the trailing `\n`
+                    // for normal lines; only add one if the line lacks it.
+                    if !content.ends_with('\n') {
+                        patch.push('\n');
+                    }
+                }
+            }
+            true
+        }),
+    );
+
+    let patches = patches.into_inner();
+
     Ok(MergeSnapshot {
         blobs,
+        patches,
         deleted,
         total_bytes,
     })

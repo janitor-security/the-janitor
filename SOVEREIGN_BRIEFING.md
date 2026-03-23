@@ -265,6 +265,32 @@ total_economic_impact   = ci_compute_saved_usd + gc_value_usd
 14. Repo_Slug
 ```
 
+### PDF Report Structure
+
+#### Global Report (`render_global_markdown`)
+
+| Page | Content |
+|---|---|
+| 1 — Executive Summary | Timestamp, repo count, PR count; Critical Threats / Necrotic GC / TEI table; methodology footnote |
+| 2 — Threat Distribution | ASCII bar chart — one line per repo, `█` Critical, `░` Necrotic |
+| 3 — Repository Breakdown | Table: Repository / PRs / Total Slop / Intercepts / Economic Impact / Worst PR |
+| 4 — Top 10 Riskiest PRs | Cross-repo PRs with score > 50, ranked descending |
+| — Scoring Methodology | Billing-tier table + score formula |
+| — Appendix: Full Audit Log | Per-repo `\newpage` sections: metric table, Top 10 Sloppiest PRs, Top 10 Cleanest Contributors, C/C++ compile-time silos |
+
+#### Single-Repo Report (`render_markdown`)
+
+| Section | Content |
+|---|---|
+| Executive Summary | Workslop metric table (actionable intercepts, critical, GC, hours, TEI) |
+| *(page break)* | |
+| Scoring Methodology | Billing-tier table + score formula |
+| Top 10 High-Risk PRs | Table + antipattern detail expansion |
+| Necrotic PRs | Backlog Pruner GC flags |
+| Structural Clones | MinHash clone pairs |
+| Zombie Dependencies | Manifest scan results |
+| Full PR Log | Every PR scored > 0 |
+
 ---
 
 ## V. THE COMMAND & CONTROL INTERFACE
@@ -392,7 +418,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## VIII. FINAL VERSION
 
 ```
-7.9.0
+7.9.1
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
