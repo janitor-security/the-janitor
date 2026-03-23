@@ -1,5 +1,5 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v7.9.2 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v7.9.3 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
@@ -48,7 +48,7 @@ Visualize C/C++ compile-time blast radius and track structural Swarm clones in r
 
 ### Pro-Entropic Resilience
 
-The v7.9.2 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.15`. Any blob crossing that threshold triggers `antipattern:ncd_anomaly` (+10 points) before tree-sitter parses a single node.
+The v7.9.3 NCD Entropy Gate compresses every patch blob via `zstd` and measures `compressed_len / raw_len`. AI-generated boilerplate is self-similar: it compresses below ratio `0.15`. Any blob crossing that threshold triggers `antipattern:ncd_anomaly` (+10 points) before tree-sitter parses a single node.
 
 Two complementary shields eliminate false positives on legitimate non-application content:
 

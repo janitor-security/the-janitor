@@ -101,6 +101,44 @@ custom_antipatterns = [
 Each file must contain patterns with an `@slop` capture. Every match scores +50
 against the composite slop score.
 
+## `[webhook]` sub-table
+
+Configures outbound webhook delivery of bounce findings to SIEM systems, Slack, or Microsoft Teams.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `url` | `String` | `""` | Destination URL. Empty string disables delivery. Supports HTTPS and HTTP. |
+| `secret` | `String` | `""` | HMAC-SHA256 signing secret. Use `"env:VAR_NAME"` to read from an environment variable at runtime (recommended for production). Payloads are delivered unsigned when empty. |
+| `events` | `[String]` | `["critical_threat"]` | Event filter. Recognised values: `"critical_threat"`, `"necrotic_flag"`, `"all"`. |
+
+The signature is delivered in the `X-Janitor-Signature-256` header as `sha256=<hex>`. The event type
+is delivered in the `X-Janitor-Event` header.
+
+```toml
+[webhook]
+url    = "https://hooks.slack.com/services/..."
+secret = "env:JANITOR_WEBHOOK_SECRET"
+events = ["critical_threat", "necrotic_flag"]
+```
+
+## `[billing]` sub-table
+
+Overrides the default actuarial ledger rates. Change these to match your organisation's measured
+incident cost before presenting to finance or executive stakeholders.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `triage_minutes_per_finding` | `f64` | `12.0` | Senior-engineer minutes consumed per finding. Used to compute `Time_Saved_Hours` in the CSV export. Source: Workslop research 2026. |
+| `critical_threat_usd` | `f64` | `150.0` | Billing rate for Critical Threats (security antipattern or Swarm collision). |
+| `necrotic_usd` | `f64` | `20.0` | Billing rate for Necrotic GC (bot-automatable dead-code, no human triage required). |
+
+```toml
+[billing]
+triage_minutes_per_finding = 20.0  # your org's measured value
+critical_threat_usd        = 200.0 # adjust to your incident response cost
+necrotic_usd               = 15.0
+```
+
 ## Effective Gate Formula
 
 ```
