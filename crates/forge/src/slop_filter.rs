@@ -30,9 +30,10 @@
 //!           + (hallucinated_security_fix × 100)
 //! ```
 //! Antipattern scoring is stratified by [`crate::slop_hunter::Severity`]:
-//! - `Critical` (50 pts): AST-Bombs, `eval()`, `gets()`, open CIDR rules, K8s wildcard hosts.
-//! - `Warning`  (10 pts): Vacuous `unsafe`, empty catch blocks, hallucinated imports.
-//! - `Lint`     ( 0 pts): `async void`, unquoted bash variables, goroutine closure traps.
+//! - `Critical` (50 pts): AST-Bombs, `gets()`, open CIDR rules, K8s wildcard hosts,
+//!   compiled payload injection.
+//! - `Warning`  (10 pts): NCD entropy anomaly (`antipattern:ncd_anomaly`).
+//! - `Lint`     ( 0 pts): Reserved for future non-scoring informational rules.
 //!
 //! The `antipattern_score` field accumulates these per-finding values; `antipatterns_found`
 //! remains the raw count for reporting purposes.  `antipattern_score` is capped at 500 pts
@@ -91,9 +92,9 @@ pub struct SlopScore {
     /// Weighted point sum for all accepted antipattern findings.
     ///
     /// Each finding contributes `severity.points()` to this total:
-    /// - `Critical` → 50 pts (AST-Bombs, `eval()`, `gets()`, open CIDR, K8s wildcard hosts)
-    /// - `Warning`  → 10 pts (vacuous `unsafe`, empty catch, hallucinated imports)
-    /// - `Lint`     →  0 pts (`async void`, unquoted Bash vars, goroutine traps)
+    /// - `Critical` → 50 pts (AST-Bombs, `gets()`, open CIDR, K8s wildcard hosts, compiled payload)
+    /// - `Warning`  → 10 pts (`antipattern:ncd_anomaly` — NCD entropy gate)
+    /// - `Lint`     →  0 pts (reserved)
     ///
     /// This field is what [`Self::score()`] uses, not `antipatterns_found × 50`.
     /// Capped at 500 in `score()` to prevent runaway inflation.
@@ -429,6 +430,39 @@ impl PRBouncer for PatchBouncer {
     fn bounce(&self, patch: &str, registry: &SymbolRegistry) -> Result<SlopScore> {
         // Detect language from the +++ header extension.
         let ext = extract_patch_ext(patch);
+
+        // Extract file path early — reused by the generated-asset bypass, the
+        // None-arm AnomalousBlob guard, and domain routing in the Some arm.
+        let file_path = extract_patch_path(patch);
+
+        // ── Generated-asset bypass ────────────────────────────────────────────
+        // Files in these path contexts or with these compound extensions exhibit
+        // high NCD compressibility or binary-level entropy by construction —
+        // not slop.  Bypass all analysis early, before tree-sitter is loaded.
+        const GENERATED_PATH_SUBSTRINGS: &[&str] = &[
+            "/fixtures/",
+            "/testdata/",
+            "/__snapshots__/",
+            "vendor/",
+            "thirdparty/",
+        ];
+        if GENERATED_PATH_SUBSTRINGS
+            .iter()
+            .any(|s| file_path.contains(s))
+        {
+            return Ok(SlopScore::default());
+        }
+        // Compound extension bypass: rfind('.') resolves only the last dot, so
+        // "foo.min.js" → ext="js" (hits the JS grammar path).  Check the full
+        // path string for known generated multi-dot suffixes and skip entirely.
+        const GENERATED_COMPOUND_EXTS: &[&str] = &["min.js", "min.css", "pb.go", "pb.rs"];
+        if GENERATED_COMPOUND_EXTS
+            .iter()
+            .any(|s| file_path.ends_with(s))
+        {
+            return Ok(SlopScore::default());
+        }
+
         let cfg = match lang_for_ext(ext) {
             Some(c) => c,
             None => {
@@ -482,6 +516,10 @@ impl PRBouncer for PatchBouncer {
                     // "cmd" moved to lang_for_ext (bash grammar covers Windows cmd-like scripts)
                     "patch",            // Diff/patch files (text diffs, may contain hashes)
                     "permitted-images", // Kubernetes allowed-image list files
+                    // ── Generated / snapshot text files ──────────────────────
+                    "snap", // Jest / insta snapshot files (serialised JS/Rust values)
+                    "svg",  // Scalable Vector Graphics (XML text)
+                    "map",  // Source map files (JSON text, high-entropy base64 chunks)
                 ];
                 if SOURCE_TEXT_EXTS.contains(&ext) {
                     return Ok(SlopScore::default());
@@ -506,7 +544,11 @@ impl PRBouncer for PatchBouncer {
                     .map(|l| &l[1..])
                     .collect::<Vec<_>>()
                     .join("\n");
-                if !added.trim().is_empty() {
+                // Test domain exemption: test code is permitted to contain
+                // high-entropy mock data, binary fixtures, or generated vectors
+                // that would otherwise trigger AnomalousBlob.
+                let path_domain = crate::metadata::DomainRouter::classify(&file_path);
+                if !added.trim().is_empty() && path_domain != crate::metadata::DOMAIN_TEST {
                     use crate::agnostic_shield::{ByteLatticeAnalyzer, TextClass};
                     if matches!(
                         ByteLatticeAnalyzer::classify(added.as_bytes()),
@@ -570,7 +612,7 @@ impl PRBouncer for PatchBouncer {
                 vec![format!(
                     "HighGenerativeVerbosity: NCD entropy ratio {ratio:.3} < threshold \
                      {MIN_ENTROPY_RATIO} — patch is highly compressible, consistent \
-                     with AI-generated or auto-templated boilerplate (security:ncd_anomaly)."
+                     with AI-generated or auto-templated boilerplate (antipattern:ncd_anomaly)."
                 )]
             } else {
                 vec![]
@@ -640,8 +682,20 @@ impl PRBouncer for PatchBouncer {
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
         // fire regardless of domain.
-        let file_path = extract_patch_path(patch);
+        // `file_path` was extracted at the top of `bounce()` and is already in scope.
         let file_domain = crate::metadata::DomainRouter::classify(&file_path);
+
+        // Test domain immunity: NCD anomalies and AnomalousBlob findings are
+        // expected in test code — mock data, generated test vectors, and binary
+        // fixtures are legitimate.  Shadow `ncd_findings` to empty for DOMAIN_TEST
+        // so these do not inflate the ledger with spurious $150 Critical Threats.
+        // LotL and Unicode checks (in `payload_findings` / `unicode_gate`) remain
+        // active — those are true supply-chain attacks regardless of domain.
+        let ncd_findings = if file_domain == crate::metadata::DOMAIN_TEST {
+            vec![]
+        } else {
+            ncd_findings
+        };
 
         // Language-specific antipattern detection via slop_hunter.
         // Apply the domain bitmask matrix, then the severity-based test-domain filter.
@@ -899,11 +953,20 @@ impl PRBouncer for PatchBouncer {
         };
 
         // Merge NCD entropy gate and Compiled Payload Shield findings into the
-        // antipattern totals.  Both gate types are Critical tier (50 pts each).
+        // antipattern totals.
+        //
+        // Severity split (v7.9.0 Threat Demotion):
+        //   NCD (antipattern:ncd_anomaly)  → Warning tier: 10 pts.
+        //     Generative verbosity is an antipattern, not a supply-chain attack.
+        //     It MUST NOT trigger the $150 Critical Threat billing ledger in
+        //     report.rs::is_critical_threat (which gates on "security:" prefix).
+        //   Payload (binary_hunter)         → Critical tier: 50 pts.
+        //     ELF magic, mining stratum URIs, shell NULs are active supply-chain
+        //     signals — Critical billing is correct and intentional.
         let ncd_count = ncd_findings.len() as u32;
         let payload_count = payload_findings.len() as u32;
         let antipatterns_found = antipatterns_found + ncd_count + payload_count;
-        let antipattern_score = antipattern_score + ncd_count * 50 + payload_count * 50;
+        let antipattern_score = antipattern_score + ncd_count * 10 + payload_count * 50;
         let mut antipattern_details = antipattern_details;
         antipattern_details.extend(ncd_findings);
         antipattern_details.extend(payload_findings);
@@ -1239,31 +1302,24 @@ pub fn bounce_git(
             }
         }
 
-        // Explicitly extract the path as a UTF-8 string from the delta path so
-        // `extract_patch_ext` and the `BINARY_ASSET_EXTS` bypass inside
-        // `PatchBouncer::bounce` can parse the `+++ b/<path>` header correctly.
-        // `path.display()` may produce a lossy OsStr representation on platforms
-        // where the path contains non-UTF-8 bytes; `to_str()` is strict and we
-        // fall back to `""` so the file is analysed as extension-less (safe).
-        let path_str = path.to_str().unwrap_or("");
+        // ── Payload Bifurcation ───────────────────────────────────────────────
+        //
+        // `blob_bytes` is the full HEAD blob — the entire file as it exists at
+        // the PR's head commit.  Passing the full blob to PatchBouncer was the
+        // root cause of false positives on small PRs in large files: NCD entropy
+        // and clone detection evaluated the entire file history, not the diff.
+        //
+        // `snapshot.patches` holds the actual unified diff per file — only the
+        // lines git reports as added, removed, or context in this PR.  This is
+        // the ONLY payload that PatchBouncer, SlopHunter, and AstSimHasher may
+        // receive.  The full blob (`blob_bytes`) is returned to the caller for
+        // use by IncludeGraphBuilder and SemanticNull.
+        let patch = match snapshot.patches.get(path) {
+            Some(p) if !p.trim().is_empty() => p.as_str(),
+            _ => continue, // no diff lines for this file — skip
+        };
 
-        // Synthesise a virtual unified diff from the blob content.
-        let raw = std::str::from_utf8(blob_bytes).unwrap_or("");
-        let mut added_lines = String::with_capacity(raw.len() + raw.lines().count());
-        for l in raw.lines() {
-            added_lines.push('+');
-            added_lines.push_str(l);
-            added_lines.push('\n');
-        }
-
-        if added_lines.is_empty() {
-            continue;
-        }
-
-        let fake_patch =
-            format!("--- a/{path_str}\n+++ b/{path_str}\n@@ -0,0 +1 @@\n{added_lines}");
-
-        if let Ok(mut score) = PatchBouncer.bounce(&fake_patch, registry) {
+        if let Ok(mut score) = PatchBouncer.bounce(patch, registry) {
             total.dead_symbols_added += score.dead_symbols_added;
             total.logic_clones_found += score.logic_clones_found;
             total.zombie_symbols_added += score.zombie_symbols_added;
