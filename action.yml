@@ -30,11 +30,24 @@ inputs:
       Set to 'false' to surface findings without blocking the merge.
     required: false
     default: 'true'
+  governor_url:
+    description: >
+      Governor URL for Architecture Inversion mode. When set with invert_mode: true,
+      bounce results are submitted for attestation without transmitting source code.
+    required: false
+    default: 'https://the-governor.fly.dev'
+  invert_mode:
+    description: >
+      Set to 'true' to use Architecture Inversion mode: the Governor issues a Check Run
+      from the result payload. Source code stays on your runner — nothing is transmitted
+      to Janitor infrastructure.
+    required: false
+    default: 'false'
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
 outputs:
   slop_score:
-    description: 'Numeric slop score for this PR (0 = clean, ≥100 = gate triggered).'
+    description: 'Numeric slop score for this PR (0 = clean, >=100 = gate triggered).'
     value: ${{ steps.bounce.outputs.score }}
   antipatterns:
     description: 'Count of AST antipatterns found in this PR.'
@@ -60,7 +73,7 @@ runs:
         if [[ -z "$ACTION_REF" ]]; then
             ACTION_REF="main"
         fi
-        
+
         if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           DL_URL="https://github.com/GhrammR/the-janitor/releases/download/${ACTION_REF}/janitor"
         else
@@ -96,6 +109,24 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
 
+    # Step 2b — Fetch analysis token (Architecture Inversion mode).
+    #
+    # Only runs when invert_mode is 'true'. Calls the Governor's
+    # /v1/analysis-token endpoint to obtain a short-lived JWT for this PR.
+    # The token is passed to janitor bounce via --analysis-token so the
+    # Governor can issue the Check Run from the result payload.
+    - name: Fetch analysis token (inversion mode)
+      id: get_token
+      if: ${{ inputs.invert_mode == 'true' }}
+      shell: bash
+      run: |
+        RESPONSE=$(curl -sf -X POST "${{ inputs.governor_url }}/v1/analysis-token" \
+          -H "Content-Type: application/json" \
+          -d "{\"repo\":\"${{ github.repository }}\",\"pr\":${{ github.event.pull_request.number }},\"head_sha\":\"${{ github.event.pull_request.head.sha }}\",\"installation_id\":0}" \
+          2>/dev/null || echo '{"token":""}')
+        TOKEN=$(echo "$RESPONSE" | jq -r '.token // ""')
+        echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
     # Step 3 — Run bounce, write Job Summary, enforce fail gate.
     - name: Run bounce and write step summary
       id: bounce
@@ -112,6 +143,12 @@ runs:
         [[ -n "$PR_NUM" ]] && BOUNCE_ARGS+=(--pr-number "$PR_NUM")
         [[ -n "$AUTHOR" ]] && BOUNCE_ARGS+=(--author    "$AUTHOR")
 
+        # Architecture Inversion: wire report-url and analysis-token when enabled.
+        if [[ "${{ inputs.invert_mode }}" == "true" && -n "${{ steps.get_token.outputs.token }}" ]]; then
+          BOUNCE_ARGS+=(--report-url "${{ inputs.governor_url }}/v1/report")
+          BOUNCE_ARGS+=(--analysis-token "${{ steps.get_token.outputs.token }}")
+        fi
+
         # janitor:ignore security:lotl_execution_anomaly
         RESULT=$(/tmp/janitor "${BOUNCE_ARGS[@]}" 2>/dev/null || echo '{"slop_score":0}')
 
@@ -126,7 +163,7 @@ runs:
 
         # ── Job Summary ───────────────────────────────────────────────────────
         {
-          echo "## The Janitor — PR #${PR_NUM:-?} Slop Report"
+          echo "## The Janitor -- PR #${PR_NUM:-?} Slop Report"
           echo ""
           echo "| Metric | Value |"
           echo "|--------|-------|"
@@ -134,9 +171,9 @@ runs:
           echo "| Antipatterns | ${ANTI} |"
           echo "| Zombie Deps Added | ${ZOMBIES} |"
           if [[ "$UNLINKED" == "1" ]]; then
-            echo "| Linked Issue | ⚠️ None |"
+            echo "| Linked Issue | None |"
           else
-            echo "| Linked Issue | ✅ Present |"
+            echo "| Linked Issue | Present |"
           fi
           echo ""
 
@@ -155,18 +192,18 @@ runs:
           # Score verdict using GitHub's alert callout syntax.
           if [[ "${SCORE}" -ge 100 ]]; then
             echo "> [!CAUTION]"
-            echo "> **SLOP GATE TRIGGERED** — Score ${SCORE} ≥ 100. Address findings before merge."
+            echo "> **SLOP GATE TRIGGERED** -- Score ${SCORE} >= 100. Address findings before merge."
           elif [[ "${SCORE}" -gt 0 ]]; then
             echo "> [!WARNING]"
-            echo "> Score ${SCORE} — Minor findings detected. Review recommended."
+            echo "> Score ${SCORE} -- Minor findings detected. Review recommended."
           else
             echo "> [!NOTE]"
-            echo "> Score 0 — Clean PR. No slop detected."
+            echo "> Score 0 -- Clean PR. No slop detected."
           fi
         } >> "$GITHUB_STEP_SUMMARY"
 
         # ── Fail gate ─────────────────────────────────────────────────────────
         if [[ "${{ inputs.fail_on_slop }}" == "true" && "${SCORE}" -ge 100 ]]; then
-          echo "::error title=Slop Gate::Score ${SCORE} ≥ 100 — see Job Summary for details."
+          echo "::error title=Slop Gate::Score ${SCORE} >= 100 -- see Job Summary for details."
           exit 1
         fi

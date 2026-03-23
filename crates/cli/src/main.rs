@@ -18,6 +18,7 @@ struct Cli {
     command: Commands,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum Commands {
     /// Run the 6-stage dead-symbol detection pipeline.
@@ -196,6 +197,20 @@ enum Commands {
         /// or `closed` to classify historical entries as non-actionable in reports.
         #[arg(long, default_value = "open")]
         pr_state: String,
+        /// Governor URL to POST bounce results for attestation (Architecture Inversion mode).
+        ///
+        /// When set alongside `--analysis-token`, the scored `BounceLogEntry` is
+        /// submitted to the Governor's `/v1/report` endpoint so the Governor can
+        /// issue a GitHub Check Run on behalf of the customer runner.  Source code
+        /// stays on the runner — nothing is transmitted to Janitor infrastructure.
+        #[arg(long)]
+        report_url: Option<String>,
+        /// Short-lived analysis token from `/v1/analysis-token`.
+        ///
+        /// Required when `--report-url` is set.  Identifies the PR event and
+        /// authorises the bounce result submission.
+        #[arg(long)]
+        analysis_token: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -538,6 +553,8 @@ async fn main() -> anyhow::Result<()> {
             pr_body,
             repo_slug,
             pr_state,
+            report_url,
+            analysis_token,
         } => cmd_bounce(
             path,
             patch.as_deref(),
@@ -551,6 +568,8 @@ async fn main() -> anyhow::Result<()> {
             pr_body.as_deref(),
             repo_slug.as_deref(),
             pr_state.as_str(),
+            report_url.as_deref(),
+            analysis_token.as_deref(),
         )?,
         Commands::Report {
             repo,
@@ -2286,6 +2305,8 @@ fn cmd_bounce(
     pr_body: Option<&str>,
     repo_slug: Option<&str>,
     pr_state_str: &str,
+    report_url: Option<&str>,
+    analysis_token: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -2649,6 +2670,13 @@ fn cmd_bounce(
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
     report::fire_webhook_if_configured(&log_entry, &policy);
+
+    // ── Architecture Inversion: POST result to Governor ───────────────────────
+    if let (Some(url), Some(token)) = (report_url, analysis_token) {
+        if let Err(e) = report::post_bounce_result(url, token, &log_entry) {
+            eprintln!("warning: governor report failed: {e}");
+        }
+    }
 
     Ok(())
 }
