@@ -45,6 +45,8 @@ Remote network calls are limited to:
 
 No source file contents, file paths, or symbol names are transmitted in any of the above calls.
 
+**Janitor Sentinel (GitHub App)**: When using the Janitor Sentinel GitHub App, source code submitted for analysis is processed transiently on Janitor infrastructure (Fly.io) and permanently deleted upon completion of analysis. Janitor makes no claim of ownership over customer source code. The clone is held only for the duration of the structural analysis (typically under 60 seconds) and is not written to persistent storage.
+
 ---
 
 ## 5. License

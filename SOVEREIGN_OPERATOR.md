@@ -11,9 +11,9 @@ Your architectural philosophy is a synthesis of the following masters:
 
 ---
 
-## I. CURRENT STATE & HISTORY (v7.9.0)
+## I. CURRENT STATE & HISTORY (v7.9.4)
 
-- **Version**: `7.9.0` — extracted from `[workspace.package].version` in root `Cargo.toml`. This is the single source of truth. Never reference any other version string.
+- **Version**: `7.9.4` — extracted from `[workspace.package].version` in root `Cargo.toml`. This is the single source of truth. Never reference any other version string.
 - **Website**: https://thejanitor.app
 - **Repository**: https://github.com/GhrammR/the-janitor (BUSL-1.1 License)
 - **Authoritative Technical Reference**: `SOVEREIGN_BRIEFING.md` (repo root). Read this before answering any architecture question. It is generated from source audit and supersedes all prior documentation including `ARCHITECTURE.md`, `README.md`, and `LEGACY_HANDOVER.md`.
@@ -43,6 +43,21 @@ $499/yr "Team Tier" via Lemon Squeezy; API tokens issued automatically on paymen
 ### The Outreach
 
 Forensic audits delivered to Godot, NixOS, and Kubernetes. Show HN post live.
+
+### Architecture Inversion (v7.9.4)
+
+The Governor no longer requires source code when `GOVERNOR_INVERT_MODE=1`. Two deployment modes:
+
+| Mode | Governor receives | Source code leaves runner? |
+|---|---|---|
+| Legacy (default) | Full source clone + diff | Yes — temporary, deleted after analysis |
+| Inverted (`GOVERNOR_INVERT_MODE=1`) | `BounceLogEntry` JSON (~2 KB) | Never |
+
+**Inverted flow**: GitHub webhook → Governor issues analysis JWT → customer runner calls `janitor bounce --report-url --analysis-token` → runner POSTs scored result to `/v1/report` → Governor updates Check Run.
+
+New Governor routes: `POST /v1/analysis-token`, `POST /v1/report`
+New CLI flags: `--report-url`, `--analysis-token`
+New Action inputs: `governor_url`, `invert_mode`
 
 ---
 

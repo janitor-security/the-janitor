@@ -48,3 +48,6 @@ markdown_extensions:
 
 # No Python-specific documentation plugins (mkdocstrings, etc.).
 # This site documents a Rust binary; generated API docs are not applicable.
+
+# Operations (internal):
+# - Launch Checklist: LAUNCH_CHECKLIST.md

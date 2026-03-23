@@ -458,7 +458,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-7.9.3
+7.9.4
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
@@ -467,6 +467,22 @@ Release profile: `opt-level = "z"`, `lto = true`, `codegen-units = 1`, `strip = 
 MSRV: `rust-version = "1.88"` (enforced by CI MSRV workflow).
 Edition: `2021`.
 License: `BUSL-1.1` (all workspace crates via `license.workspace = true`).
+
+### v7.9.4 — Architecture Inversion Implementation
+
+Architecture Inversion (Steps 1–4 complete):
+
+1. **Governor: `POST /v1/analysis-token`** — issues a short-lived (5-min TTL) Ed25519-signed JWT scoped to `{repo}:{pr}:{head_sha}`. Rate-limited: same (repo, PR) pair cannot get a new token within 60 s. Controlled by `GOVERNOR_INVERT_MODE=1`.
+
+2. **CLI: `--report-url` + `--analysis-token`** — after `append_bounce_log`, if both flags are set, POSTs the `BounceLogEntry` JSON to the Governor's `/v1/report` with `Authorization: Bearer <token>`. Non-fatal: source code stays on the runner.
+
+3. **Governor: `POST /v1/report`** — verifies the JWT, checks `commit_sha == claims.head_sha`, retrieves the pending check from `pending_checks` DashMap, updates the GitHub Check Run, removes the entry. Only active in invert mode.
+
+4. **GitHub Action: `invert_mode` + `governor_url` inputs** — pre-bounce step fetches the analysis token from `/v1/analysis-token`; token is passed to `janitor bounce --report-url --analysis-token`.
+
+New env var: `GOVERNOR_INVERT_MODE=1` — gates all inversion behaviour in the Governor. Default: `0` (legacy clone path).
+New CLI flags: `janitor bounce --report-url <url> --analysis-token <jwt>`
+New `AppState` fields: `invert_mode: bool`, `token_rate_limit: DashMap`, `pending_checks: DashMap`
 
 ---
 
