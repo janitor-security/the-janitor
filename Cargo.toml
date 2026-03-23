@@ -88,7 +88,7 @@ toml = "1.0"
 ureq = { version = "2", features = ["json"] }
 
 # Lock-free atomic reference counting
-arc-swap = "1.7"
+arc-swap = "1.9"
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
 git2 = "0.20"
