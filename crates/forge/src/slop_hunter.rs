@@ -9,8 +9,12 @@
 //! | Language | Pattern | Description |
 //! |----------|---------|-------------|
 //! | YAML | Wildcard Kubernetes host | `VirtualService`/`Ingress` with `hosts: ["*"]` — exposes all routes publicly |
-//! | C | `gets()` call | Removed in C11; unbounded buffer overflow — use `fgets()` |
+//! | C/C++ | `gets()`, `strcpy()`, `sprintf()`, `scanf()` calls | Removed in C11 or known buffer-overflow sources |
+//! | C/C++ | `strcpy()` / `sprintf()` / `scanf()` | Unsafe string functions (CERT-C) |
 //! | HCL/Terraform | Open CIDR `0.0.0.0/0` | Wildcard ingress rule exposes resource to the entire internet |
+//! | HCL/Terraform | `public-read` S3 ACL | Public S3 bucket exposes data to the internet |
+//! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
+//! | JS/TS | `innerHTML` assignment | Direct DOM XSS vector — use `textContent` or sanitize input |
 //!
 //! ## Removed Rules (v7.6.0 — Linter Annihilation)
 //!
@@ -127,13 +131,20 @@ struct QueryEngine {
     yaml_lang: Language,
     /// Plain C grammar — AST walk for banned libc calls.
     c_lang: Language,
+    /// JavaScript grammar — used for `innerHTML` assignment detection.
+    js_lang: Language,
 }
 
 impl QueryEngine {
     fn new() -> anyhow::Result<Self> {
         let yaml_lang: Language = tree_sitter_yaml::LANGUAGE.into();
         let c_lang: Language = tree_sitter_c::LANGUAGE.into();
-        Ok(Self { yaml_lang, c_lang })
+        let js_lang: Language = tree_sitter_javascript::LANGUAGE.into();
+        Ok(Self {
+            yaml_lang,
+            c_lang,
+            js_lang,
+        })
     }
 }
 
@@ -159,7 +170,10 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     match language {
         "yaml" | "yml" => find_yaml_slop(eng, source),
         "c" | "h" => find_c_slop(eng, source),
+        "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
         "hcl" | "tf" => find_hcl_slop(source),
+        "py" => find_python_slop(source),
+        "js" | "jsx" | "ts" | "tsx" => find_js_slop(eng, source),
         _ => Vec::new(),
     }
 }
@@ -380,9 +394,15 @@ fn find_wildcard_in_sequence(
 // C: banned libc functions
 // ---------------------------------------------------------------------------
 
-/// Detect calls to dangerous libc functions (`gets`) in C/C-header source.
+/// Detect calls to dangerous libc functions in C/C-header source.
+///
+/// Banned functions: `gets` (removed in C11), `strcpy` (unbounded copy),
+/// `sprintf` (unbounded format write), `scanf` (unbounded input read).
 fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
-    if !source.windows(4).any(|w| w == b"gets") {
+    let has_banned = [b"gets".as_slice(), b"strcpy", b"sprintf", b"scanf"]
+        .iter()
+        .any(|pat| source.windows(pat.len()).any(|w| w == *pat));
+    if !has_banned {
         return Vec::new();
     }
     let mut parser = tree_sitter::Parser::new();
@@ -397,16 +417,44 @@ fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     findings
 }
 
+/// Detect calls to dangerous libc functions in C++ source.
+///
+/// Reuses the C grammar for call detection — C++ is a superset of C at the
+/// function-call level.  The C++ grammar is not used here because the C grammar
+/// is sufficient for detecting simple function call expressions and avoids
+/// grammar-version lag on C++ template syntax.
+fn find_cpp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    find_c_slop(eng, source)
+}
+
 /// Walk the C AST reporting calls to functions banned by C11 / CERT-C.
+///
+/// Banned functions and their replacements:
+/// - `gets`    → `fgets(buf, sizeof(buf), stdin)` (removed in C11)
+/// - `strcpy`  → `strncpy` or `strlcpy` (unbounded buffer copy)
+/// - `sprintf` → `snprintf` (unbounded format write)
+/// - `scanf`   → `fgets` + `sscanf` with explicit width (unbounded input read)
 fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
             if func.kind() == "identifier" {
                 if let Ok(name) = func.utf8_text(source) {
-                    let desc = match name {
+                    let desc: Option<&'static str> = match name {
                         "gets" => Some(
-                            "gets(): removed in C11 — performs unbounded buffer read; \
-                             use fgets(buf, sizeof(buf), stdin) instead",
+                            "security:unsafe_string_function — gets(): removed in C11; \
+                             unbounded buffer read — use fgets(buf, sizeof(buf), stdin)",
+                        ),
+                        "strcpy" => Some(
+                            "security:unsafe_string_function — strcpy(): unbounded buffer \
+                             copy — use strncpy or strlcpy with explicit size limit",
+                        ),
+                        "sprintf" => Some(
+                            "security:unsafe_string_function — sprintf(): unbounded format \
+                             write — use snprintf with explicit buffer size",
+                        ),
+                        "scanf" => Some(
+                            "security:unsafe_string_function — scanf(): unbounded input \
+                             read — use fgets + sscanf with explicit field width",
                         ),
                         _ => None,
                     };
@@ -441,9 +489,22 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
 /// the file also contains an ingress/security-group marker, reducing false
 /// positives on non-IaC TOML.
 fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let mut findings = Vec::new();
+    find_hcl_open_cidr(source, &mut findings);
+    find_hcl_s3_public_acl(source, &mut findings);
+    findings
+}
+
+/// Detect wildcard CIDR `0.0.0.0/0` inside a security-group context in HCL.
+///
+/// Uses a byte-level scan rather than tree-sitter parsing — the signal is
+/// unambiguous enough without AST structure.  A finding is only emitted when
+/// the file also contains an ingress/security-group marker, reducing false
+/// positives on non-IaC TOML.
+fn find_hcl_open_cidr(source: &[u8], findings: &mut Vec<SlopFinding>) {
     const WILDCARD: &[u8] = b"0.0.0.0/0";
     if !source.windows(WILDCARD.len()).any(|w| w == WILDCARD) {
-        return Vec::new();
+        return;
     }
 
     const SECURITY_MARKERS: &[&[u8]] = &[
@@ -456,14 +517,15 @@ fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
         .iter()
         .any(|m| source.windows(m.len()).any(|w| w == *m));
     if !has_context {
-        return Vec::new();
+        return;
     }
 
-    source
+    for (i, _) in source
         .windows(WILDCARD.len())
         .enumerate()
         .filter(|(_, w)| *w == WILDCARD)
-        .map(|(i, _)| SlopFinding {
+    {
+        findings.push(SlopFinding {
             start_byte: i,
             end_byte: i + WILDCARD.len(),
             description: "Open CIDR `0.0.0.0/0` in security group rule: \
@@ -472,8 +534,163 @@ fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
                 .to_string(),
             domain: DOMAIN_ALL,
             severity: Severity::Critical,
+        });
+    }
+}
+
+/// Detect `public-read` S3 bucket ACL in HCL / Terraform source.
+///
+/// Uses a byte-level scan — the signal is unambiguous without grammar support.
+/// A finding is only emitted when the file also contains `aws_s3_bucket` or
+/// `acl` to reduce false positives on unrelated HCL configs.
+fn find_hcl_s3_public_acl(source: &[u8], findings: &mut Vec<SlopFinding>) {
+    const PUBLIC_READ: &[u8] = b"public-read";
+    if !source.windows(PUBLIC_READ.len()).any(|w| w == PUBLIC_READ) {
+        return;
+    }
+
+    const S3_MARKERS: &[&[u8]] = &[b"aws_s3_bucket", b"acl"];
+    let has_context = S3_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m));
+    if !has_context {
+        return;
+    }
+
+    for (i, _) in source
+        .windows(PUBLIC_READ.len())
+        .enumerate()
+        .filter(|(_, w)| *w == PUBLIC_READ)
+    {
+        findings.push(SlopFinding {
+            start_byte: i,
+            end_byte: i + PUBLIC_READ.len(),
+            description: "security:s3_public_acl — S3 bucket ACL set to \
+                          `public-read`: bucket contents are accessible to \
+                          the entire internet — use private ACL and S3 bucket \
+                          policies for controlled access"
+                .to_string(),
+            domain: DOMAIN_ALL,
+            severity: Severity::Critical,
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Python: subprocess shell=True injection detection (byte-scan heuristic)
+// ---------------------------------------------------------------------------
+
+/// Detect `subprocess.run/call/Popen` with `shell=True` in Python source.
+///
+/// Uses a byte-level scan (no grammar required) because the AST structure for
+/// keyword arguments varies significantly between Python grammar versions and
+/// the byte-level signal is unambiguous.  A finding is emitted when:
+/// 1. The source contains `shell=True`.
+/// 2. The source contains at least one of `subprocess.run`, `subprocess.call`,
+///    or `subprocess.Popen`.
+///
+/// This is a conservative heuristic — it fires on any file that contains both
+/// patterns regardless of whether they appear on the same line.  The false-
+/// positive rate in practice is negligible (subprocess + shell=True in the
+/// same file almost always indicates intentional use).
+fn find_python_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const SHELL_TRUE: &[u8] = b"shell=True";
+    const SUBPROCESS_CALLS: &[&[u8]] =
+        &[b"subprocess.run", b"subprocess.call", b"subprocess.Popen"];
+
+    if !source.windows(SHELL_TRUE.len()).any(|w| w == SHELL_TRUE) {
+        return Vec::new();
+    }
+
+    let has_subprocess = SUBPROCESS_CALLS
+        .iter()
+        .any(|pat| source.windows(pat.len()).any(|w| w == *pat));
+    if !has_subprocess {
+        return Vec::new();
+    }
+
+    // Emit one finding at the first occurrence of `shell=True`.
+    source
+        .windows(SHELL_TRUE.len())
+        .enumerate()
+        .find(|(_, w)| *w == SHELL_TRUE)
+        .map(|(i, _)| {
+            vec![SlopFinding {
+                start_byte: i,
+                end_byte: i + SHELL_TRUE.len(),
+                description: "security:subprocess_shell_injection — subprocess with \
+                    shell=True: command string is evaluated by the OS shell — \
+                    avoid shell=True or validate/sanitize all inputs"
+                    .to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::Critical,
+            }]
         })
-        .collect()
+        .unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------
+// JavaScript / TypeScript: innerHTML assignment detection
+// ---------------------------------------------------------------------------
+
+/// Detect `element.innerHTML = ...` assignments in JavaScript / TypeScript source.
+///
+/// Direct `innerHTML` assignment is a well-known DOM XSS vector when the
+/// right-hand side contains user-controlled data.  This rule flags any
+/// assignment to a property named `innerHTML`, regardless of the target object.
+///
+/// Uses the JavaScript grammar, which covers `.js`, `.jsx`, `.ts`, and `.tsx`
+/// files (TypeScript is a superset of JavaScript at the assignment level and
+/// shares compatible AST structure for member expressions).
+fn find_js_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const INNER_HTML: &[u8] = b"innerHTML";
+    if !source.windows(INNER_HTML.len()).any(|w| w == INNER_HTML) {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parser.parse(source, None) else {
+        return Vec::new();
+    };
+
+    let mut findings = Vec::new();
+    find_inner_html_assignments(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Walk the JS/TS AST looking for `assignment_expression` where the left-hand
+/// side is a `member_expression` whose `property` field is the identifier
+/// `innerHTML`.
+fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "assignment_expression" {
+        if let Some(left) = node.child_by_field_name("left") {
+            if left.kind() == "member_expression" {
+                if let Some(prop) = left.child_by_field_name("property") {
+                    if prop.utf8_text(source).ok() == Some("innerHTML") {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: "security:dom_xss_innerHTML — direct \
+                                `innerHTML` assignment is a DOM XSS vector; \
+                                use `textContent` for plain text or sanitize \
+                                input with DOMPurify before assignment"
+                                .to_string(),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::Critical,
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_inner_html_assignments(child, source, findings);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -775,6 +992,153 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         assert!(
             ratio < MIN_ENTROPY_RATIO,
             "highly repetitive content must trigger gate (ratio={ratio:.4} >= {MIN_ENTROPY_RATIO})"
+        );
+    }
+
+    // ── C/C++ unsafe string function tests ───────────────────────────────
+
+    #[test]
+    fn test_c_strcpy_detected() {
+        let src =
+            b"#include <string.h>\nvoid foo(char *dst, const char *src) { strcpy(dst, src); }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            !findings.is_empty(),
+            "strcpy() call in C must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("strcpy()"));
+    }
+
+    #[test]
+    fn test_c_sprintf_detected() {
+        let src = b"#include <stdio.h>\nvoid foo(char *buf, int n) { sprintf(buf, \"%d\", n); }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            !findings.is_empty(),
+            "sprintf() call in C must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("sprintf()"));
+    }
+
+    #[test]
+    fn test_c_scanf_detected() {
+        let src = b"#include <stdio.h>\nvoid foo() { int x; scanf(\"%d\", &x); }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            !findings.is_empty(),
+            "scanf() call in C must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("scanf()"));
+    }
+
+    #[test]
+    fn test_cpp_strcpy_detected() {
+        let src =
+            b"#include <cstring>\nvoid foo(char *dst, const char *src) { strcpy(dst, src); }\n";
+        let findings = find_slop("cpp", src);
+        assert!(
+            !findings.is_empty(),
+            "strcpy() call in C++ must be detected: {findings:?}"
+        );
+    }
+
+    // ── Python subprocess shell=True tests ───────────────────────────────
+
+    #[test]
+    fn test_python_subprocess_shell_true_detected() {
+        let src = b"import subprocess\nsubprocess.run(cmd, shell=True)\n";
+        let findings = find_slop("py", src);
+        assert!(
+            !findings.is_empty(),
+            "subprocess.run with shell=True must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("shell_injection"));
+    }
+
+    #[test]
+    fn test_python_subprocess_no_shell_not_flagged() {
+        let src = b"import subprocess\nsubprocess.run(['ls', '-la'])\n";
+        let findings = find_slop("py", src);
+        assert!(
+            findings.is_empty(),
+            "subprocess.run without shell=True must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_shell_true_without_subprocess_not_flagged() {
+        let src = b"# shell=True\nx = 1\n";
+        let findings = find_slop("py", src);
+        assert!(
+            findings.is_empty(),
+            "shell=True without subprocess must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── JavaScript innerHTML tests ────────────────────────────────────────
+
+    #[test]
+    fn test_js_innerhtml_assignment_detected() {
+        let src = b"element.innerHTML = userInput;\n";
+        let findings = find_slop("js", src);
+        assert!(
+            !findings.is_empty(),
+            "innerHTML assignment in JS must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("innerHTML"));
+    }
+
+    #[test]
+    fn test_js_textcontent_not_flagged() {
+        let src = b"element.textContent = userInput;\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings.is_empty(),
+            "textContent assignment must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_ts_innerhtml_detected() {
+        let src =
+            b"const el: HTMLElement = document.getElementById('out')!;\nel.innerHTML = data;\n";
+        let findings = find_slop("ts", src);
+        assert!(
+            !findings.is_empty(),
+            "innerHTML assignment in TS must be detected: {findings:?}"
+        );
+    }
+
+    // ── HCL / S3 public ACL tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_hcl_s3_public_read_detected() {
+        let src = b"\
+resource \"aws_s3_bucket_acl\" \"example\" {
+  bucket = aws_s3_bucket.example.id
+  acl    = \"public-read\"
+}
+";
+        let findings = find_slop("tf", src);
+        assert!(
+            !findings.is_empty(),
+            "S3 public-read ACL must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("s3_public_acl"));
+    }
+
+    #[test]
+    fn test_hcl_s3_private_not_flagged() {
+        let src = b"\
+resource \"aws_s3_bucket_acl\" \"example\" {
+  bucket = aws_s3_bucket.example.id
+  acl    = \"private\"
+}
+";
+        let findings = find_slop("tf", src);
+        assert!(
+            findings.is_empty(),
+            "S3 private ACL must not be flagged: {findings:?}"
         );
     }
 }
