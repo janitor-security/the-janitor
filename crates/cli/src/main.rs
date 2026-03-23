@@ -457,8 +457,14 @@ async fn main() -> anyhow::Result<()> {
         .build_global()
         .unwrap_or(());
 
+    // Load .env if present; silently ignore NotFound (expected in production).
     if let Err(e) = dotenvy::dotenv() {
-        eprintln!("warning: .env: {e}");
+        if !matches!(
+            e,
+            dotenvy::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::NotFound
+        ) {
+            eprintln!("warning: .env: {e}");
+        }
     }
 
     let _root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
