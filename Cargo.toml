@@ -3,7 +3,6 @@ members = [
     "crates/*",
     "crates/experimental/advanced_threats",
     "crates/experimental/backlog_pruner",
-    "crates/experimental/include_deflator",
     "tools/wisdom-bake",
     "tools/mint-token",
     "tools/parallel-bounce",

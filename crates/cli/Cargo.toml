@@ -20,7 +20,7 @@ reaper = { path = "../reaper" }
 vault = { path = "../vault" }
 dashboard = { path = "../dashboard" }
 advanced_threats = { path = "../experimental/advanced_threats" }
-include_deflator = { path = "../experimental/include_deflator" }
+include_deflator = { path = "../include_deflator" }
 arc-swap.workspace = true
 memmap2.workspace = true
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

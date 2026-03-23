@@ -1,6 +1,8 @@
 //! # Include Deflator — C/C++ Transitive Header Dependency Analyser
 //!
-//! Experimental crate. **Not wired into the production pipeline.**
+//! Wired into cmd_hyper_drive via git_drive.rs::IncludeGraphBuilder. Powers the WOPR Structural
+//! Topology tab (architecture:compile_time_bloat, architecture:graph_entanglement findings).
+//! C/C++ only.
 //!
 //! ## Architecture
 //!
@@ -25,9 +27,6 @@
 //! **Compile-time bloat** fires when a PR *adds* an include edge from a high-reach
 //! header H into file F where `reach(H) > BLOAT_REACH_THRESHOLD`. Every translation
 //! unit that transitively includes F now also pulls in H's entire closure.
-//!
-//! **ISOLATION GUARANTEE**: No symbol in this crate is imported by `PatchBouncer`,
-//! `slop_hunter`, or any production CLI path. This is a standalone R&D prototype.
 
 pub mod deflator;
 pub mod graph;
