@@ -385,7 +385,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 | `advanced_threats` | `binary_hunter.rs` | **PRODUCTION** (wired into `slop_filter.rs` + `cli`) | Zero-allocation AhoCorasick scanner for ELF/PE/WASM/miner byte patterns. 7 patterns. `THREAT_LABEL = "security:compiled_payload_anomaly"`. +50 pts per match. |
 | `backlog_pruner` | — | **PRODUCTION** (wired into `forge`) | Necrotic GC flag assignment: classifies PRs as `SEMANTIC_NULL`, `GHOST_COLLISION`, or `UNWIRED_ISLAND`. Populates `necrotic_flag` on `SlopScore`. |
 | `include_deflator` | — | **EXPERIMENTAL** (wired into `cli`) | IaC header deflation — reduces include-graph noise in infrastructure-as-code diffs. |
-| `phantom_ffi_gate` | — | **EXPERIMENTAL** (not in `forge`) | FFI boundary protection — guards against phantom symbol linkage across language boundaries. Pre-production. |
+| `phantom_ffi_gate` | — | **DELETED (v7.9.1)** | Architecture requires full-repo C++ registry (not patch-scope). Cannot be wired into `PatchBouncer::bounce()` — only produces false negatives on single-file diffs. |
 
 ---
 

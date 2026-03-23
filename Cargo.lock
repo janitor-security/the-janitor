@@ -1751,20 +1751,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "phantom_ffi_gate"
-version = "7.9.0"
-dependencies = [
- "anyhow",
- "blake3",
- "fips204",
- "memmap2",
- "rkyv",
- "tree-sitter",
- "tree-sitter-cpp",
- "tree-sitter-python",
-]
-
-[[package]]
 name = "phf"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

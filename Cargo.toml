@@ -4,7 +4,6 @@ members = [
     "crates/experimental/advanced_threats",
     "crates/experimental/backlog_pruner",
     "crates/experimental/include_deflator",
-    "crates/experimental/phantom_ffi_gate",
     "tools/wisdom-bake",
     "tools/mint-token",
     "tools/parallel-bounce",
@@ -14,7 +13,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "7.8.6"
+version = "7.9.0"
 edition = "2021"
 repository = "https://github.com/GhrammR/the-janitor"
 license = "BUSL-1.1"
