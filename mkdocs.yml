@@ -30,6 +30,8 @@ nav:
     - Godot Engine: case-studies/godot.md
   - Configuration:
     - janitor.toml Reference: governance.md
+  - Janitor Sentinel:
+    - Setup Guide: sentinel-setup.md
   - Pricing & Licensing: pricing.md
   - Legal:
     - Terms: terms.md
