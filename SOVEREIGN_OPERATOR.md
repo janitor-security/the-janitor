@@ -29,7 +29,7 @@ A Rust-native, zero-copy, policy-driven structural firewall comprised of:
 
 - **Engine**: Tree-sitter (23 grammars via `crates/polyglot`), `rkyv 0.8`, `memmap2 0.9`, Unix Domain Socket daemon, Nix Flake hermetic builds.
 - **Detection**: MinHash LSH (8 bands × 8 rows), SimHash structural fingerprinting, NCD entropy gate (`zstd` compression ratio < 0.05), AhoCorasick compiled payload scanner (7 patterns), ByteLattice entropy analysis.
-- **Security**: FIPS 204 (ML-DSA-65) PQC attestation bonds, `janitor.toml` governance manifest, Ed25519 token gate (public-key-only verify in binary).
+- **Security**: ML-DSA-65 (FIPS 204) — CONFIRMED PRODUCTION in the-governor. Governor.key persists across deploys. Bond issuance in bond.rs. CLI cbom.rs generates the unsigned CBOM; Governor signs it. Ed25519 token gate (public-key-only verify in binary).
 - **Governance**: `JanitorPolicy` — `min_slop_score`, `require_issue_link`, `allowed_zombies`, `custom_antipatterns`, `forge.automation_accounts`.
 
 ### The Proof (Gauntlet)
