@@ -90,7 +90,18 @@ pub mod unix {
             /// Number of zombie symbol reintroductions detected.
             zombies: u32,
             /// Number of language-specific antipatterns detected (×50 each).
+            /// Kept for backward-compatibility with old Governor versions that
+            /// read only the count field.
             antipatterns: u32,
+            /// Full human-readable description strings for each detected
+            /// antipattern (one entry per finding).  Matches the
+            /// `BounceLogEntry.antipatterns` field so the Governor can
+            /// perform structural threat classification (`security:` prefix
+            /// check) without requiring an additional round-trip.
+            antipattern_details: Vec<String>,
+            /// PR numbers of prior patches sharing ≥85% MinHash Jaccard
+            /// similarity — structural clones detected by the Swarm engine.
+            collided_pr_numbers: Vec<u32>,
             /// Whether the PR author is listed in a Vouch identity file
             /// (`.vouched`, `trust.td`, or `.github/vouched.td`) inside the
             /// repository.  Always `false` when `author` or `repo_path` were
@@ -366,6 +377,10 @@ pub mod unix {
                         let slop_score = score.score();
                         let antipatterns_count = score.antipatterns_found;
                         let zombie_symbols_added = score.zombie_symbols_added;
+                        // Clone detail strings before move into BounceLogEntry so
+                        // the same Vec can be forwarded in DaemonResponse::Report.
+                        let antipattern_details = score.antipattern_details.clone();
+                        let collided_pr_numbers_response = near_matches.clone();
 
                         // fields are None.  Best-effort: I/O errors are silently dropped.
                         let log_entry = crate::report::BounceLogEntry {
@@ -406,6 +421,8 @@ pub mod unix {
                             slop_score: slop_score as f64,
                             zombies: zombie_symbols_added,
                             antipatterns: antipatterns_count,
+                            antipattern_details,
+                            collided_pr_numbers: collided_pr_numbers_response,
                             is_vouched,
                         }
                     }
