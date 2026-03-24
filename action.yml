@@ -1,58 +1,69 @@
 name: 'Janitor Firewall'
 description: >
   Zero-upload structural firewall for AI-generated PRs.
-  Silent reporter: this workflow job always exits 0. The only status
-  check that gates the PR is the 'Janitor Integrity Check' run issued
-  by the Governor via the GitHub Checks API.
+  Silent reporter: the workflow job always reports success regardless of
+  the CLI exit code. The only PR gate is the 'Janitor Integrity Check'
+  run issued by the Governor via the GitHub Checks API.
+
+# Only two inputs. All other configuration is governor-side.
 inputs:
   token:
-    description: 'GitHub token for API access'
+    description: 'GitHub token (contents: read, pull-requests: read)'
     required: true
   installation_id:
-    description: 'Janitor Sentinel Installation ID'
+    description: 'Janitor Sentinel App installation ID for this repository'
     required: true
+
 runs:
   using: 'composite'
   steps:
+
+    # Step 1 — Build the janitor CLI from source.
     - name: Bootstrap Janitor Engine
       shell: bash
       run: |
         git clone https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
         cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
-        echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> $GITHUB_ENV
+        echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> "$GITHUB_ENV"
 
+    # Step 2 — Extract the PR unified diff.
     - name: Extract Patch
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
       run: |
-        gh pr diff ${{ github.event.pull_request.number }} > .janitor-pr.patch
+        gh pr diff "${{ github.event.pull_request.number }}" \
+          --repo "${{ github.repository }}" \
+          > .janitor-pr.patch
 
+    # Step 3 — Exchange credentials, run bounce, POST result to Governor.
+    #
+    # continue-on-error: true  — the step is allowed to fail (the CLI exit
+    # code is preserved in logs for diagnostics) but the workflow job itself
+    # always reports success.  This removes the redundant 'Janitor Firewall'
+    # check from the PR UI; the sole gating check is 'Janitor Integrity Check'
+    # issued by the Governor.
     - name: Execute Stateless Firewall
       shell: bash
+      continue-on-error: true
       run: |
         HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
         TOKEN_PAYLOAD=$(jq -n \
-          --arg repo "${{ github.repository }}" \
-          --argjson pr ${{ github.event.pull_request.number }} \
-          --arg sha "$HEAD_SHA" \
-          --argjson id ${{ inputs.installation_id }} \
+          --arg  repo "${{ github.repository }}" \
+          --argjson pr  ${{ github.event.pull_request.number }} \
+          --arg  sha  "$HEAD_SHA" \
+          --argjson id  ${{ inputs.installation_id }} \
           '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: $id}')
 
-        ANALYSIS_TOKEN=$(curl -s -X POST https://the-governor.fly.dev/v1/analysis-token \
+        ANALYSIS_TOKEN=$(curl -sf -X POST \
+          https://the-governor.fly.dev/v1/analysis-token \
           -H "Content-Type: application/json" \
-          -d "$TOKEN_PAYLOAD" | jq -r .token)
+          -d "$TOKEN_PAYLOAD" | jq -r '.token')
 
-        # Silent reporter: this workflow job must always exit 0.
-        # The Governor owns the 'Janitor Integrity Check' Check Run and is
-        # the sole gating authority on the PR.  A non-zero exit here would
-        # create a redundant failing workflow check that conflicts with the
-        # Governor's verdict — the two checks would show different results
-        # and confuse reviewers.  Suppress the exit code; the Governor's
-        # Check Run is the single source of truth.
-        $JANITOR_BIN bounce . --patch .janitor-pr.patch \
-          --pr-number ${{ github.event.pull_request.number }} \
-          --report-url https://the-governor.fly.dev/v1/report \
+        "$JANITOR_BIN" bounce . \
+          --patch         .janitor-pr.patch \
+          --pr-number     "${{ github.event.pull_request.number }}" \
+          --report-url    https://the-governor.fly.dev/v1/report \
           --analysis-token "$ANALYSIS_TOKEN" \
-          --head-sha "$HEAD_SHA" \
-          || true
+          --head-sha      "$HEAD_SHA"
