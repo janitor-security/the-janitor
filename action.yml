@@ -27,10 +27,11 @@ runs:
     - name: Execute Stateless Firewall
       shell: bash
       run: |
+        HEAD_SHA="${{ github.event.pull_request.head.sha }}"
         TOKEN_PAYLOAD=$(jq -n \
           --arg repo "${{ github.repository }}" \
           --argjson pr ${{ github.event.pull_request.number }} \
-          --arg sha "${{ github.event.pull_request.head.sha }}" \
+          --arg sha "$HEAD_SHA" \
           --argjson id ${{ inputs.installation_id }} \
           '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: $id}')
           
@@ -40,4 +41,5 @@ runs:
           
         $JANITOR_BIN bounce . --patch .janitor-pr.patch --pr-number ${{ github.event.pull_request.number }} \
           --report-url https://the-governor.fly.dev/v1/report \
-          --analysis-token "$ANALYSIS_TOKEN"
+          --analysis-token "$ANALYSIS_TOKEN" \
+          --head-sha "$HEAD_SHA"
