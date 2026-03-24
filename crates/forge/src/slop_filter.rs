@@ -420,6 +420,58 @@ fn extract_patch_path(patch: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-file patch splitting
+// ---------------------------------------------------------------------------
+
+/// Split a multi-file unified diff into individual per-file patch slices.
+///
+/// Splits on `diff --git ` boundary lines (the standard git unified-diff
+/// separator).  If no such boundary is found, the whole patch is returned
+/// as a single-element slice — this preserves backward compatibility with
+/// single-file patches that begin directly at the `+++ b/` header.
+///
+/// Returned slices borrow from the input; no allocation beyond the `Vec`
+/// itself.
+pub fn split_patch_by_file(patch: &str) -> Vec<&str> {
+    let marker = "diff --git ";
+    let mut positions: Vec<usize> = Vec::new();
+
+    // First section may start at byte 0 (no leading newline).
+    if patch.starts_with(marker) {
+        positions.push(0);
+    }
+
+    // Remaining sections are preceded by a newline.
+    let mut search = 0usize;
+    while let Some(rel) = patch[search..].find('\n') {
+        let abs = search + rel + 1;
+        if patch[abs..].starts_with(marker) {
+            positions.push(abs);
+        }
+        search = abs;
+        if search >= patch.len() {
+            break;
+        }
+    }
+
+    if positions.is_empty() {
+        return if patch.is_empty() {
+            vec![]
+        } else {
+            vec![patch]
+        };
+    }
+
+    let mut sections = Vec::with_capacity(positions.len());
+    for i in 0..positions.len() {
+        let start = positions[i];
+        let end = positions.get(i + 1).copied().unwrap_or(patch.len());
+        sections.push(&patch[start..end]);
+    }
+    sections
+}
+
+// ---------------------------------------------------------------------------
 // PatchBouncer (default implementation)
 // ---------------------------------------------------------------------------
 
@@ -442,6 +494,32 @@ pub struct PatchBouncer;
 
 impl PRBouncer for PatchBouncer {
     fn bounce(&self, patch: &str, registry: &SymbolRegistry) -> Result<SlopScore> {
+        // ── Multi-file patch dispatch ─────────────────────────────────────────
+        //
+        // If the patch contains `diff --git ` boundaries (standard git output),
+        // split it into per-file sections and aggregate the scores.  This
+        // ensures that a multi-file PR diff is correctly analysed file-by-file
+        // rather than treating the entire diff as a single-language blob where
+        // only the first `+++ b/` header drives language detection.
+        let sections = split_patch_by_file(patch);
+        if sections.len() > 1 {
+            let mut total = SlopScore::default();
+            for section in sections {
+                // Errors are non-fatal: a parse failure in one file section does
+                // not invalidate the analysis of the remaining sections.
+                if let Ok(s) = self.bounce(section, registry) {
+                    total.dead_symbols_added += s.dead_symbols_added;
+                    total.logic_clones_found += s.logic_clones_found;
+                    total.zombie_symbols_added += s.zombie_symbols_added;
+                    total.antipatterns_found += s.antipatterns_found;
+                    total.antipattern_score += s.antipattern_score;
+                    total.suppressed_by_domain += s.suppressed_by_domain;
+                    total.antipattern_details.extend(s.antipattern_details);
+                }
+            }
+            return Ok(total);
+        }
+
         // Detect language from the +++ header extension.
         let ext = extract_patch_ext(patch);
 
@@ -476,6 +554,37 @@ impl PRBouncer for PatchBouncer {
         {
             return Ok(SlopScore::default());
         }
+
+        // ── Pre-language binary_hunter scan ───────────────────────────────────
+        //
+        // Runs BEFORE language dispatch so that the Compiled Payload Shield fires
+        // for ALL file types — including SOURCE_TEXT_EXTS (YAML, JSON, TOML, Nix,
+        // lock files) that have no grammar and take an early-return path.  This
+        // prevents an attacker from hiding a mining-pool stratum URI in a .yml
+        // config that bypasses the grammar check.
+        //
+        // The circuit breaker (64 KiB) is intentionally NOT applied here —
+        // AhoCorasick is O(N) and fast; a 100 KiB YAML file embedding a stratum
+        // URI must still be flagged even though it would exceed the tree-sitter limit.
+        let pre_lang_payload_findings: Vec<String> = {
+            let raw_added: String = patch
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .map(|l| &l[1..])
+                .collect::<Vec<_>>()
+                .join("\n");
+            if raw_added.trim().is_empty() {
+                vec![]
+            } else {
+                advanced_threats::binary_hunter::scan(raw_added.as_bytes())
+                    .into_iter()
+                    .map(|t| {
+                        let line = byte_offset_to_line(raw_added.as_bytes(), t.byte_offset);
+                        format!("{} (line={line})", t.description)
+                    })
+                    .collect()
+            }
+        };
 
         let cfg = match lang_for_ext(ext) {
             Some(c) => c,
@@ -536,6 +645,17 @@ impl PRBouncer for PatchBouncer {
                     "map",  // Source map files (JSON text, high-entropy base64 chunks)
                 ];
                 if SOURCE_TEXT_EXTS.contains(&ext) {
+                    // Even though we have no grammar for this extension, the
+                    // binary_hunter scan must still surface any payload findings.
+                    if !pre_lang_payload_findings.is_empty() {
+                        let count = pre_lang_payload_findings.len() as u32;
+                        return Ok(SlopScore {
+                            antipatterns_found: count,
+                            antipattern_score: count * 50, // Critical tier
+                            antipattern_details: pre_lang_payload_findings,
+                            ..SlopScore::default()
+                        });
+                    }
                     return Ok(SlopScore::default());
                 }
 
@@ -633,22 +753,13 @@ impl PRBouncer for PatchBouncer {
             }
         };
 
-        // Compiled Payload Shield — byte-level binary threat scan.
+        // Compiled Payload Shield — reuses the pre-language scan result.
         //
-        // Runs a single O(N) AhoCorasick pass over the raw added-source bytes,
-        // scanning for mining-pool stratum URIs, ELF/WASM/PE binary magic, and
-        // NUL-terminated shell execution paths embedded in the diff.
-        // Each finding is Critical-tier (+50 pts) and accumulates alongside NCD
-        // and AST antipatterns in the final score assembly.
-        let payload_findings: Vec<String> = {
-            advanced_threats::binary_hunter::scan(source)
-                .into_iter()
-                .map(|t| {
-                    let line = byte_offset_to_line(source, t.byte_offset);
-                    format!("{} (line={line})", t.description)
-                })
-                .collect()
-        };
+        // `pre_lang_payload_findings` was computed above over the same `+` lines
+        // (before the circuit breaker).  The source bytes used there are identical
+        // to `source` here because both extract the `+`-prefixed added lines from
+        // the same single-file patch section.  No second AhoCorasick pass needed.
+        let payload_findings: Vec<String> = pre_lang_payload_findings;
 
         let mut parser = tree_sitter::Parser::new();
         parser
