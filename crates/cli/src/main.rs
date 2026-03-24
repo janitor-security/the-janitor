@@ -211,6 +211,13 @@ enum Commands {
         /// authorises the bounce result submission.
         #[arg(long)]
         analysis_token: Option<String>,
+        /// Canonical HEAD commit SHA supplied by the CI runner.
+        ///
+        /// When set, this value is used as `commit_sha` in the `BounceLogEntry`
+        /// and must match the `head_sha` claim in the analysis JWT.  If absent,
+        /// the CLI falls back to the `--head` argument or `GITHUB_SHA` env var.
+        #[arg(long)]
+        head_sha: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -561,6 +568,7 @@ async fn main() -> anyhow::Result<()> {
             pr_state,
             report_url,
             analysis_token,
+            head_sha,
         } => cmd_bounce(
             path,
             patch.as_deref(),
@@ -576,6 +584,7 @@ async fn main() -> anyhow::Result<()> {
             pr_state.as_str(),
             report_url.as_deref(),
             analysis_token.as_deref(),
+            head_sha.as_deref(),
         )?,
         Commands::Report {
             repo,
@@ -2313,6 +2322,7 @@ fn cmd_bounce(
     pr_state_str: &str,
     report_url: Option<&str>,
     analysis_token: Option<&str>,
+    head_sha: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -2658,8 +2668,15 @@ fn cmd_bounce(
         suppressed_by_domain: score.suppressed_by_domain,
         collided_pr_numbers: score.collided_pr_numbers,
         necrotic_flag: score.necrotic_flag,
-        commit_sha: head
+        // Priority: --head-sha > --head > GITHUB_SHA env var.
+        //
+        // --head-sha is the canonical value supplied by the CI runner and MUST
+        // match the `head_sha` claim inside the analysis JWT.  Using --head
+        // (the git ref for diff extraction) as a fallback preserves local-run
+        // behaviour; GITHUB_SHA covers plain GitHub Actions without git-native mode.
+        commit_sha: head_sha
             .map(|s| s.to_owned())
+            .or_else(|| head.map(|s| s.to_owned()))
             .or_else(|| std::env::var("GITHUB_SHA").ok())
             .unwrap_or_default(),
         policy_hash: {
