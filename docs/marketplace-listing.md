@@ -6,7 +6,7 @@
 
 ## Short Description (120 chars max)
 
-Structural firewall for AI-generated PRs. Detects security antipatterns, Swarm clones, and zombie deps before merge.
+Zero-upload structural firewall for AI-generated PRs. Detects security antipatterns and zombie deps. Your code never leaves your runner.
 
 ---
 
@@ -26,9 +26,12 @@ main, and a review process that is theatre rather than substance.
 
 ### What Janitor Sentinel Does
 
-Sentinel runs the Janitor engine against every pull request using a zero-disk-checkout
-merge simulation. It evaluates the actual diff — not the full file — across 23
-programming languages using tree-sitter AST analysis.
+Sentinel is a **zero-upload** structural firewall. The Janitor engine runs entirely
+inside your own GitHub Actions runner — your source code never leaves your infrastructure.
+The Governor (Sentinel's backend) only receives a scored analysis result, not the code.
+
+Each PR is evaluated using a zero-disk-checkout merge simulation against the actual diff
+— not the full file — across 23 programming languages using tree-sitter AST analysis.
 
 **Security antipatterns** are detected by name:
 
@@ -83,20 +86,19 @@ API tokens issued automatically on payment. No per-seat limits.
 
 ## Screenshots Required
 
-The following screenshots need to be captured before submitting to the Marketplace:
+The following four screenshots need to be captured before submitting to the Marketplace:
 
 1. **Check Run — failure case**: A PR check run showing "Janitor: Code Quality Gate
-   Failed" with the full integrity summary (dead symbols, antipatterns, score formula).
+   Failed" with the full integrity summary (antipatterns found, score formula, threat
+   classification).
 
 2. **Check Run — success case**: A PR check run showing "Janitor: Clean — PQC Bond
    Issued" with the Vouch Identity Verified banner (if applicable).
 
-3. **Code Scanning annotations**: The GitHub PR diff view showing inline SARIF
+3. **Code Scanning annotations (SARIF)**: The GitHub PR diff view showing inline SARIF
    annotations from Sentinel (e.g. a `gets()` or open-CIDR finding highlighted in the
    diff gutter).
 
-4. **Swarm clone warning**: A PR check run summary showing the "Structural Clone
-   Detected — PR shares >85% AST topology with PR #N" warning block.
-
-5. **janitor.toml**: A repository's `janitor.toml` in the GitHub UI, showing the
-   policy-as-code configuration committed alongside the code it governs.
+4. **janitor.toml policy-as-code**: A repository's `janitor.toml` in the GitHub UI,
+   showing the policy-as-code configuration committed alongside the code it governs
+   (score threshold, issue-link requirement, automation account exemptions).
