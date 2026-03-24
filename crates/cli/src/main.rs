@@ -2678,10 +2678,13 @@ fn cmd_bounce(
     report::fire_webhook_if_configured(&log_entry, &policy);
 
     // ── Architecture Inversion: POST result to Governor ───────────────────────
+    //
+    // Fail-closed: any transport error or non-2xx response from the Governor
+    // is a hard crash.  The firewall MUST NOT silently succeed when attestation
+    // cannot be confirmed — a bypass here would mean a malicious PR passes CI
+    // without the Check Run ever being updated.
     if let (Some(url), Some(token)) = (report_url, analysis_token) {
-        if let Err(e) = report::post_bounce_result(url, token, &log_entry) {
-            eprintln!("warning: governor report failed: {e}");
-        }
+        report::post_bounce_result(url, token, &log_entry)?;
     }
 
     Ok(())

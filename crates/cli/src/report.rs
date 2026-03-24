@@ -422,7 +422,9 @@ pub fn append_bounce_log(janitor_dir: &Path, entry: &BounceLogEntry) {
 /// and `--analysis-token` are set, the scored entry is submitted to the Governor so
 /// it can update the GitHub Check Run without ever receiving source code.
 ///
-/// Non-fatal: logs a warning on failure so local analysis still succeeds.
+/// **Fail-closed**: any transport error or non-2xx response is returned as `Err`.
+/// The caller (`cmd_bounce`) must propagate this as a hard process exit so the
+/// firewall cannot be bypassed by a degraded or hostile Governor endpoint.
 /// The Bearer token is the short-lived JWT obtained from `/v1/analysis-token`.
 pub fn post_bounce_result(url: &str, token: &str, entry: &BounceLogEntry) -> anyhow::Result<()> {
     let body = serde_json::to_string(entry)?;
@@ -433,15 +435,20 @@ pub fn post_bounce_result(url: &str, token: &str, entry: &BounceLogEntry) -> any
     match result {
         Ok(r) if r.status() == 200 || r.status() == 201 => {
             eprintln!("info: bounce result reported to Governor");
+            Ok(())
         }
         Ok(r) => {
-            eprintln!("warning: Governor /v1/report returned {}", r.status());
+            anyhow::bail!(
+                "Governor /v1/report returned HTTP {} — firewall cannot confirm attestation",
+                r.status()
+            );
         }
         Err(e) => {
-            eprintln!("warning: failed to POST bounce result to Governor: {e}");
+            anyhow::bail!(
+                "failed to POST bounce result to Governor: {e} — firewall cannot confirm attestation"
+            );
         }
     }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
