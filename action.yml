@@ -4,6 +4,9 @@ inputs:
   token:
     description: 'GitHub token for API access'
     required: true
+  installation_id:
+    description: 'Janitor Sentinel Installation ID'
+    required: true
 runs:
   using: 'composite'
   steps:
@@ -23,16 +26,12 @@ runs:
 
     - name: Execute Stateless Firewall
       shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.token }}
       run: |
-        INSTALLATION_ID=$(gh api /repos/${{ github.repository }}/installation | jq -r .id 2>/dev/null || echo "0")
-        
         TOKEN_PAYLOAD=$(jq -n \
           --arg repo "${{ github.repository }}" \
           --argjson pr ${{ github.event.pull_request.number }} \
           --arg sha "${{ github.event.pull_request.head.sha }}" \
-          --argjson id $INSTALLATION_ID \
+          --argjson id ${{ inputs.installation_id }} \
           '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: $id}')
           
         ANALYSIS_TOKEN=$(curl -s -X POST https://the-governor.fly.dev/v1/analysis-token \
