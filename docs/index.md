@@ -234,7 +234,7 @@ The cleanup is identical at every tier. What you are paying for is a cryptograph
 **From source (Rust 1.82+, `just` required):**
 
 ```sh
-git clone https://github.com/GhrammR/the-janitor
+git clone https://github.com/janitor-security/the-janitor
 cd the-janitor
 just build
 # Binary: target/release/janitor

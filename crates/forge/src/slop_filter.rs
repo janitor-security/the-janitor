@@ -366,6 +366,20 @@ fn lang_for_ext(ext: &str) -> Option<LangConfig> {
     }
 }
 
+/// Translate a byte offset within `source` to a 1-based line number.
+///
+/// Counts the number of `\n` bytes strictly before `offset` to derive the
+/// line number.  The result is always ≥ 1.  If `offset` exceeds `source.len()`
+/// the function clamps silently and returns the last line number.
+///
+/// Used to annotate AhoCorasick byte-offset matches and tree-sitter
+/// `start_byte` values with a human-readable line number before the findings
+/// are serialised into `antipattern_details`.
+fn byte_offset_to_line(source: &[u8], offset: usize) -> u32 {
+    let clamped = offset.min(source.len());
+    source[..clamped].iter().filter(|&&b| b == b'\n').count() as u32 + 1
+}
+
 /// Extract the file extension from the `+++ b/<path>` line in a unified diff.
 ///
 /// Returns `""` if no such header is found or the path has no extension.
@@ -629,7 +643,10 @@ impl PRBouncer for PatchBouncer {
         let payload_findings: Vec<String> = {
             advanced_threats::binary_hunter::scan(source)
                 .into_iter()
-                .map(|t| format!("{} (byte_offset={})", t.description, t.byte_offset))
+                .map(|t| {
+                    let line = byte_offset_to_line(source, t.byte_offset);
+                    format!("{} (line={line})", t.description)
+                })
                 .collect()
         };
 
@@ -719,8 +736,13 @@ impl PRBouncer for PatchBouncer {
             }
         }
         let antipatterns_found = accepted.len() as u32;
-        let antipattern_details: Vec<String> =
-            accepted.into_iter().map(|f| f.description).collect();
+        let antipattern_details: Vec<String> = accepted
+            .into_iter()
+            .map(|f| {
+                let line = byte_offset_to_line(source, f.start_byte);
+                format!("{} (line={line})", f.description)
+            })
+            .collect();
 
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =

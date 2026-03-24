@@ -3,7 +3,7 @@
 ## v5.7.0
 
 **Date:** 2026-02-16
-**Repository:** https://github.com/GhrammR/the-janitor
+**Repository:** https://github.com/janitor-security/the-janitor
 **Tag:** `v5.7.0`
 
 ---
@@ -13,7 +13,7 @@
 To reproduce the release binary from source:
 
 ```sh
-git clone https://github.com/GhrammR/the-janitor
+git clone https://github.com/janitor-security/the-janitor
 cd the-janitor
 git checkout v5.7.0
 just build

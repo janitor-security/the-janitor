@@ -1809,6 +1809,16 @@ fn fmt_bytes(b: u64) -> String {
 ///
 /// ## Zero new dependencies
 /// Uses only `serde_json::json!()` — no additional crates required.
+/// Extract a 1-based line number from the `(line=N)` suffix appended by the
+/// slop pipeline to antipattern detail strings.  Returns `None` when the
+/// suffix is absent (pre-v7.9.4 log entries or non-positional findings).
+fn parse_sarif_line(detail: &str) -> Option<u32> {
+    let start = detail.rfind("(line=")?;
+    let rest = &detail[start + 6..];
+    let end = rest.find(')')?;
+    rest[..end].parse().ok()
+}
+
 pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
     use serde_json::{json, Value};
     use std::collections::BTreeSet;
@@ -1861,6 +1871,18 @@ pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
             } else {
                 format!("{repo}/pr/{pr_num}")
             };
+            // Populate physicalLocation.region.startLine when a (line=N) suffix
+            // is present in the detail string (emitted by the slop pipeline for
+            // both tree-sitter and binary_hunter findings since v7.9.4).
+            let physical_location: Value = match parse_sarif_line(ap) {
+                Some(line) => json!({
+                    "artifactLocation": { "uri": uri },
+                    "region": { "startLine": line }
+                }),
+                None => json!({
+                    "artifactLocation": { "uri": uri }
+                }),
+            };
             results.push(json!({
                 "ruleId": ap,
                 "level": level,
@@ -1868,11 +1890,7 @@ pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
                     "text": format!("PR #{pr_num} by {author}: {ap}")
                 },
                 "locations": [
-                    {
-                        "physicalLocation": {
-                            "artifactLocation": { "uri": uri }
-                        }
-                    }
+                    { "physicalLocation": physical_location }
                 ],
                 "partialFingerprints": {
                     "janitorScore": score_str

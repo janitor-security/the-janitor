@@ -1,8 +1,8 @@
 site_name: The Janitor
 site_description: "Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot."
 site_url: https://thejanitor.app
-repo_url: https://github.com/GhrammR/the-janitor
-repo_name: GhrammR/the-janitor
+repo_url: https://github.com/janitor-security/the-janitor
+repo_name: janitor-security/the-janitor
 
 theme:
   name: material

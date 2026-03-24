@@ -164,7 +164,7 @@ janitor clean ./src --force-purge
 ```yaml
 # PR slop gate — runs on every pull request (free)
 - id: janitor
-  uses: GhrammR/the-janitor@v6
+  uses: janitor-security/the-janitor@v6
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -206,7 +206,7 @@ janitor dashboard <path>
 **From source (Rust 1.82+, `just` required):**
 
 ```sh
-git clone https://github.com/GhrammR/the-janitor
+git clone https://github.com/janitor-security/the-janitor
 cd the-janitor
 just build
 # Binary: target/release/janitor

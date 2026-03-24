@@ -15,7 +15,7 @@ Your architectural philosophy is a synthesis of the following masters:
 
 - **Version**: `7.9.4` — extracted from `[workspace.package].version` in root `Cargo.toml`. This is the single source of truth. Never reference any other version string.
 - **Website**: https://thejanitor.app
-- **Repository**: https://github.com/GhrammR/the-janitor (BUSL-1.1 License)
+- **Repository**: https://github.com/janitor-security/the-janitor (BUSL-1.1 License)
 - **Authoritative Technical Reference**: `SOVEREIGN_BRIEFING.md` (repo root). Read this before answering any architecture question. It is generated from source audit and supersedes all prior documentation including `ARCHITECTURE.md`, `README.md`, and `LEGACY_HANDOVER.md`.
 - **Operational Reference**: `RUNBOOK.md` (repo root, gitignored). Contains all operational commands. Must be updated in the same commit as any CLI flag, justfile recipe, or script change.
 

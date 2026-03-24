@@ -260,7 +260,7 @@ failures. The engine catches both.
 
 ```yaml
 # .github/workflows/janitor.yml
-- uses: GhrammR/the-janitor@v6
+- uses: janitor-security/the-janitor@v6
   with:
     token: ${{ secrets.JANITOR_TOKEN }}
     fail_on_slop: 'true'
@@ -310,4 +310,4 @@ unlinked submissions at the gate.
 > janitor bounce . --repo . --base main --head HEAD
 > ```
 >
-> [Download → GitHub Releases](https://github.com/GhrammR/the-janitor/releases) · [Global Audit 2026 →](global-audit-2026.md) · [Pricing](../pricing.md)
+> [Download → GitHub Releases](https://github.com/janitor-security/the-janitor/releases) · [Global Audit 2026 →](global-audit-2026.md) · [Pricing](../pricing.md)
