@@ -20,8 +20,10 @@ inputs:
     default: ''
   token:
     description: >
-      GitHub token used to fetch the PR diff via `gh pr diff`.
-      Pass secrets.GITHUB_TOKEN — no elevated scopes required.
+      GitHub token passed as GH_TOKEN for `gh` CLI commands (diff fetch,
+      installation ID lookup).  Pass `secrets.GITHUB_TOKEN` — requires
+      `contents: read` and `pull-requests: read`.  Callers must wire this
+      to the `gh` environment:  env: { GH_TOKEN: "${{ github.token }}" }.
     required: false
     default: ''
   fail_on_slop:
@@ -111,20 +113,44 @@ runs:
 
     # Step 2b — Fetch analysis token (Architecture Inversion mode).
     #
-    # Only runs when invert_mode is 'true'. Calls the Governor's
-    # /v1/analysis-token endpoint to obtain a short-lived JWT for this PR.
-    # The token is passed to janitor bounce via --analysis-token so the
-    # Governor can issue the Check Run from the result payload.
+    # Only runs when invert_mode is 'true'.
+    #
+    # Phase A — resolve the real GitHub App installation ID for this repo
+    #   via `gh api /repos/{owner}/{repo}/installation`.  The Governor's
+    #   /v1/analysis-token endpoint records the installation_id for
+    #   future validation; passing 0 is a silent lie that will break once
+    #   the Governor enables installation verification (v7.9.5+).
+    #
+    # Phase B — POST to /v1/analysis-token with repo, pr, head_sha, and the
+    #   resolved installation_id to obtain a short-lived JWT.  The token is
+    #   forwarded to `janitor bounce` via --analysis-token so the Governor
+    #   can close the Check Run after the runner reports results.
+    #
+    # GH_TOKEN must be set (via inputs.token) so both `gh api` and `curl`
+    # authenticate against the GitHub API.  Callers must wire:
+    #   env:
+    #     GH_TOKEN: ${{ github.token }}
     - name: Fetch analysis token (inversion mode)
       id: get_token
       if: ${{ inputs.invert_mode == 'true' }}
       shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
       run: |
+        # Phase A — resolve the App installation ID for this repository.
+        INSTALL_ID=$(gh api "/repos/${{ github.repository }}/installation" \
+          --jq '.id' 2>/dev/null || echo "0")
+        echo "Resolved installation_id=${INSTALL_ID} for ${{ github.repository }}"
+
+        # Phase B — exchange for a short-lived analysis JWT.
         RESPONSE=$(curl -sf -X POST "${{ inputs.governor_url }}/v1/analysis-token" \
           -H "Content-Type: application/json" \
-          -d "{\"repo\":\"${{ github.repository }}\",\"pr\":${{ github.event.pull_request.number }},\"head_sha\":\"${{ github.event.pull_request.head.sha }}\",\"installation_id\":0}" \
+          -d "{\"repo\":\"${{ github.repository }}\",\"pr\":${{ github.event.pull_request.number }},\"head_sha\":\"${{ github.event.pull_request.head.sha }}\",\"installation_id\":${INSTALL_ID}}" \
           2>/dev/null || echo '{"token":""}')
         TOKEN=$(echo "$RESPONSE" | jq -r '.token // ""')
+        if [[ -z "$TOKEN" ]]; then
+          echo "::warning title=Janitor::Failed to obtain analysis token from Governor — bounce will run without attestation"
+        fi
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
     # Step 3 — Run bounce, write Job Summary, enforce fail gate.
