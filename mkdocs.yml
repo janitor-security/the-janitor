@@ -23,6 +23,7 @@ theme:
 
 nav:
   - Overview: index.md
+  - Architecture: architecture.md
   - Security Posture: security.md
   - Benchmarks: benchmarks.md
   - Intelligence Reports:
