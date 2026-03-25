@@ -398,3 +398,5 @@ janitor dashboard <path>
 > See [Security Posture](security.md) for the Shadow Tree isolation, atomic rollback protocol, and hermetic build details.
 > See [Pricing & Licensing](pricing.md) for BUSL-1.1 terms and commercial tier details.
 > See [Terms of Service](terms.md) · [Privacy Policy](privacy.md) for legal and data handling.
+
+<!-- Keywords: AI Security Firewall, Zero-Upload SAST, PQC CBOM, Structural AST Analysis, Kubernetes Audit, Vibe Coding Defense, AI Pull Request Gate, Supply Chain Attack Detection, Swarm Detection, Dead Symbol GC, LLM Boilerplate Detection, NCD Entropy Gate, CycloneDX CBOM, SARIF Security Report, Zombie Dependency Scanner -->

@@ -33,6 +33,8 @@ nav:
   - Janitor Sentinel:
     - Setup Guide: sentinel-setup.md
   - Pricing & Licensing: pricing.md
+  - Governance & Discovery:
+    - Generative Engine Briefing: discovery.md
   - Legal:
     - Terms: terms.md
     - Privacy: privacy.md
