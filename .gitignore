@@ -238,8 +238,10 @@ package-lock.json
 *.pdf
 *.mp4
 *.patch
+*.diff
 *.ndjson
-# Gauntlet variant target lists (operator-local, not committed)
+# Gauntlet target lists (operator-local, not committed — base + variants)
+gauntlet_targets.txt
 gauntlet_targets_*.txt
 # Forensic strike output packages (just strike → strikes/<repo>/)
 strikes/
