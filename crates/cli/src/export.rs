@@ -104,11 +104,19 @@ fn threat_class(entry: &crate::report::BounceLogEntry) -> &'static str {
 
 /// Build the `Antipattern_IDs` field: pipe-delimited structured rule labels.
 ///
-/// Uses `entry.antipatterns` directly (these are already the structured labels
-/// such as `security:compiled_payload_anomaly` or `antipattern:ncd_anomaly`).
-/// Human-readable text is not included.
+/// When `necrotic_flag` is set, a `backlog:<FLAG>` label is prepended so that
+/// Necrotic rows always carry at least one machine-readable identifier even when
+/// no language-specific antipattern fired (e.g. pure zombie-dep or dead-symbol GC).
+///
+/// The structured labels are already in the form `security:compiled_payload_anomaly`
+/// or `antipattern:ncd_anomaly`; human-readable text is not included.
 fn antipattern_ids(entry: &crate::report::BounceLogEntry) -> String {
-    csv_sanitize(&entry.antipatterns.join("|"))
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(flag) = entry.necrotic_flag.as_deref() {
+        parts.push(format!("backlog:{flag}"));
+    }
+    parts.extend(entry.antipatterns.iter().cloned());
+    csv_sanitize(&parts.join("|"))
 }
 
 /// Build the `Collided_PRs` field: pipe-delimited PR numbers.

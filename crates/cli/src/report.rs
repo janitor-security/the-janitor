@@ -656,26 +656,36 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
 ///
 /// Priority mirrors scoring weights: antipatterns (×50) > zombie symbols (×15) >
 /// logic clones (×5) > zombie deps (informational).
-fn primary_violation(e: &BounceLogEntry) -> &'static str {
+///
+/// When no language antipattern fired but a `necrotic_flag` is present, returns
+/// `"backlog:<FLAG>"` (e.g. `"backlog:SEMANTIC_NULL"`) so the PDF/Markdown Top-10
+/// table shows a machine-readable identifier instead of the generic fallback.
+fn primary_violation(e: &BounceLogEntry) -> String {
     if !e.antipatterns.is_empty() {
         if e.antipatterns
             .iter()
             .any(|a| a.contains("Unverified Security Bump"))
         {
-            return "Unverified Security Bump";
+            return "Unverified Security Bump".to_owned();
         }
-        return "Language Antipattern";
+        return "Language Antipattern".to_owned();
     }
     if e.zombie_symbols_added > 0 {
-        return "Zombie Symbol Reintroduction";
+        return "Zombie Symbol Reintroduction".to_owned();
     }
     if e.logic_clones_found > 0 {
-        return "Structural Clone";
+        return "Structural Clone".to_owned();
     }
     if !e.zombie_deps.is_empty() {
-        return "Zombie Dependency";
+        if let Some(flag) = e.necrotic_flag.as_deref() {
+            return format!("backlog:{flag}");
+        }
+        return "Zombie Dependency".to_owned();
     }
-    "Score Threshold"
+    if let Some(flag) = e.necrotic_flag.as_deref() {
+        return format!("backlog:{flag}");
+    }
+    "Score Threshold".to_owned()
 }
 
 /// Detect pairs of entries whose MinHash Jaccard similarity exceeds `threshold`.
@@ -2206,7 +2216,7 @@ mod webhook_tests {
 
     #[test]
     fn webhook_no_fire_when_event_not_matched() {
-        let entry = make_entry(vec![], Some("SEMANTIC_NULL".to_string()));
+        let _entry = make_entry(vec![], Some("SEMANTIC_NULL".to_string()));
         let mut policy = common::policy::JanitorPolicy::default();
         policy.webhook = WebhookConfig {
             url: "https://example.com/hook".to_string(),
