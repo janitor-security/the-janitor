@@ -1666,12 +1666,14 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
          clone fingerprinting via MinHash LSH, and necrotic symbol hydration. No ML \
          inference. All analysis runs locally — no source code is transmitted.*\n\n",
     );
-    out.push_str("\n\\newpage\n\n");
+    // No forced \newpage — flow directly into Threat Distribution / Repository
+    // Breakdown so the executive brief fits on fewer pages.
 
-    // ── Page 2 — Threat Distribution ──────────────────────────────────────
+    // ── Threat Distribution ────────────────────────────────────────────────
     // Only rendered for multi-repo global reports. A single-repo strike already
     // carries per-PR detail tables that make a one-bar chart redundant noise.
     if data.repos.len() > 1 {
+        out.push_str("\n\\needspace{10\\baselineskip}\n\n");
         out.push_str("## Threat Distribution by Repository\n\n");
         out.push_str("```\n");
         for repo in &data.repos {
@@ -1690,10 +1692,11 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
             out.push('\n');
         }
         out.push_str("```\n\n");
-        out.push_str("\n\\newpage\n\n");
+        // No \newpage — Repository Breakdown follows on the same flow.
     }
 
-    // ── Page 3 — Repository Breakdown table ───────────────────────────────
+    // ── Repository Breakdown table ─────────────────────────────────────────
+    out.push_str("\n\\needspace{15\\baselineskip}\n\n");
     out.push_str("## Repository Breakdown\n\n");
     out.push_str(
         "```{=latex}\n\\small\n\\setlength{\\tabcolsep}{4pt}\n\\renewcommand{\\arraystretch}{1.0}\n\\setcounter{LTchunksize}{100}\n```\n\n",
@@ -1719,9 +1722,9 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         ));
     }
     out.push('\n');
-    out.push_str("\n\\newpage\n\n");
 
-    // ── Page 4 — Top 10 Riskiest PRs ──────────────────────────────────────
+    // ── Top 10 Riskiest PRs ────────────────────────────────────────────────
+    // \needspace guards the heading so it never strands at the bottom of a page.
     // Collect the top 10 entries with score > 50 across all repos.
     let mut top_prs: Vec<(&RepoStats, u64, u32, String, String)> = Vec::new();
     for repo in &data.repos {
@@ -1736,6 +1739,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     top_prs.truncate(10);
 
     if !top_prs.is_empty() {
+        out.push_str("\n\\needspace{12\\baselineskip}\n\n");
         out.push_str("## Top 10 Riskiest PRs\n\n");
         out.push_str("| PR | Repo | Author | Score | Threat Class | Antipattern |\n");
         out.push_str("|---|---|---|---|---|---|\n");
@@ -1758,10 +1762,10 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
             ));
         }
         out.push('\n');
-        out.push_str("\n\\newpage\n\n");
     }
 
     // ── Scoring Methodology ────────────────────────────────────────────────
+    out.push_str("\n\\needspace{8\\baselineskip}\n\n");
     out.push_str("## Scoring Methodology\n\n");
     out.push_str("| Classification | Condition | Billing |\n");
     out.push_str("|---|---|---|\n");
@@ -1775,11 +1779,15 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     );
 
     // ── Appendix: Full Audit Log ───────────────────────────────────────────
+    // This is the ONLY preserved \newpage in the global render: the executive
+    // brief ends here and the per-repo audit log starts on a clean page.
+    out.push_str("\n\\newpage\n\n");
     out.push_str("## Appendix: Full Audit Log\n\n");
 
     // ── Per-repo dedicated pages ───────────────────────────────────────────
-    // Each repo gets a \newpage (raw LaTeX — pandoc passes it through to pdflatex)
-    // followed by Top 10 Sloppiest PRs and Top 10 Cleanest Contributors tables.
+    // Each repo starts on a new page inside the Appendix.  Subsections within
+    // each repo (Sloppiest, Cleanest, Silos) flow without internal breaks;
+    // \needspace before each heading prevents orphaned headings at page bottom.
     for repo in &data.repos {
         out.push_str("\n\\newpage\n\n");
         out.push_str(&format!("## {}\n\n", sanitize_latex_safe(&repo.repo_name)));
@@ -1812,6 +1820,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         out.push('\n');
 
         // Top 10 Sloppiest PRs table.
+        out.push_str("\n\\needspace{12\\baselineskip}\n\n");
         out.push_str("### Top 10 Sloppiest PRs\n\n");
         out.push_str("```{=latex}\n\\small\n\\renewcommand{\\arraystretch}{1.2}\n```\n\n");
         if repo.top_sloppiest.is_empty() {
@@ -1835,6 +1844,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         }
 
         // Top 10 Cleanest Contributors table.
+        out.push_str("\n\\needspace{12\\baselineskip}\n\n");
         out.push_str("### Top 10 Cleanest Contributors\n\n");
         out.push_str("```{=latex}\n\\small\n\\renewcommand{\\arraystretch}{1.2}\n```\n\n");
         if repo.top_clean_authors.is_empty() {
@@ -1865,6 +1875,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
             // Rank by transitive_reach descending; cap at 10.
             silos.sort_by(|a, b| b.2.cmp(&a.2));
             silos.truncate(10);
+            out.push_str("\n\\needspace{12\\baselineskip}\n\n");
             out.push_str("### Architectural Debt: C/C++ Compile-Time Silos\n\n");
             out.push_str("```{=latex}\n\\small\n\\renewcommand{\\arraystretch}{1.2}\n```\n\n");
             out.push_str("| Header Path | Direct Imports | Transitive Blast Radius |\n");

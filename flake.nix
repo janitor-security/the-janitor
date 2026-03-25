@@ -34,13 +34,15 @@
         #   tocloft      — TOC font/colour customisation
         #   newunicodechar — Unicode glyph declarations (≥ ≤ → …)
         #   framed       — snugshade environment for code blocks
+        #   needspace    — \needspace{N\baselineskip} soft page-break guard
         # Note: xfp (\real{}) is part of l3packages, already in scheme-medium.
         texPackages = pkgs.texlive.combine {
           inherit (pkgs.texlive) scheme-medium
             titlesec
             tocloft
             newunicodechar
-            framed;
+            framed
+            needspace;
         };
       in
       {
