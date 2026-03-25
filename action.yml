@@ -18,13 +18,45 @@ runs:
   using: 'composite'
   steps:
 
-    # Step 1 — Build the janitor CLI from source.
-    - name: Bootstrap Janitor Engine
+    # Step 1a — Clone the janitor source (build input; always required).
+    - name: Clone Janitor Source
+      shell: bash
+      run: git clone https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
+
+    # Step 1b — Compute Cargo.lock hash for the cache key.
+    #
+    # actions/cache hashFiles() only resolves paths inside $GITHUB_WORKSPACE.
+    # The clone lands in /tmp, so we compute the hash in shell and export it
+    # via GITHUB_OUTPUT instead.
+    - name: Compute Cargo.lock Hash
+      id: lock-hash
       shell: bash
       run: |
-        git clone https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
-        cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
-        echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> "$GITHUB_ENV"
+        echo "hash=$(sha256sum /tmp/the-janitor/Cargo.lock | cut -c1-64)" >> "$GITHUB_OUTPUT"
+
+    # Step 1c — Restore cached binary (keyed on OS + Cargo.lock digest).
+    #
+    # Cache strategy: the binary is built from the *janitor* repo's Cargo.lock,
+    # not the customer repo's.  Dependabot PRs change the customer Cargo.lock
+    # but never the janitor's, so they always get a cache hit and never trigger
+    # a rebuild against their own broken dependency tree.
+    - name: Cache Janitor Binary
+      id: cache-janitor
+      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3 branch HEAD
+      with:
+        path: /tmp/the-janitor/target/release/janitor
+        key: janitor-bin-${{ runner.os }}-${{ steps.lock-hash.outputs.hash }}
+
+    # Step 1d — Build only on cache miss.
+    - name: Build Janitor Engine
+      if: steps.cache-janitor.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
+
+    # Step 1e — Expose the binary path regardless of cache/build path.
+    - name: Export Janitor Binary Path
+      shell: bash
+      run: echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> "$GITHUB_ENV"
 
     # Step 2 — Extract the PR unified diff.
     - name: Extract Patch
