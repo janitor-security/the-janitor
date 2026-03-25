@@ -84,6 +84,36 @@ No token flag. No manual step. The proof is issued by the SaaS on a clean merge 
 
 ---
 
+## THE COMPETITIVE MOAT
+
+### On-Device vs. Cloud Fabric
+
+The market is filling with "AI Security Fabrics" — cloud-hosted LLM pipelines that ingest your source code, run probabilistic analysis, and return a verdict four minutes later. They are slow. They exfiltrate your code to a third-party inference cluster. And their probabilistic outputs produce alert fatigue at scale.
+
+The Janitor is the opposite architecture. It is an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. No cloud ingestion. No LLM. Proven at **3.5 million lines in 33 seconds on an 8 GB laptop**. Your code never leaves your runner — in either the CLI or the GitHub App deployment model.
+
+Cloud fabrics are an exfiltration vector wearing a security badge. The Janitor eliminates the attack surface instead of adding to it.
+
+### Deterministic vs. Heuristic
+
+LLM-based code review tools cannot *prove* anything. They pattern-match against training distributions and emit confidence scores. A sufficiently novel adversarial input — a well-structured but semantically dangerous diff — is invisible to a heuristic system trained on pre-AI codebases.
+
+The Janitor does not guess. It uses **tree-sitter ASTs to prove structural identity**, **BLAKE3 hashing to prove clone equivalence**, **MinHash Jaccard to prove Swarm coordination**, and **ML-DSA-65 (NIST FIPS 204) to prove chain of custody**. The gate either passes or it does not. The math either confirms structural identity or it does not. There is no confidence interval. There is no false-positive budget. There is a proof — or the PR is blocked.
+
+When a PR clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM: a cryptographically signed bill of materials covering every hash, every symbol, every decision point in the analysis. That is not a report. That is a bond you can present to a SOC 2 auditor.
+
+### Agentic-Ready
+
+The threat model is already changing. AI coding assistants are becoming autonomous agents — systems that open PRs without human authorship, coordinate across accounts, and submit structurally identical changes at a rate no human review queue can absorb. Copilot is the training run. The Swarm is the production workload.
+
+Current toolchains were designed for human developers submitting a few PRs per day. They have no concept of a non-human contributor operating at machine velocity, no mechanism to detect coordinated structural injection across hundreds of PRs, and no policy layer that can distinguish a legitimate bot from a compromised Agentic pipeline.
+
+The Janitor was built for this environment. **It is the deterministic enforcement gate that applies your architectural rules to non-human developers** — the same rules, at the same threshold, regardless of whether the author is a human engineer, a Copilot agent, or an autonomous Swarm. The `janitor.toml` governance manifest is version-controlled policy-as-code: your rules, enforced at the diff level, before the merge button is available.
+
+When your team deploys AI engineers, the gate does not move.
+
+---
+
 ## THE PR GATE: LIVE RESULTS
 
 The `janitor bounce` command intercepts pull requests at the diff level and scores them across four dimensions:

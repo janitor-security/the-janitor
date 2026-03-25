@@ -80,6 +80,30 @@ When a pull request clears the slop gate, **Janitor Sentinel** — our GitHub Ap
 
 ---
 
+## Competitive Moat
+
+### On-Device vs. Cloud Fabric
+
+The market is filling with "AI Security Fabrics" — cloud-hosted LLM pipelines that ingest your source code, run probabilistic analysis, and return a verdict four minutes later. They are slow. They exfiltrate your code to a third-party inference cluster. Your diffs become training data.
+
+The Janitor is the opposite architecture: an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. Proven at **3.5 million lines in 33 seconds on an 8 GB laptop**. Code never leaves your runner in either deployment model.
+
+### Deterministic vs. Heuristic
+
+LLM-based code review tools cannot *prove* anything. They emit confidence scores against training distributions. A novel adversarial input — well-structured but semantically dangerous — is invisible to a heuristic system trained on pre-AI codebases.
+
+The Janitor does not guess. It uses **tree-sitter ASTs to prove structural identity**, **BLAKE3 hashing to prove clone equivalence**, and **ML-DSA-65 (NIST FIPS 204) to prove chain of custody**. The gate passes or it blocks. There is no confidence interval. There is no false-positive budget. When a PR clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM: a cryptographically signed bond you can present to a SOC 2 auditor — not a report, a proof.
+
+### Agentic-Ready
+
+AI coding assistants are becoming autonomous agents — systems that open PRs without human authorship, coordinate across accounts, and submit structurally identical changes at a rate no human review queue can absorb. Current toolchains have no concept of a non-human contributor operating at machine velocity and no mechanism to detect coordinated structural injection.
+
+**The Janitor is the deterministic enforcement gate that applies your architectural rules to non-human developers.** The same rules, at the same threshold, whether the author is a human engineer, a Copilot agent, or an autonomous Swarm. The `janitor.toml` governance manifest is version-controlled policy-as-code: your rules, enforced at the diff level, before the merge button is available.
+
+When your team deploys AI engineers, the gate does not move.
+
+---
+
 ## PR Gate: Live Results
 
 ```
