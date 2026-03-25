@@ -1,0 +1,2417 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot.">
+      
+      
+      
+        <link rel="canonical" href="https://thejanitor.app/architecture/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../security/">
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
+    
+    
+      
+        <title>Architecture - The Janitor</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.a40c8224.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Mono:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto Mono";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  
+  <!--
+    Content Security Policy — defence-in-depth for a static documentation site.
+
+    Threat model: prevent injected <script> payloads from loading external code
+    or exfiltrating data, should any content-injection path reach the rendered HTML.
+
+    Directives:
+      script-src 'self' 'unsafe-inline'  — mkdocs-material 9.x uses inline scripts
+                                           for search configuration; 'self' blocks all
+                                           external script sources.
+      connect-src 'self'                 — blocks XHR/fetch data-exfiltration to
+                                           foreign origins.
+      frame-ancestors 'none'             — clickjacking prevention.
+      base-uri 'self'                    — blocks <base href="…"> injection attacks.
+      form-action 'none'                 — static docs site has no forms.
+      worker-src blob:                   — mkdocs-material search uses blob: workers.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src  'self' 'unsafe-inline';
+    style-src   'self' 'unsafe-inline';
+    img-src     'self' data:;
+    font-src    'self' data:;
+    connect-src 'self';
+    worker-src  blob:;
+    frame-ancestors 'none';
+    base-uri    'self';
+    form-action 'none';
+  ">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sovereign-briefing-the-janitor-engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            The Janitor
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/janitor-security/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    janitor-security/the-janitor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    The Janitor
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/janitor-security/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    janitor-security/the-janitor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#i-core-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      I. CORE PRIMITIVES
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. CORE PRIMITIVES">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#runtime-language-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Runtime Language Infrastructure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#foundational-crates-mathematical-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Foundational Crates &amp; Mathematical Models
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-policy-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      II. POLICY LAYER
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-execution-pipeline-hyper-gauntlet" class="md-nav__link">
+    <span class="md-ellipsis">
+      III. EXECUTION PIPELINE — HYPER-GAUNTLET
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. EXECUTION PIPELINE — HYPER-GAUNTLET">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-0-pre-emptive-workspace-purge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 0 — Pre-emptive Workspace Purge
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-repository-hydration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 1 — Repository Hydration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-in-memory-merge-simulation-hyper-drive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 2 — In-Memory Merge Simulation (Hyper-drive)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-patchbouncer-per-file-sequence-within-bounce" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 3 — PatchBouncer Per-File (sequence within bounce())
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-bounce-log-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 4 — Bounce Log Persistence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-global-aggregation-post-all-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 5 — Global Aggregation (post all repos)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-the-threat-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      IV. THE THREAT MATRIX
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IV. THE THREAT MATRIX">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-critical-threats-security-prefix-150intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — Critical Threats (security: prefix → $150/intercept)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-architectural-antipatterns-ast-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2 — Architectural Antipatterns (AST-derived)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-ncd-verbosity-antipattern-prefix-warning-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 3 — NCD Verbosity (antipattern: prefix → Warning tier)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-4-structural-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 4 — Structural Quality
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bypass-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Bypass Rules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-the-actuarial-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      V. THE ACTUARIAL LEDGER
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="V. THE ACTUARIAL LEDGER">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-function-cratesclisrcreportrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification Function (crates/cli/src/report.rs)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#billing-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Billing Tiers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#score-formula-slopscorescore" class="md-nav__link">
+    <span class="md-ellipsis">
+      Score Formula (SlopScore::score())
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#total-economic-impact-tei" class="md-nav__link">
+    <span class="md-ellipsis">
+      Total Economic Impact (TEI)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-column-schema-16-columns-exact-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      CSV Column Schema (16 columns, exact order)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdf-report-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      PDF Report Structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PDF Report Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#global-report-render_global_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Report (render_global_markdown)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-repo-report-render_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Single-Repo Report (render_markdown)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-the-command-control-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      VI. THE COMMAND &amp; CONTROL INTERFACE
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. THE COMMAND & CONTROL INTERFACE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mode-1-targetselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode 1 — TargetSelection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode-2-activesurveillance-per-repo" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode 2 — ActiveSurveillance (per-repo)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vii-operational-commands-complete-justfile-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      VII. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#viii-rd-vault-experimental-crates" class="md-nav__link">
+    <span class="md-ellipsis">
+      VIII. R&amp;D VAULT — EXPERIMENTAL CRATES
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ix-final-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      IX. FINAL VERSION
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IX. FINAL VERSION">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v794-architecture-inversion-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      v7.9.4 — Architecture Inversion Implementation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Security Posture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Benchmarks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Intelligence Reports
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Intelligence Reports
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case-studies/global-audit-2026/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Global Audit 2026
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case-studies/godot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Godot Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Configuration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../governance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    janitor.toml Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Janitor Sentinel
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Janitor Sentinel
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sentinel-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pricing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pricing & Licensing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Governance & Discovery
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Governance & Discovery
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../discovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generative Engine Briefing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Legal
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Legal
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terms/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Terms
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Privacy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#i-core-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      I. CORE PRIMITIVES
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. CORE PRIMITIVES">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#runtime-language-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Runtime Language Infrastructure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#foundational-crates-mathematical-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      Foundational Crates &amp; Mathematical Models
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-policy-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      II. POLICY LAYER
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-execution-pipeline-hyper-gauntlet" class="md-nav__link">
+    <span class="md-ellipsis">
+      III. EXECUTION PIPELINE — HYPER-GAUNTLET
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. EXECUTION PIPELINE — HYPER-GAUNTLET">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-0-pre-emptive-workspace-purge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 0 — Pre-emptive Workspace Purge
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-repository-hydration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 1 — Repository Hydration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-in-memory-merge-simulation-hyper-drive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 2 — In-Memory Merge Simulation (Hyper-drive)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-patchbouncer-per-file-sequence-within-bounce" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 3 — PatchBouncer Per-File (sequence within bounce())
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-bounce-log-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 4 — Bounce Log Persistence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-global-aggregation-post-all-repos" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage 5 — Global Aggregation (post all repos)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-the-threat-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      IV. THE THREAT MATRIX
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IV. THE THREAT MATRIX">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-critical-threats-security-prefix-150intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — Critical Threats (security: prefix → $150/intercept)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-architectural-antipatterns-ast-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2 — Architectural Antipatterns (AST-derived)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-ncd-verbosity-antipattern-prefix-warning-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 3 — NCD Verbosity (antipattern: prefix → Warning tier)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-4-structural-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 4 — Structural Quality
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bypass-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Bypass Rules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-the-actuarial-ledger" class="md-nav__link">
+    <span class="md-ellipsis">
+      V. THE ACTUARIAL LEDGER
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="V. THE ACTUARIAL LEDGER">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-function-cratesclisrcreportrs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification Function (crates/cli/src/report.rs)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#billing-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Billing Tiers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#score-formula-slopscorescore" class="md-nav__link">
+    <span class="md-ellipsis">
+      Score Formula (SlopScore::score())
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#total-economic-impact-tei" class="md-nav__link">
+    <span class="md-ellipsis">
+      Total Economic Impact (TEI)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-column-schema-16-columns-exact-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      CSV Column Schema (16 columns, exact order)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdf-report-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      PDF Report Structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PDF Report Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#global-report-render_global_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Report (render_global_markdown)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-repo-report-render_markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Single-Repo Report (render_markdown)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-the-command-control-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      VI. THE COMMAND &amp; CONTROL INTERFACE
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. THE COMMAND & CONTROL INTERFACE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mode-1-targetselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode 1 — TargetSelection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode-2-activesurveillance-per-repo" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode 2 — ActiveSurveillance (per-repo)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vii-operational-commands-complete-justfile-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      VII. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#viii-rd-vault-experimental-crates" class="md-nav__link">
+    <span class="md-ellipsis">
+      VIII. R&amp;D VAULT — EXPERIMENTAL CRATES
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ix-final-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      IX. FINAL VERSION
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="IX. FINAL VERSION">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v794-architecture-inversion-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      v7.9.4 — Architecture Inversion Implementation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="sovereign-briefing-the-janitor-engine">SOVEREIGN BRIEFING — THE JANITOR ENGINE</h1>
+<blockquote>
+<p><strong>Canonical state document.</strong> Generated by direct source audit. All values
+derive from code, not prior documentation. Supersedes all predecessor files.</p>
+</blockquote>
+<hr />
+<h2 id="i-core-primitives">I. CORE PRIMITIVES</h2>
+<h3 id="runtime-language-infrastructure">Runtime Language Infrastructure</h3>
+<table>
+<thead>
+<tr>
+<th>Grammar</th>
+<th><code>polyglot</code> Static</th>
+<th>Extension(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rust</td>
+<td><code>RUST</code></td>
+<td><code>rs</code></td>
+</tr>
+<tr>
+<td>Python</td>
+<td><code>PYTHON</code></td>
+<td><code>py</code></td>
+</tr>
+<tr>
+<td>JavaScript</td>
+<td><code>JAVASCRIPT</code></td>
+<td><code>js</code>, <code>jsx</code></td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td><code>TYPESCRIPT</code></td>
+<td><code>ts</code>, <code>tsx</code></td>
+</tr>
+<tr>
+<td>C++</td>
+<td><code>CPP</code></td>
+<td><code>cpp</code>, <code>cxx</code>, <code>cc</code>, <code>hpp</code></td>
+</tr>
+<tr>
+<td>C</td>
+<td><code>C</code></td>
+<td><code>c</code>, <code>h</code></td>
+</tr>
+<tr>
+<td>Java</td>
+<td><code>JAVA</code></td>
+<td><code>java</code></td>
+</tr>
+<tr>
+<td>C#</td>
+<td><code>CSHARP</code></td>
+<td><code>cs</code></td>
+</tr>
+<tr>
+<td>Go</td>
+<td><code>GO</code></td>
+<td><code>go</code></td>
+</tr>
+<tr>
+<td>GLSL</td>
+<td><code>GLSL</code></td>
+<td><code>glsl</code>, <code>vert</code>, <code>frag</code></td>
+</tr>
+<tr>
+<td>Objective-C</td>
+<td><code>OBJC</code></td>
+<td><code>m</code>, <code>mm</code></td>
+</tr>
+<tr>
+<td>YAML</td>
+<td><code>YAML</code></td>
+<td><code>yaml</code>, <code>yml</code></td>
+</tr>
+<tr>
+<td>Bash</td>
+<td><code>BASH</code></td>
+<td><code>sh</code>, <code>bash</code></td>
+</tr>
+<tr>
+<td>Scala</td>
+<td><code>SCALA</code></td>
+<td><code>scala</code></td>
+</tr>
+<tr>
+<td>Ruby</td>
+<td><code>RUBY</code></td>
+<td><code>rb</code></td>
+</tr>
+<tr>
+<td>PHP</td>
+<td><code>PHP</code></td>
+<td><code>php</code></td>
+</tr>
+<tr>
+<td>Swift</td>
+<td><code>SWIFT</code></td>
+<td><code>swift</code></td>
+</tr>
+<tr>
+<td>Lua</td>
+<td><code>LUA</code></td>
+<td><code>lua</code></td>
+</tr>
+<tr>
+<td>HCL/Terraform</td>
+<td><code>HCL</code></td>
+<td><code>tf</code>, <code>hcl</code></td>
+</tr>
+<tr>
+<td>Nix</td>
+<td><code>NIX</code></td>
+<td><code>nix</code></td>
+</tr>
+<tr>
+<td>GDScript</td>
+<td><code>GDSCRIPT</code></td>
+<td><code>gd</code></td>
+</tr>
+<tr>
+<td>Kotlin</td>
+<td><code>KOTLIN</code></td>
+<td><code>kt</code>, <code>kts</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>23 grammars total.</strong> Each grammar is a <code>OnceLock&lt;Language&gt;</code> static — loaded once on first use, zero per-call allocation thereafter.</p>
+<p>Grammar library: <code>tree-sitter 0.26</code> (workspace pinned).</p>
+<h3 id="foundational-crates-mathematical-models">Foundational Crates &amp; Mathematical Models</h3>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>Crate / Constant</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fuzzy clone detection</td>
+<td><code>AstSimHasher</code> — SimHash over <code>(kind_id u16, depth u32)</code> feature pairs</td>
+<td>Detects structural refactors without textual identity</td>
+</tr>
+<tr>
+<td>Swarm clustering</td>
+<td><code>LshIndex</code> — MinHash, 8 bands × 8 rows, 64-hash sketch</td>
+<td>O(1) amortised PR → clone-cluster lookup</td>
+</tr>
+<tr>
+<td>Patch entropy gate</td>
+<td><code>check_entropy</code> — <code>zstd::encode_all</code> level 3, ratio = <code>compressed/raw</code></td>
+<td>NCD verbosity detection</td>
+</tr>
+<tr>
+<td>Byte lattice shield</td>
+<td><code>ByteLatticeAnalyzer</code> — windowed Shannon entropy, 512-byte window, 256-byte stride</td>
+<td>Binary/generated blob detection</td>
+</tr>
+<tr>
+<td>Compiled payload scanner</td>
+<td><code>binary_hunter</code> — AhoCorasick over 7 static byte patterns</td>
+<td>ELF/PE/WASM/miner injection detection</td>
+</tr>
+<tr>
+<td>Merge simulation</td>
+<td><code>simulate_merge</code> via <code>libgit2</code> — <code>diff.foreach</code> + <code>RefCell</code> patch accumulation</td>
+<td>Zero disk checkout; O(PR-diff) memory</td>
+</tr>
+<tr>
+<td>Symbol persistence</td>
+<td><code>rkyv 0.8</code> — zero-copy archive format</td>
+<td>IPC registry at <code>.janitor/symbols.rkyv</code></td>
+</tr>
+<tr>
+<td>Hot-swap registry</td>
+<td><code>arc_swap::ArcSwap&lt;SymbolRegistry&gt;</code></td>
+<td>Lock-free atomic reload without daemon downtime</td>
+</tr>
+<tr>
+<td>Memory backpressure</td>
+<td><code>Physarum</code> — <code>sysinfo 0.30</code>, threshold model</td>
+<td>System-aware concurrency gate; prevents OOM</td>
+</tr>
+<tr>
+<td>Dependency graph</td>
+<td><code>petgraph 0.7</code> — transitive compile-time reach analysis</td>
+<td>C++ silo detection in <code>Structural Topology</code> tab</td>
+</tr>
+<tr>
+<td>Pattern matching</td>
+<td><code>aho_corasick 1.1</code> — single automaton per pattern group (<code>OnceLock</code>)</td>
+<td>Hot-path multi-pattern search without recompilation</td>
+</tr>
+<tr>
+<td>Hashing</td>
+<td><code>blake3 1.5</code> — exact structural hash per function body</td>
+<td>Zombie/clone identity</td>
+</tr>
+<tr>
+<td>Security — PQC</td>
+<td>ML-DSA-65 (FIPS 204) — PRODUCTION. the-governor/src/compliance/pqc.rs implements keygen/sign/verify via the fips204 crate. The Governor generates a persistent governor.key on first run and signs every CycloneDX CBOM bond with it. pqc_enforced: true in janitor.toml blocks the PR merge if bond issuance fails.</td>
+<td>Post-quantum attestation for CycloneDX v1.5 CBOM bonds</td>
+</tr>
+<tr>
+<td>Security — Ed25519</td>
+<td><code>vault::SigningOracle::verify_token</code> — public-key-only; no private key in binary</td>
+<td>API token gate for <code>janitor_clean</code> (MCP) and <code>/v1/attest</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="ii-policy-layer">II. POLICY LAYER</h2>
+<p><code>janitor.toml</code> at the repository root encodes maintainer-controlled slop tolerance as
+version-controlled, reviewable configuration. Loaded by <code>JanitorPolicy::load()</code> in
+<code>crates/common/src/policy.rs</code>. Full field reference: <code>docs/governance.md</code> /
+<a href="https://thejanitor.app/governance">https://thejanitor.app/governance</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_slop_score</code></td>
+<td>100</td>
+<td>Gate threshold — raw score ceiling</td>
+</tr>
+<tr>
+<td><code>require_issue_link</code></td>
+<td>false</td>
+<td>Block PRs with no <code>#N</code> reference</td>
+</tr>
+<tr>
+<td><code>allowed_zombies</code></td>
+<td>false</td>
+<td>Downgrade zombie veto to warning</td>
+</tr>
+<tr>
+<td><code>pqc_enforced</code></td>
+<td>false</td>
+<td>Block PR when ML-DSA-65 bond fails (needs Sentinel)</td>
+</tr>
+<tr>
+<td><code>refactor_bonus</code></td>
+<td>0</td>
+<td>Raise gate for <code>[REFACTOR]</code>/<code>[FIXES-DEBT]</code> PRs</td>
+</tr>
+<tr>
+<td><code>custom_antipatterns</code></td>
+<td>[]</td>
+<td>Project-specific <code>.scm</code> query files</td>
+</tr>
+<tr>
+<td><code>trusted_bot_authors</code></td>
+<td>[]</td>
+<td>Handles exempt from unlinked-PR penalty</td>
+</tr>
+<tr>
+<td><code>[forge].automation_accounts</code></td>
+<td>[]</td>
+<td>Ecosystem accounts without <code>[bot]</code> suffix</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="iii-execution-pipeline-hyper-gauntlet">III. EXECUTION PIPELINE — HYPER-GAUNTLET</h2>
+<p>Entry point: <code>tools/gauntlet-runner</code> binary, invoked via <code>just hyper-gauntlet</code> or <code>just run-gauntlet</code>.</p>
+<h3 id="stage-0-pre-emptive-workspace-purge">Stage 0 — Pre-emptive Workspace Purge</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>For each target repo (non-resume mode):
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  rm -rf &lt;gauntlet_dir&gt;/&lt;owner&gt;/&lt;repo&gt;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  # Clean slate: no stale bounce_log.ndjson bleeds into aggregate
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Resume mode (--resume):
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  Save &lt;repo&gt;/.janitor/bounce_log.ndjson → memory buffer
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  Perform clone/fetch below
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  Restore buffer → &lt;repo&gt;/.janitor/bounce_log.ndjson
+</code></pre></div>
+<h3 id="stage-1-repository-hydration">Stage 1 — Repository Hydration</h3>
+<p><strong>Hyper-drive mode</strong> (<code>--hyper</code>, default for <code>just hyper-gauntlet</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>--no-checkout<span class="w"> </span>https://github.com/&lt;owner&gt;/&lt;repo&gt;.git<span class="w"> </span>&lt;repo_dir&gt;
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>git<span class="w"> </span>-C<span class="w"> </span>&lt;repo_dir&gt;<span class="w"> </span>fetch<span class="w"> </span>origin<span class="w"> </span><span class="s1">&#39;refs/pull/*/head:refs/remotes/origin/pr/*&#39;</span>
+</code></pre></div>
+<p>Zero <code>gh pr diff</code> subshells. All PR refs land in the packfile.</p>
+<p><strong>Parallel-bounce mode</strong> (default for <code>just run-gauntlet</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>gh pr list --json number,author,mergeable,state --limit &lt;PR_LIMIT&gt;
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Filter: exclude CONFLICTING, exclude Bot authors
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>For each open PR (rayon pool sized by `detect_optimal_concurrency()`, GIT_LOCK mutex):
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  gh pr diff &lt;N&gt; --repo &lt;slug&gt;   → diff text
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  janitor bounce &lt;repo_dir&gt; --patch &lt;diff&gt; --pr-number &lt;N&gt; --author &lt;A&gt; --format json
+</code></pre></div>
+<h3 id="stage-2-in-memory-merge-simulation-hyper-drive">Stage 2 — In-Memory Merge Simulation (Hyper-drive)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>janitor hyper-drive &lt;repo_dir&gt; --pr-limit &lt;N&gt; --timeout &lt;S&gt;s
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  → build_symbols_rkyv(repo_path, base_sha)    [git_drive.rs — Necrotic Hydration]
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  → For each PR ref:
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>      simulate_merge(repo, base_oid, pr_head_oid) → MergeSnapshot {
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>          blobs:   HashMap&lt;PathBuf, Vec&lt;u8&gt;&gt;    // Full HEAD blob per file
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>          patches: HashMap&lt;PathBuf, String&gt;     // Actual unified diff per file
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>          deleted: Vec&lt;PathBuf&gt;
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>          total_bytes: usize
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>      }
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>      Routing:
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        snapshot.blobs   → IncludeGraphBuilder + SemanticNull
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>        snapshot.patches → PatchBouncer (SlopHunter, AstSimHasher, NCD)
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>      iter_by_priority() feeds high-SLOP-vector extensions first (Chemotaxis):
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        &quot;rs&quot;,&quot;py&quot;,&quot;go&quot;,&quot;js&quot;,&quot;ts&quot;,&quot;tsx&quot;,&quot;jsx&quot;,&quot;cs&quot;,&quot;java&quot;,&quot;cpp&quot;,&quot;cc&quot;,&quot;cxx&quot;,&quot;c&quot;
+</code></pre></div>
+<h3 id="stage-3-patchbouncer-per-file-sequence-within-bounce">Stage 3 — PatchBouncer Per-File (sequence within <code>bounce()</code>)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>1. Language detection          lang_for_ext() from &quot;+++ b/&lt;path&gt;&quot; header
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>2. Circuit breaker             patch &gt; 1 MiB → skip
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>3. IAC bypass                  ext in IAC_TEXT_EXTS → skip ByteLatticeAnalyzer
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>4. Binary asset bypass         ext in BINARY_ASSET_EXTS → skip ByteLatticeAnalyzer
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>5. ByteLatticeAnalyzer         AnomalousBlob? → antipattern:agnostic_shield_anomaly
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>6. Extract added lines         &quot;+&quot;-prefixed diff lines only
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>7. Tree-sitter parse           grammar for lang; ERROR/MISSING nodes → neutral score
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>8. Structural hashing          BLAKE3 exact + SimHash fuzzy per function/method
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>9. Logic clone detection       Hamming(a, b) ≤ 3 → Refactor; 4–9 → Zombie
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>10. find_slop(lang, source)    Language-specific AST antipatterns (see Threat Matrix)
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>11. check_entropy(patch_bytes) NCD verbosity gate (zstd ratio &lt; 0.05)
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>12. binary_hunter::scan()      AhoCorasick 7-pattern compiled payload scan
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>13. CommentScanner             Banned-phrase detection in added comment nodes
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>14. is_pr_unlinked(pr_body)    No linked issue → +20 pts
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>15. Collider lookup            LshIndex.query(PrDeltaSignature) → collided_pr_numbers
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>16. Necrotic Hydration check   backlog_pruner verdict → necrotic_flag
+</code></pre></div>
+<h3 id="stage-4-bounce-log-persistence">Stage 4 — Bounce Log Persistence</h3>
+<p>Each PR result appended to <code>&lt;repo_dir&gt;/.janitor/bounce_log.ndjson</code> via <code>append_bounce_log()</code>.
+<code>f.sync_all()</code> called after every write — survives SIGKILL.</p>
+<h3 id="stage-5-global-aggregation-post-all-repos">Stage 5 — Global Aggregation (post all repos)</h3>
+<p>Two threads spawned in parallel after sequential repo processing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Thread A: janitor report --global --format pdf  → &lt;gauntlet_dir&gt;/global_report.pdf
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Thread B: janitor export --global               → &lt;gauntlet_dir&gt;/export.csv
+</code></pre></div>
+<hr />
+<h2 id="iv-the-threat-matrix">IV. THE THREAT MATRIX</h2>
+<p>All threats detected by <code>PatchBouncer::bounce()</code> in <code>crates/forge/src/slop_filter.rs</code>.</p>
+<h3 id="tier-1-critical-threats-security-prefix-150intercept">Tier 1 — Critical Threats (<code>security:</code> prefix → $150/intercept)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Detector</th>
+<th>Condition</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>security:compiled_payload_anomaly</code></td>
+<td><code>binary_hunter</code></td>
+<td>ELF magic <code>\x7fELF</code>, WASM <code>\x00asm\x01\x00\x00\x00</code>, PE <code>MZ\x90\x00\x03</code>, <code>/bin/sh\x00</code>, <code>cmd.exe\x00</code>, <code>stratum+tcp://</code>, <code>stratum2+tcp://</code></td>
+<td>+50 per match</td>
+</tr>
+<tr>
+<td>Swarm Collision</td>
+<td><code>LshIndex</code></td>
+<td><code>collided_pr_numbers</code> non-empty</td>
+<td>Categorical → $150 billing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tier-2-architectural-antipatterns-ast-derived">Tier 2 — Architectural Antipatterns (AST-derived)</h3>
+<p>Detected by <code>find_slop(lang, source)</code> in <code>crates/forge/src/slop_hunter.rs</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Pattern</th>
+<th>Severity</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>YAML</td>
+<td><code>VirtualService</code>/<code>Ingress</code>/<code>HTTPRoute</code>/<code>Gateway</code> with <code>hosts: ["*"]</code></td>
+<td>Critical</td>
+<td>50</td>
+</tr>
+<tr>
+<td>C</td>
+<td><code>gets()</code> call (removed in C11; unbounded buffer overflow)</td>
+<td>Critical</td>
+<td>50</td>
+</tr>
+<tr>
+<td>HCL/Terraform</td>
+<td>Open CIDR <code>0.0.0.0/0</code> in ingress rule</td>
+<td>Critical</td>
+<td>50</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tier-3-ncd-verbosity-antipattern-prefix-warning-tier">Tier 3 — NCD Verbosity (<code>antipattern:</code> prefix → Warning tier)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Detector</th>
+<th>Condition</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>antipattern:ncd_anomaly</code></td>
+<td><code>check_entropy</code></td>
+<td><code>compressed/raw &lt; 0.05</code> AND patch ≥ 256 bytes</td>
+<td>10</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical distinction</strong>: <code>antipattern:</code> prefix — NOT <code>security:</code>. <code>is_critical_threat()</code> gates on <code>"security:"</code>. NCD intentionally uses <code>antipattern:</code> to avoid $150 categorical billing.</p>
+<h3 id="tier-4-structural-quality">Tier 4 — Structural Quality</h3>
+<table>
+<thead>
+<tr>
+<th>Detector</th>
+<th>Condition</th>
+<th>Score Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Logic clone detection</td>
+<td>Hamming ≤ 3 (Refactor-class similarity)</td>
+<td>+5 per clone pair (capped at 50 pairs)</td>
+</tr>
+<tr>
+<td>Zombie symbols</td>
+<td>Dead body hash matches symbol in registry</td>
+<td>+10 per zombie</td>
+</tr>
+<tr>
+<td>Comment violations</td>
+<td>Banned phrase in added comment</td>
+<td>+5 per violation</td>
+</tr>
+<tr>
+<td>Unlinked PR</td>
+<td>No issue reference in PR body</td>
+<td>+20</td>
+</tr>
+<tr>
+<td>Hallucinated security fix</td>
+<td>Security keywords, non-code-only diff</td>
+<td>+100</td>
+</tr>
+</tbody>
+</table>
+<h3 id="bypass-rules">Bypass Rules</h3>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ext in IAC_TEXT_EXTS</code> (<code>nix lock json toml yaml yml csv</code>)</td>
+<td>Skip <code>ByteLatticeAnalyzer</code></td>
+</tr>
+<tr>
+<td><code>ext in BINARY_ASSET_EXTS</code> (<code>wasm woff woff2 eot ttf png jpg jpeg gif ico zip gz tar pdf</code>)</td>
+<td>Skip <code>ByteLatticeAnalyzer</code></td>
+</tr>
+<tr>
+<td>patch &gt; 1 MiB</td>
+<td>Skip entire file</td>
+</tr>
+<tr>
+<td>Nix entities</td>
+<td><code>Protection::WisdomRule</code> — all symbols shielded from dead-code classification</td>
+</tr>
+<tr>
+<td>Bot author (<code>app/</code> prefix, <code>[bot]</code> suffix, trusted list, <code>forge.automation_accounts</code>)</td>
+<td>Score still computed; billing classification unchanged</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="v-the-actuarial-ledger">V. THE ACTUARIAL LEDGER</h2>
+<h3 id="classification-function-cratesclisrcreportrs">Classification Function (<code>crates/cli/src/report.rs</code>)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">pub</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">is_critical_threat</span><span class="p">(</span><span class="n">e</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">BounceLogEntry</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="n">e</span><span class="p">.</span><span class="n">antipatterns</span><span class="p">.</span><span class="n">iter</span><span class="p">().</span><span class="n">any</span><span class="p">(</span><span class="o">|</span><span class="n">a</span><span class="o">|</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">contains</span><span class="p">(</span><span class="s">&quot;security:&quot;</span><span class="p">))</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">        </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="n">e</span><span class="p">.</span><span class="n">collided_pr_numbers</span><span class="p">.</span><span class="n">is_empty</span><span class="p">()</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="billing-tiers">Billing Tiers</h3>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Condition</th>
+<th>Rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Critical Threat</strong></td>
+<td><code>is_critical_threat(e) == true</code></td>
+<td>$150 per intercept</td>
+</tr>
+<tr>
+<td><strong>GC-only Necrotic</strong></td>
+<td><code>necrotic_flag.is_some()</code> OR <code>!zombie_deps.is_empty()</code> AND NOT critical</td>
+<td>$20 per intercept</td>
+</tr>
+<tr>
+<td><strong>StructuralSlop</strong></td>
+<td><code>slop_score &gt; 0</code> AND NOT critical AND NOT necrotic</td>
+<td>$20 per intercept</td>
+</tr>
+<tr>
+<td><strong>Boilerplate</strong></td>
+<td><code>slop_score == 0</code>, no threat signal</td>
+<td>$0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="score-formula-slopscorescore">Score Formula (<code>SlopScore::score()</code>)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>score = (logic_clones_found.min(50) × 5)
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>      + (zombie_symbols_added × 10)
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>      + (antipattern_score.min(500))      ← sum of Severity::points() per finding
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>      + (comment_violations × 5)
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>      + (unlinked_pr × 20)
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>      + (hallucinated_security_fix × 100)
+</code></pre></div>
+<p><code>dead_symbols_added</code> is tracked but <strong>excluded from score()</strong> (v7.6.2 — FFI false-positive elimination).</p>
+<h3 id="total-economic-impact-tei">Total Economic Impact (TEI)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>critical_threats_count    = entries where is_critical_threat()
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gc_only_count             = entries where necrotic_flag.is_some() AND NOT is_critical_threat()
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>structural_slop_count     = entries where slop_score &gt; 0 AND NOT critical AND NOT necrotic
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>total_actionable_intercepts = critical_threats_count + gc_only_count + structural_slop_count
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>ci_compute_saved_usd    = critical_threats_count × $150
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>gc_value_usd            = gc_only_count × $20
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>structural_slop_usd     = structural_slop_count × $20
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>total_economic_impact   = ci_compute_saved_usd + gc_value_usd + structural_slop_usd
+</code></pre></div>
+<h3 id="csv-column-schema-16-columns-exact-order">CSV Column Schema (16 columns, exact order)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a> 1. PR_Number
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a> 2. Author
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a> 3. Score
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a> 4. Threat_Class          &quot;Critical&quot; | &quot;Necrotic&quot; | &quot;StructuralSlop&quot; | &quot;Boilerplate&quot;
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a> 5. Unlinked_PR
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a> 6. Logic_Clones
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a> 7. Antipattern_IDs       pipe-delimited rule labels (e.g. security:compiled_payload_anomaly|antipattern:ncd_anomaly)
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a> 8. Collided_PRs          pipe-delimited collided PR numbers; empty if none
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a> 9. Time_Saved_Hours      necrotic_count × triage_minutes_per_finding ÷ 60 (default 12 min; configurable via [billing] in janitor.toml)
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>10. Operational_Savings_USD ($150 critical / $20 GC-only / $0 otherwise; rates configurable via [billing] in janitor.toml)
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>11. Timestamp
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>12. PR_State
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>13. Is_Bot
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>14. Repo_Slug
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>15. Commit_SHA            Git SHA of the PR head at bounce time; from --head or GITHUB_SHA; empty when unavailable
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>16. Policy_Hash           BLAKE3 hex digest of janitor.toml at bounce time; empty when no manifest present (SOC 2 audit trail)
+</code></pre></div>
+<p><strong><code>[billing]</code> TOML table</strong> (override actuarial defaults):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[billing]</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">triage_minutes_per_finding</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">12.0</span><span class="w">   </span><span class="c1"># senior-engineer minutes per finding (Workslop 2026 default)</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">critical_threat_usd</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="mf">150.0</span><span class="w">  </span><span class="c1"># billing rate for Critical Threats</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">necrotic_usd</span><span class="w">               </span><span class="o">=</span><span class="w"> </span><span class="mf">20.0</span><span class="w">   </span><span class="c1"># billing rate for Necrotic GC flags</span>
+</code></pre></div></p>
+<p><strong><code>[webhook]</code> TOML table</strong> (SIEM / Slack / Teams integration):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[webhook]</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">url</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://hooks.slack.com/services/...&quot;</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">secret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;env:JANITOR_WEBHOOK_SECRET&quot;</span><span class="w">   </span><span class="c1"># or literal string for dev</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;critical_threat&quot;</span><span class="p">]</span><span class="w">            </span><span class="c1"># &quot;critical_threat&quot; | &quot;necrotic_flag&quot; | &quot;all&quot;</span>
+</code></pre></div></p>
+<h3 id="pdf-report-structure">PDF Report Structure</h3>
+<h4 id="global-report-render_global_markdown">Global Report (<code>render_global_markdown</code>)</h4>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 — Executive Summary</td>
+<td>Timestamp, repo count, PR count; Critical Threats / Necrotic GC / TEI table; methodology footnote</td>
+</tr>
+<tr>
+<td>2 — Threat Distribution</td>
+<td>ASCII bar chart — one line per repo, <code>█</code> Critical, <code>░</code> Necrotic</td>
+</tr>
+<tr>
+<td>3 — Repository Breakdown</td>
+<td>Table: Repository / PRs / Total Slop / Intercepts / Economic Impact / Worst PR</td>
+</tr>
+<tr>
+<td>4 — Top 10 Riskiest PRs</td>
+<td>Cross-repo PRs with score &gt; 50, ranked descending</td>
+</tr>
+<tr>
+<td>— Scoring Methodology</td>
+<td>Billing-tier table + score formula</td>
+</tr>
+<tr>
+<td>— Appendix: Full Audit Log</td>
+<td>Per-repo <code>\newpage</code> sections: metric table, Top 10 Sloppiest PRs, Top 10 Cleanest Contributors, C/C++ compile-time silos</td>
+</tr>
+</tbody>
+</table>
+<h4 id="single-repo-report-render_markdown">Single-Repo Report (<code>render_markdown</code>)</h4>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Executive Summary</td>
+<td>Workslop metric table (actionable intercepts, critical, GC, hours, TEI)</td>
+</tr>
+<tr>
+<td><em>(page break)</em></td>
+<td></td>
+</tr>
+<tr>
+<td>Scoring Methodology</td>
+<td>Billing-tier table + score formula</td>
+</tr>
+<tr>
+<td>Top 10 High-Risk PRs</td>
+<td>Table + antipattern detail expansion</td>
+</tr>
+<tr>
+<td>Necrotic PRs</td>
+<td>Backlog Pruner GC flags</td>
+</tr>
+<tr>
+<td>Structural Clones</td>
+<td>MinHash clone pairs</td>
+</tr>
+<tr>
+<td>Zombie Dependencies</td>
+<td>Manifest scan results</td>
+</tr>
+<tr>
+<td>Full PR Log</td>
+<td>Every PR scored &gt; 0</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vi-the-command-control-interface">VI. THE COMMAND &amp; CONTROL INTERFACE</h2>
+<p>Invoked via: <code>janitor dashboard</code>
+Crate: <code>crates/dashboard</code></p>
+<h3 id="mode-1-targetselection">Mode 1 — TargetSelection</h3>
+<p>Scans <code>&lt;gauntlet_dir&gt;</code> for cloned repositories. Displays them as a navigable list.
+Repositories with <code>bounce_log.ndjson</code> modified within the last <strong>10 seconds</strong> are tagged <code>[ AUDIT ACTIVE ]</code> (blinking).
+List rescans automatically every <strong>2 seconds</strong>.</p>
+<p><strong>Key Bindings:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>↑</code> / <code>↓</code></td>
+<td>Navigate repository list</td>
+</tr>
+<tr>
+<td><code>Enter</code></td>
+<td>Open repository in ActiveSurveillance mode</td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td>Quit</td>
+</tr>
+</tbody>
+</table>
+<h3 id="mode-2-activesurveillance-per-repo">Mode 2 — ActiveSurveillance (per-repo)</h3>
+<p>Full-screen view. Layout: title bar (3 rows) → tab selector (3 rows) → content (fill) → footer (1 row).
+Log file polled for changes every <strong>2 seconds</strong>.</p>
+<p><strong>Three tabs:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Index</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Live Telemetry</strong></td>
+<td>0</td>
+<td>PR delta feed: score, necrotic flag, clone count, antipattern detail strings, collided PR numbers</td>
+</tr>
+<tr>
+<td><strong>Structural Topology</strong></td>
+<td>1</td>
+<td>Top-10 C++ compile-time silos ranked by transitive reach (petgraph). C++ graph rebuilt every 5 seconds when empty.</td>
+</tr>
+<tr>
+<td><strong>Swarm Intelligence</strong></td>
+<td>2</td>
+<td>Structural clone cluster detection table: PR pairs, Jaccard similarity, band collisions</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key Bindings:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>←</code> / <code>→</code></td>
+<td>Change tab</td>
+</tr>
+<tr>
+<td><code>Esc</code> / <code>Backspace</code></td>
+<td>Return to TargetSelection</td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td>Quit</td>
+</tr>
+</tbody>
+</table>
+<p><em>(Mode 3 — Static Dashboard <code>draw_dashboard</code> removed in v7.9.1. The WOPR TUI is the sole production view.)</em></p>
+<hr />
+<h2 id="vii-operational-commands-complete-justfile-manifest">VII. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST</h2>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>just shell
+</code></pre></div>
+Drop into the Nix development environment (<code>nix develop</code>). All tools pinned via <code>flake.nix</code>.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>just init
+</code></pre></div>
+Scaffold workspace from scratch: write <code>Cargo.toml</code>, <code>mkdir crates/</code>, <code>cargo new</code> each crate. Destructive — resets existing workspace.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>just audit
+</code></pre></div>
+<strong>Definition of Done.</strong> Runs inside Nix shell if available:
+<code>cargo fmt --all -- --check</code> → <code>cargo clippy --workspace -- -D warnings</code> → <code>cargo check --workspace</code> → <code>cargo test --workspace</code></p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>just build
+</code></pre></div>
+<code>cargo build --release --workspace</code> (inside Nix shell if available).</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>just clean
+</code></pre></div>
+<code>cargo clean</code> + <code>find . -name "*.rkyv" -delete</code> — vaporises target artefacts and all rkyv registry files.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>just auth-refresh
+</code></pre></div>
+No-op. Token is injected at runtime via <code>--token</code> flag. Stateless auth model.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>just bump-version &lt;version&gt;
+</code></pre></div>
+Updates version strings in <code>Cargo.toml</code> (root + all <code>crates/</code> + <code>tools/</code>), <code>README.md</code>, <code>docs/index.md</code>, <code>ARCHITECTURE.md</code>, and <code>CLAUDE.md</code>. Runs <code>cargo check</code> as sanity pass.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>just release &lt;version&gt;
+</code></pre></div>
+Full release pipeline: <code>audit</code> → <code>bump-version</code> → <code>cargo build --release</code> → <code>strip target/release/janitor</code> → <code>git commit</code> → <code>git tag v&lt;version&gt;</code> → floating major tag (<code>v&lt;MAJOR&gt;</code>, force-pushed) → <code>git push</code> → <code>gh release create</code> → <code>mkdocs gh-deploy</code>.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>just run-gauntlet [*ARGS]
+</code></pre></div>
+Build <code>gauntlet-runner</code> (<code>cargo build --release -p gauntlet-runner</code>) then execute. Reads <code>gauntlet_targets.txt</code>. Uses <code>gh pr diff</code> subshells per PR (parallel-bounce mode). Accepts: <code>--pr-limit</code>, <code>--timeout</code>, <code>--targets</code>, <code>--gauntlet-dir</code>, <code>--out-dir</code>, <code>--resume</code>, <code>--concurrency</code> (0 = auto from RAM).</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>just hyper-gauntlet [*ARGS]
+</code></pre></div>
+Build <code>gauntlet-runner</code> + <code>cli</code> (<code>cargo build --release -p gauntlet-runner -p cli</code>) then execute with <code>--hyper --pr-limit 5000</code>. Clones repos once via libgit2, fetches all PR refs — zero <code>gh pr diff</code> subshells. Accepts same flags as <code>run-gauntlet</code>.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>just deploy-docs
+</code></pre></div>
+<code>uv run --with "mkdocs-material&lt;9.6" --with "mkdocs&lt;2" mkdocs gh-deploy --force</code> — builds and pushes MkDocs site to GitHub Pages.</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>just sync
+</code></pre></div>
+<code>rsync -av --delete</code> to <code>/mnt/c/Projects/the-janitor/</code> — excludes <code>target/</code>, <code>.git/</code>, <code>.janitor/shadow_src/</code>.</p>
+<hr />
+<h2 id="viii-rd-vault-experimental-crates">VIII. R&amp;D VAULT — EXPERIMENTAL CRATES</h2>
+<p>Located at <code>crates/experimental/</code>. All four are workspace members but only <code>advanced_threats</code> is wired into the production <code>forge</code> pipeline.</p>
+<table>
+<thead>
+<tr>
+<th>Crate</th>
+<th>File</th>
+<th>Status</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>advanced_threats</code></td>
+<td><code>binary_hunter.rs</code></td>
+<td><strong>PRODUCTION</strong> (wired into <code>slop_filter.rs</code> + <code>cli</code>)</td>
+<td>Zero-allocation AhoCorasick scanner for ELF/PE/WASM/miner byte patterns. 7 patterns. <code>THREAT_LABEL = "security:compiled_payload_anomaly"</code>. +50 pts per match.</td>
+</tr>
+<tr>
+<td><code>backlog_pruner</code></td>
+<td>—</td>
+<td><strong>PRODUCTION</strong> (wired into <code>forge</code>)</td>
+<td>Necrotic GC flag assignment: classifies PRs as <code>SEMANTIC_NULL</code>, <code>GHOST_COLLISION</code>, or <code>UNWIRED_ISLAND</code>. Populates <code>necrotic_flag</code> on <code>SlopScore</code>.</td>
+</tr>
+<tr>
+<td><code>include_deflator</code></td>
+<td>—</td>
+<td><strong>PRODUCTION</strong> — graduated v7.9.2. C/C++ transitive header dependency analyser. IncludeGraphBuilder used in git_drive.rs; powers architecture:compile_time_bloat and architecture:graph_entanglement antipatterns and WOPR Structural Topology tab.</td>
+<td>C/C++ compile-time silo analysis</td>
+</tr>
+<tr>
+<td><code>phantom_ffi_gate</code></td>
+<td>—</td>
+<td><strong>DELETED (v7.9.1)</strong></td>
+<td>Architecture requires full-repo C++ registry (not patch-scope). Cannot be wired into <code>PatchBouncer::bounce()</code> — only produces false negatives on single-file diffs.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="ix-final-version">IX. FINAL VERSION</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>7.9.4
+</code></pre></div>
+<p>Extracted from <code>[workspace.package].version</code> in root <code>Cargo.toml</code>.</p>
+<p>Release profile: <code>opt-level = "z"</code>, <code>lto = true</code>, <code>codegen-units = 1</code>, <code>strip = true</code>, <code>panic = "abort"</code>.
+MSRV: <code>rust-version = "1.88"</code> (enforced by CI MSRV workflow).
+Edition: <code>2021</code>.
+License: <code>BUSL-1.1</code> (all workspace crates via <code>license.workspace = true</code>).</p>
+<h3 id="v794-architecture-inversion-implementation">v7.9.4 — Architecture Inversion Implementation</h3>
+<p>Architecture Inversion (Steps 1–4 complete):</p>
+<ol>
+<li>
+<p><strong>Governor: <code>POST /v1/analysis-token</code></strong> — issues a short-lived (5-min TTL) Ed25519-signed JWT scoped to <code>{repo}:{pr}:{head_sha}</code>. Rate-limited: same (repo, PR) pair cannot get a new token within 60 s. Controlled by <code>GOVERNOR_INVERT_MODE=1</code>.</p>
+</li>
+<li>
+<p><strong>CLI: <code>--report-url</code> + <code>--analysis-token</code></strong> — after <code>append_bounce_log</code>, if both flags are set, POSTs the <code>BounceLogEntry</code> JSON to the Governor's <code>/v1/report</code> with <code>Authorization: Bearer &lt;token&gt;</code>. Non-fatal: source code stays on the runner.</p>
+</li>
+<li>
+<p><strong>Governor: <code>POST /v1/report</code></strong> — verifies the JWT, checks <code>commit_sha == claims.head_sha</code>, retrieves the pending check from <code>pending_checks</code> DashMap, updates the GitHub Check Run, removes the entry. Only active in invert mode.</p>
+</li>
+<li>
+<p><strong>GitHub Action: <code>invert_mode</code> + <code>governor_url</code> inputs</strong> — pre-bounce step fetches the analysis token from <code>/v1/analysis-token</code>; token is passed to <code>janitor bounce --report-url --analysis-token</code>.</p>
+</li>
+</ol>
+<p>New env var: <code>GOVERNOR_INVERT_MODE=1</code> — gates all inversion behaviour in the Governor. Default: <code>0</code> (legacy clone path).
+New CLI flags: <code>janitor bounce --report-url &lt;url&gt; --analysis-token &lt;jwt&gt;</code>
+New <code>AppState</code> fields: <code>invert_mode: bool</code>, <code>token_rate_limit: DashMap</code>, <code>pending_checks: DashMap</code></p>
+<hr />
+<p><em>End of SOVEREIGN BRIEFING.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.60a45f97.min.js"></script>
+      
+    
+  </body>
+</html>
