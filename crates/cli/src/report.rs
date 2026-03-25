@@ -820,10 +820,6 @@ fn sanitize_latex_safe(input: &str) -> String {
 pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
     let mut out = String::with_capacity(4096);
 
-    // Pandoc YAML metadata — loads the needspace package into the LaTeX preamble
-    // so that \needspace{N\baselineskip} soft page-break guards compile cleanly.
-    out.push_str("---\nheader-includes:\n  - \\usepackage{needspace}\n---\n\n");
-
     // Compact LaTeX settings: tighter paragraph spacing and table row height,
     // matching the global-report density so summary tables fit on fewer pages.
     out.push_str("```{=latex}\n\\setlength{\\parskip}{2pt plus 1pt minus 1pt}\n\\renewcommand{\\arraystretch}{0.9}\n```\n\n");
@@ -1642,10 +1638,6 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     let gc_only = actionable.saturating_sub(critical);
     let tei = critical * 150 + gc_only * 20;
     let timestamp = crate::utc_now_iso8601();
-
-    // Pandoc YAML metadata — loads the needspace package into the LaTeX preamble
-    // so that \needspace{N\baselineskip} soft page-break guards compile cleanly.
-    out.push_str("---\nheader-includes:\n  - \\usepackage{needspace}\n---\n\n");
 
     // ── Page 1 — Executive Summary ─────────────────────────────────────────
     // Compact the global summary page: tighter paragraph skip + table row height.
