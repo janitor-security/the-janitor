@@ -4,9 +4,31 @@
 
 ---
 
+## Metadata
+
+- **Category (Primary)**: Security
+- **Category (Secondary)**: AI Assisted
+- **Support Contact**: sales@thejanitor.app
+- **Source Repository**: https://github.com/janitor-security/the-janitor
+
+---
+
 ## Short Description (120 chars max)
 
 Free structural firewall for AI-generated PRs. Detects security antipatterns and zombie deps. Your code never leaves your runner.
+
+---
+
+## Introductory Description
+
+Janitor Sentinel is a zero-upload structural firewall for AI-generated pull requests.
+The Janitor engine runs entirely inside your own GitHub Actions runner — your source
+code never leaves your infrastructure. The Governor backend receives only a scored
+analysis result, not your code.
+
+Every pull request is evaluated against 23 programming languages using tree-sitter
+AST analysis, MinHash clone detection, and entropy-based anomaly classification.
+Findings are surfaced as a GitHub Check Run and inline SARIF annotations in the PR diff.
 
 ---
 
@@ -24,41 +46,103 @@ checks, or human reviewers who are moving at AI speed.
 The result: technical debt that compounds silently, security antipatterns that land in
 main, and a review process that is theatre rather than substance.
 
-### What Janitor Sentinel Does
+### Capabilities
 
-Sentinel is a **zero-upload** structural firewall. The Janitor engine runs entirely
-inside your own GitHub Actions runner — your source code never leaves your infrastructure.
-The Governor (Sentinel's backend) only receives a scored analysis result, not the code.
+**Security antipattern detection** — named rules, not heuristics:
 
-Each PR is evaluated using a zero-disk-checkout merge simulation against the actual diff
-— not the full file — across 23 programming languages using tree-sitter AST analysis.
-
-**Security antipatterns** are detected by name:
-
-- C: `gets()`, `strcpy()`, `sprintf()`, `scanf()` — buffer overflow families
-- YAML: wildcard `hosts: ["*"]` in VirtualService/Ingress/HTTPRoute/Gateway
-- HCL/Terraform: open CIDR `0.0.0.0/0` in ingress rules
-- Python: `subprocess(..., shell=True)` injection vectors
+- C/C++: `gets()`, `strcpy()`, `sprintf()`, `scanf()` — buffer overflow families
+- YAML: wildcard `hosts: ["*"]` in VirtualService / Ingress / HTTPRoute / Gateway
+- HCL/Terraform: open CIDR `0.0.0.0/0` in ingress rules; S3 public ACL grants
+- Python: `subprocess(..., shell=True)` — shell injection vectors
 - JavaScript/TypeScript: `innerHTML` assignment sinks
-- AWS: S3 public ACL grants
 
-**Swarm clone detection** uses MinHash LSH (8 bands × 8 rows) to find PRs that share
-≥85% structural similarity — the fingerprint of AI-generated patch floods where dozens
-of contributors submit nearly identical changes.
+**Swarm clone detection** — MinHash LSH (8 bands × 8 rows) identifies PRs sharing
+≥85% structural AST similarity. Flags AI-generated patch floods before they merge.
 
-**NCD verbosity gate** uses zstd compression to detect machine-generated boilerplate:
-if a patch compresses to <15% of its original size, it is flagged as a verbosity bomb.
+**NCD verbosity gate** — zstd compression ratio detects machine-generated boilerplate.
+A patch that compresses to <15% of its original size is flagged as a verbosity bomb.
 
-**Zombie dependency detection** scans Cargo.toml, package.json, requirements.txt, and
-go.mod for dependencies that were previously removed and are being re-introduced.
+**Zombie dependency detection** — scans `Cargo.toml`, `package.json`,
+`requirements.txt`, and `go.mod` for dependencies previously removed and being
+re-introduced.
 
-**What the developer sees**: a GitHub Check Run with the Integrity Score, inline PR
-annotations via Code Scanning (GHAS), and a CycloneDX v1.5 CBOM bond signed with
-ML-DSA-65 (FIPS 204) for every clean PR.
+**Entropy anomaly classification** — `ByteLatticeAnalyzer` flags blobs with entropy
+outside the natural code range (2.0–5.5 bits/byte) without requiring grammar support.
+Language-agnostic binary and generated-code detection.
 
-**Policy control**: drop a `janitor.toml` at the repository root to configure the score
-threshold, issue-link requirements, refactor bonuses, and automation account exemptions.
-See the [governance documentation](https://thejanitor.app/governance).
+**23-language AST support** — Rust, Python, JavaScript, TypeScript, Go, C, C++, Java,
+Ruby, PHP, Lua, Nix, Swift, Scala, C#, HCL, YAML, Bash, and more via tree-sitter.
+
+### Benefits
+
+- **Zero-upload privacy** — your source code is never transmitted to any third-party
+  server. The engine runs on your runner; the Governor receives only the score.
+- **No per-seat limits** — the free CLI tier is uncapped. Scan every PR in every repo.
+- **Stateless by design** — the Governor resolves the Check Run via the GitHub API on
+  every report. No in-memory state, no race conditions on deploy.
+- **Policy as code** — drop a `janitor.toml` at the repository root. Score threshold,
+  issue-link requirements, refactor bonuses, and automation account exemptions are all
+  version-controlled alongside the code they govern.
+- **Instant SARIF integration** — findings appear as inline Code Scanning annotations
+  in the PR diff with no additional configuration.
+
+### Getting Started
+
+1. Install the action from the GitHub Marketplace.
+2. Add the workflow to your repository:
+
+```yaml
+name: Janitor Firewall
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: janitor-security/the-janitor@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          installation_id: ${{ vars.JANITOR_INSTALLATION_ID }}
+```
+
+3. The engine builds from source on your runner, extracts the PR diff, and POSTs the
+   scored result to the Governor. The Governor issues the "Janitor Integrity Check"
+   Check Run on the PR.
+
+For Team Tier governance (automated Check Run gating, CBOM bonding, org-wide policy),
+see https://thejanitor.app.
+
+### Example Findings
+
+**Security: buffer overflow vector (C)**
+```
+antipattern:security:c_gets — gets() detected in src/io/reader.c:47
+Score contribution: +50 pts | Threat class: Critical
+```
+
+**IaC: open ingress (Terraform)**
+```
+antipattern:security:open_cidr — 0.0.0.0/0 ingress in infra/sg.tf:23
+Score contribution: +50 pts | Threat class: Critical
+```
+
+**Zombie dependency (Cargo.toml)**
+```
+zombie:dep:openssl — previously removed dependency re-introduced
+Score contribution: +10 pts
+```
+
+**Swarm clone (structural similarity)**
+```
+clone:ast_similarity — PR shares 91% AST topology with PR #4821
+Score contribution: +5 pts per clone pair
+```
 
 ### The Proof
 
@@ -68,49 +152,64 @@ Tauri, Redis, Next.js, Home Assistant, Ansible, Cloudflare Workers SDK, LangChai
 Rails, Laravel, Apple/Swift, ASP.NET Core, OkHttp, Terraform, Neovim.
 
 In the Godot Engine audit: 82% of human-authored PRs were unlinked (no issue reference).
-In NixOS/nixpkgs: the full automation shield correctly classified all `r-ryantm` and
-NixOS CI bot PRs as automation — zero false positives against 32 consecutive bot PRs.
+In NixOS/nixpkgs: the automation shield correctly classified all `r-ryantm` and NixOS CI
+bot PRs as automation — zero false positives against 32 consecutive bot PRs.
 
-Scans 3.5M LOC in <33 seconds on a 2019 Dell Inspiron with 8GB RAM. This is not a
-cloud-scale service pretending to be a developer tool. It runs on the hardware you own.
+Scans 3.5M LOC in <33 seconds on a 2019 Dell Inspiron with 8 GB RAM.
 
-### Pricing
+---
 
-**The Janitor CLI is free.** Install it from the GitHub Marketplace at no cost.
-The core firewall engine — AST analysis, security antipattern detection, zombie
-dependency scanning, clone detection — runs entirely on your own runner with no
-usage limits and no per-seat fees.
+## Pricing
 
-**Janitor Sentinel (Enterprise)** is available directly at
-[https://thejanitor.app](https://thejanitor.app) for teams that need the
-Governor backend: centralized Check Run gating, SARIF Code Scanning integration,
-CycloneDX CBOM attestation bonds, and `janitor.toml` policy-as-code enforcement
-across an organization.
+**The Marketplace listing is free.** The Janitor CLI installs at no cost with no usage
+limits and no per-seat fees. The full firewall engine — AST analysis, security
+antipattern detection, zombie dependency scanning, clone detection — runs on your own
+runner indefinitely.
+
+**Team Tier ($499/yr)** is available directly at
+[https://thejanitor.app](https://thejanitor.app). It unlocks:
+
+- Automated Sentinel governance via the Governor backend
+- GitHub Check Run gating (pass/fail on the PR)
+- Inline SARIF Code Scanning annotations
+- CycloneDX v1.5 CBOM attestation bonds (PQC-signed)
+- `janitor.toml` policy-as-code enforcement across your organization
+- Email support
 
 | Tier | Price | What you get |
 |---|---|---|
 | **Janitor CLI** | **Free** | Core firewall engine on your runner. No limits. |
-| **Sentinel Enterprise** | $499/yr (via [thejanitor.app](https://thejanitor.app)) | Governor backend, Check Run gating, SARIF, CBOM bonds, org policy |
-
-No per-seat limits at either tier.
+| **Team Tier** | $499/yr via [thejanitor.app](https://thejanitor.app) | Governor backend, Check Run gating, SARIF, CBOM bonds, org policy |
 
 ---
 
-## Screenshots Required
+## Screenshot Manifest
 
-The following four screenshots need to be captured before submitting to the Marketplace:
+Four screenshots are required for the Marketplace submission:
 
-1. **Check Run — failure case**: A PR check run showing "Janitor: Code Quality Gate
-   Failed" with the full integrity summary (antipatterns found, score formula, threat
-   classification).
+1. **Failure Case** — A PR Check Run showing "Janitor: Code Quality Gate Failed" with
+   the full integrity summary: antipatterns detected (by rule ID), threat classification
+   (Critical / Necrotic / Boilerplate), and the score formula breakdown.
 
-2. **Check Run — success case**: A PR check run showing "Janitor: Clean — PQC Bond
-   Issued" with the Vouch Identity Verified banner (if applicable).
+2. **Success Case** — A PR Check Run showing "Janitor: Clean — PQC Bond Issued" with
+   the integrity score at zero and the Vouch Identity Verified banner confirming the
+   CycloneDX attestation bond was issued.
 
-3. **Code Scanning annotations (SARIF)**: The GitHub PR diff view showing inline SARIF
-   annotations from Sentinel (e.g. a `gets()` or open-CIDR finding highlighted in the
-   diff gutter).
+3. **SARIF Code Scanning Annotations** — The GitHub PR diff view showing inline Code
+   Scanning annotations from Sentinel (e.g. a `gets()` finding or an open-CIDR rule
+   highlighted in the diff gutter with the rule ID and remediation hint).
 
-4. **janitor.toml policy-as-code**: A repository's `janitor.toml` in the GitHub UI,
-   showing the policy-as-code configuration committed alongside the code it governs
-   (score threshold, issue-link requirement, automation account exemptions).
+4. **janitor.toml Policy-as-Code** — A repository's `janitor.toml` open in the GitHub
+   file browser, showing the policy configuration committed alongside the code it
+   governs: `min_slop_score`, `require_issue_link`, automation account exemptions.
+
+---
+
+## Links
+
+- **Source**: https://github.com/janitor-security/the-janitor
+- **Documentation**: https://thejanitor.app/docs
+- **Governance**: https://thejanitor.app/governance
+- **Privacy**: https://thejanitor.app/privacy
+- **Terms**: https://thejanitor.app/terms
+- **Support**: sales@thejanitor.app
