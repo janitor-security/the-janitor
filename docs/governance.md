@@ -121,6 +121,41 @@ secret = "env:JANITOR_WEBHOOK_SECRET"
 events = ["critical_threat", "necrotic_flag"]
 ```
 
+### Supported integrations
+
+Any HTTPS endpoint that accepts a POST request with a JSON body works. Common targets:
+
+| Platform | Endpoint type |
+|---|---|
+| Slack | Incoming Webhooks app URL |
+| Microsoft Teams | Workflows connector URL |
+| Datadog | `https://http-intake.logs.datadoghq.com/api/v2/logs` |
+| Splunk HEC | `https://<host>:8088/services/collector/event` |
+| Custom SIEM | Any HTTPS POST endpoint |
+
+### `janitor webhook-test`
+
+Send a synchronous test delivery without waiting for a real PR event.
+Reads `[webhook]` from `janitor.toml`, constructs a synthetic `critical_threat`
+payload, signs it, and POSTs it to the configured URL. Prints the HTTP status
+and any error to stderr.
+
+```sh
+janitor webhook-test [--repo <path>]
+```
+
+```
+info: webhook-test — URL: https://hooks.slack.com/services/...
+info: webhook-test — events filter: ["critical_threat", "necrotic_flag"]
+info: webhook-test — payload size: 412 bytes
+info: webhook-test — X-Janitor-Signature-256: sha256=a3f2...
+info: webhook-test — HTTP 200 ✓ delivery confirmed
+webhook-test OK — HTTP 200
+```
+
+The command exits non-zero on `4xx`/`5xx` or transport failure, making it
+safe to use as a CI smoke test for your SIEM integration.
+
 ## `[billing]` sub-table
 
 Overrides the default actuarial ledger rates. Change these to match your organisation's measured

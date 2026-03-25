@@ -49,14 +49,14 @@ Three capabilities your current toolchain cannot replicate:
 
 Every analysis — reference graph construction, dead symbol detection, structural clone hashing — executes via **memory-mapped file access**. No network call is made at any point in the dead-symbol pipeline. The analysis surface is your local machine. There is no exfiltration vector to audit.
 
-**Two deployment models — choose based on your security requirements:**
+**Zero-Upload Guarantee — both deployment models:**
 
 | Model | Where analysis runs | Source code leaves your environment? |
 |---|---|---|
-| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | Never — all analysis is local |
-| **Janitor Sentinel** (GitHub App) | Janitor's Fly.io infrastructure | Yes — repo is cloned serverside |
+| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | **Never** |
+| **Janitor Sentinel** (GitHub App) | Your GitHub Actions runner | **Never** — Governor receives only the score |
 
-The CLI and GitHub Action models provide full zero-upload guarantees. Janitor Sentinel is the managed deployment — source code is analysed on Janitor infrastructure and never retained beyond the duration of the scan.
+The Janitor engine runs entirely inside your own runner in both modes. The Governor (Sentinel's backend) receives a signed analysis result — not your source code. There is no server-side clone, no cloud SAST upload, no exfiltration vector.
 
 **Benchmark:** Scanned the Godot Engine — **3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python** — in **33 seconds**, consuming **58 MB of peak RAM**. On a standard CI runner. With zero OOM events and zero panics.
 
@@ -213,6 +213,44 @@ All operations run locally when using the CLI or GitHub Action. Your source code
 
 ---
 
+## ENTERPRISE INTEGRATIONS
+
+Every bounce event that trips the threat threshold fires an outbound webhook — signed with **HMAC-SHA256** and delivered with two headers your SIEM can verify without a shared secret rotation:
+
+```
+X-Janitor-Signature-256: sha256=<hex>
+X-Janitor-Event: critical_threat | necrotic_flag
+```
+
+The payload is a full `BounceLogEntry` in JSON — PR number, author, score, antipattern IDs, collided PR numbers, commit SHA, and policy hash. Wire it to any receiver in under five minutes:
+
+| Platform | How |
+|---|---|
+| **Slack** | Incoming Webhooks app → paste URL into `janitor.toml` `[webhook]` block |
+| **Microsoft Teams** | Workflows connector → POST to Teams channel webhook URL |
+| **Datadog** | Datadog HTTP Logs API endpoint (`https://http-intake.logs.datadoghq.com/api/v2/logs`) |
+| **Splunk** | Splunk HTTP Event Collector (`https://<host>:8088/services/collector/event`) |
+| **Any SIEM** | Any HTTPS endpoint that accepts a POST with a JSON body |
+
+```toml
+# janitor.toml
+[webhook]
+url    = "https://hooks.slack.com/services/T.../B.../..."
+secret = "env:JANITOR_WEBHOOK_SECRET"
+events = ["critical_threat", "necrotic_flag"]
+```
+
+Test your integration without waiting for a real PR:
+
+```sh
+janitor webhook-test --repo .
+# info: webhook-test — HTTP 200 ✓ delivery confirmed
+```
+
+See the [governance documentation](governance.md#webhook-sub-table) for the full `[webhook]` field reference.
+
+---
+
 ## ECONOMICS
 
 **The enforcement is free. The attestation is the product.**
@@ -225,7 +263,13 @@ All operations run locally when using the CLI or GitHub Action. Your source code
 
 The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.
 
-[**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)
+<div align="center">
+
+### [→ Get Janitor Sentinel — $499/yr](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
+
+*API token delivered by email within seconds of payment. No per-seat limits.*
+
+</div>
 
 ---
 

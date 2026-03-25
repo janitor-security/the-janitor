@@ -59,14 +59,14 @@ Two complementary shields eliminate false positives on legitimate non-applicatio
 
 Every analysis executes via **memory-mapped file access**. No network call is made during the dead-symbol pipeline.
 
-**Two deployment models — choose based on your security requirements:**
+**Zero-Upload Guarantee — both deployment models:**
 
 | Model | Where analysis runs | Source code leaves your environment? |
 |---|---|---|
-| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | Never — all analysis is local |
-| **Janitor Sentinel** (GitHub App) | Janitor's Fly.io infrastructure | Yes — repo is cloned serverside |
+| **CLI + GitHub Action** (`action.yml`) | Your GitHub Actions runner | **Never** |
+| **Janitor Sentinel** (GitHub App) | Your GitHub Actions runner | **Never** — Governor receives only the score |
 
-The CLI and GitHub Action models provide full zero-upload guarantees. Janitor Sentinel is the managed deployment — source code is analysed on Janitor infrastructure and never retained beyond the duration of the scan.
+The Janitor engine runs entirely inside your own runner in both modes. The Governor (Sentinel's backend) receives a signed analysis result — not your source code. No server-side clone. No SAST upload.
 
 **Benchmark:** 3.5 million lines of Godot Engine — **33 seconds, 58 MB peak RAM.** On a standard CI runner. Zero panics.
 
@@ -147,6 +147,24 @@ janitor clean ./src --force-purge
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
 | **Audit Attestation** | ML-DSA-65 (NIST FIPS 204) | CycloneDX v1.5 CBOMs issued by Janitor Sentinel on clean merge |
 
+## Enterprise Integrations
+
+Every `critical_threat` bounce fires an outbound webhook — HMAC-SHA256 signed, with `X-Janitor-Signature-256` and `X-Janitor-Event` headers. Wire to Slack, Microsoft Teams, Datadog, Splunk, or any HTTPS endpoint:
+
+```toml
+# janitor.toml
+[webhook]
+url    = "https://hooks.slack.com/services/..."
+secret = "env:JANITOR_WEBHOOK_SECRET"
+events = ["critical_threat", "necrotic_flag"]
+```
+
+Test without a live PR:
+
+```sh
+janitor webhook-test --repo .
+```
+
 ## Pricing
 
 **The enforcement is free. The attestation is the product.**
@@ -157,7 +175,9 @@ janitor clean ./src --force-purge
 | **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
 | **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 
-[**Activate Attestation → thejanitor.lemonsqueezy.com**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)
+### [→ Get Janitor Sentinel — $499/yr](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
+
+*API token delivered by email within seconds of payment. No per-seat limits.*
 
 ## CI Integration
 
