@@ -671,6 +671,23 @@ fn parse_wrangler_toml_content(content: &str, registry: &mut DependencyRegistry)
 ///
 /// Flags (tokens starting with `-`) and the install command itself are skipped.
 /// Each extracted name is registered as [`DependencyEcosystem::Apt`].
+/// Returns `true` if `name` is a syntactically valid apt/Debian package identifier.
+///
+/// Valid names start with an ASCII alphanumeric character and contain only
+/// `[a-zA-Z0-9+._-]` — shell artifacts like `>&2`, `2>&1`, `/dev/null`, `>`,
+/// `<`, and `=` are rejected before they can be registered as zombie dep names.
+///
+/// Reference: Debian Policy §5.6.1 (package names).
+#[inline]
+fn is_valid_apt_name(name: &str) -> bool {
+    let mut chars = name.bytes();
+    match chars.next() {
+        Some(b) if b.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    chars.all(|b| matches!(b, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'+' | b'.' | b'_' | b'-'))
+}
+
 pub(crate) fn parse_shell_script_content(content: &str, registry: &mut DependencyRegistry) {
     const INSTALL_TRIGGERS: &[&str] = &[
         "apt-get install",
@@ -705,6 +722,13 @@ pub(crate) fn parse_shell_script_content(content: &str, registry: &mut Dependenc
             // Strip trailing backslash continuations and trailing semicolons.
             let name = token.trim_end_matches(['\\', ';', '&', '|']);
             if name.is_empty() || name == "&&" || name == "||" {
+                continue;
+            }
+            // Reject shell artifacts: redirections (`>&2`, `2>&1`, `/dev/null`)
+            // and any token that is not a valid Debian/apt package identifier.
+            // Valid names: start with an alphanumeric and contain only
+            // [a-zA-Z0-9+._-] — no `>`, `<`, `&`, `/`, `=`, `(`, `)`.
+            if !is_valid_apt_name(name) {
                 continue;
             }
             registry.insert(DependencyEntry {

@@ -652,6 +652,18 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
     }
 }
 
+/// Map a machine-readable antipattern label to a concise human-readable display string.
+///
+/// Used only in the PDF/Markdown rendering layer — the raw machine IDs are
+/// preserved in `BounceLogEntry.antipatterns` and in the CSV export.
+fn humanize_antipattern_label(label: &str) -> std::borrow::Cow<'_, str> {
+    if label == "antipattern:ncd_anomaly" || label.starts_with("HighGenerativeVerbosity:") {
+        "AI Boilerplate Detected (NCD Ratio < 0.15)".into()
+    } else {
+        label.into()
+    }
+}
+
 /// Returns a short, human-readable label for the dominant violation in a bounce entry.
 ///
 /// Priority mirrors scoring weights: antipatterns (×50) > zombie symbols (×15) >
@@ -999,7 +1011,8 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             let author = html_escape(&sanitize_latex_safe(e.author.as_deref().unwrap_or("-")));
             out.push_str(&format!("- **PR {pr}** (`{author}`):\n"));
             for (desc, count) in group_strings(&e.antipatterns) {
-                let desc_s = sanitize_latex_safe(desc);
+                let display = humanize_antipattern_label(desc);
+                let desc_s = sanitize_latex_safe(&display);
                 if count > 1 {
                     out.push_str(&format!("  - {} (x{})\n", html_escape(&desc_s), count));
                 } else {

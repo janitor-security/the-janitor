@@ -743,11 +743,7 @@ impl PRBouncer for PatchBouncer {
             use crate::slop_hunter::{check_entropy, MIN_ENTROPY_RATIO};
             let ratio = check_entropy(source);
             if ratio < MIN_ENTROPY_RATIO {
-                vec![format!(
-                    "HighGenerativeVerbosity: NCD entropy ratio {ratio:.3} < threshold \
-                     {MIN_ENTROPY_RATIO} — patch is highly compressible, consistent \
-                     with AI-generated or auto-templated boilerplate (antipattern:ncd_anomaly)."
-                )]
+                vec!["antipattern:ncd_anomaly".to_owned()]
             } else {
                 vec![]
             }

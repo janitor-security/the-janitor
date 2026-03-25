@@ -115,6 +115,9 @@ fn antipattern_ids(entry: &crate::report::BounceLogEntry) -> String {
     if let Some(flag) = entry.necrotic_flag.as_deref() {
         parts.push(format!("backlog:{flag}"));
     }
+    if !entry.zombie_deps.is_empty() {
+        parts.push("architecture:zombie_dependency".to_owned());
+    }
     parts.extend(entry.antipatterns.iter().cloned());
     csv_sanitize(&parts.join("|"))
 }
