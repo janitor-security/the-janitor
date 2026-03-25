@@ -121,6 +121,116 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
 }
 
 // ---------------------------------------------------------------------------
+// webhook-test command
+// ---------------------------------------------------------------------------
+
+/// `janitor webhook-test` — synchronous test delivery to the configured webhook URL.
+///
+/// Loads `[webhook]` from `janitor.toml` in `repo`, constructs a synthetic
+/// `critical_threat` `BounceLogEntry`, signs it with HMAC-SHA256, and POSTs it
+/// synchronously.  Unlike `fire_webhook_if_configured` (which is non-blocking and
+/// best-effort), this function blocks and returns an error on failure so the
+/// customer gets clear terminal feedback.
+pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+
+    let policy = common::policy::JanitorPolicy::load(repo);
+    let cfg = &policy.webhook;
+
+    if cfg.url.is_empty() {
+        anyhow::bail!(
+            "No webhook URL configured. Add a [webhook] section to {}/janitor.toml",
+            repo.display()
+        );
+    }
+
+    eprintln!("info: webhook-test — URL: {}", cfg.url);
+    eprintln!("info: webhook-test — events filter: {:?}", cfg.events);
+
+    // ── Resolve secret ───────────────────────────────────────────────────────
+    let secret = if cfg.secret.starts_with("env:") {
+        let var_name = &cfg.secret[4..];
+        std::env::var(var_name).unwrap_or_else(|_| {
+            eprintln!("warning: env var '{var_name}' not set — delivering unsigned");
+            String::new()
+        })
+    } else {
+        cfg.secret.clone()
+    };
+
+    // ── Construct synthetic critical_threat payload ──────────────────────────
+    let dummy = BounceLogEntry {
+        pr_number: Some(0),
+        author: Some("janitor-webhook-test".to_string()),
+        timestamp: crate::utc_now_iso8601(),
+        slop_score: 150,
+        dead_symbols_added: 0,
+        logic_clones_found: 0,
+        zombie_symbols_added: 0,
+        unlinked_pr: 0,
+        antipatterns: vec!["security:unsafe_string_function".to_string()],
+        comment_violations: vec![],
+        min_hashes: vec![],
+        zombie_deps: vec![],
+        state: PrState::Open,
+        is_bot: false,
+        repo_slug: "janitor-webhook-test/test-repo".to_string(),
+        suppressed_by_domain: 0,
+        collided_pr_numbers: vec![],
+        necrotic_flag: None,
+        commit_sha: "0000000000000000000000000000000000000000".to_string(),
+        policy_hash: "test".to_string(),
+    };
+
+    let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
+    eprintln!("info: webhook-test — payload size: {} bytes", payload.len());
+
+    // ── HMAC-SHA256 signature ────────────────────────────────────────────────
+    let sig_header = if !secret.is_empty() {
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+        mac.update(payload.as_bytes());
+        let hex: String = mac
+            .finalize()
+            .into_bytes()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        let header = format!("sha256={hex}");
+        eprintln!("info: webhook-test — X-Janitor-Signature-256: {header}");
+        header
+    } else {
+        eprintln!("warning: webhook-test — no secret configured, sending unsigned");
+        String::new()
+    };
+
+    // ── Blocking POST ────────────────────────────────────────────────────────
+    let mut builder = ureq::post(&cfg.url)
+        .set("Content-Type", "application/json")
+        .set("X-Janitor-Event", "critical_threat");
+    if !sig_header.is_empty() {
+        builder = builder.set("X-Janitor-Signature-256", &sig_header);
+    }
+
+    match builder.send_string(&payload) {
+        Ok(resp) => {
+            let status = resp.status();
+            eprintln!("info: webhook-test — HTTP {status} ✓ delivery confirmed");
+            println!("webhook-test OK — HTTP {status}");
+        }
+        Err(ureq::Error::Status(code, resp)) => {
+            let body = resp.into_string().unwrap_or_default();
+            anyhow::bail!("webhook-test FAILED — HTTP {code}: {body}");
+        }
+        Err(e) => {
+            anyhow::bail!("webhook-test FAILED — transport error: {e}");
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // PrState
 // ---------------------------------------------------------------------------
 

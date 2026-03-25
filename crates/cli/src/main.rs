@@ -429,6 +429,18 @@ enum Commands {
         #[arg(long, default_value = "false")]
         resume: bool,
     },
+    /// Send a test webhook delivery to verify your SIEM/Slack integration.
+    ///
+    /// Reads `[webhook]` from `janitor.toml`, constructs a synthetic
+    /// `critical_threat` payload, and POSTs it to the configured URL
+    /// synchronously.  Prints the HTTP status and any error to stderr so
+    /// you can confirm receipt without waiting for a real PR event.
+    WebhookTest {
+        /// Repository root containing `janitor.toml`.
+        /// Defaults to the current directory.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -648,6 +660,7 @@ async fn main() -> anyhow::Result<()> {
             repo_slug.as_deref(),
             *resume,
         )?,
+        Commands::WebhookTest { repo } => report::cmd_webhook_test(repo)?,
     }
 
     Ok(())
