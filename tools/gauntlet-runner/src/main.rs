@@ -877,13 +877,15 @@ fn main() {
     // ── Aggregate report + export (parallel) ────────────────────────────────
     let pdf_out = cfg.out_dir.join("gauntlet_intelligence_report.pdf");
     let csv_out = cfg.out_dir.join("gauntlet_export.csv");
+    let json_out = cfg.out_dir.join("gauntlet_report.json");
     let gauntlet_dir = cfg.gauntlet_dir.clone();
     let janitor_bin = cfg.janitor_bin.clone();
 
     eprintln!(
-        "\nGenerating aggregate artefacts in parallel:\n  PDF → {}\n  CSV → {}",
+        "\nGenerating aggregate artefacts in parallel:\n  PDF  → {}\n  CSV  → {}\n  JSON → {}",
         pdf_out.display(),
-        csv_out.display()
+        csv_out.display(),
+        json_out.display(),
     );
 
     let janitor_pdf = janitor_bin.clone();
@@ -909,6 +911,27 @@ fn main() {
         )
     });
 
+    let janitor_json = janitor_bin.clone();
+    let gauntlet_json = gauntlet_dir.clone();
+    let json_path = json_out.clone();
+
+    let json_thread = std::thread::spawn(move || {
+        run_aggregate_command(
+            &janitor_json,
+            &[
+                "report",
+                "--global",
+                "--gauntlet",
+                gauntlet_json.to_str().unwrap_or("."),
+                "--format",
+                "json",
+                "--out",
+                json_path.to_str().unwrap_or("gauntlet_report.json"),
+            ],
+            "report --global --format json",
+        )
+    });
+
     let export_result = run_aggregate_command(
         &janitor_bin,
         &[
@@ -926,6 +949,10 @@ fn main() {
         .join()
         .unwrap_or_else(|_| Err("report thread panicked".to_owned()));
 
+    let json_result = json_thread
+        .join()
+        .unwrap_or_else(|_| Err("json report thread panicked".to_owned()));
+
     // ── Final status ─────────────────────────────────────────────────────────
     let mut exit_code = 0i32;
 
@@ -940,6 +967,13 @@ fn main() {
         Ok(()) => eprintln!("CSV export  OK → {}", csv_out.display()),
         Err(e) => {
             eprintln!("CSV export  FAILED: {e}");
+            exit_code = 1;
+        }
+    }
+    match json_result {
+        Ok(()) => eprintln!("JSON report OK → {}", json_out.display()),
+        Err(e) => {
+            eprintln!("JSON report FAILED: {e}");
             exit_code = 1;
         }
     }
