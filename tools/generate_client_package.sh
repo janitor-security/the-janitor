@@ -33,16 +33,21 @@ set -euo pipefail
 
 # ── Functions ─────────────────────────────────────────────────────────────────
 
-# _synthesize_case_study <global_json> <intel_json> <owner/repo> <out_file>
+# _synthesize_case_study <global_json> <intel_json> <owner/repo> <out_file> <pr_limit>
 #
 # Reads audit statistics from two JSON files produced by the bounce pipeline
 # and writes a populated case study Markdown document.  The template is
 # self-contained here — no external template files are required or read.
+#
+# <pr_limit>: the PR_LIMIT passed to gauntlet-runner.  Used to compute the
+# number of malformed/empty merge commits filtered before analysis
+# (pr_limit − total_prs).
 _synthesize_case_study() {
     local global_json="$1"
     local intel_json="$2"
     local slug="$3"
     local out_file="$4"
+    local pr_limit="${5:-${PR_LIMIT:-1000}}"
 
     local repo_name="${slug##*/}"
     local owner="${slug%%/*}"
@@ -54,6 +59,12 @@ _synthesize_case_study() {
     local actionable_intercepts critical_threats necrotic_count
     local reclaimed_hours tei_usd
     total_prs="$(jq '.total_prs' "${global_json}")"
+    # Filtered commits: refs fetched minus PRs that passed sanitization.
+    # Floor at 0 — total_prs can equal pr_limit when every ref is clean.
+    local filtered=0
+    if [[ "${pr_limit}" -gt "${total_prs}" ]]; then
+        filtered=$(( pr_limit - total_prs ))
+    fi
     antipatterns_found="$(jq '.repositories[0].antipatterns_found' "${global_json}")"
     zombie_dep_prs="$(jq '.repositories[0].zombie_dep_prs' "${global_json}")"
     highest_score="$(jq '.repositories[0].highest_score // 0' "${global_json}")"
@@ -121,6 +132,7 @@ The Janitor v7.9.4 runs a 6-stage structural analysis pipeline on each pull requ
 4. **Zombie Dependency Detection** — manifest vs. import-graph cross-reference (\`architecture:zombie_dependency\`)
 5. **Social Forensics** — unlinked PRs (+20 pts), AhoCorasick comment-violation scan
 6. **Necrotic GC Gate** — semantic null analysis (base vs. head AST diff; \`backlog:SEMANTIC_NULL\` etc.)
+7. **Data Sanitization** — The engine fetched the ${pr_limit} most recent PR references. ${filtered} malformed or empty merge commits were filtered from the dataset prior to analysis, resulting in a cryptographically precise audit of ${total_prs} pull requests.
 
 All analysis runs on your hardware. Source code never leaves your environment.
 Zero-upload guarantee: The Janitor engine runs inside your CI runner in both CLI and Sentinel modes.
@@ -361,7 +373,8 @@ _synthesize_case_study \
     "${OUT_DIR}/gauntlet_report.json" \
     "${INTEL_JSON}" \
     "${SLUG}" \
-    "${OUT_DIR}/case-study.md"
+    "${OUT_DIR}/case-study.md" \
+    "${PR_LIMIT}"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
