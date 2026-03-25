@@ -15,7 +15,7 @@
 
 ## Short Description (120 chars max)
 
-Free structural firewall for AI-generated PRs. Detects security antipatterns and zombie deps. Your code never leaves your runner.
+Free structural firewall for AI-generated PRs. Security antipatterns, zombie deps. Your code never leaves your runner.
 
 ---
 
