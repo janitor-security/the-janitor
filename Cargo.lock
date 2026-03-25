@@ -970,6 +970,7 @@ name = "gauntlet-runner"
 version = "7.9.4"
 dependencies = [
  "anyhow",
+ "common",
  "rayon",
  "serde",
  "serde_json",
