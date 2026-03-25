@@ -6,7 +6,7 @@
 
 ## Short Description (120 chars max)
 
-Zero-upload structural firewall for AI-generated PRs. Detects security antipatterns and zombie deps. Your code never leaves your runner.
+Free structural firewall for AI-generated PRs. Detects security antipatterns and zombie deps. Your code never leaves your runner.
 
 ---
 
@@ -74,13 +74,25 @@ NixOS CI bot PRs as automation — zero false positives against 32 consecutive b
 Scans 3.5M LOC in <33 seconds on a 2019 Dell Inspiron with 8GB RAM. This is not a
 cloud-scale service pretending to be a developer tool. It runs on the hardware you own.
 
-### Pricing Plans
+### Pricing
 
-| Plan | Price | Repositories | Support |
-|---|---|---|---|
-| Team Tier | $499/yr | Unlimited (single org) | Email |
+**The Janitor CLI is free.** Install it from the GitHub Marketplace at no cost.
+The core firewall engine — AST analysis, security antipattern detection, zombie
+dependency scanning, clone detection — runs entirely on your own runner with no
+usage limits and no per-seat fees.
 
-API tokens issued automatically on payment. No per-seat limits.
+**Janitor Sentinel (Enterprise)** is available directly at
+[https://thejanitor.app](https://thejanitor.app) for teams that need the
+Governor backend: centralized Check Run gating, SARIF Code Scanning integration,
+CycloneDX CBOM attestation bonds, and `janitor.toml` policy-as-code enforcement
+across an organization.
+
+| Tier | Price | What you get |
+|---|---|---|
+| **Janitor CLI** | **Free** | Core firewall engine on your runner. No limits. |
+| **Sentinel Enterprise** | $499/yr (via [thejanitor.app](https://thejanitor.app)) | Governor backend, Check Run gating, SARIF, CBOM bonds, org policy |
+
+No per-seat limits at either tier.
 
 ---
 
