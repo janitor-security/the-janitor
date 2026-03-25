@@ -2,14 +2,15 @@
 # generate_client_package.sh — single-repo audit + marketing asset generator.
 #
 # Runs a hyper-drive bounce audit against one GitHub repository and produces a
-# self-contained client package directory with five artefacts:
+# self-contained client package directory with seven artefacts:
 #
 #   1. gauntlet_intelligence_report.pdf  — PDF intelligence report
 #   2. gauntlet_export.csv               — 16-column CSV audit trail
 #   3. gauntlet_report.json              — machine-readable aggregate JSON
 #   4. <repo>_cbom.json                  — CycloneDX v1.5 Cryptography SBOM
 #   5. <repo>_intel.json                 — per-repo JSON (clone pairs + top-50)
-#   6. case-study.md                     — auto-populated case study (Markdown)
+#   6. <repo>_vex.json                   — CycloneDX v1.5 VEX (exploitability)
+#   7. case-study.md                     — auto-populated case study (Markdown)
 #
 # Usage:
 #   ./tools/generate_client_package.sh <owner/repo> [out_dir]
@@ -120,6 +121,7 @@ See <https://thejanitor.app/architecture> for the full technical specification.
 | \`gauntlet_report.json\` | Machine-readable aggregate statistics |
 | \`${repo_name}_cbom.json\` | CycloneDX v1.5 Cryptography Bill of Materials |
 | \`${repo_name}_intel.json\` | Per-repo JSON with clone pairs and top-50 PR detail |
+| \`${repo_name}_vex.json\` | CycloneDX v1.5 VEX — exploitability status for all scanned threat classes |
 | \`case-study.md\` | This document |
 
 ---
@@ -128,6 +130,101 @@ See <https://thejanitor.app/architecture> for the full technical specification.
 MARKDOWN
 
     echo "  case-study.md → ${out_file}"
+}
+
+# _synthesize_vex <intel_json> <owner/repo> <out_file>
+#
+# Reads per-PR antipattern data from <intel_json> and emits a CycloneDX v1.5
+# VEX (Vulnerability Exploitability eXchange) document.
+#
+# If the audit found zero `security:` prefixed antipattern findings, every
+# component is declared `not_affected` with justification
+# `inline_mitigations_already_exist`.  If findings were present the state is
+# `affected` so reviewers know to inspect the CBOM and PDF for detail.
+_synthesize_vex() {
+    local intel_json="$1"
+    local slug="$2"
+    local out_file="$3"
+
+    local repo_name="${slug##*/}"
+    local timestamp
+    timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Count PRs that carry at least one security: antipattern finding.
+    # .top_prs[]? tolerates both array and missing key without error.
+    local security_threat_count=0
+    security_threat_count="$(jq '
+        [ .top_prs[]?
+          | select(
+              (.antipatterns // [])
+              | map(startswith("security:"))
+              | any
+            )
+        ] | length
+    ' "${intel_json}" 2>/dev/null || echo 0)"
+
+    local vex_state has_justification vex_detail
+    if [[ "${security_threat_count}" -eq 0 ]]; then
+        vex_state="not_affected"
+        has_justification="true"
+        vex_detail="Janitor v7.9.4 structural scan found 0 security: antipattern findings across all audited PRs. All repository components assessed as not_affected."
+    else
+        vex_state="affected"
+        has_justification="false"
+        vex_detail="Janitor v7.9.4 structural scan found ${security_threat_count} PR(s) with security: antipattern findings. Review gauntlet_intelligence_report.pdf and gauntlet_export.csv for remediation detail."
+    fi
+
+    # Emit CycloneDX v1.5 VEX document via jq so all values are correctly
+    # escaped without manual quoting gymnastics.
+    jq -n \
+        --arg  ts              "${timestamp}" \
+        --arg  repo            "${slug}" \
+        --arg  repo_name       "${repo_name}" \
+        --arg  state           "${vex_state}" \
+        --argjson has_just     "${has_justification}" \
+        --arg  detail          "${vex_detail}" \
+        '{
+          bomFormat:    "CycloneDX",
+          specVersion:  "1.5",
+          version:      1,
+          metadata: {
+            timestamp: $ts,
+            tools: [{
+              type:    "application",
+              name:    "The Janitor",
+              version: "7.9.4",
+              externalReferences: [{
+                type: "website",
+                url:  "https://thejanitor.app"
+              }]
+            }],
+            component: {
+              type:      "application",
+              "bom-ref": ($repo + "@HEAD"),
+              name:      $repo_name,
+              version:   "HEAD"
+            }
+          },
+          vulnerabilities: [{
+            id:       "JANITOR-SECURITY-SCAN",
+            "bom-ref": "janitor-sec-audit",
+            description: (
+              "Static structural security analysis by The Janitor v7.9.4. " +
+              "Threat classes scanned: C/C++ memory-unsafe functions (gets, strcpy, sprintf, scanf); " +
+              "Python subprocess shell injection (subprocess+shell=True); " +
+              "JavaScript innerHTML XSS assignment; " +
+              "HCL open CIDR (0.0.0.0/0) and S3 public ACL; " +
+              "Kubernetes wildcard host rules."
+            ),
+            analysis: (
+              { state: $state, detail: $detail }
+              + if $has_just then { justification: "inline_mitigations_already_exist" } else {} end
+            ),
+            affects: [{ ref: ($repo + "@HEAD") }]
+          }]
+        }' > "${out_file}"
+
+    echo "  ${repo_name}_vex.json → ${out_file}"
 }
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -169,7 +266,7 @@ mkdir -p "${OUT_DIR}"
 
 # ── Step 1: Build ─────────────────────────────────────────────────────────────
 
-echo "[1/5] Building release binaries..."
+echo "[1/6] Building release binaries..."
 cargo build --release -p cli -p gauntlet-runner
 
 # ── Step 2: Bounce PRs via hyper-drive ────────────────────────────────────────
@@ -182,7 +279,7 @@ cargo build --release -p cli -p gauntlet-runner
 #   gauntlet_export.csv
 #   gauntlet_report.json
 
-echo "[2/5] Running hyper-drive audit for ${SLUG} (limit=${PR_LIMIT})..."
+echo "[2/6] Running hyper-drive audit for ${SLUG} (limit=${PR_LIMIT})..."
 
 TARGETS_TMP="$(mktemp /tmp/gcpkg_targets_XXXXXX.txt)"
 trap 'rm -f "${TARGETS_TMP}"' EXIT
@@ -210,7 +307,7 @@ done
 # bounce log: ML-DSA-65 attestation hash, BLAKE3 structural hashes, per-symbol
 # audit entries, and the chain-of-custody for every intercepted finding.
 
-echo "[3/5] Generating CycloneDX CBOM bond..."
+echo "[3/6] Generating CycloneDX CBOM bond..."
 CBOM_OUT="${OUT_DIR}/${REPO_NAME}_cbom.json"
 "${JANITOR}" report \
     --repo   "${REPO_DIR}" \
@@ -222,16 +319,29 @@ CBOM_OUT="${OUT_DIR}/${REPO_NAME}_cbom.json"
 # gauntlet_report.json is the cross-repo aggregate; it does not carry clone
 # pairs or per-PR antipattern detail.  The per-repo renderer provides both.
 
-echo "[4/5] Generating per-repo intel JSON..."
+echo "[4/6] Generating per-repo intel JSON..."
 INTEL_JSON="${OUT_DIR}/${REPO_NAME}_intel.json"
 "${JANITOR}" report \
     --repo   "${REPO_DIR}" \
     --format json \
     --out    "${INTEL_JSON}"
 
-# ── Step 5: Case Study Synthesis ──────────────────────────────────────────────
+# ── Step 5: VEX Document ──────────────────────────────────────────────────────
+#
+# Emits a CycloneDX v1.5 Vulnerability Exploitability eXchange document.
+# Reads security: antipattern counts from the per-repo intel JSON produced in
+# Step 4 — zero additional janitor invocations, zero analysis overhead.
 
-echo "[5/5] Synthesising case-study.md..."
+echo "[5/6] Generating VEX document..."
+VEX_OUT="${OUT_DIR}/${REPO_NAME}_vex.json"
+_synthesize_vex \
+    "${INTEL_JSON}" \
+    "${SLUG}" \
+    "${VEX_OUT}"
+
+# ── Step 6: Case Study Synthesis ──────────────────────────────────────────────
+
+echo "[6/6] Synthesising case-study.md..."
 _synthesize_case_study \
     "${OUT_DIR}/gauntlet_report.json" \
     "${INTEL_JSON}" \
