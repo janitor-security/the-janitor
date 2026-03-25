@@ -88,15 +88,17 @@ const CSV_HEADER: [&str; 16] = [
 
 /// Derive the `Threat_Class` string for a bounce log entry.
 ///
-/// - `"Critical"` — `is_critical_threat` is true (security antipattern or Swarm collision).
-/// - `"Necrotic"` — `necrotic_flag` is set, OR zombie deps detected (not critical).
-///   Zombie dep re-introductions are automatable intercepts billed at $20/PR.
-/// - `"Boilerplate"` — clone-only, no critical or necrotic signal.
+/// - `"Critical"` — `is_critical_threat` is true (security antipattern or Swarm collision); $150.
+/// - `"Necrotic"` — `necrotic_flag` is set, OR zombie deps detected (not critical); $20.
+/// - `"StructuralSlop"` — `slop_score > 0`, no critical or necrotic signal; $20.
+/// - `"Boilerplate"` — `slop_score == 0`, no threat signal; $0.
 fn threat_class(entry: &crate::report::BounceLogEntry) -> &'static str {
     if crate::report::is_critical_threat(entry) {
         "Critical"
     } else if entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty() {
         "Necrotic"
+    } else if entry.slop_score > 0 {
+        "StructuralSlop"
     } else {
         "Boilerplate"
     }
@@ -158,15 +160,18 @@ fn write_entry_row(
     // Necrotic: pruner-flagged dead-code OR zombie dep re-introduction.
     // Both are automatable intercepts billed at $20/PR.
     let necrotic = entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty();
+    // Structural Slop: slop_score > 0 with no critical or necrotic signal.
+    // Carries measurable structural debt; billed at $20/PR.
+    let structural_slop = !critical && !necrotic && entry.slop_score > 0;
 
     // Time_Saved_Hours: necrotic_count × 12 min ÷ 60.
     // 12 min = conservative senior-engineer triage estimate per Workslop research 2026.
     let time_saved_h: f64 = if necrotic { 12.0 / 60.0 } else { 0.0 };
 
-    // Categorical billing: Critical Threats ($150) > GC-only Necrotic ($20) > $0.
+    // Categorical billing: Critical ($150) > Necrotic GC ($20) > Structural Slop ($20) > $0.
     let savings_usd: u32 = if critical {
         150
-    } else if necrotic {
+    } else if necrotic || structural_slop {
         20
     } else {
         0

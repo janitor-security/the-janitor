@@ -433,16 +433,19 @@ pub struct ReportData {
     /// can be bulk-closed by a bot without human review.  Score-blocked PRs
     /// still require a human to verify the finding, so they do not reclaim time.
     pub total_reclaimed_minutes: f64,
-    /// Total number of actionable intercepts: Critical Threats OR Garbage
-    /// Collection (Necrotic) PRs.  Does NOT count PRs whose score is elevated
-    /// purely by `logic_clones_found` — clone boilerplate inflates score but
-    /// does not represent a billable security event.
+    /// Total number of actionable intercepts: Critical Threats, Necrotic GC,
+    /// OR Structural Slop PRs (slop_score > 0, no critical or necrotic signal).
     pub total_actionable_intercepts: u64,
     /// Count of PRs classified as Critical Threats per [`is_critical_threat`].
     ///
     /// A subset of `total_actionable_intercepts`; used to split TEI billing
-    /// between the $150 security-intercept tier and $20 GC tier.
+    /// between the $150 security-intercept tier and $20 GC/slop tiers.
     pub critical_threats_count: u64,
+    /// Count of PRs with `slop_score > 0` that are neither Critical nor Necrotic.
+    ///
+    /// These PRs carry measurable structural debt but no security or dead-code
+    /// signal.  Billed at **$20** per intercept in the TEI ledger.
+    pub structural_slop_count: u64,
     /// Indices of entries that carry a `necrotic_flag`, sorted by slop_score descending.
     pub necrotic_indices: Vec<usize>,
     /// Top 10 contributors ranked by cumulative slop score descending.
@@ -591,15 +594,22 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
     let total_reclaimed_minutes =
         entries.iter().filter(|e| e.necrotic_flag.is_some()).count() as f64 * MINUTES_PER_TRIAGE;
 
-    // Categorical billing: Critical Threats ($150) + Garbage Collection / Necrotic ($20).
-    // PRs elevated purely by logic_clones_found contribute $0 — boilerplate clone
-    // scores do not represent a billable security event.
+    // Categorical billing:
+    //   Critical Threats ($150): security: antipattern OR Swarm collision.
+    //   Necrotic GC ($20): necrotic_flag set, not critical.
+    //   Structural Slop ($20): slop_score > 0, not critical, no necrotic flag.
+    //   Boilerplate ($0): slop_score == 0 and none of the above.
     let critical_threats_count = entries.iter().filter(|e| is_critical_threat(e)).count() as u64;
     let gc_only_count = entries
         .iter()
         .filter(|e| e.necrotic_flag.is_some() && !is_critical_threat(e))
         .count() as u64;
-    let total_actionable_intercepts = critical_threats_count + gc_only_count;
+    let structural_slop_count = entries
+        .iter()
+        .filter(|e| e.slop_score > 0 && !is_critical_threat(e) && e.necrotic_flag.is_none())
+        .count() as u64;
+    let total_actionable_intercepts =
+        critical_threats_count + gc_only_count + structural_slop_count;
 
     // ── User stats (Top 10 Sloppiest / Top 10 Cleanest) ───────────────────
     // Value: (total_slop_score, total_pr_count, clean_pr_count)
@@ -647,6 +657,7 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
         total_reclaimed_minutes,
         total_actionable_intercepts,
         critical_threats_count,
+        structural_slop_count,
         necrotic_indices,
         sloppiest_users,
     }
@@ -839,11 +850,14 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
     {
         let actionable = data.total_actionable_intercepts;
         let critical = data.critical_threats_count;
-        let gc_only = actionable.saturating_sub(critical);
+        let structural_slop = data.structural_slop_count;
+        let gc_only = actionable
+            .saturating_sub(critical)
+            .saturating_sub(structural_slop);
         let hours = data.total_reclaimed_minutes / 60.0;
-        // Categorical billing: Critical Threats ($150) + GC-only Necrotic ($20).
+        // Categorical billing: Critical ($150) + Necrotic GC ($20) + Structural Slop ($20).
         let ci_compute_saved = critical * 150;
-        let tei = critical * 150 + gc_only * 20;
+        let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
         out.push_str("## Workslop: Maintainer Impact\n\n");
         out.push_str(
             "*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax \
@@ -852,13 +866,16 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push_str("| Metric | Value |\n");
         out.push_str("|--------|-------|\n");
         out.push_str(&format!(
-            "| Actionable intercepts (Threats + Necrotic) | **{actionable}** |\n"
+            "| Actionable intercepts (Threats + Necrotic + Structural Slop) | **{actionable}** |\n"
         ));
         out.push_str(&format!(
             "| Critical Threats Blocked (Swarm / Security) | **{critical}** |\n"
         ));
         out.push_str(&format!(
             "| Garbage Collection (Necrotic — bot-closeable) | **{gc_only}** |\n"
+        ));
+        out.push_str(&format!(
+            "| Structural Slop (score > 0, no threat signal) | **{structural_slop}** |\n"
         ));
         out.push_str(&format!(
             "| **Total engineering time reclaimed** | **{hours:.1} hours** |\n"
@@ -869,9 +886,10 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push_str(&format!("| **Total Economic Impact** | **${tei}** |\n"));
         out.push('\n');
         out.push_str(
-            "> TEI = (Critical Threats × $150) + (Garbage Collection × $20). \
+            "> TEI = (Critical Threats × $150) + (Necrotic GC × $20) + (Structural Slop × $20). \
              Critical Threats: `security:` antipatterns or Swarm collisions. \
-             GC: Necrotic (bot-closeable) PRs not already classified as Critical. \
+             Necrotic: bot-closeable dead-code PRs. \
+             Structural Slop: PRs with slop_score > 0 and no critical/necrotic signal. \
              Based on **12-minute industry triage baseline** × **$100/hr** loaded engineering cost. \
              Source: [Workslop research](https://builtin.com/articles/what-is-workslop).\n\n",
         );
@@ -926,7 +944,8 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
     out.push_str("|---|---|---|\n");
     out.push_str("| Critical Threat | `security:` antipattern OR Swarm collision | $150 |\n");
     out.push_str("| Necrotic GC | Dead-code ghost (bot-automatable) | $20 |\n");
-    out.push_str("| Boilerplate | Clone-only, no threat signal | $0 |\n");
+    out.push_str("| Structural Slop | slop_score > 0, no critical/necrotic signal | $20 |\n");
+    out.push_str("| Boilerplate | slop_score == 0, no threat signal | $0 |\n");
     out.push('\n');
     out.push_str(
         "Score formula: `(clones × 5) + (zombies × 10) + (antipattern_score) + \
@@ -1169,9 +1188,13 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
     let hours = data.total_reclaimed_minutes / 60.0;
     let necrotic_count = (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64;
     let critical = data.critical_threats_count;
-    let gc_only = data.total_actionable_intercepts.saturating_sub(critical);
+    let structural_slop = data.structural_slop_count;
+    let gc_only = data
+        .total_actionable_intercepts
+        .saturating_sub(critical)
+        .saturating_sub(structural_slop);
     let ci_compute_saved = critical * 150;
-    let tei = critical * 150 + gc_only * 20;
+    let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     serde_json::json!({
         "schema_version": "7.0.0",
         "repository": repo_name,
@@ -1180,6 +1203,7 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
             "actionable_intercepts": data.total_actionable_intercepts,
             "critical_threats_count": critical,
             "necrotic_count": necrotic_count,
+            "structural_slop_count": structural_slop,
             "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
             "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
             "ci_compute_saved_usd": ci_compute_saved,
@@ -1409,12 +1433,14 @@ pub struct RepoStats {
     pub highest_score: u32,
     /// Engineering minutes reclaimed from actionable intercepts in this repo.
     pub reclaimed_minutes: f64,
-    /// Total actionable intercepts: Critical Threats OR Garbage Collection (Necrotic).
+    /// Total actionable intercepts: Critical Threats, Necrotic GC, or Structural Slop.
     pub total_actionable_intercepts: u64,
     /// Count of Critical Threats in this repo (security: antipatterns or Swarm).
     pub critical_threats_count: u64,
-    /// Top 10 sloppiest PRs: `(pr_number, score, state, author)`.
-    pub top_sloppiest: Vec<(u64, u32, String, String)>,
+    /// Count of Structural Slop PRs (slop_score > 0, not critical, not necrotic).
+    pub structural_slop_count: u64,
+    /// Top 10 sloppiest PRs: `(pr_number, score, state, author, threat_class)`.
+    pub top_sloppiest: Vec<(u64, u32, String, String, String)>,
     /// Top 10 cleanest contributors: `(author, clean_pr_count)`.
     pub top_clean_authors: Vec<(String, usize)>,
 }
@@ -1431,10 +1457,12 @@ pub struct GlobalReportData {
     pub total_antipatterns: u32,
     /// Total engineering minutes reclaimed across all repos.
     pub total_reclaimed_minutes: f64,
-    /// Total actionable intercepts: Critical Threats OR Garbage Collection (Necrotic).
+    /// Total actionable intercepts: Critical Threats, Necrotic GC, or Structural Slop.
     pub total_actionable_intercepts: u64,
     /// Count of Critical Threats across all repos (security: antipatterns or Swarm).
     pub critical_threats_count: u64,
+    /// Count of Structural Slop PRs across all repos (slop_score > 0, not critical, not necrotic).
+    pub structural_slop_count: u64,
 }
 
 /// Discover all bounce logs one directory level beneath `gauntlet_root`.
@@ -1485,7 +1513,13 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
         .flat_map(|(_, entries)| entries.iter())
         .filter(|e| e.necrotic_flag.is_some() && !is_critical_threat(e))
         .count() as u64;
-    let repos_for_actionable: u64 = global_critical_threats + global_gc_only;
+    let global_structural_slop: u64 = repos
+        .iter()
+        .flat_map(|(_, entries)| entries.iter())
+        .filter(|e| e.slop_score > 0 && !is_critical_threat(e) && e.necrotic_flag.is_none())
+        .count() as u64;
+    let repos_for_actionable: u64 =
+        global_critical_threats + global_gc_only + global_structural_slop;
 
     let mut repo_stats: Vec<RepoStats> = repos
         .into_iter()
@@ -1517,12 +1551,17 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                 .iter()
                 .filter(|e| e.necrotic_flag.is_some() && !is_critical_threat(e))
                 .count() as u64;
-            let total_actionable_intercepts = critical_threats_count + gc_only_count;
+            let structural_slop_count = entries
+                .iter()
+                .filter(|e| e.slop_score > 0 && !is_critical_threat(e) && e.necrotic_flag.is_none())
+                .count() as u64;
+            let total_actionable_intercepts =
+                critical_threats_count + gc_only_count + structural_slop_count;
 
             // Top 10 sloppiest PRs (descending score).
             let mut sorted_by_score: Vec<&BounceLogEntry> = entries.iter().collect();
             sorted_by_score.sort_by(|a, b| b.slop_score.cmp(&a.slop_score));
-            let top_sloppiest: Vec<(u64, u32, String, String)> = sorted_by_score
+            let top_sloppiest: Vec<(u64, u32, String, String, String)> = sorted_by_score
                 .iter()
                 .filter(|e| e.slop_score > 0)
                 .take(10)
@@ -1531,7 +1570,15 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                     let score = e.slop_score;
                     let state = e.state.to_string();
                     let author = e.author.as_deref().unwrap_or("unknown").to_owned();
-                    (pr_num, score, state, author)
+                    let tc = if is_critical_threat(e) {
+                        "Critical"
+                    } else if e.necrotic_flag.is_some() {
+                        "Necrotic"
+                    } else {
+                        "StructuralSlop"
+                    }
+                    .to_owned();
+                    (pr_num, score, state, author, tc)
                 })
                 .collect();
 
@@ -1559,6 +1606,7 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                 reclaimed_minutes,
                 total_actionable_intercepts,
                 critical_threats_count,
+                structural_slop_count,
                 top_sloppiest,
                 top_clean_authors: clean_vec,
             }
@@ -1583,6 +1631,7 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
         total_reclaimed_minutes,
         total_actionable_intercepts,
         critical_threats_count,
+        structural_slop_count: global_structural_slop,
     }
 }
 
@@ -1635,8 +1684,11 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
 
     let actionable = data.total_actionable_intercepts;
     let critical = data.critical_threats_count;
-    let gc_only = actionable.saturating_sub(critical);
-    let tei = critical * 150 + gc_only * 20;
+    let structural_slop = data.structural_slop_count;
+    let gc_only = actionable
+        .saturating_sub(critical)
+        .saturating_sub(structural_slop);
+    let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     let timestamp = crate::utc_now_iso8601();
 
     // ── Page 1 — Executive Summary ─────────────────────────────────────────
@@ -1658,6 +1710,9 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     out.push_str(&format!("| **Critical Threats Blocked** | {critical} |\n"));
     out.push_str(&format!(
         "| **Necrotic GC (bot-closeable)** | {gc_only} |\n"
+    ));
+    out.push_str(&format!(
+        "| **Structural Slop (score > 0)** | {structural_slop} |\n"
     ));
     out.push_str(&format!("| **Total Economic Impact** | ${tei} |\n"));
     out.push_str("\n---\n\n");
@@ -1710,8 +1765,11 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
             .unwrap_or_else(|| "-".to_owned());
         let repo_gc_only = repo
             .total_actionable_intercepts
-            .saturating_sub(repo.critical_threats_count);
-        let repo_tei = repo.critical_threats_count * 150 + repo_gc_only * 20;
+            .saturating_sub(repo.critical_threats_count)
+            .saturating_sub(repo.structural_slop_count);
+        // StructuralSlop billed at $20 (same tier as Necrotic GC).
+        let repo_tei =
+            repo.critical_threats_count * 150 + repo_gc_only * 20 + repo.structural_slop_count * 20;
         out.push_str(&format!(
             "| `{}` | {} | **{}** | {} | **${repo_tei}** | {} |\n",
             sanitize_latex_safe(&repo.repo_name),
@@ -1726,12 +1784,12 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     // ── Top 10 Riskiest PRs ────────────────────────────────────────────────
     // \needspace guards the heading so it never strands at the bottom of a page.
     // Collect the top 10 entries with score > 50 across all repos.
+    // top_sloppiest tuples: (pr_num, score, state, author, threat_class)
     let mut top_prs: Vec<(&RepoStats, u64, u32, String, String)> = Vec::new();
     for repo in &data.repos {
-        for (pr_num, score, _state, author) in &repo.top_sloppiest {
+        for (pr_num, score, _state, author, threat_class) in &repo.top_sloppiest {
             if *score > 50 {
-                let first_ap = String::new(); // will be filled below
-                top_prs.push((repo, *pr_num, *score, author.clone(), first_ap));
+                top_prs.push((repo, *pr_num, *score, author.clone(), threat_class.clone()));
             }
         }
     }
@@ -1743,13 +1801,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         out.push_str("## Top 10 Riskiest PRs\n\n");
         out.push_str("| PR | Repo | Author | Score | Threat Class | Antipattern |\n");
         out.push_str("|---|---|---|---|---|---|\n");
-        for (repo, pr_num, score, author, _) in &top_prs {
-            // Derive threat class from score and repo critical count heuristic.
-            let threat_class = if repo.critical_threats_count > 0 {
-                "Critical"
-            } else {
-                "Necrotic"
-            };
+        for (repo, pr_num, score, author, threat_class) in &top_prs {
             let author_s = sanitize_latex_safe(author);
             let auth_display: String = if author_s.len() > 20 {
                 format!("{}…", &author_s[..19])
@@ -1771,7 +1823,8 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
     out.push_str("|---|---|---|\n");
     out.push_str("| Critical Threat | `security:` antipattern OR Swarm collision | $150 |\n");
     out.push_str("| Necrotic GC | Dead-code ghost (bot-automatable) | $20 |\n");
-    out.push_str("| Boilerplate | Clone-only, no threat signal | $0 |\n");
+    out.push_str("| Structural Slop | slop_score > 0, no critical/necrotic signal | $20 |\n");
+    out.push_str("| Boilerplate | slop_score == 0, no threat signal | $0 |\n");
     out.push('\n');
     out.push_str(
         "Score formula: `(clones × 5) + (zombies × 10) + (antipattern_score) + \
@@ -1795,9 +1848,12 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         let repo_hours = repo.reclaimed_minutes / 60.0;
         let repo_gc_only_page = repo
             .total_actionable_intercepts
-            .saturating_sub(repo.critical_threats_count);
+            .saturating_sub(repo.critical_threats_count)
+            .saturating_sub(repo.structural_slop_count);
         let repo_ci_saved_page = repo.critical_threats_count * 150;
-        let repo_tei_page = repo.critical_threats_count * 150 + repo_gc_only_page * 20;
+        let repo_tei_page = repo.critical_threats_count * 150
+            + repo_gc_only_page * 20
+            + repo.structural_slop_count * 20;
         out.push_str("| Metric | Value |\n");
         out.push_str("|--------|-------|\n");
         out.push_str(&format!("| PRs Analyzed | {} |\n", repo.pr_count));
@@ -1828,7 +1884,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         } else {
             out.push_str("| PR | Score | State | Author |\n");
             out.push_str("|----|------:|-------|--------|\n");
-            for (pr_num, score, state, author) in &repo.top_sloppiest {
+            for (pr_num, score, state, author, _tc) in &repo.top_sloppiest {
                 // Truncate long author handles to 22 chars for layout integrity.
                 let author_s = sanitize_latex_safe(author);
                 let auth_display: &str = if author_s.len() > 22 {
@@ -1900,9 +1956,13 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
     let hours = data.total_reclaimed_minutes / 60.0;
     let necrotic_count = (data.total_reclaimed_minutes / MINUTES_PER_TRIAGE).round() as u64;
     let critical = data.critical_threats_count;
-    let gc_only = data.total_actionable_intercepts.saturating_sub(critical);
+    let structural_slop = data.structural_slop_count;
+    let gc_only = data
+        .total_actionable_intercepts
+        .saturating_sub(critical)
+        .saturating_sub(structural_slop);
     let ci_compute_saved = critical * 150;
-    let tei = critical * 150 + gc_only * 20;
+    let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     serde_json::json!({
         "schema_version": "7.0.0",
         "gauntlet_root": gauntlet_root,
@@ -1914,6 +1974,7 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
             "actionable_intercepts": data.total_actionable_intercepts,
             "critical_threats_count": critical,
             "necrotic_count": necrotic_count,
+            "structural_slop_count": structural_slop,
             "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
             "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
             "ci_compute_saved_usd": ci_compute_saved,
@@ -1921,9 +1982,13 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
         },
         "repositories": data.repos.iter().map(|r| {
             let r_hours = r.reclaimed_minutes / 60.0;
-            let r_gc_only = r.total_actionable_intercepts.saturating_sub(r.critical_threats_count);
+            let r_gc_only = r.total_actionable_intercepts
+                .saturating_sub(r.critical_threats_count)
+                .saturating_sub(r.structural_slop_count);
             let r_ci_saved = r.critical_threats_count * 150;
-            let r_tei = r.critical_threats_count * 150 + r_gc_only * 20;
+            let r_tei = r.critical_threats_count * 150
+                + r_gc_only * 20
+                + r.structural_slop_count * 20;
             serde_json::json!({
                 "repo_name": r.repo_name,
                 "pr_count": r.pr_count,
@@ -1937,6 +2002,7 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
                 "reclaimed_hours": (r_hours * 10.0).round() / 10.0,
                 "total_actionable_intercepts": r.total_actionable_intercepts,
                 "critical_threats_count": r.critical_threats_count,
+                "structural_slop_count": r.structural_slop_count,
                 "ci_compute_saved_usd": r_ci_saved,
                 "total_economic_impact_usd": r_tei,
             })

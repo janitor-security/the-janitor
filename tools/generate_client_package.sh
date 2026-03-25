@@ -56,7 +56,7 @@ _synthesize_case_study() {
 
     # ── Extract fields from gauntlet_report.json (global aggregate) ──────────
     local total_prs antipatterns_found zombie_dep_prs highest_score
-    local actionable_intercepts critical_threats necrotic_count
+    local actionable_intercepts critical_threats necrotic_count structural_slop_count
     local reclaimed_hours tei_usd
     total_prs="$(jq '.total_prs' "${global_json}")"
     # Filtered commits: refs fetched minus PRs that passed sanitization.
@@ -71,6 +71,7 @@ _synthesize_case_study() {
     actionable_intercepts="$(jq '.workslop.actionable_intercepts' "${global_json}")"
     critical_threats="$(jq '.workslop.critical_threats_count' "${global_json}")"
     necrotic_count="$(jq '.workslop.necrotic_count' "${global_json}")"
+    structural_slop_count="$(jq '.workslop.structural_slop_count // 0' "${global_json}")"
     reclaimed_hours="$(jq '.workslop.total_reclaimed_hours' "${global_json}")"
     tei_usd="$(jq '.workslop.total_economic_impact_usd' "${global_json}")"
 
@@ -115,6 +116,7 @@ Human review at AI velocity is a mathematical impossibility. The Janitor is the 
 - **${zombie_dep_prs}** zombie dependencies re-introduced (declared in manifest, never imported)
 - **${critical_threats}** Critical Threats (security antipattern or Swarm collision) — \$150/intercept
 - **${necrotic_count}** Necrotic GC intercepts (bot-closeable dead-code) — \$20/intercept
+- **${structural_slop_count}** Structural Slop intercepts (slop_score > 0, no threat signal) — \$20/intercept
 
 ## Top 10 PRs by Slop Score
 
