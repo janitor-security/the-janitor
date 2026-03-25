@@ -119,7 +119,20 @@ fn antipattern_ids(entry: &crate::report::BounceLogEntry) -> String {
         parts.push("architecture:zombie_dependency".to_owned());
     }
     parts.extend(entry.antipatterns.iter().cloned());
-    csv_sanitize(&parts.join("|"))
+    // Collapse repeated labels: [A, A, A, B] → "A (x3)|B".
+    // Identical structured IDs (e.g. three antipattern:ncd_anomaly hits from
+    // the same patch) are merged so the CSV cell stays readable in Excel/pandas.
+    let grouped = crate::report::group_strings(&parts)
+        .into_iter()
+        .map(|(label, count)| {
+            if count > 1 {
+                format!("{label} (x{count})")
+            } else {
+                label.to_owned()
+            }
+        })
+        .collect::<Vec<_>>();
+    csv_sanitize(&grouped.join("|"))
 }
 
 /// Build the `Collided_PRs` field: pipe-delimited PR numbers.
