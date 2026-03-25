@@ -89,12 +89,13 @@ const CSV_HEADER: [&str; 16] = [
 /// Derive the `Threat_Class` string for a bounce log entry.
 ///
 /// - `"Critical"` — `is_critical_threat` is true (security antipattern or Swarm collision).
-/// - `"Necrotic"` — `necrotic_flag` is set but not critical.
+/// - `"Necrotic"` — `necrotic_flag` is set, OR zombie deps detected (not critical).
+///   Zombie dep re-introductions are automatable intercepts billed at $20/PR.
 /// - `"Boilerplate"` — clone-only, no critical or necrotic signal.
 fn threat_class(entry: &crate::report::BounceLogEntry) -> &'static str {
     if crate::report::is_critical_threat(entry) {
         "Critical"
-    } else if entry.necrotic_flag.is_some() {
+    } else if entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty() {
         "Necrotic"
     } else {
         "Boilerplate"
@@ -130,7 +131,9 @@ fn write_entry_row(
     entry: &crate::report::BounceLogEntry,
 ) -> Result<()> {
     let critical = crate::report::is_critical_threat(entry);
-    let necrotic = entry.necrotic_flag.is_some();
+    // Necrotic: pruner-flagged dead-code OR zombie dep re-introduction.
+    // Both are automatable intercepts billed at $20/PR.
+    let necrotic = entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty();
 
     // Time_Saved_Hours: necrotic_count × 12 min ÷ 60.
     // 12 min = conservative senior-engineer triage estimate per Workslop research 2026.

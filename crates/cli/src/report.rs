@@ -916,8 +916,8 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
              to populate the log.*\n\n",
         );
     } else {
-        out.push_str("| Rank | PR | Author | Slop Score | Primary Violation |\n");
-        out.push_str("|------|----|--------|------------|-------------------|\n");
+        out.push_str("| Rank | PR | Author | Slop Score | Primary Violation | Antipatterns |\n");
+        out.push_str("|------|----|--------|------------|-------------------|--------------|\n");
         for (rank, &i) in data.slop_top_indices.iter().take(10).enumerate() {
             let e = &data.entries[i];
             let pr = e
@@ -928,13 +928,39 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
                 &sanitize_latex_safe(e.author.as_deref().unwrap_or("-")),
                 20,
             ));
+            // Show first two antipattern descriptions; append "+N more" if truncated.
+            let ap_cell = if e.antipatterns.is_empty() {
+                "-".to_owned()
+            } else {
+                let shown: Vec<String> = e
+                    .antipatterns
+                    .iter()
+                    .take(2)
+                    .map(|a| {
+                        // Truncate long descriptions at 60 chars for table readability.
+                        let s = sanitize_latex_safe(a);
+                        if s.len() > 60 {
+                            format!("{}…", &s[..57])
+                        } else {
+                            s
+                        }
+                    })
+                    .collect();
+                let remainder = e.antipatterns.len().saturating_sub(2);
+                if remainder > 0 {
+                    format!("{}, +{remainder} more", shown.join("; "))
+                } else {
+                    shown.join("; ")
+                }
+            };
             out.push_str(&format!(
-                "| {} | {} | {} | **{}** | {} |\n",
+                "| {} | {} | {} | **{}** | {} | {} |\n",
                 rank + 1,
                 pr,
                 author,
                 e.slop_score,
                 primary_violation(e),
+                html_escape(&ap_cell),
             ));
         }
     }
