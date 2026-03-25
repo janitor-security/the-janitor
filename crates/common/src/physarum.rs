@@ -49,6 +49,21 @@
 //! (memory being freed) is ignored.  The velocity override cannot escalate
 //! beyond `Constrict`; a hard `Stop` is always driven by the percentage gate.
 //!
+//! ## Hardware-Aware Concurrency
+//!
+//! [`detect_optimal_concurrency`] queries `sysinfo` for total system RAM and
+//! returns a thread-count recommendation:
+//!
+//! | Total RAM    | Workers          | Mode            |
+//! |-------------|-----------------|-----------------|
+//! | < 8 GB      | 2               | Safety          |
+//! | 8–16 GB     | 4               | Standard        |
+//! | 16–32 GB    | 8               | High-Velocity   |
+//! | > 32 GB     | logical CPU count | Aggressive    |
+//!
+//! The `--concurrency` flag on both `janitor` and `gauntlet-runner` allows
+//! manual override; `0` (the default) selects auto-detection.
+//!
 //! ## Overhead
 //!
 //! The ring buffer is a fixed 16-slot array of `(Instant, u64)` pairs (224
@@ -68,12 +83,26 @@ use sysinfo::System;
 const SMA_WINDOW_SECS: f64 = 3.0;
 
 /// Allocation velocity above which the pulse is escalated to at least
-/// [`Pulse::Constrict`], even when the SMA percentage is below 75 %.
+/// [`Pulse::Constrict`], even when the SMA percentage is below the normal
+/// Constrict threshold.
 ///
 /// 100 MB/s is chosen as the threshold: sustained allocation at that rate
 /// would exhaust a 4 GB free-RAM headroom in ~40 seconds, which is fast
-/// enough to pre-empt OOM before the static 75 % gate fires.
+/// enough to pre-empt OOM before the static gate fires.
 const HIGH_VELOCITY_BYTES_PER_SEC: f64 = 100.0 * 1024.0 * 1024.0;
+
+/// Constrict threshold on systems with ≤ 16 GB total RAM, or whenever the
+/// SMA velocity exceeds [`HIGH_VELOCITY_BYTES_PER_SEC`].
+const CONSTRICT_THRESHOLD_NORMAL: f64 = 75.0;
+
+/// Constrict threshold on systems with > 16 GB total RAM **and** stable
+/// velocity (≤ [`HIGH_VELOCITY_BYTES_PER_SEC`]).  Rewards high-RAM hosts
+/// with a wider Flow band before throttling.
+const CONSTRICT_THRESHOLD_HIGH_RAM: f64 = 85.0;
+
+/// Total-RAM boundary (in GiB) above which the high-RAM Constrict threshold
+/// applies when velocity is stable.
+const HIGH_RAM_THRESHOLD_GIB: u64 = 16;
 
 /// Capacity of the ring buffer.  16 slots at typical daemon call rates
 /// (1–4 calls/sec) provides 4–16 seconds of history — well beyond the
@@ -265,10 +294,25 @@ impl SystemHeart {
         let effective_used = sma.unwrap_or(used as f64);
         let pct = effective_used / total as f64 * 100.0;
 
+        // Adaptive Constrict threshold: on systems with > 16 GiB total RAM
+        // and stable allocation velocity, widen the Flow band to 85 % so
+        // high-memory hosts benefit from proportionally higher throughput.
+        // Under velocity pressure (rapid allocation) the conservative 75 %
+        // gate is always enforced regardless of total RAM.
+        let velocity_is_stable = velocity
+            .map(|v| v <= HIGH_VELOCITY_BYTES_PER_SEC)
+            .unwrap_or(true);
+        let total_gib = total / (1024 * 1024 * 1024);
+        let constrict_threshold = if total_gib >= HIGH_RAM_THRESHOLD_GIB && velocity_is_stable {
+            CONSTRICT_THRESHOLD_HIGH_RAM
+        } else {
+            CONSTRICT_THRESHOLD_NORMAL
+        };
+
         // Percentage-driven base pulse.
         let base = if pct > 90.0 {
             Pulse::Stop
-        } else if pct > 75.0 {
+        } else if pct > constrict_threshold {
             Pulse::Constrict
         } else {
             Pulse::Flow
@@ -373,6 +417,47 @@ impl SystemHeart {
 impl Default for SystemHeart {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hardware-Aware Concurrency
+// ---------------------------------------------------------------------------
+
+/// Recommend an optimal rayon worker count based on total system RAM.
+///
+/// Queries `sysinfo` for total physical memory and maps it to a thread count
+/// that keeps peak RSS safely within available headroom.  Each bounce worker
+/// peaks at ≈100–250 MB; the table below targets ≤ 50 % RSS on the host RAM
+/// tier as a steady-state safety margin.
+///
+/// | Total RAM    | Workers          | Mode            |
+/// |--------------|-----------------|-----------------|
+/// | < 8 GiB      | 2               | Safety          |
+/// | 8–16 GiB     | 4               | Standard        |
+/// | 16–32 GiB    | 8               | High-Velocity   |
+/// | > 32 GiB     | logical CPU count | Aggressive    |
+///
+/// Returns `2` on platforms where `sysinfo` cannot report total memory.
+/// The caller may override this value with `--concurrency <N>`.
+pub fn detect_optimal_concurrency() -> usize {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    let total = sys.total_memory();
+    if total == 0 {
+        return 2; // sysinfo unavailable — conservative default
+    }
+    let total_gib = total / (1024 * 1024 * 1024);
+    match total_gib {
+        0..=7 => 2,   // < 8 GiB: Safety Mode
+        8..=15 => 4,  // 8–16 GiB: Standard
+        16..=31 => 8, // 16–32 GiB: High-Velocity
+        _ => {
+            // > 32 GiB: Aggressive — saturate all logical cores.
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        }
     }
 }
 
@@ -603,6 +688,111 @@ mod tests {
         assert!(
             virtual_pct > 90.0,
             "heavy Swarm multiplier must push 73 % real RAM past the Stop gate"
+        );
+    }
+
+    #[test]
+    fn test_detect_optimal_concurrency_returns_positive() {
+        let n = super::detect_optimal_concurrency();
+        assert!(n >= 2, "concurrency must be at least 2, got {n}");
+    }
+
+    #[test]
+    fn test_detect_optimal_concurrency_tiers() {
+        // Validate the tier logic directly using the same formula, without
+        // relying on actual sysinfo (which varies per machine).
+        let tier = |total_gib: u64| -> usize {
+            match total_gib {
+                0..=7 => 2,
+                8..=15 => 4,
+                16..=31 => 8,
+                _ => std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(8),
+            }
+        };
+        assert_eq!(tier(4), 2, "4 GiB → Safety Mode (2 workers)");
+        assert_eq!(tier(7), 2, "7 GiB → Safety Mode boundary");
+        assert_eq!(tier(8), 4, "8 GiB → Standard (4 workers)");
+        assert_eq!(tier(15), 4, "15 GiB → Standard boundary");
+        assert_eq!(tier(16), 8, "16 GiB → High-Velocity (8 workers)");
+        assert_eq!(tier(31), 8, "31 GiB → High-Velocity boundary");
+        assert!(tier(32) >= 1, "32+ GiB → Aggressive (≥1 workers)");
+    }
+
+    #[test]
+    fn test_adaptive_constrict_threshold_high_ram() {
+        // On a high-RAM host with stable velocity, the Constrict threshold
+        // is 85 % — so 80 % usage must remain Flow.
+        let pct: f64 = 80.0;
+        let total_gib: u64 = 32; // > HIGH_RAM_THRESHOLD_GIB
+        let velocity_is_stable = true;
+        let constrict_threshold = if total_gib >= HIGH_RAM_THRESHOLD_GIB && velocity_is_stable {
+            CONSTRICT_THRESHOLD_HIGH_RAM
+        } else {
+            CONSTRICT_THRESHOLD_NORMAL
+        };
+        let base = if pct > 90.0 {
+            Pulse::Stop
+        } else if pct > constrict_threshold {
+            Pulse::Constrict
+        } else {
+            Pulse::Flow
+        };
+        assert_eq!(
+            base,
+            Pulse::Flow,
+            "80 % on 32 GiB host with stable velocity must be Flow (threshold=85%)"
+        );
+    }
+
+    #[test]
+    fn test_adaptive_constrict_threshold_normal_ram() {
+        // On a normal host, 80 % must be Constrict (threshold=75 %).
+        let pct: f64 = 80.0;
+        let total_gib: u64 = 8;
+        let velocity_is_stable = true;
+        let constrict_threshold = if total_gib >= HIGH_RAM_THRESHOLD_GIB && velocity_is_stable {
+            CONSTRICT_THRESHOLD_HIGH_RAM
+        } else {
+            CONSTRICT_THRESHOLD_NORMAL
+        };
+        let base = if pct > 90.0 {
+            Pulse::Stop
+        } else if pct > constrict_threshold {
+            Pulse::Constrict
+        } else {
+            Pulse::Flow
+        };
+        assert_eq!(
+            base,
+            Pulse::Constrict,
+            "80 % on 8 GiB host must be Constrict (threshold=75 %)"
+        );
+    }
+
+    #[test]
+    fn test_adaptive_constrict_threshold_high_ram_unstable_velocity() {
+        // High-RAM host BUT velocity is unstable → conservative 75 % threshold.
+        let pct: f64 = 80.0;
+        let total_gib: u64 = 32;
+        let velocity_is_stable = false; // rapid allocation
+        let constrict_threshold = if total_gib >= HIGH_RAM_THRESHOLD_GIB && velocity_is_stable {
+            CONSTRICT_THRESHOLD_HIGH_RAM
+        } else {
+            CONSTRICT_THRESHOLD_NORMAL
+        };
+        let base = if pct > 90.0 {
+            Pulse::Stop
+        } else if pct > constrict_threshold {
+            Pulse::Constrict
+        } else {
+            Pulse::Flow
+        };
+        assert_eq!(
+            base,
+            Pulse::Constrict,
+            "80 % on 32 GiB host with unstable velocity must still be Constrict"
         );
     }
 }

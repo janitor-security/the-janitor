@@ -14,6 +14,14 @@ mod report;
 #[command(name = "janitor")]
 #[command(about = "Code Integrity Protocol — Automated Dead Symbol Detection & Cleanup")]
 struct Cli {
+    /// Number of parallel rayon worker threads (0 = auto-detect from system RAM).
+    ///
+    /// Auto-detection tiers: < 8 GiB → 2, 8–16 GiB → 4, 16–32 GiB → 8,
+    /// \> 32 GiB → logical CPU count.  Set explicitly to override for CI
+    /// environments where RAM limits differ from total physical RAM.
+    #[arg(long, default_value = "0", global = true)]
+    concurrency: usize,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -467,15 +475,6 @@ enum TelemetryCmd {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialise the global Rayon thread pool with an 8 MB stack per worker so
-    // deep tree-sitter ASTs (e.g. rust-lang/rust compiler test suites) do not
-    // overflow the default 2 MB stack when traversals approach the 512-depth
-    // abort limit.  unwrap_or(()) — a pre-existing global pool is benign.
-    rayon::ThreadPoolBuilder::new()
-        .stack_size(32 * 1024 * 1024)
-        .build_global()
-        .unwrap_or(());
-
     // Load .env if present; silently ignore NotFound (expected in production).
     if let Err(e) = dotenvy::dotenv() {
         if !matches!(
@@ -488,6 +487,21 @@ async fn main() -> anyhow::Result<()> {
 
     let _root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let cli = Cli::parse();
+
+    // Initialise the global Rayon thread pool after CLI parse so --concurrency
+    // is available.  Stack size is 32 MB per worker to prevent stack overflow
+    // on deep tree-sitter ASTs (e.g. rust-lang/rust compiler test suites).
+    // unwrap_or(()) — a pre-existing global pool (e.g. from tests) is benign.
+    let rayon_workers = if cli.concurrency == 0 {
+        common::physarum::detect_optimal_concurrency()
+    } else {
+        cli.concurrency
+    };
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(rayon_workers)
+        .stack_size(32 * 1024 * 1024)
+        .build_global()
+        .unwrap_or(());
 
     match &cli.command {
         Commands::Scan {

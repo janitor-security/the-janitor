@@ -102,13 +102,21 @@ release version: audit (bump-version version)
 # 5. MULTI-REPO GAUNTLET
 # Deterministic Rust orchestrator replacing ultimate_gauntlet.sh.
 # Reads gauntlet_targets.txt (one owner/repo per line), bounces PRs in parallel
-# within each repo (2-worker RAM gate), then generates a global PDF + CSV export.
+# within each repo (hardware-aware concurrency: auto-detected from system RAM),
+# then generates a global PDF + CSV export.
+#
+# Concurrency tiers (auto-detected via --concurrency 0):
+#   < 8 GiB RAM  → 2 workers (Safety Mode)
+#   8–16 GiB     → 4 workers
+#   16–32 GiB    → 8 workers
+#   > 32 GiB     → logical CPU count (Aggressive Mode)
 #
 # Usage:
-#   just run-gauntlet                        # defaults from gauntlet_targets.txt
-#   just run-gauntlet --pr-limit 50          # 50 PRs per repo
+#   just run-gauntlet                             # defaults from gauntlet_targets.txt
+#   just run-gauntlet --pr-limit 50               # 50 PRs per repo
 #   just run-gauntlet --pr-limit 5000 --timeout 60
 #   just run-gauntlet --targets my_repos.txt --out-dir ~/Desktop
+#   just run-gauntlet --concurrency 4             # manual override
 #
 run-gauntlet *ARGS:
 	#!/usr/bin/env bash

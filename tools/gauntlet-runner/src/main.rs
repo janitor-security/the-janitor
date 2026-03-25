@@ -48,6 +48,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use common::physarum::detect_optimal_concurrency;
 use rayon::prelude::*;
 use serde::Deserialize;
 
@@ -137,6 +138,12 @@ struct Config {
     /// When `true`, do not purge existing bounce logs and pass `--resume` to
     /// `janitor hyper-drive` so interrupted runs continue from where they left off.
     resume: bool,
+    /// Number of parallel bounce workers per repo.
+    ///
+    /// `0` (the default) triggers hardware-aware auto-detection via
+    /// [`detect_optimal_concurrency`]: 2 workers on < 8 GiB, 4 on 8–16 GiB,
+    /// 8 on 16–32 GiB, logical-CPU-count on > 32 GiB.
+    concurrency: usize,
 }
 
 fn parse_args() -> Result<Config, String> {
@@ -162,6 +169,7 @@ fn parse_args() -> Result<Config, String> {
     let mut out_dir = PathBuf::from(std::env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".into()));
     let mut hyper = false;
     let mut resume = false;
+    let mut concurrency: usize = 0; // 0 = auto-detect
 
     let mut i = 1usize;
     while i < args.len() {
@@ -205,12 +213,19 @@ fn parse_args() -> Result<Config, String> {
             "--resume" => {
                 resume = true;
             }
+            "--concurrency" => {
+                i += 1;
+                concurrency = args
+                    .get(i)
+                    .and_then(|v| v.parse().ok())
+                    .ok_or("--concurrency requires a non-negative integer (0 = auto)")?;
+            }
             unknown => {
                 return Err(format!(
                     "Unknown argument: {unknown}\n\
                      Usage: gauntlet-runner [--targets FILE] [--pr-limit N] \
                      [--timeout S] [--janitor PATH] [--gauntlet-dir DIR] [--out-dir DIR] \
-                     [--hyper] [--resume]"
+                     [--hyper] [--resume] [--concurrency N]"
                 ));
             }
         }
@@ -226,6 +241,7 @@ fn parse_args() -> Result<Config, String> {
         out_dir,
         hyper,
         resume,
+        concurrency,
     })
 }
 
@@ -279,11 +295,19 @@ fn main() {
         std::process::exit(1);
     }
 
+    // Resolve worker count: 0 = hardware-aware auto-detection.
+    let workers = if cfg.concurrency == 0 {
+        detect_optimal_concurrency()
+    } else {
+        cfg.concurrency
+    };
+
     eprintln!(
-        "gauntlet-runner: {} repos | pr-limit={} | timeout={}s | gauntlet-dir={} | mode={}",
+        "gauntlet-runner: {} repos | pr-limit={} | timeout={}s | workers={} | gauntlet-dir={} | mode={}",
         targets.len(),
         cfg.pr_limit,
         cfg.timeout_s,
+        workers,
         cfg.gauntlet_dir.display(),
         if cfg.hyper {
             "hyper-drive"
@@ -777,9 +801,11 @@ fn main() {
             let repo_slug_ref = repo_slug.as_str();
             let timeout_s = cfg.timeout_s;
 
-            // ── 2-thread rayon pool (RAM gate) ────────────────────────────────
+            // ── Hardware-aware rayon pool ─────────────────────────────────────
+            // `workers` was resolved from --concurrency or detect_optimal_concurrency()
+            // at startup; use it here so every repo benefits from the same setting.
             let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(2)
+                .num_threads(workers)
                 .thread_name(|i| format!("bounce-worker-{i}"))
                 .build()
                 .expect("rayon pool build failed");
