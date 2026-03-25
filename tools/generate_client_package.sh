@@ -100,7 +100,7 @@ Highest slop score in this audit: **${highest_score}** (100-point gate = fail th
 
 The Janitor v7.9.4 runs a 6-stage structural analysis pipeline on each pull request diff:
 
-1. **NCD Entropy Gate** — zstd compression ratio < 0.15 flags AI-generated boilerplate (\`antipattern:ncd_anomaly\`)
+1. **Vibe-Check Gate** — zstd compression ratio < 0.15 flags vibe-coded PRs (\`antipattern:ncd_anomaly\`)
 2. **AST Antipattern Scan** — tree-sitter queries for 20+ security patterns across 12 languages
 3. **MinHash LSH Clone Detection** — 64-hash Jaccard index detects Swarm structural clones
 4. **Zombie Dependency Detection** — manifest vs. import-graph cross-reference (\`architecture:zombie_dependency\`)

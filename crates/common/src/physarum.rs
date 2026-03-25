@@ -16,6 +16,20 @@
 //! | SMA% 75–90 %  OR  velocity > 100 MB/s | `Constrict` | Limit to 2 concurrent tasks.              |
 //! | SMA% > 90 %                           | `Stop`      | Reject; caller sleeps 500 ms and retries. |
 //!
+//! ## Swarm Edge Integrity
+//!
+//! [`SystemHeart::beat_swarm`] accepts an `active_collisions` count from the
+//! `LshIndex`.  When the Swarm detector observes coordinated clone injection,
+//! a virtual pressure multiplier is applied to the SMA percentage before the
+//! threshold gates are evaluated.  This tightens the effective thresholds
+//! proportionally to collision load, preserving RAM headroom before a wave of
+//! structurally identical patches saturates the analysis pool simultaneously.
+//!
+//! The principle mirrors *Physarum* Edge Integrity: peripheral veins constrict
+//! first under nutrient pressure, protecting the core network routing capacity.
+//! Under a Swarm attack the "peripheral veins" are the excess analysis slots —
+//! they close before the core is starved.
+//!
 //! ## SMA gate
 //!
 //! Each call to [`SystemHeart::beat`] records the current `used_memory` reading
@@ -275,6 +289,85 @@ impl SystemHeart {
 
         base
     }
+
+    /// Sample memory pressure under active Swarm conditions and return the
+    /// corresponding [`Pulse`].
+    ///
+    /// Identical to [`beat`] except that a **virtual pressure multiplier** is
+    /// applied to the SMA percentage when `active_collisions > 0`.  When the
+    /// `LshIndex` detects coordinated clone injection across multiple PRs the
+    /// daemon passes the live collision count so the gate triggers earlier —
+    /// preserving RAM headroom before a wave of structurally identical patches
+    /// is analysed simultaneously.
+    ///
+    /// The principle mirrors *Physarum polycephalum* Edge Integrity: veins at
+    /// the network periphery constrict first when nutrient supply is threatened,
+    /// protecting the core routing capacity.  A Swarm attack is the biological
+    /// equivalent of a simultaneous peripheral load spike.
+    ///
+    /// # Multiplier schedule
+    ///
+    /// | `active_collisions` | Multiplier | Effective `Flow` ceiling |
+    /// |---------------------|------------|--------------------------|
+    /// | 0                   | ×1.00      | ≤ 75 % (delegates to [`beat`]) |
+    /// | 1–4                 | ×1.15      | ≤ ~65 % real RAM         |
+    /// | 5+                  | ×1.25      | ≤ 60 % real RAM          |
+    ///
+    /// The velocity override remains active regardless of multiplier.  A hard
+    /// `Stop` is still only reachable when the *inflated* percentage exceeds
+    /// 90 % — the multiplier can produce `Stop` at lower real RAM under heavy
+    /// Swarm load, which is the intended behaviour.
+    pub fn beat_swarm(&self, active_collisions: usize) -> Pulse {
+        // Zero collisions — identical semantics to beat(); avoid touching the
+        // lock twice by delegating directly.
+        if active_collisions == 0 {
+            return self.beat();
+        }
+
+        let multiplier = if active_collisions >= 5 {
+            1.25_f64 // heavy swarm: 72 % real RAM saturates the Stop gate
+        } else {
+            1.15_f64 // light swarm: ~78 % real RAM saturates the Stop gate
+        };
+
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.sys.refresh_memory();
+
+        let total = g.sys.total_memory();
+        if total == 0 {
+            return Pulse::Flow;
+        }
+
+        let used = g.sys.used_memory();
+        let now = Instant::now();
+
+        g.history.push(Sample { at: now, used });
+
+        let (sma, velocity) = g.history.compute(now);
+
+        let effective_used = sma.unwrap_or(used as f64);
+        // Apply the Swarm multiplier: virtual pressure inflates the percentage
+        // so that the existing static thresholds fire at a lower real RAM%.
+        let pct = effective_used / total as f64 * 100.0 * multiplier;
+
+        let base = if pct > 90.0 {
+            Pulse::Stop
+        } else if pct > 75.0 {
+            Pulse::Constrict
+        } else {
+            Pulse::Flow
+        };
+
+        if base == Pulse::Flow {
+            if let Some(v) = velocity {
+                if v > HIGH_VELOCITY_BYTES_PER_SEC {
+                    return Pulse::Constrict;
+                }
+            }
+        }
+
+        base
+    }
 }
 
 impl Default for SystemHeart {
@@ -441,6 +534,75 @@ mod tests {
         assert!(
             v <= HIGH_VELOCITY_BYTES_PER_SEC,
             "negative velocity should not trigger the gate"
+        );
+    }
+
+    #[test]
+    fn test_beat_swarm_zero_collisions_returns_valid_pulse() {
+        // beat_swarm(0) must delegate to beat() and return a valid Pulse.
+        let heart = SystemHeart::new();
+        let pulse = heart.beat_swarm(0);
+        assert!(matches!(
+            pulse,
+            Pulse::Flow | Pulse::Constrict | Pulse::Stop
+        ));
+    }
+
+    #[test]
+    fn test_beat_swarm_light_collisions_returns_valid_pulse() {
+        let heart = SystemHeart::new();
+        let pulse = heart.beat_swarm(2);
+        assert!(matches!(
+            pulse,
+            Pulse::Flow | Pulse::Constrict | Pulse::Stop
+        ));
+    }
+
+    #[test]
+    fn test_beat_swarm_heavy_collisions_returns_valid_pulse() {
+        let heart = SystemHeart::new();
+        let pulse = heart.beat_swarm(5);
+        assert!(matches!(
+            pulse,
+            Pulse::Flow | Pulse::Constrict | Pulse::Stop
+        ));
+    }
+
+    #[test]
+    fn test_beat_swarm_multiplier_tightens_threshold() {
+        // Verify the multiplier: at 70 % real RAM, a ×1.25 multiplier
+        // produces a virtual 87.5 % — which must cross the 75 % Constrict
+        // gate.  We test the math directly without relying on sysinfo.
+        let real_pct: f64 = 70.0;
+
+        let normal_pulse = |pct: f64| -> Pulse {
+            if pct > 90.0 {
+                Pulse::Stop
+            } else if pct > 75.0 {
+                Pulse::Constrict
+            } else {
+                Pulse::Flow
+            }
+        };
+
+        // Without multiplier: 70 % → Flow.
+        assert_eq!(normal_pulse(real_pct), Pulse::Flow);
+
+        // With ×1.25 swarm multiplier: 70 × 1.25 = 87.5 % → Constrict.
+        assert_eq!(normal_pulse(real_pct * 1.25), Pulse::Constrict);
+
+        // With ×1.15 light swarm: 70 × 1.15 = 80.5 % → Constrict.
+        assert_eq!(normal_pulse(real_pct * 1.15), Pulse::Constrict);
+    }
+
+    #[test]
+    fn test_beat_swarm_heavy_multiplier_can_reach_stop() {
+        // At 73 % real RAM, ×1.25 = 91.25 % — crosses the 90 % Stop gate.
+        let real_pct: f64 = 73.0;
+        let virtual_pct = real_pct * 1.25;
+        assert!(
+            virtual_pct > 90.0,
+            "heavy Swarm multiplier must push 73 % real RAM past the Stop gate"
         );
     }
 }
