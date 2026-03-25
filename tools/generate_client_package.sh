@@ -14,6 +14,7 @@
 #
 # Usage:
 #   ./tools/generate_client_package.sh <owner/repo> [out_dir]
+#   just strike <owner/repo> [pr_limit]        # preferred — enters Nix shell
 #
 # Environment overrides:
 #   PR_LIMIT       — max PRs to audit (default: 100)
@@ -21,9 +22,12 @@
 #   GAUNTLET_DIR   — gauntlet clone root (default: ~/dev/gauntlet)
 #   JANITOR        — path to janitor binary (default: ./target/release/janitor)
 #
+# Output directory: strikes/<repo_name>/  (workspace-isolated; gitignored)
+#
 # Examples:
-#   PR_LIMIT=1000 ./tools/generate_client_package.sh kubernetes/kubernetes
-#   PR_LIMIT=50   ./tools/generate_client_package.sh NixOS/nixpkgs ./output/nixpkgs
+#   just strike kubernetes/kubernetes           # 1000 PRs, output → strikes/kubernetes/
+#   just strike NixOS/nixpkgs 50               # 50 PRs
+#   PR_LIMIT=5000 ./tools/generate_client_package.sh godotengine/godot
 
 set -euo pipefail
 
@@ -79,16 +83,27 @@ _synthesize_case_study() {
 **PRs Audited**: ${total_prs}
 **Engine**: The Janitor v7.9.4 (tree-sitter AST, MinHash LSH, ML-DSA-65 attestation)
 
-## Executive Summary
+## The Bottleneck Problem
 
-- **${intercept_pct}%** of PRs triggered an actionable intercept (${actionable_intercepts} of ${total_prs})
+**${total_prs} pull requests** entered the \`${owner}/${repo_name}\` merge queue during this audit window.
+
+At standard engineering-team review capacity — 8 PRs per engineer per day — a 4–6× AI-assisted productivity surge means the inbound queue grows faster than humans can process it. A team of 10 engineers has a review capacity of 80 PRs/day. At 5× AI throughput that queue receives 400 PRs/day and accumulates a 320-PR backlog every 24 hours. It never clears. It compounds.
+
+Human review at AI velocity is a mathematical impossibility. The Janitor is the structural circuit breaker that moves enforcement to the diff level — before the merge button is available, at machine velocity.
+
+## Circuit Breaker Impact
+
+- **${intercept_pct}%** of PRs intercepted upstream of human review (${actionable_intercepts} of ${total_prs})
+- **${reclaimed_hours} hours** of senior-engineer triage time redirected to productive work
+- **\$${tei_usd}** Total Economic Impact across audit window
+
+## Threat Intelligence Summary
+
 - **${clone_pairs}** Swarm clone pairs detected (Jaccard ≥ 0.70 structural similarity)
 - **${antipatterns_found}** language antipatterns found across all PRs
 - **${zombie_dep_prs}** zombie dependencies re-introduced (declared in manifest, never imported)
 - **${critical_threats}** Critical Threats (security antipattern or Swarm collision) — \$150/intercept
 - **${necrotic_count}** Necrotic GC intercepts (bot-closeable dead-code) — \$20/intercept
-- **${reclaimed_hours} hours** senior-engineer triage time reclaimed (${actionable_intercepts} × 12 min baseline)
-- **\$${tei_usd}** Total Economic Impact across audit window
 
 ## Top 10 PRs by Slop Score
 
@@ -100,11 +115,11 @@ Highest slop score in this audit: **${highest_score}** (100-point gate = fail th
 
 The Janitor v7.9.4 runs a 6-stage structural analysis pipeline on each pull request diff:
 
-1. **Vibe-Check Gate** — zstd compression ratio < 0.15 flags vibe-coded PRs (\`antipattern:ncd_anomaly\`)
-2. **AST Antipattern Scan** — tree-sitter queries for 20+ security patterns across 12 languages
-3. **MinHash LSH Clone Detection** — 64-hash Jaccard index detects Swarm structural clones
+1. **Vibe-Check Gate** — zstd compression ratio < 0.15 flags vibe-coded PRs that lack human-authored structural variance (\`antipattern:ncd_anomaly\`, +10 pts). Fires before tree-sitter parses a single node.
+2. **AST Antipattern Scan** — tree-sitter queries for 20+ security patterns across 12 languages (memory-unsafe C/C++, subprocess injection, innerHTML XSS, open CIDR, S3 public ACLs)
+3. **MinHash LSH Clone Detection** — 64-hash Jaccard index detects coordinated Swarm injection across PRs; Jaccard ≥ 0.85 = structural clone
 4. **Zombie Dependency Detection** — manifest vs. import-graph cross-reference (\`architecture:zombie_dependency\`)
-5. **Social Forensics** — unlinked PRs (+20 pts), comment-violation pattern scan
+5. **Social Forensics** — unlinked PRs (+20 pts), AhoCorasick comment-violation scan
 6. **Necrotic GC Gate** — semantic null analysis (base vs. head AST diff; \`backlog:SEMANTIC_NULL\` etc.)
 
 All analysis runs on your hardware. Source code never leaves your environment.
@@ -236,7 +251,7 @@ PR_LIMIT="${PR_LIMIT:-100}"
 BOUNCE_TIMEOUT="${BOUNCE_TIMEOUT:-30}"
 GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet}"
 JANITOR="${JANITOR:-./target/release/janitor}"
-OUT_DIR="${2:-${PWD}/client_packages/${REPO_NAME}}"
+OUT_DIR="${2:-${PWD}/strikes/${REPO_NAME}}"
 REPO_DIR="${GAUNTLET_DIR}/${REPO_NAME}"
 
 # ── Preflight ─────────────────────────────────────────────────────────────────

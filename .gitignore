@@ -241,6 +241,8 @@ package-lock.json
 *.ndjson
 # Gauntlet variant target lists (operator-local, not committed)
 gauntlet_targets_*.txt
+# Forensic strike output packages (just strike → strikes/<repo>/)
+strikes/
 
 # Whitelist: official docs assets are intentionally tracked.
 !docs/assets/*.pdf

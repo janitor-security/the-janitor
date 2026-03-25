@@ -140,11 +140,29 @@ hyper-gauntlet *ARGS:
 	cargo build --release -p gauntlet-runner -p cli
 	./target/release/gauntlet-runner --hyper --pr-limit 5000 {{ARGS}}
 
-# 6. DOCUMENTATION
+# 6. SINGLE-REPO FORENSIC STRIKE
+#
+# Runs the full 7-artefact forensic pipeline against one repository:
+#   PDF intelligence report + 16-col CSV audit trail + aggregate JSON
+#   + CycloneDX CBOM + per-repo intel JSON + VEX document + case-study.md
+#
+# Delegates entirely to tools/generate_client_package.sh which handles
+# the build, hyper-drive bounce, attestation, and synthesis steps.
+# Output lands in strikes/<repo_name>/ (workspace-isolated).
+#
+# Usage:
+#   just strike godotengine/godot          # 1000 PRs (default)
+#   just strike kubernetes/kubernetes 5000 # custom PR limit
+#   just strike NixOS/nixpkgs 50
+#
+strike repo pr_limit='1000':
+	PR_LIMIT={{pr_limit}} ./tools/generate_client_package.sh {{repo}}
+
+# 7. DOCUMENTATION
 deploy-docs:
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 
-# 6. WINDOWS SYNC
+# 8. WINDOWS SYNC
 sync:
 	@echo "🪟 Syncing to Windows mount..."
 	rsync -av --delete \
