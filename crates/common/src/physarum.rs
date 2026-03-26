@@ -68,8 +68,13 @@
 //!
 //! The ring buffer is a fixed 16-slot array of `(Instant, u64)` pairs (224
 //! bytes on 64-bit platforms).  No heap allocation occurs on any call path.
-//! The per-beat cost is one `sysinfo::refresh_memory()` call plus O(16) scalar
-//! arithmetic — negligible on any hardware the daemon is likely to run on.
+//!
+//! `beat()` calls `sysinfo::refresh_memory()` **at most once per
+//! [`REFRESH_THROTTLE`] interval** (100 ms).  Calls within the throttle
+//! window return the cached reading immediately — one mutex acquisition and
+//! one `Instant::now()` call, with no OS syscall.  This decouples the
+//! memory observer from the scanning hot-path: a rayon pool processing 100
+//! PRs/sec issues ≤ 10 sysinfo reads/sec instead of 100.
 
 use std::time::{Duration, Instant};
 
@@ -108,6 +113,21 @@ const HIGH_RAM_THRESHOLD_GIB: u64 = 16;
 /// (1–4 calls/sec) provides 4–16 seconds of history — well beyond the
 /// 3-second SMA window.
 const RING_CAPACITY: usize = 16;
+
+/// Minimum elapsed time between actual `sysinfo::refresh_memory()` syscalls.
+///
+/// Consecutive `beat()` calls within this window reuse the cached memory
+/// reading and return immediately.  The SMA ring buffer is updated **only**
+/// on actual refreshes so the window always contains real observations.
+///
+/// 100 ms is chosen to decouple the memory observer from the scanning
+/// hot-path: a rayon pool processing PRs at 50–200 ms each previously
+/// issued one `refresh_memory()` per PR.  With the throttle the refresh
+/// rate is bounded at ≤ 10 reads/sec regardless of PR throughput, while
+/// still responding to sustained memory pressure within one SMA window
+/// (3 s / 0.1 s = up to 30 samples per window — more than enough for the
+/// velocity and SMA calculations).
+const REFRESH_THROTTLE: Duration = Duration::from_millis(100);
 
 // ---------------------------------------------------------------------------
 // Pulse
@@ -227,6 +247,15 @@ impl SmaHistory {
 struct Inner {
     sys: System,
     history: SmaHistory,
+    /// Timestamp of the last actual `sysinfo::refresh_memory()` call.
+    ///
+    /// Initialised to `now - REFRESH_THROTTLE` so the very first `beat()`
+    /// always performs a real refresh.
+    last_refresh: Instant,
+    /// Cached total memory bytes from the most recent real refresh.
+    cached_total: u64,
+    /// Cached used memory bytes from the most recent real refresh.
+    cached_used: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -246,10 +275,20 @@ impl SystemHeart {
     /// Create a new `SystemHeart`, initialising the sysinfo handle and the
     /// empty ring-buffer history.
     pub fn new() -> Self {
+        // Initialise last_refresh to (now − REFRESH_THROTTLE) so the very
+        // first beat() always performs a real sysinfo refresh.
+        // checked_sub guards against the (theoretical) case where Instant::now()
+        // is less than REFRESH_THROTTLE after the monotonic clock epoch.
+        let stale = Instant::now()
+            .checked_sub(REFRESH_THROTTLE)
+            .unwrap_or_else(Instant::now);
         Self {
             inner: std::sync::Mutex::new(Inner {
                 sys: System::new(),
                 history: SmaHistory::new(),
+                last_refresh: stale,
+                cached_total: 0,
+                cached_used: 0,
             }),
         }
     }
@@ -272,21 +311,31 @@ impl SystemHeart {
     /// total memory (i.e., when `total_memory() == 0`).
     pub fn beat(&self) -> Pulse {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        g.sys.refresh_memory();
+        let now = Instant::now();
 
-        let total = g.sys.total_memory();
+        // Throttled refresh — call sysinfo only when the window has elapsed.
+        // The SMA ring buffer is updated only on actual refreshes so every
+        // sample in the history represents a distinct OS observation.
+        if now.duration_since(g.last_refresh) >= REFRESH_THROTTLE {
+            g.sys.refresh_memory();
+            g.cached_total = g.sys.total_memory();
+            g.cached_used = g.sys.used_memory();
+            g.last_refresh = now;
+            // Copy before the push to avoid a simultaneous mut/imm borrow of `g`.
+            let snapshot_used = g.cached_used;
+            g.history.push(Sample {
+                at: now,
+                used: snapshot_used,
+            });
+        }
+
+        let total = g.cached_total;
         if total == 0 {
             // No memory info available (e.g. some BSDs, CI sandboxes) — allow flow.
             return Pulse::Flow;
         }
 
-        let used = g.sys.used_memory();
-        let now = Instant::now();
-
-        // Record the new sample before computing — ensures the current reading
-        // participates in both the SMA and the velocity calculation.
-        g.history.push(Sample { at: now, used });
-
+        let used = g.cached_used;
         let (sma, velocity) = g.history.compute(now);
 
         // Use the SMA-smoothed value for the percentage gate; fall back to
@@ -375,18 +424,28 @@ impl SystemHeart {
         };
 
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        g.sys.refresh_memory();
+        let now = Instant::now();
 
-        let total = g.sys.total_memory();
+        // Same throttled-refresh logic as beat() — the Swarm variant shares
+        // the Inner cache so both paths benefit from the same deduplication.
+        if now.duration_since(g.last_refresh) >= REFRESH_THROTTLE {
+            g.sys.refresh_memory();
+            g.cached_total = g.sys.total_memory();
+            g.cached_used = g.sys.used_memory();
+            g.last_refresh = now;
+            let snapshot_used = g.cached_used;
+            g.history.push(Sample {
+                at: now,
+                used: snapshot_used,
+            });
+        }
+
+        let total = g.cached_total;
         if total == 0 {
             return Pulse::Flow;
         }
 
-        let used = g.sys.used_memory();
-        let now = Instant::now();
-
-        g.history.push(Sample { at: now, used });
-
+        let used = g.cached_used;
         let (sma, velocity) = g.history.compute(now);
 
         let effective_used = sma.unwrap_or(used as f64);
@@ -689,6 +748,31 @@ mod tests {
             virtual_pct > 90.0,
             "heavy Swarm multiplier must push 73 % real RAM past the Stop gate"
         );
+    }
+
+    #[test]
+    fn test_throttled_refresh_rapid_calls_return_valid_pulse() {
+        // Rapid consecutive beat() calls within the 100 ms throttle window
+        // must all return valid pulses without panicking.
+        let heart = SystemHeart::new();
+        for _ in 0..20 {
+            let pulse = heart.beat();
+            assert!(
+                matches!(pulse, Pulse::Flow | Pulse::Constrict | Pulse::Stop),
+                "rapid beat() call returned unexpected variant"
+            );
+        }
+    }
+
+    #[test]
+    fn test_throttled_refresh_beat_and_beat_swarm_share_cache() {
+        // beat() followed immediately by beat_swarm() within the throttle
+        // window must both return valid pulses — they share the Inner cache.
+        let heart = SystemHeart::new();
+        let p1 = heart.beat();
+        let p2 = heart.beat_swarm(3);
+        assert!(matches!(p1, Pulse::Flow | Pulse::Constrict | Pulse::Stop));
+        assert!(matches!(p2, Pulse::Flow | Pulse::Constrict | Pulse::Stop));
     }
 
     #[test]
