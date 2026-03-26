@@ -170,7 +170,20 @@ strike repo pr_limit='1000':
 deploy-docs:
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 
-# 8. WINDOWS SYNC
+# 8. LOCAL BRANCH INTEGRITY CHECK
+#
+# Fast pre-merge verification of a local branch against main.
+# Runs the full bounce pipeline (git-native mode) without any network calls
+# or cloning — reads directly from the local packfile.
+#
+# Usage:
+#   just check-branch dependabot/cargo/serde-1.0.200
+#   just check-branch my-feature-branch 42          # with PR number for log entry
+#
+check-branch branch pr='0':
+	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --format json
+
+# 9. WINDOWS SYNC
 sync:
 	@echo "🪟 Syncing to Windows mount..."
 	rsync -av --delete \
