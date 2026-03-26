@@ -13,7 +13,7 @@
 //! | 1 | `PR_Number` | Empty string when absent |
 //! | 2 | `Author` | Empty string when absent |
 //! | 3 | `Score` | Composite weighted slop score |
-//! | 4 | `Threat_Class` | `"Critical"` \| `"Necrotic"` \| `"Boilerplate"` |
+//! | 4 | `Threat_Class` | `"Critical"` \| `"Necrotic"` \| `"StructuralSlop"` \| `"Boilerplate"` |
 //! | 5 | `Unlinked_PR` | `TRUE` if no issue link detected, else `FALSE` |
 //! | 6 | `Logic_Clones` | SimHash clone pairs within the patch |
 //! | 7 | `Antipattern_IDs` | Pipe-delimited structured rule labels only (e.g. `security:compiled_payload_anomaly\|antipattern:ncd_anomaly`) |
@@ -91,14 +91,18 @@ const CSV_HEADER: [&str; 16] = [
 /// - `"Critical"` — `is_critical_threat` is true (security antipattern or Swarm collision); $150.
 /// - `"Necrotic"` — `necrotic_flag` is set, OR zombie deps detected (not critical); $20.
 /// - `"StructuralSlop"` — `slop_score > 0`, no critical or necrotic signal; $20.
+///   Includes PRs whose score is raised solely by version silos — their
+///   `slop_score` is non-zero (`version_silo_details.len() × 20`), which is
+///   sufficient to land here without any necrotic or critical signal.
 /// - `"Boilerplate"` — `slop_score == 0`, no threat signal; $0.
+///
+/// Version silos are NOT "Necrotic": they represent architectural debt that
+/// requires a human dependency-graph review, not an automated bot-close.  A
+/// silo PR has `slop_score >= 20` and therefore can never be `"Boilerplate"`.
 fn threat_class(entry: &crate::report::BounceLogEntry) -> &'static str {
     if crate::report::is_critical_threat(entry) {
         "Critical"
-    } else if entry.necrotic_flag.is_some()
-        || !entry.zombie_deps.is_empty()
-        || !entry.version_silos.is_empty()
-    {
+    } else if entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty() {
         "Necrotic"
     } else if entry.slop_score > 0 {
         "StructuralSlop"
@@ -123,10 +127,10 @@ fn antipattern_ids(entry: &crate::report::BounceLogEntry) -> String {
     if !entry.zombie_deps.is_empty() {
         parts.push("architecture:zombie_dependency".to_owned());
     }
-    if !entry.version_silos.is_empty() {
-        let names = entry.version_silos.join(", ");
-        parts.push(format!("architecture:version_silo ({names})"));
-    }
+    // NOTE: version silos are NOT pushed here because the silo detector already
+    // injects `architecture:version_silo (...)` into `entry.antipatterns` via
+    // `score.antipattern_details`.  Pushing from `entry.version_silos` as well
+    // would produce a duplicate `(x2)` entry after `group_strings` collapses.
     parts.extend(entry.antipatterns.iter().cloned());
     // Collapse repeated labels: [A, A, A, B] → "A (x3)|B".
     // Identical structured IDs (e.g. three antipattern:ncd_anomaly hits from
@@ -164,17 +168,18 @@ fn write_entry_row(
     entry: &crate::report::BounceLogEntry,
 ) -> Result<()> {
     let critical = crate::report::is_critical_threat(entry);
-    // Necrotic: pruner-flagged dead-code, zombie dep, OR version silo introduction.
-    // All are automatable intercepts billed at $20/PR.
-    let necrotic = entry.necrotic_flag.is_some()
-        || !entry.zombie_deps.is_empty()
-        || !entry.version_silos.is_empty();
+    // Necrotic: pruner-flagged dead-code OR zombie dep — bot-automatable closes.
+    // Version silos are NOT Necrotic: they require human dependency-graph review,
+    // not an automated bulk-close, and they carry slop_score > 0 which places them
+    // in the StructuralSlop tier instead.
+    let necrotic = entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty();
     // Structural Slop: slop_score > 0 with no critical or necrotic signal.
-    // Carries measurable structural debt; billed at $20/PR.
+    // Includes version-silo PRs (slop_score = version_silo_details.len() × 20).
     let structural_slop = !critical && !necrotic && entry.slop_score > 0;
 
     // Time_Saved_Hours: necrotic_count × 12 min ÷ 60.
-    // 12 min = conservative senior-engineer triage estimate per Workslop research 2026.
+    // Only necrotic (bot-automatable) PRs contribute reclaimed triage minutes.
+    // Structural Slop still requires human review — no time credit.
     let time_saved_h: f64 = if necrotic { 12.0 / 60.0 } else { 0.0 };
 
     // Categorical billing: Critical ($150) > Necrotic GC ($20) > Structural Slop ($20) > $0.
