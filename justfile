@@ -72,7 +72,9 @@ auth-refresh:
 #           → push → gh release → deploy-docs
 #
 release version: audit
-	@echo "🚀 Initiating Release Sequence v{{version}}..."
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "🚀 Initiating Release Sequence v{{version}}..."
 	cargo build --release --workspace
 	strip target/release/janitor
 	git add .
@@ -80,15 +82,16 @@ release version: audit
 	git tag v{{version}}
 	# Floating major-version tag — lets users pin to a major and always receive
 	# the latest stable patch without editing their workflows.
-	MAJOR="$(echo "{{version}}" | cut -d. -f1)" && git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
+	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
+	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
 	git push origin HEAD:main "v{{version}}"
-	git push origin "v$(echo "{{version}}" | cut -d. -f1)" --force
+	git push origin "v${MAJOR}" --force
 	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
 		--title "v{{version}} - The Industrial Pivot" \
 		--notes-file README.md \
 		--latest
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
-	@echo "💀 Release v{{version}} deployed."
+	echo "💀 Release v{{version}} deployed."
 
 # 5. MULTI-REPO GAUNTLET
 # Deterministic Rust orchestrator replacing ultimate_gauntlet.sh.
@@ -172,7 +175,11 @@ deploy-docs:
 #   just check-branch my-feature-branch 42          # with PR number for log entry
 #
 check-branch branch pr='0':
-	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --repo-slug $(git config --get remote.origin.url | sed -e 's/.*github.com[:/]//' -e 's/\.git$//') --format json
+	#!/usr/bin/env bash
+	set -euo pipefail
+	REPO_SLUG="$(git config --get remote.origin.url | sed -e 's/.*github.com[:/]//' -e 's/\.git$//')"
+	[[ -n "${REPO_SLUG}" ]] || { echo "error: could not resolve repo slug from git remote" >&2; exit 1; }
+	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --repo-slug "${REPO_SLUG}" --format json
 
 # 9. WINDOWS SYNC
 sync:

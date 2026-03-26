@@ -45,7 +45,9 @@ runs:
       if: steps.cache-build.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        git clone https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
+        set -euo pipefail
+        git clone --depth 1 --branch "${{ github.action_ref || 'main' }}" \
+          https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
         cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
 
     # Step 3 — Export binary path (always runs; cache hit and miss both land here).
@@ -59,6 +61,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
       run: |
+        set -euo pipefail
         gh pr diff "${{ github.event.pull_request.number }}" \
           --repo "${{ github.repository }}" \
           > .janitor-pr.patch
@@ -73,7 +76,7 @@ runs:
     - name: Execute Stateless Firewall
       shell: bash
       run: |
-        set -eo pipefail
+        set -euo pipefail
         HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
         # Resolve installation ID — prefer explicit input, fall back to the

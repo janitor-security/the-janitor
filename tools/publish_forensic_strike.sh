@@ -36,6 +36,9 @@ set -euo pipefail
 SLUG="${1:?Usage: $0 <owner/repo>   e.g. godotengine/godot}"
 REPO_NAME="${SLUG##*/}"          # "godot" from "godotengine/godot"
 PR_LIMIT="${PR_LIMIT:-1000}"
+JANITOR="${JANITOR:-./target/release/janitor}"
+# Pre-strike: use existing binary if present; refreshed post-strike below.
+JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}' || echo "dev")"
 STRIKES_DIR="${STRIKES_DIR:-${PWD}/strikes}"
 AUDIT_ORG="${AUDIT_ORG:-janitor-security}"
 SKIP_STRIKE="${SKIP_STRIKE:-0}"
@@ -57,7 +60,7 @@ for cmd in gh git jq bc; do
 done
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  publish_forensic_strike — The Janitor v7.9.4               ║"
+echo "║  publish_forensic_strike — The Janitor v${JANITOR_VERSION}               ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "  Target     : ${SLUG}"
@@ -79,6 +82,9 @@ else
     echo "[1/4] Executing forensic strike against ${SLUG} (limit=${PR_LIMIT})..."
     PR_LIMIT="${PR_LIMIT}" just strike "${SLUG}" "${PR_LIMIT}"
 fi
+
+# Resolve version from the freshly-built binary.
+JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}')"
 
 # Verify all 7 expected artefacts are present.
 EXPECTED_ARTIFACTS=(
@@ -111,7 +117,7 @@ if gh repo view "${FULL_AUDIT_SLUG}" &>/dev/null; then
 else
     gh repo create "${FULL_AUDIT_SLUG}" \
         --public \
-        --description "Janitor v7.9.4 forensic audit — ${SLUG} (${TODAY})" \
+        --description "Janitor v${JANITOR_VERSION} forensic audit — ${SLUG} (${TODAY})" \
         --add-readme=false
     echo "  Created: https://github.com/${FULL_AUDIT_SLUG}"
 fi
@@ -140,7 +146,7 @@ git -C "${PUBLISH_DIR}" add .
 git -C "${PUBLISH_DIR}" \
     -c user.email="ops@thejanitor.app" \
     -c user.name="Janitor Intelligence" \
-    commit -m "Janitor v7.9.4 forensic audit — ${SLUG} (${TODAY}, ${PR_LIMIT} PRs)"
+    commit -m "Janitor v${JANITOR_VERSION} forensic audit — ${SLUG} (${TODAY}, ${PR_LIMIT} PRs)"
 
 git -C "${PUBLISH_DIR}" remote add origin \
     "https://github.com/${FULL_AUDIT_SLUG}.git"

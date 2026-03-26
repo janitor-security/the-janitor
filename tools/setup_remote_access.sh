@@ -14,8 +14,17 @@ set -euo pipefail
 
 # ── 1. Tailscale install (idempotent) ─────────────────────────────────────────
 if ! command -v tailscale &>/dev/null; then
-    echo "==> Installing Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh
+    echo "==> Installing Tailscale (pinned v1.78.1 via apt)..."
+    # Use the signed APT repository — avoids the curl-pipe-sh supply chain risk.
+    # To update: bump TAILSCALE_VERSION and re-run.
+    TAILSCALE_VERSION="1.78.1"
+    curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg \
+        | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] \
+        https://pkgs.tailscale.com/stable/debian bookworm main" \
+        | sudo tee /etc/apt/sources.list.d/tailscale.list
+    sudo apt-get update -qq
+    sudo apt-get install -y "tailscale=${TAILSCALE_VERSION}"
 else
     echo "==> Tailscale already installed: $(tailscale version | head -1)"
 fi
