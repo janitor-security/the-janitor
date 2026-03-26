@@ -52,7 +52,7 @@ build:
 	    echo "↳ Entering Nix hermetic shell for reproducible build..."
 	    exec nix develop --command just build
 	fi
-	cargo clean -p cli && cargo build --release --workspace
+	cargo build --release --workspace
 
 clean:
 	cargo clean

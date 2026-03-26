@@ -1248,7 +1248,7 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
     let ci_compute_saved = critical * 150;
     let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     serde_json::json!({
-        "schema_version": "7.9.4",
+        "schema_version": env!("CARGO_PKG_VERSION"),
         "repository": repo_name,
         "total_prs_analyzed": data.entries.len(),
         "workslop": {
@@ -1447,7 +1447,7 @@ pub fn render_scan_json(
     let total_dead_bytes: u64 = dead.iter().map(|e| e.byte_size as u64).sum();
 
     serde_json::json!({
-        "schema_version": "7.9.4",
+        "schema_version": env!("CARGO_PKG_VERSION"),
         "repository": repo_name,
         "total_entities": total_entities,
         "dead_symbol_count": dead.len(),
@@ -2024,7 +2024,7 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
     let ci_compute_saved = critical * 150;
     let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     serde_json::json!({
-        "schema_version": "7.9.4",
+        "schema_version": env!("CARGO_PKG_VERSION"),
         "gauntlet_root": gauntlet_root,
         "total_repos": data.repos.len(),
         "total_prs": data.total_prs,
