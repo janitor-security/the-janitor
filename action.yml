@@ -11,8 +11,13 @@ inputs:
     description: 'GitHub token (contents: read, pull-requests: read)'
     required: true
   installation_id:
-    description: 'Janitor Sentinel App installation ID for this repository'
-    required: true
+    description: >
+      Janitor Sentinel App installation ID for this repository.
+      Auto-resolved from github.event.installation.id when omitted — only
+      required if the workflow is triggered outside a GitHub App event context
+      (e.g. workflow_dispatch or scheduled runs).
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -71,11 +76,16 @@ runs:
         set -eo pipefail
         HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
+        # Resolve installation ID — prefer explicit input, fall back to the
+        # installation context embedded in the App's webhook event payload,
+        # then default to 0 (Governor auto-resolves via /app/installations API).
+        INSTALL_ID="${{ inputs.installation_id || github.event.installation.id || '0' }}"
+
         TOKEN_PAYLOAD=$(jq -n \
           --arg  repo "${{ github.repository }}" \
           --argjson pr  ${{ github.event.pull_request.number }} \
           --arg  sha  "$HEAD_SHA" \
-          --argjson id  ${{ inputs.installation_id }} \
+          --argjson id  "${INSTALL_ID:-0}" \
           '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: $id}')
 
         ANALYSIS_TOKEN=$(curl -sf -X POST \
