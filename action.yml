@@ -25,7 +25,9 @@ runs:
 
     # Step 1 — Restore cached janitor binary.
     #
-    # Key: OS + Cargo.lock digest (hashes all Cargo.lock files in workspace).
+    # Key: OS + digest of Cargo.lock, all crate source files, and crate manifests.
+    # Hashing source alongside the lockfile ensures a cache miss whenever any
+    # Rust source or Cargo.toml changes, not just when dependencies change.
     # Path: the compiled binary only — not the full target/ tree.
     # On cache hit  → Step 2 (Bootstrap) is skipped entirely.
     # On cache miss → Step 2 clones + builds, populating the cache on exit.
@@ -34,7 +36,7 @@ runs:
       uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3 branch HEAD
       with:
         path: /tmp/the-janitor/target/release/janitor
-        key: ${{ runner.os }}-rust-stable-cargo-lock-hash-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-rust-stable-janitor-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
 
     # Step 2 — Clone and compile on cache miss only.
     #
