@@ -28,6 +28,7 @@ nav:
   - Security Posture: security.md
   - Benchmarks: benchmarks.md
   - Intelligence Reports:
+    - Index: intelligence.md
     - Global Audit 2026: case-studies/global-audit-2026.md
     - Godot Engine: case-studies/godot.md
     - Kubernetes Core: https://github.com/janitor-security/kubernetes-audit-2026
