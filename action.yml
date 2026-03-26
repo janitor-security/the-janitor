@@ -85,8 +85,8 @@ runs:
           --arg  repo "${{ github.repository }}" \
           --argjson pr  ${{ github.event.pull_request.number }} \
           --arg  sha  "$HEAD_SHA" \
-          --argjson id  "${INSTALL_ID:-0}" \
-          '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: $id}')
+          --arg  id   "${INSTALL_ID:-0}" \
+          '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: (if $id == "" then 0 else ($id | tonumber) end)}')
 
         ANALYSIS_TOKEN=$(curl -sf -X POST \
           https://the-governor.fly.dev/v1/analysis-token \
