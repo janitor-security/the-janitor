@@ -104,6 +104,28 @@ When your team deploys AI engineers, the gate does not move.
 
 ---
 
+## GOOGLE-READY PQC ATTESTATION
+
+Google announced in early 2026 that all internal cryptographic operations must be quantum-safe ahead of schedule, with external-facing systems following suit. **NIST FIPS 204 (ML-DSA-65)** — the Module Lattice Digital Signature algorithm — is the mandated post-quantum standard. The migration window is shorter than most security teams have budgeted for.
+
+Every **CycloneDX v1.5 CBOM** issued by Janitor Sentinel is signed with **ML-DSA-65** today.
+
+| Claim | Implementation |
+|---|---|
+| Signature algorithm | **ML-DSA-65** (NIST FIPS 204 — Module Lattice Digital Signature) |
+| Hash algorithm | **BLAKE3** (256-bit) for structural hashes and per-symbol audit entries |
+| Format | **CycloneDX v1.5 CBOM** — Cryptography Bill of Materials |
+| Issuance trigger | Clean merge — automatic, no token flag or manual step |
+| Audit target | SOC 2 Type II, NIST CSF 2.0, quantum-readiness audit |
+
+Your compliance artifacts are **ahead of the mandate**. Most enterprises will not complete their PQC migration before Google's accelerated deadline. Every PR that clears the Janitor gate today produces a quantum-safe attestation bond — a chain of custody you will not need to retrofit later.
+
+This is not a migration plan. It is an artifact. The CBOM records the ML-DSA-65 attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`. A regulator or incident response team can verify the chain of custody without trusting the issuing system — the math stands alone.
+
+**The only PQC-signed CBOM that fires automatically on every clean PR merge. No configuration. No certificate authority. No migration project.**
+
+---
+
 ## DEFEATING AUTONOMOUS PR TAMPERING
 
 On **March 24, 2026**, GitHub rolled out a feature that allows any repository maintainer to assign an open pull request directly to Copilot for autonomous modification. Copilot then reads the PR, plans changes, and pushes commits — without a human writing a single line. The PR author remains the original human opener; the new commits are signed by `copilot[bot]`.
@@ -123,6 +145,36 @@ The +50 surcharge means a Copilot-modified PR must be **structurally flawless** 
 The surcharge fires as `antipattern:agentic_origin` in the bounce log, CBOM, and SIEM webhook payload — providing a full audit trail of every PR where autonomous coding agent activity was detected and gated.
 
 Copilot is not the last. Devin, Cursor Agent, and equivalents follow the same pattern: non-human commits on human PRs, at machine velocity, bypassing the review queue. The AgenticOrigin gate is the enforcement layer that moves with the threat.
+
+---
+
+## THE MAINTAINER SHIELD
+
+Open-source maintainers are experiencing **death by a thousand slops**.
+
+The Agoda engineering team published the numbers in 2025: AI-assisted development increased per-engineer PR output by **4–6×**. On a team of 10 engineers, that is 400 inbound PRs per day against a human review capacity of 80. The backlog grows by 320 PRs every 24 hours. It never clears. It compounds.
+
+The failure mode is not malice. It is **context bloat**.
+
+AI coding agents suffer a predictable structural degradation as their context windows extend to handle larger codebases. Signal-to-noise ratio collapses. The agent generates structurally self-similar functions that pass superficial review. It hallucinates imports that compile but never execute. It reintroduces previously deleted dead symbols — because the deletion happened three sprints ago and the context window has rolled past it. It submits the same structural scaffold across a dozen PRs from a dozen accounts — not a coordinated attack, just a model completing the same pattern it has seen ten thousand times.
+
+Each PR is individually plausible. Collectively, they are **death by a thousand slops** — a flood that overwhelms every human review heuristic precisely because each individual PR clears the bar that human review was designed to catch.
+
+**The 100-point Slop Gate is the definitive defense.**
+
+| Signal | Weight | What it stops |
+|:-------|:------:|:--------------|
+| Logic clones detected | ×5 | Structurally identical implementations — the context-bloat signature |
+| Zombie symbols reintroduced | ×10 | Previously deleted symbols returning via AI copy-paste |
+| Language antipatterns | ×50 | Hallucinated imports, unsafe blocks, injection vectors |
+| Unlinked PR | ×20 | Agent PRs that bypass issue-tracking hygiene |
+| AgenticOrigin surcharge | +50 flat | Autonomous coding agents held to a zero-defect structural standard |
+
+The gate is not a reviewer. It is a circuit breaker. It does not replace human judgment — it eliminates the structural category of slop that should never reach a human reviewer in the first place. When the queue is 400 PRs deep, the circuit breaker is not optional.
+
+A single Critical antipattern from a context-bloated agent PR scores 50 points. The AgenticOrigin surcharge adds 50 more. The PR fails at exactly the gate threshold — deterministically, in under 33 seconds, before the merge button is available.
+
+**The Slop Gate moves with the threat. When your team deploys AI engineers, the gate does not move.**
 
 ---
 
