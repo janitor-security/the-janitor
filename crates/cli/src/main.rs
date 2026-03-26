@@ -1023,7 +1023,7 @@ fn cmd_scan(
 
         let scan_policy = common::policy::JanitorPolicy::load(project_root);
         let json_out = serde_json::json!({
-            "schema_version": "6.9.0",
+            "schema_version": "7.9.4",
             "slop_score": slop_score,
             "dead_symbols": result.dead.iter().map(|e| serde_json::json!({
                 "id": e.qualified_name,
@@ -2719,7 +2719,7 @@ fn cmd_bounce(
 
     if format == "json" {
         let json_out = serde_json::json!({
-            "schema_version": "6.9.0",
+            "schema_version": "7.9.4",
             "slop_score": score.score() as f64,
             "dead_symbols_added": score.dead_symbols_added,
             "logic_clones_found": score.logic_clones_found,
