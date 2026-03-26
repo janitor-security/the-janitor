@@ -386,10 +386,13 @@ impl JanitorPolicy {
     pub fn is_automation_account(&self, author: &str) -> bool {
         // Layer 1: GitHub App path prefix — `app/<slug>` format used by
         // GitHub's REST API for App-authored PRs.  Zero-allocation check.
+        // Covers: app/dependabot, app/renovate, app/copilot, app/github-copilot, etc.
         if author.starts_with("app/") {
             return true;
         }
         // Layer 2: standard GitHub App suffix — zero-allocation static check.
+        // Covers: dependabot[bot], renovate[bot], github-actions[bot],
+        // copilot[bot], github-copilot[bot], and any future GitHub App bots.
         if author.ends_with("[bot]") {
             return true;
         }
@@ -403,6 +406,67 @@ impl JanitorPolicy {
                 .automation_accounts
                 .iter()
                 .any(|a| a.eq_ignore_ascii_case(author))
+    }
+
+    /// Returns `true` when `author` or `pr_body` indicates an **autonomous coding agent**
+    /// made commits in this PR — distinct from basic CI bots like Dependabot.
+    ///
+    /// ## AgenticOrigin Penalty
+    ///
+    /// Autonomous coding agents warrant a mandatory structural quality surcharge of
+    /// **+50 points** applied to the composite slop score (see
+    /// [`crate::slop_filter::SlopScore::agentic_origin_penalty`]).
+    ///
+    /// This ensures machine-authored code must be structurally flawless to pass the
+    /// 100-point gate — a PR from `copilot[bot]` with one Critical antipattern already
+    /// scores 100 (50 antipattern + 50 surcharge) and fails.  A structurally clean
+    /// agent PR scores 50 and passes — the penalty enforces a higher bar, not a blanket
+    /// block.
+    ///
+    /// ## Detection layers
+    ///
+    /// 1. **Known agentic handles** — exact case-insensitive match against the GitHub
+    ///    Copilot coding agent account names active as of 2026-03-24:
+    ///    `copilot[bot]`, `github-copilot[bot]`, `app/copilot`, `app/github-copilot`.
+    ///
+    /// 2. **Co-authored-by trailer** — scans PR body lines starting with
+    ///    `co-authored-by:` for any Copilot handle.  Catches the case where a human
+    ///    opens the PR but the Copilot coding agent autonomously pushes commits on top —
+    ///    the scenario introduced by GitHub's March 24, 2026 "assign to Copilot" feature.
+    ///
+    /// ## Distinction from `is_automation_account`
+    ///
+    /// | Function               | `dependabot[bot]` | `copilot[bot]` |
+    /// |------------------------|:-----------------:|:--------------:|
+    /// | `is_automation_account`| `true`            | `true`         |
+    /// | `is_agentic_actor`     | `false`           | `true`         |
+    ///
+    /// Both functions returning `true` for Copilot is intentional:
+    /// automation accounts are exempt from the unlinked-PR penalty;
+    /// agentic actors additionally receive the +50 surcharge.
+    pub fn is_agentic_actor(&self, author: &str, pr_body: Option<&str>) -> bool {
+        // Layer 1: GitHub Copilot coding agent handle patterns (zero-allocation).
+        // These are the exact account names GitHub uses for the Copilot coding agent
+        // (App format and [bot] suffix) as of the 2026-03-24 feature rollout.
+        if author.eq_ignore_ascii_case("copilot[bot]")
+            || author.eq_ignore_ascii_case("github-copilot[bot]")
+            || author.eq_ignore_ascii_case("app/copilot")
+            || author.eq_ignore_ascii_case("app/github-copilot")
+        {
+            return true;
+        }
+        // Layer 2: Co-authored-by trailer in the PR body.
+        // The Copilot coding agent appends a `Co-authored-by: Copilot <...>` trailer
+        // when it pushes autonomous commits onto an existing human-authored PR.
+        if let Some(body) = pr_body {
+            for line in body.lines() {
+                let line_lower = line.to_ascii_lowercase();
+                if line_lower.starts_with("co-authored-by:") && line_lower.contains("copilot") {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Returns `true` when `author` appears in [`Self::trusted_bot_authors`].
@@ -668,5 +732,80 @@ mod tests {
         let p = JanitorPolicy::load(&dir);
         assert_eq!(p.min_slop_score, 200);
         assert!(p.require_issue_link);
+    }
+
+    // --- AgenticOrigin detection ---
+
+    #[test]
+    fn copilot_bot_suffix_is_agentic() {
+        let p = JanitorPolicy::default();
+        assert!(p.is_agentic_actor("copilot[bot]", None));
+        assert!(p.is_agentic_actor("github-copilot[bot]", None));
+    }
+
+    #[test]
+    fn copilot_app_prefix_is_agentic() {
+        let p = JanitorPolicy::default();
+        assert!(p.is_agentic_actor("app/copilot", None));
+        assert!(p.is_agentic_actor("app/github-copilot", None));
+    }
+
+    #[test]
+    fn copilot_handles_are_case_insensitive() {
+        let p = JanitorPolicy::default();
+        assert!(p.is_agentic_actor("Copilot[bot]", None));
+        assert!(p.is_agentic_actor("GITHUB-COPILOT[BOT]", None));
+        assert!(p.is_agentic_actor("App/Copilot", None));
+    }
+
+    #[test]
+    fn basic_ci_bots_are_not_agentic() {
+        // Dependabot, Renovate, and GitHub Actions are NOT agentic actors.
+        let p = JanitorPolicy::default();
+        assert!(!p.is_agentic_actor("dependabot[bot]", None));
+        assert!(!p.is_agentic_actor("renovate[bot]", None));
+        assert!(!p.is_agentic_actor("github-actions[bot]", None));
+        assert!(!p.is_agentic_actor("r-ryantm", None));
+        assert!(!p.is_agentic_actor("app/dependabot", None));
+        assert!(!p.is_agentic_actor("app/renovate", None));
+    }
+
+    #[test]
+    fn human_authors_are_not_agentic() {
+        let p = JanitorPolicy::default();
+        assert!(!p.is_agentic_actor("human-dev", None));
+        assert!(!p.is_agentic_actor("alice", None));
+        assert!(!p.is_agentic_actor("", None));
+    }
+
+    #[test]
+    fn coauthored_by_copilot_trailer_fires_agentic() {
+        let p = JanitorPolicy::default();
+        let body = "Fixes #42\n\nCo-authored-by: Copilot <copilot@github.com>";
+        // Human PR author but Copilot co-committed.
+        assert!(p.is_agentic_actor("human-dev", Some(body)));
+    }
+
+    #[test]
+    fn coauthored_by_trailer_case_insensitive() {
+        let p = JanitorPolicy::default();
+        let body = "co-authored-by: COPILOT <copilot@github.com>";
+        assert!(p.is_agentic_actor("human-dev", Some(body)));
+    }
+
+    #[test]
+    fn coauthored_by_non_copilot_does_not_fire() {
+        let p = JanitorPolicy::default();
+        let body = "Co-authored-by: alice <alice@example.com>";
+        assert!(!p.is_agentic_actor("human-dev", Some(body)));
+    }
+
+    #[test]
+    fn copilot_author_is_also_automation_account() {
+        // Copilot[bot] matches both is_automation_account (via [bot] suffix)
+        // AND is_agentic_actor — these are independent, non-exclusive gates.
+        let p = JanitorPolicy::default();
+        assert!(p.is_automation_account("copilot[bot]"));
+        assert!(p.is_agentic_actor("copilot[bot]", None));
     }
 }

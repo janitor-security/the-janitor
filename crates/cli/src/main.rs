@@ -2594,6 +2594,25 @@ fn cmd_bounce(
     if policy.require_issue_link && score.unlinked_pr == 0 && pr_body.is_none() {
         score.unlinked_pr = 1;
     }
+
+    // AgenticOrigin penalty — applied when the PR is authored or co-authored by an
+    // autonomous coding agent (GitHub Copilot coding agent and equivalents).
+    //
+    // +50 points: forces structurally clean code through the gate while blocking
+    // agent PRs with even one Critical antipattern (50 antipattern + 50 = 100 ≥ gate).
+    // Distinct from `is_automation_account`: basic CI bots (Dependabot, Renovate) do NOT
+    // receive this penalty — only autonomous *coding* agents that generate source code.
+    if policy.is_agentic_actor(author.unwrap_or(""), pr_body) {
+        score.agentic_origin_penalty = 50;
+        score.antipatterns_found += 1;
+        score.antipattern_details.push(
+            "antipattern:agentic_origin — autonomous coding agent detected \
+(GitHub Copilot coding agent, active since 2026-03-24); \
++50 structural quality surcharge applied"
+                .to_string(),
+        );
+    }
+
     let effective_gate = policy.effective_gate(pr_body);
     let gate_passed = policy.gate_passes(score.score(), pr_body);
 
@@ -2610,6 +2629,7 @@ fn cmd_bounce(
             "comment_violation_details": score.comment_violation_details,
             "unlinked_pr": score.unlinked_pr,
             "hallucinated_security_fix": score.hallucinated_security_fix,
+            "agentic_origin_penalty": score.agentic_origin_penalty,
             "collided_pr_numbers": score.collided_pr_numbers,
             "merkle_root": merkle_root,
             "gate_passed": gate_passed,
@@ -2634,6 +2654,10 @@ fn cmd_bounce(
         println!(
             "| Unverified sec fix: {:>19} |",
             score.hallucinated_security_fix
+        );
+        println!(
+            "| Agentic origin pen: {:>19} |",
+            score.agentic_origin_penalty
         );
         println!("+------------------------------------------+");
         println!("  Merkle root: {}...", &merkle_root[..32]);

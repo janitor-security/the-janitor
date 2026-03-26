@@ -104,6 +104,28 @@ When your team deploys AI engineers, the gate does not move.
 
 ---
 
+## DEFEATING AUTONOMOUS PR TAMPERING
+
+On **March 24, 2026**, GitHub rolled out a feature that allows any repository maintainer to assign an open pull request directly to Copilot for autonomous modification. Copilot then reads the PR, plans changes, and pushes commits — without a human writing a single line. The PR author remains the original human opener; the new commits are signed by `copilot[bot]`.
+
+This is not a dependency bump. This is an autonomous agent rewriting your source code inside an open PR, at machine velocity, with no human authorship of the resulting commits.
+
+**The Janitor applies a mandatory +50 point AgenticOrigin surcharge to every PR where Copilot coding agent activity is detected:**
+
+| Detection signal | Trigger |
+|---|---|
+| PR author is `copilot[bot]` or `github-copilot[bot]` | Author field matches Copilot coding agent handles |
+| PR author is `app/copilot` or `app/github-copilot` | GitHub App prefix format |
+| PR body contains `Co-authored-by: Copilot` trailer | Copilot pushed commits onto a human-authored PR |
+
+The +50 surcharge means a Copilot-modified PR must be **structurally flawless** to pass the default 100-point gate. One Critical antipattern (50 pts) plus the surcharge (50 pts) equals exactly 100 — a gate failure. A structurally clean Copilot PR scores 50 and passes. **The gate enforces a higher bar, not a blanket block.**
+
+The surcharge fires as `antipattern:agentic_origin` in the bounce log, CBOM, and SIEM webhook payload — providing a full audit trail of every PR where autonomous coding agent activity was detected and gated.
+
+Copilot is not the last. Devin, Cursor Agent, and equivalents follow the same pattern: non-human commits on human PRs, at machine velocity, bypassing the review queue. The AgenticOrigin gate is the enforcement layer that moves with the threat.
+
+---
+
 ## ENTERPRISE INTEGRATIONS
 
 Every bounce event that trips the threat threshold fires an outbound webhook — signed with **HMAC-SHA256** and delivered with two headers your SIEM can verify without a shared secret rotation:

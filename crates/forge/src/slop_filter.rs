@@ -61,6 +61,7 @@ use common::registry::SymbolRegistry;
 ///       + (comment_violations      ×  5)
 ///       + (unlinked_pr             × 20)
 ///       + (hallucinated_security_fix × 100)
+///       + agentic_origin_penalty            — 0 or 50 flat surcharge
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SlopScore {
@@ -167,6 +168,21 @@ pub struct SlopScore {
     ///
     /// Does **not** contribute to [`Self::score()`].
     pub necrotic_flag: Option<String>,
+
+    /// Flat penalty applied when the PR is attributed to an autonomous coding agent.
+    ///
+    /// Set by `cmd_bounce` when [`common::policy::JanitorPolicy::is_agentic_actor`]
+    /// returns `true` for the PR author or PR body.  The value is always `0` (inactive)
+    /// or `50` (active) — no intermediate values.
+    ///
+    /// ## Rationale
+    ///
+    /// Machine-authored PRs bypass human authorship entirely.  The +50 surcharge
+    /// forces agent code to be structurally flawless: a `copilot[bot]` PR with a
+    /// single Critical antipattern scores 100 (50 antipattern + 50 surcharge) and
+    /// fails the default 100-point gate.  A structurally clean agent PR scores 50
+    /// and passes cleanly — the gate enforces a higher bar, not a blanket block.
+    pub agentic_origin_penalty: u32,
 }
 
 impl SlopScore {
@@ -191,6 +207,7 @@ impl SlopScore {
             + self.comment_violations * 5
             + self.unlinked_pr * 20
             + self.hallucinated_security_fix * 100
+            + self.agentic_origin_penalty
     }
 
     /// Returns `true` when no slop was detected.
@@ -201,6 +218,7 @@ impl SlopScore {
             && self.comment_violations == 0
             && self.unlinked_pr == 0
             && self.hallucinated_security_fix == 0
+            && self.agentic_origin_penalty == 0
     }
 }
 
