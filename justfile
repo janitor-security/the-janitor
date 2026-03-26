@@ -181,7 +181,7 @@ deploy-docs:
 #   just check-branch my-feature-branch 42          # with PR number for log entry
 #
 check-branch branch pr='0':
-	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --format json
+	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --repo-slug janitor-security/the-janitor --format json
 
 # 9. WINDOWS SYNC
 sync:
