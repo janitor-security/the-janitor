@@ -226,6 +226,19 @@ enum Commands {
         /// the CLI falls back to the `--head` argument or `GITHUB_SHA` env var.
         #[arg(long)]
         head_sha: Option<String>,
+        /// Hard wall-clock timeout for the entire bounce analysis, in seconds.
+        ///
+        /// If the analysis does not complete within this duration the CLI sends
+        /// a synthetic failure payload to `--report-url` (if configured) so the
+        /// Governor can close the GitHub Check Run with a `failure` conclusion
+        /// rather than leaving it spinning indefinitely.  Exits non-zero after
+        /// dispatching the payload.
+        ///
+        /// Default: 1140 s (19 minutes) — one minute inside GitHub Actions'
+        /// default 20-minute job timeout, giving the POST to the Governor time
+        /// to complete before the runner is killed.
+        #[arg(long, default_value = "1140")]
+        timeout_secs: u64,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -595,23 +608,110 @@ async fn main() -> anyhow::Result<()> {
             report_url,
             analysis_token,
             head_sha,
-        } => cmd_bounce(
-            path,
-            patch.as_deref(),
-            registry.as_deref(),
-            format,
-            repo.as_deref(),
-            base.as_deref(),
-            head.as_deref(),
-            *pr_number,
-            author.as_deref(),
-            pr_body.as_deref(),
-            repo_slug.as_deref(),
-            pr_state.as_str(),
-            report_url.as_deref(),
-            analysis_token.as_deref(),
-            head_sha.as_deref(),
-        )?,
+            timeout_secs,
+        } => {
+            // Clone owned values for spawn_blocking (required for 'static bound).
+            let path = path.clone();
+            let patch = patch.clone();
+            let registry = registry.clone();
+            let format = format.clone();
+            let repo = repo.clone();
+            let base = base.clone();
+            let head = head.clone();
+            let pr_number = *pr_number;
+            let author = author.clone();
+            let pr_body = pr_body.clone();
+            let repo_slug = repo_slug.clone();
+            let pr_state = pr_state.clone();
+            let report_url = report_url.clone();
+            let analysis_token = analysis_token.clone();
+            let head_sha = head_sha.clone();
+            let timeout_secs = *timeout_secs;
+
+            // Capture fields needed for the timeout failure payload before the
+            // move into spawn_blocking.
+            let timeout_report_url = report_url.clone();
+            let timeout_token = analysis_token.clone();
+            let timeout_commit_sha = head_sha
+                .clone()
+                .or_else(|| head.clone())
+                .or_else(|| std::env::var("GITHUB_SHA").ok())
+                .unwrap_or_default();
+            let timeout_repo_slug = repo_slug
+                .clone()
+                .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
+                .unwrap_or_default();
+            let timeout_pr_number = pr_number;
+
+            let task = tokio::task::spawn_blocking(move || {
+                cmd_bounce(
+                    &path,
+                    patch.as_deref(),
+                    registry.as_deref(),
+                    &format,
+                    repo.as_deref(),
+                    base.as_deref(),
+                    head.as_deref(),
+                    pr_number,
+                    author.as_deref(),
+                    pr_body.as_deref(),
+                    repo_slug.as_deref(),
+                    pr_state.as_str(),
+                    report_url.as_deref(),
+                    analysis_token.as_deref(),
+                    head_sha.as_deref(),
+                )
+            });
+
+            match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), task).await {
+                Ok(Ok(inner)) => inner?,
+                Ok(Err(join_err)) => anyhow::bail!("bounce task panicked: {join_err}"),
+                Err(_elapsed) => {
+                    // Hard timeout — send a synthetic failure payload so the Governor
+                    // can close the GitHub Check Run immediately instead of leaving it
+                    // spinning until GitHub's 14-day check expiry.
+                    eprintln!(
+                        "error: bounce analysis timed out after {timeout_secs}s; \
+                         dispatching failure payload to Governor"
+                    );
+                    if let (Some(url), Some(token)) =
+                        (timeout_report_url.as_deref(), timeout_token.as_deref())
+                    {
+                        let timeout_entry = report::BounceLogEntry {
+                            pr_number: timeout_pr_number,
+                            author: None,
+                            timestamp: utc_now_iso8601(),
+                            slop_score: 999,
+                            dead_symbols_added: 0,
+                            logic_clones_found: 0,
+                            zombie_symbols_added: 0,
+                            unlinked_pr: 0,
+                            antipatterns: vec![format!(
+                                "antipattern:analysis_timeout — bounce did not \
+                                 complete within {timeout_secs}s; CI runner may be \
+                                 overloaded or handling an abnormally large diff"
+                            )],
+                            comment_violations: vec![],
+                            min_hashes: vec![],
+                            zombie_deps: vec![],
+                            state: report::PrState::Open,
+                            is_bot: false,
+                            repo_slug: timeout_repo_slug,
+                            suppressed_by_domain: 0,
+                            collided_pr_numbers: vec![],
+                            necrotic_flag: None,
+                            commit_sha: timeout_commit_sha,
+                            policy_hash: String::new(),
+                        };
+                        // Best-effort POST — log if it fails but still exit non-zero.
+                        if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
+                            eprintln!("warning: failed to dispatch timeout payload: {e}");
+                        }
+                    }
+                    anyhow::bail!("bounce analysis timed out after {timeout_secs}s");
+                }
+            }
+        }
         Commands::Report {
             repo,
             top,
