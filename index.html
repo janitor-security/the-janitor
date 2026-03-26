@@ -416,6 +416,33 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#google-ready-pqc-attestation" class="md-nav__link">
+    <span class="md-ellipsis">
+      GOOGLE-READY PQC ATTESTATION
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#defeating-autonomous-pr-tampering" class="md-nav__link">
+    <span class="md-ellipsis">
+      DEFEATING AUTONOMOUS PR TAMPERING
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-maintainer-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE MAINTAINER SHIELD
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#enterprise-integrations" class="md-nav__link">
     <span class="md-ellipsis">
       ENTERPRISE INTEGRATIONS
@@ -560,6 +587,27 @@
             Intelligence Reports
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="intelligence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1073,6 +1121,33 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#google-ready-pqc-attestation" class="md-nav__link">
+    <span class="md-ellipsis">
+      GOOGLE-READY PQC ATTESTATION
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#defeating-autonomous-pr-tampering" class="md-nav__link">
+    <span class="md-ellipsis">
+      DEFEATING AUTONOMOUS PR TAMPERING
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-maintainer-shield" class="md-nav__link">
+    <span class="md-ellipsis">
+      THE MAINTAINER SHIELD
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#enterprise-integrations" class="md-nav__link">
     <span class="md-ellipsis">
       ENTERPRISE INTEGRATIONS
@@ -1185,6 +1260,120 @@
 <p>Current toolchains were designed for human developers submitting a few PRs per day. They have no concept of a non-human contributor operating at machine velocity, no mechanism to detect coordinated structural injection across hundreds of PRs, and no policy layer that can distinguish a legitimate bot from a compromised Agentic pipeline.</p>
 <p>The Janitor was built for this environment. <strong>It is the deterministic enforcement gate that applies your architectural rules to non-human developers</strong> — the same rules, at the same threshold, regardless of whether the author is a human engineer, a Copilot agent, or an autonomous Swarm. The <code>janitor.toml</code> governance manifest is version-controlled policy-as-code: your rules, enforced at the diff level, before the merge button is available.</p>
 <p>When your team deploys AI engineers, the gate does not move.</p>
+<hr />
+<h2 id="google-ready-pqc-attestation">GOOGLE-READY PQC ATTESTATION</h2>
+<p>Google announced in early 2026 that all internal cryptographic operations must be quantum-safe ahead of schedule, with external-facing systems following suit. <strong>NIST FIPS 204 (ML-DSA-65)</strong> — the Module Lattice Digital Signature algorithm — is the mandated post-quantum standard. The migration window is shorter than most security teams have budgeted for.</p>
+<p>Every <strong>CycloneDX v1.5 CBOM</strong> issued by Janitor Sentinel is signed with <strong>ML-DSA-65</strong> today.</p>
+<table>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Signature algorithm</td>
+<td><strong>ML-DSA-65</strong> (NIST FIPS 204 — Module Lattice Digital Signature)</td>
+</tr>
+<tr>
+<td>Hash algorithm</td>
+<td><strong>BLAKE3</strong> (256-bit) for structural hashes and per-symbol audit entries</td>
+</tr>
+<tr>
+<td>Format</td>
+<td><strong>CycloneDX v1.5 CBOM</strong> — Cryptography Bill of Materials</td>
+</tr>
+<tr>
+<td>Issuance trigger</td>
+<td>Clean merge — automatic, no token flag or manual step</td>
+</tr>
+<tr>
+<td>Audit target</td>
+<td>SOC 2 Type II, NIST CSF 2.0, quantum-readiness audit</td>
+</tr>
+</tbody>
+</table>
+<p>Your compliance artifacts are <strong>ahead of the mandate</strong>. Most enterprises will not complete their PQC migration before Google's accelerated deadline. Every PR that clears the Janitor gate today produces a quantum-safe attestation bond — a chain of custody you will not need to retrofit later.</p>
+<p>This is not a migration plan. It is an artifact. The CBOM records the ML-DSA-65 attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering <code>{timestamp}{file_path}{sha256_pre_cleanup}</code>. A regulator or incident response team can verify the chain of custody without trusting the issuing system — the math stands alone.</p>
+<p><strong>The only PQC-signed CBOM that fires automatically on every clean PR merge. No configuration. No certificate authority. No migration project.</strong></p>
+<hr />
+<h2 id="defeating-autonomous-pr-tampering">DEFEATING AUTONOMOUS PR TAMPERING</h2>
+<p>On <strong>March 24, 2026</strong>, GitHub rolled out a feature that allows any repository maintainer to assign an open pull request directly to Copilot for autonomous modification. Copilot then reads the PR, plans changes, and pushes commits — without a human writing a single line. The PR author remains the original human opener; the new commits are signed by <code>copilot[bot]</code>.</p>
+<p>This is not a dependency bump. This is an autonomous agent rewriting your source code inside an open PR, at machine velocity, with no human authorship of the resulting commits.</p>
+<p><strong>The Janitor applies a mandatory +50 point AgenticOrigin surcharge to every PR where Copilot coding agent activity is detected:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Detection signal</th>
+<th>Trigger</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PR author is <code>copilot[bot]</code> or <code>github-copilot[bot]</code></td>
+<td>Author field matches Copilot coding agent handles</td>
+</tr>
+<tr>
+<td>PR author is <code>app/copilot</code> or <code>app/github-copilot</code></td>
+<td>GitHub App prefix format</td>
+</tr>
+<tr>
+<td>PR body contains <code>Co-authored-by: Copilot</code> trailer</td>
+<td>Copilot pushed commits onto a human-authored PR</td>
+</tr>
+</tbody>
+</table>
+<p>The +50 surcharge means a Copilot-modified PR must be <strong>structurally flawless</strong> to pass the default 100-point gate. One Critical antipattern (50 pts) plus the surcharge (50 pts) equals exactly 100 — a gate failure. A structurally clean Copilot PR scores 50 and passes. <strong>The gate enforces a higher bar, not a blanket block.</strong></p>
+<p>The surcharge fires as <code>antipattern:agentic_origin</code> in the bounce log, CBOM, and SIEM webhook payload — providing a full audit trail of every PR where autonomous coding agent activity was detected and gated.</p>
+<p>Copilot is not the last. Devin, Cursor Agent, and equivalents follow the same pattern: non-human commits on human PRs, at machine velocity, bypassing the review queue. The AgenticOrigin gate is the enforcement layer that moves with the threat.</p>
+<hr />
+<h2 id="the-maintainer-shield">THE MAINTAINER SHIELD</h2>
+<p>Open-source maintainers are experiencing <strong>death by a thousand slops</strong>.</p>
+<p>The Agoda engineering team published the numbers in 2025: AI-assisted development increased per-engineer PR output by <strong>4–6×</strong>. On a team of 10 engineers, that is 400 inbound PRs per day against a human review capacity of 80. The backlog grows by 320 PRs every 24 hours. It never clears. It compounds.</p>
+<p>The failure mode is not malice. It is <strong>context bloat</strong>.</p>
+<p>AI coding agents suffer a predictable structural degradation as their context windows extend to handle larger codebases. Signal-to-noise ratio collapses. The agent generates structurally self-similar functions that pass superficial review. It hallucinates imports that compile but never execute. It reintroduces previously deleted dead symbols — because the deletion happened three sprints ago and the context window has rolled past it. It submits the same structural scaffold across a dozen PRs from a dozen accounts — not a coordinated attack, just a model completing the same pattern it has seen ten thousand times.</p>
+<p>Each PR is individually plausible. Collectively, they are <strong>death by a thousand slops</strong> — a flood that overwhelms every human review heuristic precisely because each individual PR clears the bar that human review was designed to catch.</p>
+<p><strong>The 100-point Slop Gate is the definitive defense.</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Signal</th>
+<th style="text-align: center;">Weight</th>
+<th style="text-align: left;">What it stops</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Logic clones detected</td>
+<td style="text-align: center;">×5</td>
+<td style="text-align: left;">Structurally identical implementations — the context-bloat signature</td>
+</tr>
+<tr>
+<td style="text-align: left;">Zombie symbols reintroduced</td>
+<td style="text-align: center;">×10</td>
+<td style="text-align: left;">Previously deleted symbols returning via AI copy-paste</td>
+</tr>
+<tr>
+<td style="text-align: left;">Language antipatterns</td>
+<td style="text-align: center;">×50</td>
+<td style="text-align: left;">Hallucinated imports, unsafe blocks, injection vectors</td>
+</tr>
+<tr>
+<td style="text-align: left;">Unlinked PR</td>
+<td style="text-align: center;">×20</td>
+<td style="text-align: left;">Agent PRs that bypass issue-tracking hygiene</td>
+</tr>
+<tr>
+<td style="text-align: left;">AgenticOrigin surcharge</td>
+<td style="text-align: center;">+50 flat</td>
+<td style="text-align: left;">Autonomous coding agents held to a zero-defect structural standard</td>
+</tr>
+</tbody>
+</table>
+<p>The gate is not a reviewer. It is a circuit breaker. It does not replace human judgment — it eliminates the structural category of slop that should never reach a human reviewer in the first place. When the queue is 400 PRs deep, the circuit breaker is not optional.</p>
+<p>A single Critical antipattern from a context-bloated agent PR scores 50 points. The AgenticOrigin surcharge adds 50 more. The PR fails at exactly the gate threshold — deterministically, in under 33 seconds, before the merge button is available.</p>
+<p><strong>The Slop Gate moves with the threat. When your team deploys AI engineers, the gate does not move.</strong></p>
 <hr />
 <h2 id="enterprise-integrations">ENTERPRISE INTEGRATIONS</h2>
 <p>Every bounce event that trips the threat threshold fires an outbound webhook — signed with <strong>HMAC-SHA256</strong> and delivered with two headers your SIEM can verify without a shared secret rotation:</p>
