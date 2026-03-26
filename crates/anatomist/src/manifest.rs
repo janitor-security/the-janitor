@@ -868,6 +868,114 @@ fn collect_npm_versions(content: &str, map: &mut HashMap<String, HashSet<String>
 }
 
 // ---------------------------------------------------------------------------
+// Cargo-metadata resolved version silo detection
+// ---------------------------------------------------------------------------
+
+/// A crate that appears at multiple distinct resolved versions in the Cargo workspace.
+///
+/// Returned by [`find_version_silos_cargo_metadata`].  Each entry represents a crate
+/// whose version was resolved differently across workspace members — a dependency graph
+/// split that increases binary size and can introduce subtle API incompatibilities.
+pub struct CrateVersionSilo {
+    /// Crate name (e.g. `"serde"`).
+    pub name: String,
+    /// All distinct resolved versions, sorted ascending (e.g. `["1.0.100", "1.0.200"]`).
+    pub versions: Vec<String>,
+}
+
+impl CrateVersionSilo {
+    /// Format for antipattern display: `"serde v1.0.100 vs v1.0.200"`.
+    pub fn display(&self) -> String {
+        let vs = self
+            .versions
+            .iter()
+            .map(|v| format!("v{v}"))
+            .collect::<Vec<_>>()
+            .join(" vs ");
+        format!("{} ({})", self.name, vs)
+    }
+}
+
+/// Resolve the full dependency graph via `cargo metadata` and return every crate
+/// that appears at more than one distinct version.
+///
+/// ## When it runs
+/// Only when `cargo` is discoverable on `PATH` and `project_root/Cargo.toml`
+/// exists.  Returns an empty `Vec` on any failure — the blob-based fallback
+/// [`find_version_silos_in_blobs`] remains authoritative when this is unavailable.
+///
+/// ## Why not `--no-deps`
+/// `--no-deps` limits the `packages` array to workspace members only.  Workspace
+/// members have unique names, so no duplicates can ever appear — the flag would
+/// make version-silo detection impossible.  The full graph (default mode) is
+/// required to surface transitive crates resolved at conflicting versions.
+///
+/// ## Performance
+/// With a warmed Cargo registry cache and an existing `Cargo.lock`, this completes
+/// in < 2 s on typical workspaces.  No network calls are made when the lock file
+/// is already present.
+pub fn find_version_silos_cargo_metadata(project_root: &Path) -> Vec<CrateVersionSilo> {
+    // Guard: only meaningful for Rust workspaces.
+    if !project_root.join("Cargo.toml").exists() {
+        return Vec::new();
+    }
+
+    let output = std::process::Command::new("cargo")
+        .args(["metadata", "--format-version", "1"])
+        .current_dir(project_root)
+        // Suppress colour codes and progress spinners — we only need JSON stdout.
+        .env("CARGO_TERM_COLOR", "never")
+        .env("CARGO_TERM_PROGRESS_WHEN", "never")
+        .output();
+
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        // cargo not on PATH, no Cargo.lock, or the workspace itself has an
+        // unsatisfiable version constraint (in which case compilation would
+        // also fail — the operator is already aware).
+        _ => return Vec::new(),
+    };
+
+    let json: serde_json::Value = match serde_json::from_slice(&output.stdout) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+
+    // Build name → HashSet<version> from the resolved packages array.
+    // When two crates coexist at different versions (e.g. `serde 0.9` and
+    // `serde 1.0` both required by different dependencies), they each appear
+    // as separate entries in `packages`.
+    let mut version_map: HashMap<String, HashSet<String>> = HashMap::new();
+    if let Some(packages) = json.get("packages").and_then(|p| p.as_array()) {
+        for pkg in packages {
+            let name = pkg.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+            let version = pkg
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            if !name.is_empty() && !version.is_empty() {
+                version_map
+                    .entry(name.to_owned())
+                    .or_default()
+                    .insert(version.to_owned());
+            }
+        }
+    }
+
+    let mut silos: Vec<CrateVersionSilo> = version_map
+        .into_iter()
+        .filter(|(_, versions)| versions.len() > 1)
+        .map(|(name, versions)| {
+            let mut v: Vec<String> = versions.into_iter().collect();
+            v.sort();
+            CrateVersionSilo { name, versions: v }
+        })
+        .collect();
+    silos.sort_by(|a, b| a.name.cmp(&b.name));
+    silos
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
