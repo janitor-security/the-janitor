@@ -183,6 +183,19 @@ pub struct SlopScore {
     /// fails the default 100-point gate.  A structurally clean agent PR scores 50
     /// and passes cleanly — the gate enforces a higher bar, not a blanket block.
     pub agentic_origin_penalty: u32,
+
+    /// Crate/package names that appear at more than one distinct version across the PR's
+    /// manifest files (`Cargo.toml`, `package.json`).
+    ///
+    /// Populated by `cmd_bounce` via [`anatomist::manifest::find_version_silos_in_blobs`].
+    /// Each entry contributes **+20 points** to [`Self::score()`].
+    ///
+    /// A version silo indicates that the PR introduces or widens a dependency split —
+    /// two workspace members (or two package.json dependency sections) pin the same
+    /// crate at different versions.  This forces the Cargo resolver to maintain two
+    /// parallel compilation artifacts and is a common source of diamond dependency
+    /// conflicts in rapidly evolving monorepos.
+    pub version_silo_details: Vec<String>,
 }
 
 impl SlopScore {
@@ -208,6 +221,7 @@ impl SlopScore {
             + self.unlinked_pr * 20
             + self.hallucinated_security_fix * 100
             + self.agentic_origin_penalty
+            + self.version_silo_details.len() as u32 * 20
     }
 
     /// Returns `true` when no slop was detected.
@@ -219,6 +233,7 @@ impl SlopScore {
             && self.unlinked_pr == 0
             && self.hallucinated_security_fix == 0
             && self.agentic_origin_penalty == 0
+            && self.version_silo_details.is_empty()
     }
 }
 

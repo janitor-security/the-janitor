@@ -95,7 +95,10 @@ const CSV_HEADER: [&str; 16] = [
 fn threat_class(entry: &crate::report::BounceLogEntry) -> &'static str {
     if crate::report::is_critical_threat(entry) {
         "Critical"
-    } else if entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty() {
+    } else if entry.necrotic_flag.is_some()
+        || !entry.zombie_deps.is_empty()
+        || !entry.version_silos.is_empty()
+    {
         "Necrotic"
     } else if entry.slop_score > 0 {
         "StructuralSlop"
@@ -119,6 +122,10 @@ fn antipattern_ids(entry: &crate::report::BounceLogEntry) -> String {
     }
     if !entry.zombie_deps.is_empty() {
         parts.push("architecture:zombie_dependency".to_owned());
+    }
+    if !entry.version_silos.is_empty() {
+        let names = entry.version_silos.join(", ");
+        parts.push(format!("architecture:version_silo ({names})"));
     }
     parts.extend(entry.antipatterns.iter().cloned());
     // Collapse repeated labels: [A, A, A, B] → "A (x3)|B".
@@ -157,9 +164,11 @@ fn write_entry_row(
     entry: &crate::report::BounceLogEntry,
 ) -> Result<()> {
     let critical = crate::report::is_critical_threat(entry);
-    // Necrotic: pruner-flagged dead-code OR zombie dep re-introduction.
-    // Both are automatable intercepts billed at $20/PR.
-    let necrotic = entry.necrotic_flag.is_some() || !entry.zombie_deps.is_empty();
+    // Necrotic: pruner-flagged dead-code, zombie dep, OR version silo introduction.
+    // All are automatable intercepts billed at $20/PR.
+    let necrotic = entry.necrotic_flag.is_some()
+        || !entry.zombie_deps.is_empty()
+        || !entry.version_silos.is_empty();
     // Structural Slop: slop_score > 0 with no critical or necrotic signal.
     // Carries measurable structural debt; billed at $20/PR.
     let structural_slop = !critical && !necrotic && entry.slop_score > 0;

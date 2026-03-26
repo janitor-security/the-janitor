@@ -31,7 +31,7 @@
 
 use aho_corasick::AhoCorasick;
 use common::deps::{DependencyEcosystem, DependencyEntry, DependencyRegistry};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -768,6 +768,106 @@ fn extract_wrangler_bindings(
 }
 
 // ---------------------------------------------------------------------------
+// Version silo detection
+// ---------------------------------------------------------------------------
+
+/// PR-scoped version silo detection.
+///
+/// Parses every `Cargo.toml` and `package.json` blob present in the PR diff and
+/// builds a `name → HashSet<version>` map.  Any crate/package whose name maps to
+/// more than one **distinct, non-wildcard** version string is a **version silo** —
+/// the PR is introducing or widening a dependency split that the resolver must
+/// reconcile at compile time.
+///
+/// Returns a sorted list of siloed crate/package names.
+pub fn find_version_silos_in_blobs(blobs: &HashMap<PathBuf, Vec<u8>>) -> Vec<String> {
+    let mut version_map: HashMap<String, HashSet<String>> = HashMap::new();
+
+    for (path, bytes) in blobs {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let Ok(content) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        match name {
+            CARGO_MANIFEST => collect_cargo_versions(content, &mut version_map),
+            NPM_MANIFEST => collect_npm_versions(content, &mut version_map),
+            _ => {}
+        }
+    }
+
+    let mut silos: Vec<String> = version_map
+        .into_iter()
+        .filter(|(_, versions)| versions.len() > 1)
+        .map(|(name, _)| name)
+        .collect();
+    silos.sort();
+    silos
+}
+
+/// Collect `name → version` entries from a `Cargo.toml` content string into `map`.
+///
+/// Skips `workspace = true` stubs and wildcard (`"*"`) version specs so that
+/// workspace-level pin omissions do not spuriously inflate the silo count.
+fn collect_cargo_versions(content: &str, map: &mut HashMap<String, HashSet<String>>) {
+    let Ok(val) = toml::from_str::<toml::Value>(content) else {
+        return;
+    };
+    for section in &["dependencies", "dev-dependencies", "build-dependencies"] {
+        let Some(table) = val.get(section).and_then(|v| v.as_table()) else {
+            continue;
+        };
+        for (name, spec) in table {
+            if name == "workspace" {
+                continue;
+            }
+            let version = match spec {
+                toml::Value::String(s) => s.clone(),
+                toml::Value::Table(t) => {
+                    // workspace = true stubs have no version field — skip.
+                    if t.get("workspace")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    t.get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("*")
+                        .to_owned()
+                }
+                _ => "*".to_owned(),
+            };
+            if version != "*" && !version.is_empty() {
+                map.entry(name.clone()).or_default().insert(version);
+            }
+        }
+    }
+}
+
+/// Collect `name → version` entries from a `package.json` content string into `map`.
+fn collect_npm_versions(content: &str, map: &mut HashMap<String, HashSet<String>>) {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(content) else {
+        return;
+    };
+    let Some(obj) = json.as_object() else {
+        return;
+    };
+    for section in &["dependencies", "devDependencies"] {
+        if let Some(deps) = obj.get(*section).and_then(|v| v.as_object()) {
+            for (name, version) in deps {
+                let v = version.as_str().unwrap_or("*").to_owned();
+                if v != "*" && !v.is_empty() {
+                    map.entry(name.clone()).or_default().insert(v);
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -980,6 +1080,101 @@ serde = "1.0"
         assert!(
             zombies.is_empty(),
             "serde is used in the PR blob → not a zombie"
+        );
+    }
+
+    #[test]
+    fn test_version_silo_detected_across_cargo_tomls() {
+        // Two Cargo.toml blobs with serde at different versions → silo.
+        let crate_a = r#"
+[package]
+name = "crate-a"
+[dependencies]
+serde = "1.0.100"
+tokio = "1.20"
+"#;
+        let crate_b = r#"
+[package]
+name = "crate-b"
+[dependencies]
+serde = "1.0.200"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            PathBuf::from("crate-a/Cargo.toml"),
+            crate_a.as_bytes().to_vec(),
+        );
+        blobs.insert(
+            PathBuf::from("crate-b/Cargo.toml"),
+            crate_b.as_bytes().to_vec(),
+        );
+
+        let silos = find_version_silos_in_blobs(&blobs);
+        assert_eq!(silos, vec!["serde"], "serde appears at two versions → silo");
+    }
+
+    #[test]
+    fn test_no_silo_when_single_version() {
+        let cargo = r#"
+[package]
+name = "x"
+[dependencies]
+serde = "1.0.200"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.toml"), cargo.as_bytes().to_vec());
+
+        let silos = find_version_silos_in_blobs(&blobs);
+        assert!(silos.is_empty(), "single version → no silo");
+    }
+
+    #[test]
+    fn test_version_silo_npm() {
+        let pkg_a = serde_json::json!({
+            "dependencies": { "lodash": "^4.17.20" }
+        });
+        let pkg_b = serde_json::json!({
+            "dependencies": { "lodash": "^4.17.21" }
+        });
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            PathBuf::from("pkg-a/package.json"),
+            pkg_a.to_string().into_bytes(),
+        );
+        blobs.insert(
+            PathBuf::from("pkg-b/package.json"),
+            pkg_b.to_string().into_bytes(),
+        );
+
+        let silos = find_version_silos_in_blobs(&blobs);
+        assert_eq!(silos, vec!["lodash"], "lodash at two versions → npm silo");
+    }
+
+    #[test]
+    fn test_workspace_stub_excluded_from_silo() {
+        // workspace = true stubs should not be counted as a pinned version.
+        let workspace_member = r#"
+[package]
+name = "member"
+[dependencies]
+serde = { workspace = true }
+"#;
+        let root = r#"
+[workspace]
+[dependencies]
+serde = "1.0.200"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            PathBuf::from("member/Cargo.toml"),
+            workspace_member.as_bytes().to_vec(),
+        );
+        blobs.insert(PathBuf::from("Cargo.toml"), root.as_bytes().to_vec());
+
+        let silos = find_version_silos_in_blobs(&blobs);
+        assert!(
+            silos.is_empty(),
+            "workspace stub should not create a silo with the root pin"
         );
     }
 }

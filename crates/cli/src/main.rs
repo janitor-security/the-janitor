@@ -702,6 +702,7 @@ async fn main() -> anyhow::Result<()> {
                             necrotic_flag: None,
                             commit_sha: timeout_commit_sha,
                             policy_hash: String::new(),
+                            version_silos: vec![],
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -2792,6 +2793,24 @@ fn cmd_bounce(
     } else {
         Vec::new()
     };
+
+    // Version silo detection — PR-scoped, no filesystem traversal.
+    // Gated on registry_loaded for the same reason as zombie_deps: without the
+    // full-codebase symbol registry we cannot confidently resolve cross-manifest
+    // version conflicts (the PR may only touch one of two Cargo.toml files).
+    let version_silos = if registry_loaded {
+        anatomist::manifest::find_version_silos_in_blobs(&bounce_blobs)
+    } else {
+        Vec::new()
+    };
+    if !version_silos.is_empty() {
+        let names = version_silos.join(", ");
+        score
+            .antipattern_details
+            .push(format!("architecture:version_silo ({names})"));
+        score.version_silo_details = version_silos.clone();
+    }
+
     let janitor_dir = project_root.join(".janitor");
     let pr_state = pr_state_str
         .parse::<report::PrState>()
@@ -2841,6 +2860,7 @@ fn cmd_bounce(
                 String::new()
             }
         },
+        version_silos,
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
     report::fire_webhook_if_configured(&log_entry, &policy);

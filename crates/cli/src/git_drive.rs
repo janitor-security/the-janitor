@@ -518,10 +518,11 @@ fn bounce_one(
             necrotic_flag: Some("SEMANTIC_NULL".to_string()),
             commit_sha: pr_sha.to_string(),
             policy_hash: String::new(),
+            version_silos: Vec::new(),
         });
     }
 
-    let (score, blobs) = bounce_git(repo_path, &merge_base_sha, pr_sha, registry)
+    let (mut score, blobs) = bounce_git(repo_path, &merge_base_sha, pr_sha, registry)
         .map_err(|e| {
             eprintln!("hyper-drive PR#{pr_num}: {e}");
         })
@@ -529,6 +530,16 @@ fn bounce_one(
 
     // Zombie dependency scan over the blobs (best-effort).
     let zombie_deps = anatomist::manifest::find_zombie_deps_in_blobs(&blobs);
+
+    // Version silo detection — O(PR-diff bytes), no filesystem traversal.
+    let version_silos = anatomist::manifest::find_version_silos_in_blobs(&blobs);
+    if !version_silos.is_empty() {
+        let names = version_silos.join(", ");
+        score
+            .antipattern_details
+            .push(format!("architecture:version_silo ({names})"));
+        score.version_silo_details = version_silos.clone();
+    }
 
     let slop_score = score.score();
 
@@ -556,6 +567,7 @@ fn bounce_one(
         necrotic_flag: score.necrotic_flag,
         commit_sha: pr_sha.to_string(),
         policy_hash: String::new(),
+        version_silos,
     })
 }
 

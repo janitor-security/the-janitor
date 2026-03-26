@@ -180,6 +180,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         necrotic_flag: None,
         commit_sha: "0000000000000000000000000000000000000000".to_string(),
         policy_hash: "test".to_string(),
+        version_silos: vec![],
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -397,6 +398,13 @@ pub struct BounceLogEntry {
     /// Empty string when no `janitor.toml` is present (default policy applied).
     #[serde(default)]
     pub policy_hash: String,
+
+    /// Crate/package names that appear at more than one distinct version across the PR's
+    /// manifest files (`Cargo.toml`, `package.json`).
+    ///
+    /// Each entry contributed +20 points to `slop_score` at bounce time.
+    #[serde(default)]
+    pub version_silos: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +434,8 @@ pub struct ReportData {
     pub clone_pairs: Vec<(usize, usize)>,
     /// Indices of entries that have at least one zombie dependency.
     pub zombie_indices: Vec<usize>,
+    /// Indices of entries that have at least one version silo.
+    pub silo_indices: Vec<usize>,
     /// Total engineering minutes reclaimed: necrotic PR count × [`MINUTES_PER_TRIAGE`].
     ///
     /// Only PRs with `necrotic_flag.is_some()` contribute — these are
@@ -588,6 +598,14 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
         .map(|(i, _)| i)
         .collect();
 
+    // Version silo PRs — entries where a crate appears at multiple distinct versions.
+    let silo_indices: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| !e.version_silos.is_empty())
+        .map(|(i, _)| i)
+        .collect();
+
     // Workslop ROI — sum 12 minutes for every necrotic PR (bot-closeable).
     // Score-blocked PRs still require human review; only necrotic verdicts
     // represent truly reclaimed labor via automated bulk-close.
@@ -654,6 +672,7 @@ pub fn aggregate(entries: Vec<BounceLogEntry>, top_n: usize) -> ReportData {
         slop_top_indices,
         clone_pairs,
         zombie_indices,
+        silo_indices,
         total_reclaimed_minutes,
         total_actionable_intercepts,
         critical_threats_count,
@@ -1176,6 +1195,39 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         out.push('\n');
     }
 
+    // ── Section 4: Version Silos (suppressed when none detected) ────────────
+    if !data.silo_indices.is_empty() {
+        out.push_str("## Version Silos — Dependency Version Conflicts\n\n");
+        out.push_str(
+            "*Crates or packages that appear at more than one distinct version across the PR's \
+             manifest files. Each silo adds +20 points to the Slop Score.*\n\n",
+        );
+        for &i in data.silo_indices.iter().take(LIST_DISPLAY_CAP) {
+            let e = &data.entries[i];
+            let pr = e
+                .pr_number
+                .map(|n| format!("#{n}"))
+                .unwrap_or_else(|| format!("entry-{i}"));
+            let author = html_escape(&sanitize_latex_safe(
+                e.author.as_deref().unwrap_or("unknown"),
+            ));
+            let silos: Vec<String> = e.version_silos.iter().map(|s| html_escape(s)).collect();
+            out.push_str(&format!(
+                "- **PR {}** ({}): `{}`\n",
+                pr,
+                author,
+                silos.join("`, `")
+            ));
+        }
+        let silo_overflow = data.silo_indices.len().saturating_sub(LIST_DISPLAY_CAP);
+        if silo_overflow > 0 {
+            out.push_str(&format!(
+                "\n*…and {silo_overflow} more entries. See CSV for full list.*\n"
+            ));
+        }
+        out.push('\n');
+    }
+
     out
 }
 
@@ -1240,6 +1292,14 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
                 "pr_number": e.pr_number,
                 "author": e.author,
                 "zombie_deps": e.zombie_deps,
+            })
+        }).collect::<Vec<_>>(),
+        "version_silo_prs": data.silo_indices.iter().map(|&i| {
+            let e = &data.entries[i];
+            serde_json::json!({
+                "pr_number": e.pr_number,
+                "author": e.author,
+                "version_silos": e.version_silos,
             })
         }).collect::<Vec<_>>(),
     })
@@ -2303,6 +2363,7 @@ mod webhook_tests {
             necrotic_flag: necrotic,
             commit_sha: String::new(),
             policy_hash: String::new(),
+            version_silos: vec![],
         }
     }
 

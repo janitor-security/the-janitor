@@ -404,6 +404,7 @@ pub mod unix {
                             necrotic_flag: score.necrotic_flag,
                             commit_sha: String::new(),
                             policy_hash: String::new(),
+                            version_silos: Vec::new(),
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

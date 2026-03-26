@@ -140,6 +140,7 @@ mod tests {
             necrotic_flag: None,
             commit_sha: String::new(),
             policy_hash: String::new(),
+            version_silos: vec![],
         }
     }
 
