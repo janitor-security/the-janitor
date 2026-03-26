@@ -36,7 +36,7 @@ runs:
       uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3 branch HEAD
       with:
         path: /tmp/the-janitor/target/release/janitor
-        key: ${{ runner.os }}-rust-stable-janitor-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
+        key: ${{ runner.os }}-rust-stable-janitor-v2-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
 
     # Step 2 — Clone and compile on cache miss only.
     #
