@@ -531,13 +531,25 @@ fn bounce_one(
     // Zombie dependency scan over the blobs (best-effort).
     let zombie_deps = anatomist::manifest::find_zombie_deps_in_blobs(&blobs);
 
-    // Version silo detection — O(PR-diff bytes), no filesystem traversal.
-    let version_silos = anatomist::manifest::find_version_silos_in_blobs(&blobs);
+    // Version silo detection — Tier 1: Cargo.toml / package.json blobs.
+    let mut version_silos = anatomist::manifest::find_version_silos_in_blobs(&blobs);
+
+    // Tier 2: resolved graph from in-memory Cargo.lock blob (supersedes Tier 1
+    // for Rust crates; npm/pip entries from Tier 1 are preserved).
+    let lockfile_silos = anatomist::manifest::find_version_silos_from_lockfile(&blobs);
+    if !lockfile_silos.is_empty() {
+        let lock_names: std::collections::HashSet<&str> =
+            lockfile_silos.iter().map(|s| s.name.as_str()).collect();
+        version_silos.retain(|n| !lock_names.contains(n.as_str()));
+        version_silos.extend(lockfile_silos.iter().map(|s| s.display()));
+        version_silos.sort();
+    }
+
     if !version_silos.is_empty() {
-        let names = version_silos.join(", ");
+        let detail = version_silos.join(", ");
         score
             .antipattern_details
-            .push(format!("architecture:version_silo ({names})"));
+            .push(format!("architecture:version_silo ({detail})"));
         score.version_silo_details = version_silos.clone();
     }
 

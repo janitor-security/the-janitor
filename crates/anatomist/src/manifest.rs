@@ -868,12 +868,12 @@ fn collect_npm_versions(content: &str, map: &mut HashMap<String, HashSet<String>
 }
 
 // ---------------------------------------------------------------------------
-// Cargo-metadata resolved version silo detection
+// Lockfile-based resolved version silo detection
 // ---------------------------------------------------------------------------
 
-/// A crate that appears at multiple distinct resolved versions in the Cargo workspace.
+/// A crate that appears at multiple distinct resolved versions in `Cargo.lock`.
 ///
-/// Returned by [`find_version_silos_cargo_metadata`].  Each entry represents a crate
+/// Returned by [`find_version_silos_from_lockfile`].  Each entry represents a crate
 /// whose version was resolved differently across workspace members — a dependency graph
 /// split that increases binary size and can introduce subtle API incompatibilities.
 pub struct CrateVersionSilo {
@@ -884,7 +884,7 @@ pub struct CrateVersionSilo {
 }
 
 impl CrateVersionSilo {
-    /// Format for antipattern display: `"serde v1.0.100 vs v1.0.200"`.
+    /// Format for antipattern display: `"serde (v1.0.100 vs v1.0.200)"`.
     pub fn display(&self) -> String {
         let vs = self
             .versions
@@ -896,69 +896,67 @@ impl CrateVersionSilo {
     }
 }
 
-/// Resolve the full dependency graph via `cargo metadata` and return every crate
-/// that appears at more than one distinct version.
+/// Scan the `Cargo.lock` blob present in the PR diff and return every crate
+/// that appears at more than one distinct resolved version.
 ///
-/// ## When it runs
-/// Only when `cargo` is discoverable on `PATH` and `project_root/Cargo.toml`
-/// exists.  Returns an empty `Vec` on any failure — the blob-based fallback
-/// [`find_version_silos_in_blobs`] remains authoritative when this is unavailable.
+/// ## Why the lockfile — not `cargo metadata`
+/// `cargo metadata` invokes a subprocess that reads the **physical disk**.  In the
+/// hyper-drive path the entire merge is simulated in-memory via `simulate_merge`
+/// and the resulting `Cargo.lock` content lives in the `MergeSnapshot.blobs`
+/// HashMap — the disk has not been touched.  Reading from the in-memory blob is
+/// both faster and architecturally correct: we analyse the graph as it would exist
+/// **after** the PR merges, not as it exists on the working tree today.
 ///
-/// ## Why not `--no-deps`
-/// `--no-deps` limits the `packages` array to workspace members only.  Workspace
-/// members have unique names, so no duplicates can ever appear — the flag would
-/// make version-silo detection impossible.  The full graph (default mode) is
-/// required to surface transitive crates resolved at conflicting versions.
-///
-/// ## Performance
-/// With a warmed Cargo registry cache and an existing `Cargo.lock`, this completes
-/// in < 2 s on typical workspaces.  No network calls are made when the lock file
-/// is already present.
-pub fn find_version_silos_cargo_metadata(project_root: &Path) -> Vec<CrateVersionSilo> {
-    // Guard: only meaningful for Rust workspaces.
-    if !project_root.join("Cargo.toml").exists() {
-        return Vec::new();
+/// ## When it fires
+/// Only when the PR diff includes a `Cargo.lock` modification.  If the lock file
+/// is unchanged the PR cannot introduce new version splits, so no detection is
+/// needed and an empty `Vec` is returned.
+pub fn find_version_silos_from_lockfile(
+    blobs: &HashMap<PathBuf, Vec<u8>>,
+) -> Vec<CrateVersionSilo> {
+    for (path, bytes) in blobs {
+        if path.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock") {
+            let Ok(content) = std::str::from_utf8(bytes) else {
+                continue;
+            };
+            return parse_lockfile_silos(content);
+        }
     }
+    Vec::new()
+}
 
-    let output = std::process::Command::new("cargo")
-        .args(["metadata", "--format-version", "1"])
-        .current_dir(project_root)
-        // Suppress colour codes and progress spinners — we only need JSON stdout.
-        .env("CARGO_TERM_COLOR", "never")
-        .env("CARGO_TERM_PROGRESS_WHEN", "never")
-        .output();
-
-    let output = match output {
-        Ok(o) if o.status.success() => o,
-        // cargo not on PATH, no Cargo.lock, or the workspace itself has an
-        // unsatisfiable version constraint (in which case compilation would
-        // also fail — the operator is already aware).
-        _ => return Vec::new(),
+/// Parse a `Cargo.lock` TOML string and return every crate present at more
+/// than one distinct version.
+///
+/// Cargo.lock uses a `[[package]]` array; each entry has `name` and `version`
+/// string fields.  Two entries with the same `name` but different `version`
+/// values represent a true multi-version dependency split.
+fn parse_lockfile_silos(content: &str) -> Vec<CrateVersionSilo> {
+    let Ok(val) = toml::from_str::<toml::Value>(content) else {
+        return Vec::new();
+    };
+    let Some(packages) = val.get("package").and_then(|p| p.as_array()) else {
+        return Vec::new();
     };
 
-    let json: serde_json::Value = match serde_json::from_slice(&output.stdout) {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
-
-    // Build name → HashSet<version> from the resolved packages array.
-    // When two crates coexist at different versions (e.g. `serde 0.9` and
-    // `serde 1.0` both required by different dependencies), they each appear
-    // as separate entries in `packages`.
     let mut version_map: HashMap<String, HashSet<String>> = HashMap::new();
-    if let Some(packages) = json.get("packages").and_then(|p| p.as_array()) {
-        for pkg in packages {
-            let name = pkg.get("name").and_then(|n| n.as_str()).unwrap_or_default();
-            let version = pkg
-                .get("version")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default();
-            if !name.is_empty() && !version.is_empty() {
-                version_map
-                    .entry(name.to_owned())
-                    .or_default()
-                    .insert(version.to_owned());
-            }
+    for pkg in packages {
+        let Some(table) = pkg.as_table() else {
+            continue;
+        };
+        let name = table
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or_default();
+        let version = table
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if !name.is_empty() && !version.is_empty() {
+            version_map
+                .entry(name.to_owned())
+                .or_default()
+                .insert(version.to_owned());
         }
     }
 
@@ -1284,5 +1282,104 @@ serde = "1.0.200"
             silos.is_empty(),
             "workspace stub should not create a silo with the root pin"
         );
+    }
+
+    #[test]
+    fn test_lockfile_silo_detected() {
+        // Cargo.lock with serde at two resolved versions — hard split.
+        let lockfile = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aabbcc"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddeeff"
+
+[[package]]
+name = "tokio"
+version = "1.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112233"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
+
+        let silos = find_version_silos_from_lockfile(&blobs);
+        assert_eq!(silos.len(), 1, "one crate at two versions");
+        assert_eq!(silos[0].name, "serde");
+        assert_eq!(silos[0].versions, vec!["1.0.100", "1.0.200"]);
+        assert_eq!(silos[0].display(), "serde (v1.0.100 vs v1.0.200)");
+    }
+
+    #[test]
+    fn test_lockfile_no_silo_when_all_unique() {
+        let lockfile = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+
+[[package]]
+name = "tokio"
+version = "1.20.0"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
+
+        let silos = find_version_silos_from_lockfile(&blobs);
+        assert!(silos.is_empty(), "all crates at single version → no silo");
+    }
+
+    #[test]
+    fn test_lockfile_absent_returns_empty() {
+        // No Cargo.lock in the blobs at all.
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            PathBuf::from("Cargo.toml"),
+            b"[package]\nname = \"x\"\n".to_vec(),
+        );
+
+        let silos = find_version_silos_from_lockfile(&blobs);
+        assert!(silos.is_empty(), "no Cargo.lock blob → empty result");
+    }
+
+    #[test]
+    fn test_lockfile_multiple_silos_sorted() {
+        let lockfile = r#"
+version = 4
+
+[[package]]
+name = "toml"
+version = "1.1.0"
+
+[[package]]
+name = "toml"
+version = "1.0.6"
+
+[[package]]
+name = "anyhow"
+version = "1.0.80"
+
+[[package]]
+name = "anyhow"
+version = "1.0.75"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
+
+        let silos = find_version_silos_from_lockfile(&blobs);
+        assert_eq!(silos.len(), 2);
+        // Sorted by name: anyhow < toml.
+        assert_eq!(silos[0].name, "anyhow");
+        assert_eq!(silos[1].name, "toml");
+        assert_eq!(silos[1].display(), "toml (v1.0.6 vs v1.1.0)");
     }
 }

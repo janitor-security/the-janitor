@@ -2797,35 +2797,33 @@ fn cmd_bounce(
     // Version silo detection — two-tier approach:
     //
     // Tier 1 (blob-based, always runs when registry is loaded):
-    //   Inspects only the Cargo.toml / package.json blobs present in the PR diff.
-    //   Fast, O(PR-diff bytes), no filesystem traversal.  Returns plain crate names.
+    //   Inspects Cargo.toml / package.json blobs from the PR diff.
+    //   Fast, O(PR-diff bytes), no subprocess.  Returns plain crate names.
     //
-    // Tier 2 (cargo-metadata, runs when `cargo` is on PATH):
-    //   Invokes `cargo metadata --format-version 1` against the project root to get
-    //   the fully resolved dependency graph.  Finds every crate that Cargo resolved
-    //   at more than one distinct version across the workspace.  Returns rich
-    //   `CrateVersionSilo` entries with exact version strings (e.g. "serde v1.0.100
-    //   vs v1.0.200"), which are authoritative over the blob-based plain names.
+    // Tier 2 (lockfile-based, fires when Cargo.lock is in the diff):
+    //   Parses the in-memory Cargo.lock blob from the MergeSnapshot — the
+    //   authoritative resolved graph as it would exist after the PR merges.
+    //   Returns rich CrateVersionSilo entries with exact version strings
+    //   (e.g. "toml (v1.0.6 vs v1.1.0)"), which supersede plain blob names.
     //
-    // Merge rule: metadata entries replace any blob-detected plain names for the
-    // same crate; blob-detected entries for ecosystems cargo can't see (npm, pip)
-    // are preserved.
+    // Merge rule: lockfile entries replace blob-detected plain names for the
+    // same Rust crate; npm/pip blob entries are preserved.
     let mut version_silos: Vec<String> = if registry_loaded {
         anatomist::manifest::find_version_silos_in_blobs(&bounce_blobs)
     } else {
         Vec::new()
     };
 
-    // Cargo-metadata tier — authoritative for Rust crates.
-    let metadata_silos = anatomist::manifest::find_version_silos_cargo_metadata(project_root);
-    if !metadata_silos.is_empty() {
-        // Remove blob-detected plain names that are now superseded by metadata
-        // entries carrying full version detail.
-        let meta_names: std::collections::HashSet<&str> =
-            metadata_silos.iter().map(|s| s.name.as_str()).collect();
-        version_silos.retain(|n| !meta_names.contains(n.as_str()));
-        // Append rich metadata entries (e.g. "toml v1.1.0 vs v1.0.6").
-        version_silos.extend(metadata_silos.iter().map(|s| s.display()));
+    // Lockfile tier — authoritative resolved graph for Rust crates.
+    let lockfile_silos = anatomist::manifest::find_version_silos_from_lockfile(&bounce_blobs);
+    if !lockfile_silos.is_empty() {
+        // Remove blob-detected plain names superseded by lockfile entries
+        // carrying full version detail.
+        let lock_names: std::collections::HashSet<&str> =
+            lockfile_silos.iter().map(|s| s.name.as_str()).collect();
+        version_silos.retain(|n| !lock_names.contains(n.as_str()));
+        // Append rich lockfile entries (e.g. "toml (v1.0.6 vs v1.1.0)").
+        version_silos.extend(lockfile_silos.iter().map(|s| s.display()));
         version_silos.sort();
     }
 
