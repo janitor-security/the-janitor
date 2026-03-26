@@ -38,6 +38,29 @@ use rayon::prelude::*;
 
 use anatomist::parser::ParserHost;
 use common::physarum::{Pulse, SystemHeart};
+
+// ---------------------------------------------------------------------------
+// Base-lockfile ODB fetch
+// ---------------------------------------------------------------------------
+
+/// Read the raw bytes of `Cargo.lock` at `base_sha` from the repository ODB.
+///
+/// Used to provide the base snapshot for silo delta computation:
+/// [`anatomist::manifest::find_version_silos_from_lockfile`] subtracts any
+/// crate that was already a version-split on the base branch so that only
+/// silos **introduced** by the PR are reported.
+///
+/// Returns `None` on any failure (missing file, invalid OID, git error) — the
+/// caller falls back to reporting all head silos without delta filtering.
+fn fetch_base_lockfile(repo_path: &Path, base_sha: &str) -> Option<Vec<u8>> {
+    let repo = git2::Repository::open(repo_path).ok()?;
+    let oid = git2::Oid::from_str(base_sha).ok()?;
+    let commit = repo.find_commit(oid).ok()?;
+    let tree = commit.tree().ok()?;
+    let entry = tree.get_path(std::path::Path::new("Cargo.lock")).ok()?;
+    let blob = repo.find_blob(entry.id()).ok()?;
+    Some(blob.content().to_vec())
+}
 use common::registry::{symbol_hash, MappedRegistry, SymbolEntry, SymbolRegistry};
 use common::Protection;
 use forge::slop_filter::bounce_git;
@@ -536,7 +559,11 @@ fn bounce_one(
 
     // Tier 2: resolved graph from in-memory Cargo.lock blob (supersedes Tier 1
     // for Rust crates; npm/pip entries from Tier 1 are preserved).
-    let lockfile_silos = anatomist::manifest::find_version_silos_from_lockfile(&blobs);
+    // Delta: fetch the base Cargo.lock from the ODB so we only report silos
+    // that are genuinely NEW in this PR, not pre-existing splits on the base.
+    let base_lock = fetch_base_lockfile(repo_path, &merge_base_sha);
+    let lockfile_silos =
+        anatomist::manifest::find_version_silos_from_lockfile(&blobs, base_lock.as_deref());
     if !lockfile_silos.is_empty() {
         let lock_names: std::collections::HashSet<&str> =
             lockfile_silos.iter().map(|s| s.name.as_str()).collect();

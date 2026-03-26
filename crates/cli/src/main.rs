@@ -2430,6 +2430,21 @@ fn apply_deletions(source: &[u8], mut ranges: Vec<(usize, usize)>) -> Vec<u8> {
 /// **Patch mode** (`--patch` / stdin): Loads patch from file or stdin, runs
 /// `PatchBouncer` analysis.
 ///
+/// Fetch the raw bytes of `Cargo.lock` at `base_sha` from the repository ODB.
+///
+/// Used in git-native bounce mode to provide the base lockfile snapshot for
+/// silo delta computation.  Returns `None` on any failure — the caller falls
+/// back to reporting all head silos without delta filtering.
+fn fetch_base_lockfile_from_odb(repo_path: &Path, base_sha: &str) -> Option<Vec<u8>> {
+    let repo = git2::Repository::open(repo_path).ok()?;
+    let oid = git2::Oid::from_str(base_sha).ok()?;
+    let commit = repo.find_commit(oid).ok()?;
+    let tree = commit.tree().ok()?;
+    let entry = tree.get_path(std::path::Path::new("Cargo.lock")).ok()?;
+    let blob = repo.find_blob(entry.id()).ok()?;
+    Some(blob.content().to_vec())
+}
+
 /// **Git-native mode** (`--repo --base --head`): Loads changed blobs directly
 /// from the git pack index via `shadow_git::simulate_merge`, no diff file needed.
 ///
@@ -2492,12 +2507,14 @@ fn cmd_bounce(
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
     // `bounce_blobs` carries the per-file byte content of the PR for the
     // O(1)-scoped zombie dep scan performed below (no full-repo WalkDir).
-    let (mut score, merkle_root, min_hashes_vec, bounce_blobs, patch_has_entropy) =
+    let (mut score, merkle_root, min_hashes_vec, bounce_blobs, patch_has_entropy, base_lock) =
         match (repo, base, head) {
             (Some(repo_path), Some(base_sha), Some(head_sha)) => {
                 // Git-native mode: shadow_git blob extraction.
                 // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
                 let (mut score, blobs) = bounce_git(repo_path, base_sha, head_sha, &registry)?;
+                // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
+                let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
                 let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
                 let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
                 // Derive MinHash from the deterministic merkle key (no raw patch in git mode).
@@ -2527,7 +2544,14 @@ fn cmd_bounce(
                 }
                 // Git-native mode: merkle root is a 64-char hex string — always
                 // has sufficient byte 3-gram entropy to enter the swarm index.
-                (score, merkle_root, sig.min_hashes.to_vec(), blobs, true)
+                (
+                    score,
+                    merkle_root,
+                    sig.min_hashes.to_vec(),
+                    blobs,
+                    true,
+                    base_lock,
+                )
             }
             _ => {
                 // Patch mode: file, auto-fetch via gh, or stdin.
@@ -2622,7 +2646,15 @@ fn cmd_bounce(
                 // 3-gram windows cannot form a unique MinHash sketch and must
                 // bypass swarm clustering to prevent null-vector collisions.
                 let entropy = forge::pr_collider::PrDeltaSignature::has_entropy(patch.as_bytes());
-                (score, merkle_root, sig.min_hashes.to_vec(), blobs, entropy)
+                // Patch mode: no git ODB access, base lockfile unavailable.
+                (
+                    score,
+                    merkle_root,
+                    sig.min_hashes.to_vec(),
+                    blobs,
+                    entropy,
+                    None::<Vec<u8>>,
+                )
             }
         };
 
@@ -2815,7 +2847,9 @@ fn cmd_bounce(
     };
 
     // Lockfile tier — authoritative resolved graph for Rust crates.
-    let lockfile_silos = anatomist::manifest::find_version_silos_from_lockfile(&bounce_blobs);
+    // Pass base_lock for delta computation: only silos NEW in this PR are flagged.
+    let lockfile_silos =
+        anatomist::manifest::find_version_silos_from_lockfile(&bounce_blobs, base_lock.as_deref());
     if !lockfile_silos.is_empty() {
         // Remove blob-detected plain names superseded by lockfile entries
         // carrying full version detail.

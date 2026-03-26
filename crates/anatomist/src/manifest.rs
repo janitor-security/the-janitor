@@ -897,7 +897,8 @@ impl CrateVersionSilo {
 }
 
 /// Scan the `Cargo.lock` blob present in the PR diff and return every crate
-/// that appears at more than one distinct resolved version.
+/// that appears at more than one distinct resolved version **and was not already
+/// a version-split on the base branch**.
 ///
 /// ## Why the lockfile — not `cargo metadata`
 /// `cargo metadata` invokes a subprocess that reads the **physical disk**.  In the
@@ -907,22 +908,58 @@ impl CrateVersionSilo {
 /// both faster and architecturally correct: we analyse the graph as it would exist
 /// **after** the PR merges, not as it exists on the working tree today.
 ///
+/// ## Delta logic — base subtraction
+/// `base_lock` should be the raw bytes of the **base** `Cargo.lock` (the lockfile
+/// at the merge-base commit, before this PR).  When provided, any crate that was
+/// already showing a version split on the base branch is **excluded** from the
+/// result.  Only silos that are genuinely *introduced* by this PR are returned.
+///
+/// Pass `None` when no base lockfile is available (e.g. patch-mode bounce where
+/// only unified-diff `+` lines are in `blobs`).  In that case all silos found in
+/// the head lockfile are returned — callers must accept the possibility of false
+/// positives from pre-existing splits.
+///
 /// ## When it fires
 /// Only when the PR diff includes a `Cargo.lock` modification.  If the lock file
 /// is unchanged the PR cannot introduce new version splits, so no detection is
 /// needed and an empty `Vec` is returned.
 pub fn find_version_silos_from_lockfile(
     blobs: &HashMap<PathBuf, Vec<u8>>,
+    base_lock: Option<&[u8]>,
 ) -> Vec<CrateVersionSilo> {
-    for (path, bytes) in blobs {
+    // Find the head Cargo.lock blob (only present when the PR modifies it).
+    let head_content = blobs.iter().find_map(|(path, bytes)| {
         if path.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock") {
-            let Ok(content) = std::str::from_utf8(bytes) else {
-                continue;
-            };
-            return parse_lockfile_silos(content);
+            std::str::from_utf8(bytes).ok()
+        } else {
+            None
         }
+    });
+
+    let Some(head_content) = head_content else {
+        return Vec::new();
+    };
+
+    let head_silos = parse_lockfile_silos(head_content);
+    if head_silos.is_empty() {
+        return Vec::new();
     }
-    Vec::new()
+
+    // Delta: build the set of crate names that were ALREADY a version-split on
+    // the base branch.  Any silo whose name appears here is pre-existing — it
+    // was not introduced by this PR — and must be excluded from the result.
+    let pre_existing: HashSet<String> = base_lock
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .map(parse_lockfile_silos)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+
+    head_silos
+        .into_iter()
+        .filter(|s| !pre_existing.contains(&s.name))
+        .collect()
 }
 
 /// Parse a `Cargo.lock` TOML string and return every crate present at more
@@ -1311,7 +1348,7 @@ checksum = "112233"
         let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
         blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
 
-        let silos = find_version_silos_from_lockfile(&blobs);
+        let silos = find_version_silos_from_lockfile(&blobs, None);
         assert_eq!(silos.len(), 1, "one crate at two versions");
         assert_eq!(silos[0].name, "serde");
         assert_eq!(silos[0].versions, vec!["1.0.100", "1.0.200"]);
@@ -1334,7 +1371,7 @@ version = "1.20.0"
         let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
         blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
 
-        let silos = find_version_silos_from_lockfile(&blobs);
+        let silos = find_version_silos_from_lockfile(&blobs, None);
         assert!(silos.is_empty(), "all crates at single version → no silo");
     }
 
@@ -1347,7 +1384,7 @@ version = "1.20.0"
             b"[package]\nname = \"x\"\n".to_vec(),
         );
 
-        let silos = find_version_silos_from_lockfile(&blobs);
+        let silos = find_version_silos_from_lockfile(&blobs, None);
         assert!(silos.is_empty(), "no Cargo.lock blob → empty result");
     }
 
@@ -1375,11 +1412,77 @@ version = "1.0.75"
         let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
         blobs.insert(PathBuf::from("Cargo.lock"), lockfile.as_bytes().to_vec());
 
-        let silos = find_version_silos_from_lockfile(&blobs);
+        let silos = find_version_silos_from_lockfile(&blobs, None);
         assert_eq!(silos.len(), 2);
         // Sorted by name: anyhow < toml.
         assert_eq!(silos[0].name, "anyhow");
         assert_eq!(silos[1].name, "toml");
         assert_eq!(silos[1].display(), "toml (v1.0.6 vs v1.1.0)");
+    }
+
+    #[test]
+    fn test_lockfile_delta_suppresses_preexisting_silo() {
+        // Base already has serde at two versions — the PR must NOT be blamed.
+        let base_lock = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.100"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+"#;
+        // Head lockfile: serde silo unchanged, but a NEW toml silo appears.
+        let head_lock = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.100"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+
+[[package]]
+name = "toml"
+version = "1.0.6"
+
+[[package]]
+name = "toml"
+version = "1.1.0"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.lock"), head_lock.as_bytes().to_vec());
+
+        let silos = find_version_silos_from_lockfile(&blobs, Some(base_lock.as_bytes()));
+        // serde was pre-existing → suppressed.  Only toml (new) is returned.
+        assert_eq!(silos.len(), 1, "pre-existing serde silo must be suppressed");
+        assert_eq!(silos[0].name, "toml");
+        assert_eq!(silos[0].display(), "toml (v1.0.6 vs v1.1.0)");
+    }
+
+    #[test]
+    fn test_lockfile_delta_no_base_returns_all_silos() {
+        // When base_lock is None the function must return all head silos (no delta).
+        let head_lock = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.100"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+"#;
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.lock"), head_lock.as_bytes().to_vec());
+
+        let silos = find_version_silos_from_lockfile(&blobs, None);
+        assert_eq!(silos.len(), 1, "with no base, all head silos returned");
+        assert_eq!(silos[0].name, "serde");
     }
 }
