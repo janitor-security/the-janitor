@@ -115,3 +115,15 @@ runs:
           --report-url    https://the-governor.fly.dev/v1/report \
           --analysis-token "$ANALYSIS_TOKEN" \
           --head-sha      "$HEAD_SHA"
+
+    # Step 6 — Tabula Rasa: vaporise all /tmp artefacts and local caches.
+    #
+    # Runs unconditionally (even on failure) so that no state from this PR
+    # execution can leak into a subsequent run on the same hosted runner.
+    # Removes the compiled Janitor binary, the extracted patch, and any
+    # selftest artefacts written to /tmp.
+    - name: Cleanup Artifacts (Tabula Rasa)
+      if: always()
+      shell: bash
+      run: |
+        rm -rf /tmp/the-janitor /tmp/janitor-selftest-* .janitor-pr.patch || true

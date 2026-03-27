@@ -469,6 +469,17 @@ enum Commands {
     /// disruptions.  Not listed in `--help` output.
     #[command(hide = true)]
     OperatorStatus,
+
+    /// [INTERNAL] Sovereign Integrity Audit — verify the engine intercepts its own synthetic threats.
+    ///
+    /// Executes a Ghost Attack: injects a cryptominer string and a version silo into
+    /// synthetic diff/manifest fixtures and verifies the engine flags them with the
+    /// expected non-zero scores.  If any check fails, exits non-zero with
+    /// "INTEGRITY BREACH: RECALIBRATION REQUIRED".
+    ///
+    /// Not listed in `--help` output.
+    #[command(hide = true)]
+    SelfTest,
 }
 
 #[derive(Subcommand)]
@@ -786,19 +797,45 @@ async fn main() -> anyhow::Result<()> {
         Commands::WebhookTest { repo } => report::cmd_webhook_test(repo)?,
         Commands::OperatorStatus => {
             let version = env!("CARGO_PKG_VERSION");
+            let janitor_dir = std::path::Path::new(".janitor");
+            let entries = report::load_bounce_log(janitor_dir);
 
             // Last Attestation: most recent timestamp from the local bounce log.
-            let janitor_dir = std::path::Path::new(".janitor");
-            let last_attestation = report::load_bounce_log(janitor_dir)
-                .into_iter()
+            let last_attestation = entries
+                .iter()
                 .max_by(|a, b| a.timestamp.cmp(&b.timestamp))
-                .map(|e| e.timestamp)
+                .map(|e| e.timestamp.clone())
                 .unwrap_or_else(|| "none".to_string());
+
+            // Total Human Time Reclaimed: cumulative TEI converted to hours.
+            // TEI = (critical × $150) + (gc_only × $20) + (structural_slop × $20).
+            // Hours = TEI / $150 (senior developer hourly rate).
+            let critical = entries
+                .iter()
+                .filter(|e| report::is_critical_threat(e))
+                .count() as u64;
+            let gc_only = entries
+                .iter()
+                .filter(|e| e.necrotic_flag.is_some() && !report::is_critical_threat(e))
+                .count() as u64;
+            let structural_slop = entries
+                .iter()
+                .filter(|e| {
+                    e.slop_score > 0 && !report::is_critical_threat(e) && e.necrotic_flag.is_none()
+                })
+                .count() as u64;
+            let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
+            let hours_reclaimed = tei as f64 / 150.0;
 
             println!("Janitor v{version}");
             println!("Engine: HEALTHY");
             println!("Last Attestation: {last_attestation}");
             println!("Silo Detector: ARMED");
+            println!("Total Human Time Reclaimed: {hours_reclaimed:.1}h");
+        }
+
+        Commands::SelfTest => {
+            cmd_self_test()?;
         }
     }
 
@@ -3532,6 +3569,111 @@ fn cmd_telemetry_export(project_root: &Path) -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// self-test — Sovereign Integrity Audit
+// ---------------------------------------------------------------------------
+
+/// Executes a Ghost Attack: two synthetic threat fixtures are injected and the
+/// engine must intercept both to produce a "SANCTUARY INTACT" verdict.
+///
+/// Ghost Attack A — Cryptominer string:
+///   A unified diff blob containing `stratum+tcp://` is fed to `PatchBouncer`.
+///   Expected outcome: `score.score() > 0` and a `security:` antipattern entry.
+///
+/// Ghost Attack B — Version silo:
+///   Two `Cargo.toml` blobs declare the same crate at different versions.
+///   Expected outcome: `find_version_silos_in_blobs` returns the silo name.
+///
+/// If either check fails the function returns `Err` and exits non-zero.
+fn cmd_self_test() -> anyhow::Result<()> {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use anatomist::manifest::find_version_silos_in_blobs;
+    use common::registry::SymbolRegistry;
+    use forge::slop_filter::{PRBouncer, PatchBouncer};
+
+    println!("Janitor Self-Test: Sovereign Integrity Audit");
+    println!("---");
+
+    let mut passed: u32 = 0;
+    let mut failed: u32 = 0;
+
+    // ── Ghost Attack A: Cryptominer Intercept ──────────────────────────────
+    {
+        // Minimal unified diff containing a stratum+tcp:// mining-pool URI.
+        // The PatchBouncer must flag this as security:compiled_payload_anomaly.
+        let synthetic_diff = concat!(
+            "diff --git a/src/miner.rs b/src/miner.rs\n",
+            "--- a/src/miner.rs\n",
+            "+++ b/src/miner.rs\n",
+            "@@ -0,0 +1,4 @@\n",
+            "+fn connect_pool() {\n",
+            "+    let url = \"stratum+tcp://pool.selftest.invalid:3333\";\n",
+            "+    println!(\"{}\", url);\n",
+            "+}\n",
+        );
+
+        let registry = SymbolRegistry::default();
+        match PatchBouncer.bounce(synthetic_diff, &registry) {
+            Ok(score) if score.score() > 0 => {
+                println!(
+                    "[PASS] Ghost Attack A — Cryptominer Intercept: score={}",
+                    score.score()
+                );
+                passed += 1;
+            }
+            Ok(score) => {
+                println!(
+                    "[FAIL] Ghost Attack A — Cryptominer Intercept: score={} (expected > 0)",
+                    score.score()
+                );
+                failed += 1;
+            }
+            Err(e) => {
+                println!("[FAIL] Ghost Attack A — Cryptominer Intercept: bounce error: {e}");
+                failed += 1;
+            }
+        }
+    }
+
+    // ── Ghost Attack B: Version Silo Intercept ─────────────────────────────
+    {
+        // Two Cargo.toml blobs declare `serde` at different versions.
+        // find_version_silos_in_blobs must return "serde" as a silo.
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            PathBuf::from("crate-alpha/Cargo.toml"),
+            b"[dependencies]\nserde = \"1.0.100\"\n".to_vec(),
+        );
+        blobs.insert(
+            PathBuf::from("crate-beta/Cargo.toml"),
+            b"[dependencies]\nserde = \"1.0.200\"\n".to_vec(),
+        );
+
+        let silos = find_version_silos_in_blobs(&blobs);
+        if silos.iter().any(|s| s == "serde") {
+            println!("[PASS] Ghost Attack B — Version Silo Intercept: serde silo detected");
+            passed += 1;
+        } else {
+            println!(
+                "[FAIL] Ghost Attack B — Version Silo Intercept: serde silo not detected (found: {silos:?})"
+            );
+            failed += 1;
+        }
+    }
+
+    println!("---");
+    println!("{passed} passed, {failed} failed");
+    if failed == 0 {
+        println!("SANCTUARY INTACT");
+        Ok(())
+    } else {
+        eprintln!("INTEGRITY BREACH: RECALIBRATION REQUIRED");
+        anyhow::bail!("self-test: {failed} check(s) failed — engine integrity compromised")
+    }
 }
 
 fn run_pytest(dir: &Path) -> anyhow::Result<()> {

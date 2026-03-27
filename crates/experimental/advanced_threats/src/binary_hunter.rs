@@ -99,6 +99,23 @@ const PATTERNS: &[(&[u8], &str)] = &[
         b"cmd.exe\x00",
         "security:compiled_payload_anomaly — NUL-terminated cmd.exe string (shell execution artifact)",
     ),
+    // ── Agentic hostile obfuscation patterns ─────────────────────────────────
+    // `eval(base64_decode(` is the canonical JS/Python obfuscation idiom used
+    // to hide hostile payloads from static analysis — the encoded string is
+    // decoded at runtime and exec'd directly.  No legitimate application code
+    // uses this pattern outside of security research.
+    //
+    // `exec(zlib.decompress(` is the Python equivalent: a zlib-compressed
+    // payload is decompressed and executed in-process.  Common in dropper
+    // scripts and agentic C2 stubs targeting Python runtimes.
+    (
+        b"eval(base64_decode(",
+        "security:compiled_payload_anomaly — eval(base64_decode( obfuscation (JS/Python in-process decode-and-exec)",
+    ),
+    (
+        b"exec(zlib.decompress(",
+        "security:compiled_payload_anomaly — exec(zlib.decompress( payload delivery (Python compressed dropper)",
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -255,5 +272,30 @@ mod tests {
         bytes.extend_from_slice(b"\x7fELF\x02\x01\x01\x00");
         let findings = scan(&bytes);
         assert_eq!(findings.len(), 2, "two threats must produce two findings");
+    }
+
+    #[test]
+    fn test_eval_base64_decode_detected() {
+        let bytes = b"var payload = eval(base64_decode(enc));";
+        let findings = scan(bytes);
+        assert!(!findings.is_empty(), "eval(base64_decode( must be detected");
+        assert!(
+            findings[0].description.contains("base64_decode"),
+            "description must reference base64_decode"
+        );
+    }
+
+    #[test]
+    fn test_exec_zlib_decompress_detected() {
+        let bytes = b"exec(zlib.decompress(data))";
+        let findings = scan(bytes);
+        assert!(
+            !findings.is_empty(),
+            "exec(zlib.decompress( must be detected"
+        );
+        assert!(
+            findings[0].description.contains("zlib.decompress"),
+            "description must reference zlib.decompress"
+        );
     }
 }
