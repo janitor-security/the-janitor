@@ -251,7 +251,7 @@ janitor webhook-test --repo .
 # info: webhook-test — HTTP 200 ✓ delivery confirmed
 ```
 
-See the [governance documentation](governance.md#webhook-sub-table) for the full `[webhook]` field reference.
+See the [setup documentation](setup.md#webhook-sub-table) for the full `[webhook]` field reference.
 
 ---
 
@@ -277,12 +277,73 @@ The cleanup is identical at every tier. What you are paying for is a cryptograph
 
 ---
 
-> **[→ 30-Second Setup Guide](onboarding.md)** — Install, paste YAML, drop token. Done.
-
 > See [The Manifesto](manifesto.md) for the full crisis framing, actuarial ledger, and technical stack.
 > See [Architecture](architecture.md) for the engine specification.
-> See [Security Posture](security.md) for the Shadow Tree isolation, atomic rollback protocol, and hermetic build details.
-> See [Pricing & Licensing](pricing.md) for BUSL-1.1 terms and commercial tier details.
+> See [Setup](setup.md) for Janitor Sentinel configuration and CI integration.
 > See [Terms of Service](terms.md) · [Privacy Policy](privacy.md) for legal and data handling.
+
+---
+
+## Pricing
+
+### Free Tier
+
+No account required. No time limit. No LOC cap.
+
+| Capability | Included |
+|:-----------|:--------:|
+| `janitor scan` — dead symbol detection | ✓ |
+| `janitor clean` — shadow simulation + physical removal | ✓ |
+| `janitor dedup` — structural clone detection | ✓ |
+| `janitor bounce` — PR slop gate (JSON output for CI) | ✓ |
+| `janitor dashboard` — Ratatui TUI | ✓ |
+| **PQC-Signed Audit Logs** | — |
+| **CI/CD Compliance Attestation** | — |
+| **Janitor Sentinel** (GitHub App automation) | — |
+
+### Team Specialist — $499 / year
+
+Includes all Free tier capabilities, plus:
+
+| Capability | Included |
+|:-----------|:--------:|
+| **PQC-Signed Audit Logs** — every cleanup event signed with ML-DSA-65 (NIST FIPS 204) | ✓ |
+| **CI/CD Compliance Attestation** — `--token` flag activates signed reports in CI | ✓ |
+| **Janitor Sentinel** — GitHub App that runs `janitor bounce` on every PR | ✓ |
+| **Shared Credit Pool** — team-level token across all CI runners | ✓ |
+| Up to 25 seats on a single license | ✓ |
+
+[**Activate — $499/yr →**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
+
+### Industrial Core — Custom
+
+Includes all Team capabilities, plus:
+
+- **On-Premises Token Server** — dedicated verifying key for air-gapped deployments
+- **Keypair Rotation Protocol** — satisfies SOC 2 Type II change-management requirements
+- **Enterprise SLA** — 4-hour emergency rotation SLA for confirmed compromises
+- **Unlimited seats** on a single organization license
+
+[**Contact sales → sales@thejanitor.app**](mailto:sales@thejanitor.app)
+
+---
+
+## License (BUSL-1.1)
+
+**The Janitor** is licensed under the [Business Source License 1.1 (BUSL-1.1)](https://spdx.org/licenses/BUSL-1.1.html).
+
+- **Non-production use** — free, unrestricted: local scanning, evaluation, research, open-source projects.
+- **Production / commercial use** — requires a commercial license when embedding in a SaaS product or issuing attestations to customers.
+
+**Change Date**: `2030-02-15`. License converts automatically to **MIT** on that date, in perpetuity.
+
+### Token Gate
+
+Destructive operations (`janitor clean`, `janitor dedup --apply`) require a valid purge token — a base64-encoded ML-DSA-65 (NIST FIPS 204) signature of the string `JANITOR_PURGE_AUTHORIZED`. The binary embeds **only** the 32-byte verifying key. The signing key never leaves thejanitor.app.
+
+On an invalid or missing token, the CLI prints `ACCESS DENIED` and exits with code `1`. No partial work is performed.
+
+**License questions:** legal@thejanitor.app
+**Commercial inquiries:** sales@thejanitor.app
 
 <!-- Keywords: AI Security Firewall, Zero-Upload SAST, PQC CBOM, Structural AST Analysis, Kubernetes Audit, Vibe Coding Defense, AI Pull Request Gate, Supply Chain Attack Detection, Swarm Detection, Dead Symbol GC, LLM Boilerplate Detection, NCD Entropy Gate, CycloneDX CBOM, SARIF Security Report, Zombie Dependency Scanner -->

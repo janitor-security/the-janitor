@@ -70,7 +70,7 @@ OOM events            : 0
 
 These are real, open pull requests against 22 production codebases — including the Rust compiler, the Linux package ecosystem, and the Swift compiler. The gate works.
 
-[Full audit results →](ultimate_gauntlet_results.md)
+[Full audit results →](intelligence.md)
 
 ---
 
@@ -228,9 +228,8 @@ janitor dashboard <path>
 
 > **3.5 million lines. 33 seconds. 58 megabytes. Zero panics.**
 >
-> [Read the Godot Engine Autopsy →](case-studies/godot.md)
+> [Read the Godot Engine Autopsy →](intelligence.md)
 
 ---
 
 > See [Architecture](architecture.md) for the full technical specification.
-> See [Security Posture](security.md) for the Shadow Tree isolation, atomic rollback protocol, and hermetic build details.

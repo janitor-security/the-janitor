@@ -63,8 +63,7 @@ Grammar library: `tree-sitter 0.26` (workspace pinned).
 
 `janitor.toml` at the repository root encodes maintainer-controlled slop tolerance as
 version-controlled, reviewable configuration. Loaded by `JanitorPolicy::load()` in
-`crates/common/src/policy.rs`. Full field reference: `docs/governance.md` /
-[https://thejanitor.app/governance](https://thejanitor.app/governance).
+`crates/common/src/policy.rs`. Full field reference: [Setup → janitor.toml Reference](setup.md).
 
 | Field | Default | Purpose |
 |---|---|---|
@@ -486,6 +485,235 @@ Architecture Inversion (Steps 1–4 complete):
 New env var: `GOVERNOR_INVERT_MODE=1` — gates all inversion behaviour in the Governor. Default: `0` (legacy clone path).
 New CLI flags: `janitor bounce --report-url <url> --analysis-token <jwt>`
 New `AppState` fields: `invert_mode: bool`, `token_rate_limit: DashMap`, `pending_checks: DashMap`
+
+---
+
+## X. VERSION SILO DETECTION — DEPENDENCY GRAPH HARDENING
+
+`architecture:version_silo` is emitted when the engine detects a crate or package
+resolved at multiple distinct versions within the PR's manifest files (`Cargo.toml`,
+`package.json`).
+
+**Scoring**: +20 points per duplicate crate version. Each duplicate emits a distinct
+antipattern entry: `architecture:version_silo — <crate_name> (<v1> vs <v2>)`.
+
+**Mechanism**: The engine parses the in-memory `Cargo.lock` blob (no disk reads) via
+`find_version_silos_in_blobs` in `crates/anatomist/src/manifest.rs`. Detection is
+O(PR-diff): only files present in the PR patch are scanned, not the full repository
+lockfile.
+
+**Impact**: A version silo forces the Cargo resolver to maintain two parallel
+compilation artifacts for the same crate, is a common source of diamond dependency
+conflicts in rapidly evolving monorepos, and is a footprint vector for supply chain
+drift.
+
+---
+
+## XI. GATEKEEPER PROVENANCE
+
+The `Provenance` struct (attached to every `BounceLogEntry` in
+`crates/cli/src/report.rs`) records three fields at bounce time:
+
+| Field | Description |
+|---|---|
+| `analysis_duration_ms` | Wall-clock duration of the full bounce analysis in milliseconds |
+| `source_bytes_processed` | Total bytes of added source content fed into the analysis engine |
+| `egress_bytes_sent` | Exact byte-length of the JSON score report POSTed to the Governor |
+
+**Exfiltration Ratio** = `egress_bytes_sent / source_bytes_processed`.
+
+Since the engine transmits only a structured JSON score report (PR metadata, score,
+antipattern IDs) and never source lines, this ratio is mathematically bounded near
+zero. The report renders the `Exfiltration Ratio` as a percentage — a machine-verifiable
+proof that no source code crossed the network boundary. `zero_upload_verified` is set
+`true` when `egress_bytes_sent == 0` or the ratio is `< 1.0%`.
+
+---
+
+## XII. MEMORY BACKPRESSURE — PHYSARUM 2.0
+
+### Hardware-Aware Concurrency
+
+`detect_optimal_concurrency()` in `crates/common/src/physarum.rs` queries `sysinfo`
+for total system RAM and returns a worker-count recommendation used by both
+`janitor` and `gauntlet-runner`:
+
+| Total RAM | Workers | Mode |
+|-----------|---------|------|
+| < 8 GB | 2 | Safety |
+| 8–16 GB | 4 | Standard |
+| 16–32 GB | 8 | High-Velocity |
+| > 32 GB | logical CPU count | Aggressive |
+
+The `--concurrency 0` flag (default) selects auto-detection. Manual override is
+available via `--concurrency <N>`.
+
+Request concurrency is further governed by the SMA-gated semaphore model:
+
+| RAM Utilisation | Semaphore | Max Concurrent Requests |
+|-----------------|-----------|------------------------|
+| ≤ 75% | `flow_semaphore` | 4 |
+| 75–90% | `constrict_semaphore` | 2 |
+| > 90% | Busy-wait | 0 (backpressure) |
+
+### Melanin Layer
+
+The Melanin Layer is a 500 ms background thread (`start_background_heart()`) that
+refreshes OS memory statistics and publishes the result to a `static AtomicU8`
+(`GLOBAL_PULSE`). Analysis threads read `global_pulse()` via a single
+`AtomicU8::load(Relaxed)` — zero mutex acquisition, zero OS syscall per check.
+
+This decouples the memory observer from the scanning hot-path. A rayon pool
+processing 100 PRs/sec issues at most 2 `sysinfo::refresh_memory()` syscalls per
+second instead of 100. The background thread is idempotent — spawned at most once
+regardless of how many callers invoke `start_background_heart()`.
+
+---
+
+## Security Model
+
+### Zero-Copy Architecture: RAM-Only AST Pipeline
+
+All file reads in the hot path use `memmap2::Mmap` — a read-only memory-mapped view
+(`PROT_READ` only). The file content is never copied into a heap allocation.
+Tree-sitter receives a `&[u8]` slice of the mmap'd region and constructs the AST
+entirely in RAM. No AST is written to disk. No temporary file is created.
+
+Circuit breakers prevent resource exhaustion before parsing begins:
+
+| Limit | Value | Location |
+|-------|-------|----------|
+| Max file size for parsing | 1 MiB | `slop_filter.rs` |
+| Parse timeout | 100 ms | `parser.rs::PARSE_TIMEOUT_MICROS` |
+| Panic containment | `catch_unwind(AssertUnwindSafe)` | `parser.rs::timed_parse()` |
+
+### Shadow Merger: Air-Gapped PR Simulation
+
+`simulate_merge(repo, base_oid, head_oid)` in `crates/forge/src/shadow_git.rs` uses
+libgit2's tree-diff API to compute changed blobs within the git object store — read-only.
+The result is a `MergeSnapshot { blobs: HashMap<PathBuf, Vec<u8>> }` — a pure heap
+allocation. No file is checked out. No working directory is written. No build tool
+is invoked. A malicious `CMakeLists.txt` or `Makefile` exists only as an inert
+byte array.
+
+### Cryptographic Provenance: ML-DSA-65 (FIPS 204)
+
+Attestation is signed with ML-DSA-65 — 128-bit post-quantum security, standardised
+by NIST as FIPS 204 in August 2024. The binary embeds **only** the 32-byte
+verifying key (`VERIFYING_KEY_BYTES`). The signing key is held exclusively by
+thejanitor.app and never appears in the binary, repository, or process memory.
+
+Token revocation is achieved by keypair rotation: all tokens signed against the old
+private key become cryptographically invalid against the new verifying key — no
+revocation server, no database lookup.
+
+### Shadow Tree Isolation and Atomic Rollback
+
+Before touching any source file, the engine creates a Shadow Tree — a mirror of the
+project directory using zero additional disk space (symlinks on Linux/macOS, hard
+links on Windows). Physical excision proceeds bottom-to-top (descending byte order)
+to preserve upstream offsets. Backup copies are written to `.janitor/ghost/` before
+any write. `restore_all()` is called on any write failure.
+
+All destructive commands default to dry-run mode. Nothing is modified without
+`--force-purge --token <TOKEN>`.
+
+### Supply Chain Integrity
+
+All GitHub Actions steps are SHA-pinned to 40-character commit SHAs.
+`step-security/harden-runner` is the first step of every job.
+`cargo audit` and `cargo deny` are required gates in `just audit`.
+Docker base images are pinned to `@sha256:<digest>`.
+The engine's CI runs `janitor scan` against its own source tree on every PR.
+
+### Compliance Mapping
+
+| Framework | Control | Implementation |
+|-----------|---------|----------------|
+| SOC 2 Type II — CC6 | Logical access controls | ML-DSA-65 token gate on all destructive commands |
+| SOC 2 Type II — CC7 | System monitoring | Remote attestation POST to `/v1/attest` on every excision |
+| NIST FIPS 204 | Post-quantum signature | ML-DSA-65 |
+| SLSA Level 2 | Build provenance | GitHub Actions release workflow with SHA-pinned steps |
+| CIS Benchmark — 14.2 | Encrypt data in transit | All API calls use HTTPS; `ureq` enforces TLS |
+| OWASP — A08:2021 | Software and data integrity | `cargo audit` + `cargo deny` in CI; SHA-pinned Docker images |
+
+### Responsible Disclosure
+
+Security issues: **security@thejanitor.app**
+
+Acknowledge within 24 hours. Initial assessment within 72 hours. Critical vulnerabilities
+(RCE, token forgery, audit log tampering) treated as P0 with a 48-hour patch target.
+
+---
+
+## Benchmarks
+
+Results from **v6.12.7** gauntlet run. 22 Tier-1 repositories. Live PRs via
+`just run-gauntlet`. Hardware: AMD64 / WSL2, Linux 6.6.87, 8 GB RAM.
+
+### Global Audit 2026 — Summary
+
+| Metric | Value |
+|:-------|------:|
+| **Repositories audited** | **22** |
+| **Pull requests analyzed** | **2,090** |
+| **Total Slop Score** | **38,685** |
+| **Antipatterns Blocked** | **124** |
+| Engine panics | 0 |
+| OOM events | 0 |
+
+### 22-Repo Tier-1 Matrix
+
+| Repo | Lang | Peak RSS | Dead Symbols | Clone Groups | PRs Bounced | Antipatterns |
+|:-----|:-----|:--------:|-------------:|:------------:|:-----------:|:------------:|
+| godotengine/godot | C++ | 58 MB | 717 | 2 | 98 | 8 |
+| NixOS/nixpkgs | Nix | 29 MB | 205 | 2 | 100 | 0 |
+| microsoft/vscode | TS | 107 MB | 2,827 | 0 | 95 | 10 |
+| kubernetes/kubernetes | Go | 166 MB | 73 | 2 | 98 | 4 |
+| pytorch/pytorch | C++/Py | 164 MB | 8,247 | 24 | 95 | 2 |
+| apache/kafka | Java | 72 MB | 1 | 3 | 100 | 16 |
+| rust-lang/rust | Rust | 235 MB | 30 | 2 | 100 | 24 |
+| tauri-apps/tauri | Rust/JS | 29 MB | 1 | 0 | 95 | 12 |
+| redis/redis | C | 23 MB | 87 | 2 | 98 | 3 |
+| vercel/next.js | JS/TS | 51 MB | 0 | 0 | 93 | 8 |
+| home-assistant/core | Python | 101 MB | 8,311 | 9 | 97 | 4 |
+| ansible/ansible | Python | 25 MB | 895 | 2 | 95 | 6 |
+| cloudflare/workers-sdk | TS | 38 MB | 14 | 1 | 90 | 3 |
+| langchain-ai/langchain | Python | 20 MB | 1,483 | 2 | 95 | 4 |
+| denoland/deno | Rust/TS | 44 MB | 22 | 1 | 100 | 2 |
+| rails/rails | Ruby | 46 MB | 120 | 2 | 95 | 3 |
+| laravel/framework | PHP | 34 MB | 85 | 1 | 95 | 3 |
+| apple/swift | Swift/C++ | 182 MB | 450 | 3 | 88 | 2 |
+| dotnet/aspnetcore | C# | 142 MB | 4 | 0 | 95 | 2 |
+| square/okhttp | Kotlin/Java | 48 MB | 22 | 0 | 88 | 0 |
+| hashicorp/terraform | Go/HCL | 52 MB | 38 | 1 | 93 | 0 |
+| neovim/neovim | C/Lua | 28 MB | 145 | 3 | 90 | 8 |
+
+### Language Support Matrix
+
+| Language | Grammar | Gauntlet Repos |
+|:---------|:--------|:--------------|
+| Python | `tree-sitter-python` | ansible, home-assistant, pytorch, langchain |
+| Rust | `tree-sitter-rust` | rust-lang/rust, tauri, deno |
+| JavaScript | `tree-sitter-javascript` | next.js, workers-sdk |
+| TypeScript | `tree-sitter-typescript` | vscode, next.js, workers-sdk |
+| C++ | `tree-sitter-cpp` | godot, pytorch, apple/swift |
+| C | `tree-sitter-c` | redis, neovim |
+| Java | `tree-sitter-java` | kafka, okhttp |
+| C# | `tree-sitter-c-sharp` | dotnet/aspnetcore |
+| Go | `tree-sitter-go` | kubernetes, terraform |
+| Ruby | `tree-sitter-ruby` | rails/rails |
+| PHP | `tree-sitter-php` | laravel/framework |
+| Swift | `tree-sitter-swift` | apple/swift |
+| Lua | `tree-sitter-lua` | neovim/neovim |
+| Nix | `tree-sitter-nix` | NixOS/nixpkgs |
+| Kotlin | `tree-sitter-kotlin` | square/okhttp |
+| GLSL | `tree-sitter-glsl` | godot shaders |
+| Objective-C | `tree-sitter-objc` | godot, apple/swift |
+| Bash | `tree-sitter-bash` | ansible |
+| Scala | `tree-sitter-scala` | kafka |
+
+**23 grammars total.** `OnceLock<Language>` statics: 184 bytes total static overhead for all 23 grammars. Zero per-call allocation.
 
 ---
 
