@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 <p align="center">
   <img src="assets/logo_text.svg" alt="The Janitor" width="80%" style="max-width: 800px; display: block; margin: 0 auto;">
 </p>
