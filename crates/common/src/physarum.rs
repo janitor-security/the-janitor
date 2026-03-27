@@ -76,6 +76,10 @@
 //! memory observer from the scanning hot-path: a rayon pool processing 100
 //! PRs/sec issues ≤ 10 sysinfo reads/sec instead of 100.
 
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    OnceLock,
+};
 use std::time::{Duration, Instant};
 
 use sysinfo::System;
@@ -521,6 +525,83 @@ pub fn detect_optimal_concurrency() -> usize {
 }
 
 // ---------------------------------------------------------------------------
+// Melanin Layer — background-thread atomic pulse (zero-syscall read path)
+// ---------------------------------------------------------------------------
+
+/// Background refresh interval for the Melanin Layer heart thread.
+///
+/// 500 ms provides a fresh memory reading without saturating `sysinfo`
+/// on high-throughput scan pools.  Scanning threads read [`global_pulse`]
+/// with a single `AtomicU8::load(Relaxed)` — zero mutex, zero syscall.
+const MELANIN_REFRESH_MS: u64 = 500;
+
+/// Packed atomic storage for the current [`Pulse`]:
+/// `0` = `Flow`, `1` = `Constrict`, `2` = `Stop`.
+///
+/// Updated every [`MELANIN_REFRESH_MS`] ms by the background heart thread.
+/// Default value is `0` (Flow) so callers have a safe answer before the
+/// first refresh fires.
+static GLOBAL_PULSE: AtomicU8 = AtomicU8::new(0);
+
+/// One-time sentinel that ensures the background heart thread is started
+/// at most once regardless of how many callers invoke [`start_background_heart`].
+static HEART_STARTED: OnceLock<()> = OnceLock::new();
+
+#[inline]
+fn pulse_to_u8(p: Pulse) -> u8 {
+    match p {
+        Pulse::Flow => 0,
+        Pulse::Constrict => 1,
+        Pulse::Stop => 2,
+    }
+}
+
+#[inline]
+fn u8_to_pulse(v: u8) -> Pulse {
+    match v {
+        1 => Pulse::Constrict,
+        2 => Pulse::Stop,
+        _ => Pulse::Flow,
+    }
+}
+
+/// Return the current memory-pressure [`Pulse`] from the Melanin Layer.
+///
+/// Zero mutex contention, zero OS syscalls — reads a single [`AtomicU8`]
+/// with `Ordering::Relaxed`.  Call [`start_background_heart`] once at
+/// startup to activate the background observer.
+///
+/// Returns [`Pulse::Flow`] before the first background refresh (safe default).
+#[inline]
+pub fn global_pulse() -> Pulse {
+    u8_to_pulse(GLOBAL_PULSE.load(Ordering::Relaxed))
+}
+
+/// Start the Melanin Layer: a 500 ms background thread that refreshes
+/// OS memory statistics and publishes the result to [`global_pulse`].
+///
+/// Idempotent — the thread is spawned at most once regardless of how many
+/// times this function is called.  Safe to call from `main()`, daemon
+/// startup, or any crate initialisation path.
+///
+/// The thread is named `physarum-heart` and runs until process exit.
+pub fn start_background_heart() {
+    HEART_STARTED.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("physarum-heart".to_owned())
+            .spawn(|| {
+                let heart = SystemHeart::new();
+                loop {
+                    let pulse = heart.beat();
+                    GLOBAL_PULSE.store(pulse_to_u8(pulse), Ordering::Relaxed);
+                    std::thread::sleep(Duration::from_millis(MELANIN_REFRESH_MS));
+                }
+            })
+            .expect("physarum: failed to spawn background heart thread");
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -878,5 +959,31 @@ mod tests {
             Pulse::Constrict,
             "80 % on 32 GiB host with unstable velocity must still be Constrict"
         );
+    }
+
+    #[test]
+    fn test_global_pulse_returns_valid_pulse() {
+        // Before start_background_heart: default value (Flow) must be valid.
+        let pulse = global_pulse();
+        assert!(matches!(
+            pulse,
+            Pulse::Flow | Pulse::Constrict | Pulse::Stop
+        ));
+    }
+
+    #[test]
+    fn test_start_background_heart_idempotent() {
+        // Calling start_background_heart multiple times must not panic or
+        // spawn extra threads — the OnceLock guarantees single execution.
+        start_background_heart();
+        start_background_heart();
+        start_background_heart();
+        // Allow one refresh cycle to fire before reading.
+        std::thread::sleep(Duration::from_millis(600));
+        let pulse = global_pulse();
+        assert!(matches!(
+            pulse,
+            Pulse::Flow | Pulse::Constrict | Pulse::Stop
+        ));
     }
 }

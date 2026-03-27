@@ -1114,8 +1114,21 @@ impl PRBouncer for PatchBouncer {
             raw_clone_count
         };
 
-        // Merge NCD entropy gate and Compiled Payload Shield findings into the
-        // antipattern totals.
+        // Recursive Boilerplate — topology-hash flood detection.
+        //
+        // Fires Critical (+50 pts) when >5 added functions share identical AST
+        // topology in the same source blob.  This is the canonical AI context-bloat
+        // signature: a context-exhausted agent scaffolds the same function body N
+        // times with distinct names but identical structure.
+        let boilerplate_finding = crate::slop_hunter::detect_recursive_boilerplate(ext, source);
+        let boilerplate_count = boilerplate_finding.is_some() as u32;
+        let boilerplate_details: Vec<String> = boilerplate_finding
+            .map(|f| f.description)
+            .into_iter()
+            .collect();
+
+        // Merge NCD entropy gate, Compiled Payload Shield, and Recursive Boilerplate
+        // findings into the antipattern totals.
         //
         // Severity split (v7.9.0 Threat Demotion):
         //   NCD (antipattern:ncd_anomaly)  → Warning tier: 10 pts.
@@ -1125,13 +1138,18 @@ impl PRBouncer for PatchBouncer {
         //   Payload (binary_hunter)         → Critical tier: 50 pts.
         //     ELF magic, mining stratum URIs, shell NULs are active supply-chain
         //     signals — Critical billing is correct and intentional.
+        //   Recursive Boilerplate           → Critical tier: 50 pts.
+        //     Structural topology flood is a direct AI-generation artefact;
+        //     Critical billing is correct and intentional.
         let ncd_count = ncd_findings.len() as u32;
         let payload_count = payload_findings.len() as u32;
-        let antipatterns_found = antipatterns_found + ncd_count + payload_count;
-        let antipattern_score = antipattern_score + ncd_count * 10 + payload_count * 50;
+        let antipatterns_found = antipatterns_found + ncd_count + payload_count + boilerplate_count;
+        let antipattern_score =
+            antipattern_score + ncd_count * 10 + payload_count * 50 + boilerplate_count * 50;
         let mut antipattern_details = antipattern_details;
         antipattern_details.extend(ncd_findings);
         antipattern_details.extend(payload_findings);
+        antipattern_details.extend(boilerplate_details);
 
         Ok(SlopScore {
             dead_symbols_added,

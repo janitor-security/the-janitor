@@ -40,6 +40,7 @@
 //! }
 //! ```
 
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use tree_sitter::{Language, Node};
@@ -748,6 +749,120 @@ pub fn check_entropy(patch_bytes: &[u8]) -> f64 {
 // Tests
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Recursive Boilerplate — topology-hash collision detector
+// ---------------------------------------------------------------------------
+
+/// Number of functions with identical AST topology required to trigger the
+/// Recursive Boilerplate penalty.
+const BOILERPLATE_THRESHOLD: u32 = 5;
+
+/// Produce a BLAKE3-derived u64 topology fingerprint for a tree-sitter node
+/// subtree.  Only node kinds are serialised — token text is ignored — so two
+/// functions with the same structural skeleton but different identifier names
+/// produce the same fingerprint.
+fn topology_hash(node: Node<'_>) -> u64 {
+    let mut buf = String::with_capacity(256);
+    build_topology(node, &mut buf);
+    let hash = blake3::hash(buf.as_bytes());
+    let bytes = hash.as_bytes();
+    u64::from_le_bytes(bytes[..8].try_into().unwrap_or([0u8; 8]))
+}
+
+fn build_topology(node: Node<'_>, out: &mut String) {
+    if node.is_extra() {
+        // Skip comments and other extras — they are cosmetic noise.
+        return;
+    }
+    out.push_str(node.kind());
+    out.push('|');
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        build_topology(child, out);
+    }
+}
+
+/// Walk `node` depth-first, collecting topology hashes of every function-like
+/// node whose kind is listed in `fn_kinds`.
+fn collect_fn_topologies<'a>(
+    node: Node<'a>,
+    fn_kinds: &[&str],
+    counts: &mut HashMap<u64, u32>,
+    first_bytes: &mut HashMap<u64, usize>,
+) {
+    if fn_kinds.contains(&node.kind()) {
+        let h = topology_hash(node);
+        *counts.entry(h).or_insert(0) += 1;
+        first_bytes.entry(h).or_insert(node.start_byte());
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_fn_topologies(child, fn_kinds, counts, first_bytes);
+    }
+}
+
+/// Detect Recursive Boilerplate — more than [`BOILERPLATE_THRESHOLD`] functions
+/// added in the same source blob with identical AST topology.
+///
+/// A PR that floods the codebase with structurally identical functions (the
+/// canonical AI context-bloat signature) triggers a Critical (+50 pt) finding.
+///
+/// Language coverage: Rust, Python, C/C++, JavaScript/TypeScript.
+/// Returns `None` for unsupported languages or if no threshold breach is found.
+pub fn detect_recursive_boilerplate(language: &str, source: &[u8]) -> Option<SlopFinding> {
+    let ts_lang: tree_sitter::Language = match language {
+        "rs" => tree_sitter_rust::LANGUAGE.into(),
+        "py" => tree_sitter_python::LANGUAGE.into(),
+        "c" | "h" | "cpp" | "cxx" | "cc" | "hpp" => tree_sitter_c::LANGUAGE.into(),
+        "js" | "jsx" | "ts" | "tsx" => tree_sitter_javascript::LANGUAGE.into(),
+        _ => return None,
+    };
+
+    let fn_kinds: &[&str] = match language {
+        "rs" => &["function_item"],
+        "py" => &["function_definition"],
+        "c" | "h" | "cpp" | "cxx" | "cc" | "hpp" => &["function_definition"],
+        "js" | "jsx" | "ts" | "tsx" => &[
+            "function_declaration",
+            "arrow_function",
+            "method_definition",
+        ],
+        _ => return None,
+    };
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&ts_lang).is_err() {
+        return None;
+    }
+    let tree = parser.parse(source, None)?;
+    if tree.root_node().has_error() {
+        return None;
+    }
+
+    let mut counts: HashMap<u64, u32> = HashMap::new();
+    let mut first_bytes: HashMap<u64, usize> = HashMap::new();
+    collect_fn_topologies(tree.root_node(), fn_kinds, &mut counts, &mut first_bytes);
+
+    let worst = counts
+        .iter()
+        .filter(|(_, &c)| c > BOILERPLATE_THRESHOLD)
+        .max_by_key(|(_, &c)| c);
+
+    let (&hash_key, &count) = worst?;
+    let first_byte = first_bytes.get(&hash_key).copied().unwrap_or(0);
+
+    Some(SlopFinding {
+        start_byte: first_byte,
+        end_byte: first_byte,
+        description: format!(
+            "antipattern:recursive_boilerplate — {count} functions share identical AST topology \
+             (SimHash distance=0); structural boilerplate flood detected"
+        ),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::Critical,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1126,6 +1241,90 @@ resource \"aws_s3_bucket_acl\" \"example\" {
             "S3 public-read ACL must be detected: {findings:?}"
         );
         assert!(findings[0].description.contains("s3_public_acl"));
+    }
+
+    // ── Recursive Boilerplate tests ───────────────────────────────────────
+
+    /// Build a Rust source blob with N structurally identical functions.
+    fn make_rust_boilerplate(n: usize) -> Vec<u8> {
+        let mut src = String::new();
+        for i in 0..n {
+            src.push_str(&format!("fn func_{i}(x: i32) -> i32 {{ x + 1 }}\n"));
+        }
+        src.into_bytes()
+    }
+
+    #[test]
+    fn test_recursive_boilerplate_below_threshold_not_flagged() {
+        // 5 identical bodies — exactly at threshold, must NOT fire (needs >5).
+        let src = make_rust_boilerplate(5);
+        let result = detect_recursive_boilerplate("rs", &src);
+        assert!(
+            result.is_none(),
+            "5 identical functions must not trigger (threshold is >5): {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_recursive_boilerplate_above_threshold_detected() {
+        // 6 identical bodies — one over threshold.
+        let src = make_rust_boilerplate(6);
+        let result = detect_recursive_boilerplate("rs", &src);
+        assert!(
+            result.is_some(),
+            "6 identical functions must trigger recursive_boilerplate"
+        );
+        let f = result.unwrap();
+        assert!(
+            f.description.contains("recursive_boilerplate"),
+            "description must contain antipattern label: {}",
+            f.description
+        );
+        assert_eq!(
+            f.severity,
+            Severity::Critical,
+            "recursive_boilerplate must be Critical severity"
+        );
+    }
+
+    #[test]
+    fn test_recursive_boilerplate_diverse_functions_not_flagged() {
+        // 6 functions with distinct bodies — topology hashes diverge, must not fire.
+        let src = b"
+fn a(x: i32) -> i32 { x + 1 }
+fn b(x: i32) -> i32 { x * 2 }
+fn c(x: i32, y: i32) -> i32 { x + y }
+fn d() -> String { String::new() }
+fn e(v: Vec<i32>) -> usize { v.len() }
+fn f(s: &str) -> bool { s.is_empty() }
+";
+        let result = detect_recursive_boilerplate("rs", src);
+        assert!(
+            result.is_none(),
+            "structurally diverse functions must not trigger: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_recursive_boilerplate_python_detected() {
+        // 6 structurally identical Python functions.
+        let mut src = String::new();
+        for i in 0..6 {
+            src.push_str(&format!("def func_{i}(x):\n    return x + 1\n\n"));
+        }
+        let result = detect_recursive_boilerplate("py", src.as_bytes());
+        assert!(
+            result.is_some(),
+            "6 identical Python functions must trigger recursive_boilerplate"
+        );
+    }
+
+    #[test]
+    fn test_recursive_boilerplate_unsupported_language_returns_none() {
+        // YAML has no function nodes — must return None silently.
+        let src = b"key: value\n";
+        let result = detect_recursive_boilerplate("yaml", src);
+        assert!(result.is_none(), "unsupported language must return None");
     }
 
     #[test]

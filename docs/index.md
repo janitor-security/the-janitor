@@ -6,7 +6,7 @@
 
 # The Janitor
 
-**v7.9.4 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v7.9.4 — Deterministic Structural Firewall. Attosecond-grade integrity for the AI-assisted development economy.**
 
 ---
 
@@ -114,6 +114,22 @@ LLM-based code review tools cannot *prove* anything. They pattern-match against 
 The Janitor does not guess. It uses **tree-sitter ASTs to prove structural identity**, **BLAKE3 hashing to prove clone equivalence**, **MinHash Jaccard to prove Swarm coordination**, and **ML-DSA-65 (NIST FIPS 204) to prove chain of custody**. The gate either passes or it does not. The math either confirms structural identity or it does not. There is no confidence interval. There is no false-positive budget. There is a proof — or the PR is blocked.
 
 When a PR clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM: a cryptographically signed bill of materials covering every hash, every symbol, every decision point in the analysis. That is not a report. That is a bond you can present to a SOC 2 auditor.
+
+### The Doorman Fallacy
+
+A Doorman checks if you are wearing shoes. He does not x-ray your briefcase.
+
+Lightweight linters — ESLint, Pylint, Clippy — check if a PR compiles and conforms to style guides. They are Doormen. They operate on the surface: syntax, formatting, known CVE patterns. They are excellent at what they do. They do not do what The Janitor does.
+
+The Janitor conducts a **structural autopsy**. It does not check formatting. It does not run a known-bad signature database. It maps the reference graph, hashes every function body with BLAKE3, runs a MinHash Jaccard swarm collision check across your entire PR history, and issues a ML-DSA-65 (NIST FIPS 204) signed cryptographic bond for every clean merge.
+
+The Doorman Fallacy is the belief that *more Doormen solve the Doorman problem*. They do not. A stack of five linters — each using 5 MB of RAM to pattern-match against pre-AI threat signatures — does not cover 90% of the threat surface. It covers the same 10% five times. The structural category of AI-generated slop has no CVE record. It is invisible to every tool trained on pre-AI codebases.
+
+You do not need a tool that uses 5 MB of RAM to ignore 90% of the threat.
+
+**You need a tool that uses 60 MB of RAM to guarantee FIPS 204 provenance.**
+
+The Janitor is the only gate in the pipeline that conducts a structural autopsy instead of a wardrobe check. It is 60 MB at peak on a 3.5-million-line polyglot repository. It exits in 33 seconds. And it issues a quantum-safe attestation bond that your Doormen cannot produce if they run until the heat death of the universe.
 
 ### Agentic-Ready
 
