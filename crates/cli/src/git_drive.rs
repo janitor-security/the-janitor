@@ -543,6 +543,7 @@ fn bounce_one(
             policy_hash: String::new(),
             version_silos: Vec::new(),
             agentic_pct: 0.0,
+            provenance: crate::report::Provenance::default(),
         });
     }
 
@@ -609,6 +610,10 @@ fn bounce_one(
         policy_hash: String::new(),
         version_silos,
         agentic_pct: 0.0,
+        provenance: crate::report::Provenance {
+            source_bytes_processed: blobs.values().map(|v| v.len() as u64).sum(),
+            ..crate::report::Provenance::default()
+        },
     })
 }
 

@@ -733,6 +733,7 @@ async fn main() -> anyhow::Result<()> {
                             policy_hash: String::new(),
                             version_silos: vec![],
                             agentic_pct: 0.0,
+                            provenance: report::Provenance::default(),
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -2547,6 +2548,9 @@ fn cmd_bounce(
     use common::registry::{MappedRegistry, SymbolRegistry};
     use forge::slop_filter::{bounce_git, PRBouncer, PatchBouncer};
 
+    // Provenance ledger — capture analysis start time for duration measurement.
+    let bounce_start = std::time::Instant::now();
+
     // Load governance manifest — fallback to defaults if absent or malformed.
     let policy = JanitorPolicy::load(project_root);
 
@@ -2583,156 +2587,175 @@ fn cmd_bounce(
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
     // `bounce_blobs` carries the per-file byte content of the PR for the
     // O(1)-scoped zombie dep scan performed below (no full-repo WalkDir).
-    let (mut score, merkle_root, min_hashes_vec, bounce_blobs, patch_has_entropy, base_lock) =
-        match (repo, base, head) {
-            (Some(repo_path), Some(base_sha), Some(head_sha)) => {
-                // Git-native mode: shadow_git blob extraction.
-                // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
-                let (mut score, blobs) = bounce_git(repo_path, base_sha, head_sha, &registry)?;
-                // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
-                let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
-                let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
-                let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
-                // Derive MinHash from the deterministic merkle key (no raw patch in git mode).
-                let sig = forge::pr_collider::PrDeltaSignature::from_bytes(merkle_root.as_bytes());
-                // Hallucinated security fix check (git mode — extensions from snapshot blobs).
-                if let Some(body) = pr_body {
-                    let exts: Vec<String> = {
-                        use std::collections::HashSet;
-                        blobs
-                            .keys()
-                            .map(|p| {
-                                p.extension()
-                                    .and_then(|e| e.to_str())
-                                    .unwrap_or("")
-                                    .to_string()
-                            })
-                            .collect::<HashSet<_>>()
-                            .into_iter()
-                            .collect()
-                    };
-                    forge::slop_filter::check_hallucinated_fix(
-                        &mut score,
-                        body,
-                        &exts,
-                        repo_slug.unwrap_or(""),
-                    );
-                }
-                // Git-native mode: merkle root is a 64-char hex string — always
-                // has sufficient byte 3-gram entropy to enter the swarm index.
-                (
-                    score,
-                    merkle_root,
-                    sig.min_hashes.to_vec(),
-                    blobs,
-                    true,
-                    base_lock,
-                )
-            }
-            _ => {
-                // Patch mode: file, auto-fetch via gh, or stdin.
-                let patch = if let (None, Some(pn)) = (patch_file, pr_number) {
-                    // Auto-fetch: gh pr diff <N> --repo <slug>
-                    let slug = repo_slug
-                        .map(|s| s.to_owned())
-                        .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Auto-fetch requires --repo-slug <owner/repo> \
-                             or the GITHUB_REPOSITORY env var"
-                            )
-                        })?;
-                    let output = std::process::Command::new("gh")
-                        .args(["pr", "diff", &pn.to_string(), "--repo", &slug])
-                        .output()
-                        .context(
-                            "failed to invoke `gh pr diff` — is `gh` installed and authenticated?",
-                        )?;
-                    if !output.status.success() {
-                        anyhow::bail!(
-                            "`gh pr diff {}` failed (exit {}): {}",
-                            pn,
-                            output.status,
-                            String::from_utf8_lossy(&output.stderr).trim()
-                        );
-                    }
-                    String::from_utf8_lossy(&output.stdout).into_owned()
-                } else {
-                    match patch_file {
-                        Some(pf) => {
-                            let bytes = std::fs::read(pf)
-                                .with_context(|| format!("reading patch file: {}", pf.display()))?;
-                            String::from_utf8_lossy(&bytes).into_owned()
-                        }
-                        None => {
-                            use std::io::IsTerminal as _;
-                            if std::io::stdin().is_terminal() {
-                                anyhow::bail!(
-                                    "Must provide either --patch <file> \
-                                 or --pr-number <N> --repo-slug <owner/repo>"
-                                );
-                            }
-                            let mut buf = Vec::new();
-                            use std::io::Read as _;
-                            std::io::stdin()
-                                .read_to_end(&mut buf)
-                                .context("reading patch from stdin")?;
-                            String::from_utf8_lossy(&buf).into_owned()
-                        }
-                    }
+    // `source_bytes` is the raw analysis surface size for the provenance ledger.
+    let (
+        mut score,
+        merkle_root,
+        min_hashes_vec,
+        bounce_blobs,
+        patch_has_entropy,
+        base_lock,
+        source_bytes,
+    ) = match (repo, base, head) {
+        (Some(repo_path), Some(base_sha), Some(head_sha)) => {
+            // Git-native mode: shadow_git blob extraction.
+            // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
+            let (mut score, blobs) = bounce_git(repo_path, base_sha, head_sha, &registry)?;
+            // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
+            let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
+            let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
+            let merkle_root = blake3::hash(merkle_key.as_bytes()).to_hex().to_string();
+            // Derive MinHash from the deterministic merkle key (no raw patch in git mode).
+            let sig = forge::pr_collider::PrDeltaSignature::from_bytes(merkle_root.as_bytes());
+            // Hallucinated security fix check (git mode — extensions from snapshot blobs).
+            if let Some(body) = pr_body {
+                let exts: Vec<String> = {
+                    use std::collections::HashSet;
+                    blobs
+                        .keys()
+                        .map(|p| {
+                            p.extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("")
+                                .to_string()
+                        })
+                        .collect::<HashSet<_>>()
+                        .into_iter()
+                        .collect()
                 };
-                let mut score = PatchBouncer.bounce(&patch, &registry)?;
-                let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
-                let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
-
-                // Comment & PR metadata analysis (patch surface).
-                let scanner = forge::metadata::CommentScanner::new();
-                let comment_violations = scanner.scan_patch(&patch);
-                score.comment_violations = comment_violations.len() as u32;
-                // Populate detail strings for the violation phrases.
-                score.comment_violation_details = comment_violations
-                    .iter()
-                    .map(|v| format!("[line {}] {}", v.line, v.phrase))
-                    .collect();
-                if let Some(body) = pr_body {
-                    // Unlinked-PR penalty — suppressed for automation accounts.
-                    // Detection layers (zero-allocation, evaluated in order):
-                    //   1. Standard GitHub [bot] suffix (Dependabot, Renovate, etc.)
-                    //   2. `trusted_bot_authors` list in janitor.toml
-                    //   3. `[forge].automation_accounts` list in janitor.toml
-                    //      (for ecosystem accounts like r-ryantm, app/nixpkgs-ci)
-                    let author_is_automation = policy.is_automation_account(author.unwrap_or(""));
-                    if scanner.is_pr_unlinked(body) && !author_is_automation {
-                        score.unlinked_pr = 1;
-                    }
-                    // Hallucinated security fix check (patch mode — all +++ b/ headers).
-                    let changed_exts = forge::slop_filter::extract_all_patch_exts(&patch);
-                    forge::slop_filter::check_hallucinated_fix(
-                        &mut score,
-                        body,
-                        &changed_exts,
-                        repo_slug.unwrap_or(""),
+                forge::slop_filter::check_hallucinated_fix(
+                    &mut score,
+                    body,
+                    &exts,
+                    repo_slug.unwrap_or(""),
+                );
+            }
+            // Git-native mode: merkle root is a 64-char hex string — always
+            // has sufficient byte 3-gram entropy to enter the swarm index.
+            // Provenance: source bytes = sum of all changed-file blob sizes.
+            let src_bytes: u64 = blobs.values().map(|v| v.len() as u64).sum();
+            (
+                score,
+                merkle_root,
+                sig.min_hashes.to_vec(),
+                blobs,
+                true,
+                base_lock,
+                src_bytes,
+            )
+        }
+        _ => {
+            // Patch mode: file, auto-fetch via gh, or stdin.
+            let patch = if let (None, Some(pn)) = (patch_file, pr_number) {
+                // Auto-fetch: gh pr diff <N> --repo <slug>
+                let slug = repo_slug
+                    .map(|s| s.to_owned())
+                    .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Auto-fetch requires --repo-slug <owner/repo> \
+                             or the GITHUB_REPOSITORY env var"
+                        )
+                    })?;
+                let output = std::process::Command::new("gh")
+                    .args(["pr", "diff", &pn.to_string(), "--repo", &slug])
+                    .output()
+                    .context(
+                        "failed to invoke `gh pr diff` — is `gh` installed and authenticated?",
+                    )?;
+                if !output.status.success() {
+                    anyhow::bail!(
+                        "`gh pr diff {}` failed (exit {}): {}",
+                        pn,
+                        output.status,
+                        String::from_utf8_lossy(&output.stderr).trim()
                     );
                 }
+                String::from_utf8_lossy(&output.stdout).into_owned()
+            } else {
+                match patch_file {
+                    Some(pf) => {
+                        let bytes = std::fs::read(pf)
+                            .with_context(|| format!("reading patch file: {}", pf.display()))?;
+                        String::from_utf8_lossy(&bytes).into_owned()
+                    }
+                    None => {
+                        use std::io::IsTerminal as _;
+                        if std::io::stdin().is_terminal() {
+                            anyhow::bail!(
+                                "Must provide either --patch <file> \
+                                 or --pr-number <N> --repo-slug <owner/repo>"
+                            );
+                        }
+                        let mut buf = Vec::new();
+                        use std::io::Read as _;
+                        std::io::stdin()
+                            .read_to_end(&mut buf)
+                            .context("reading patch from stdin")?;
+                        String::from_utf8_lossy(&buf).into_owned()
+                    }
+                }
+            };
+            let mut score = PatchBouncer.bounce(&patch, &registry)?;
+            let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
+            let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
 
-                // Extract per-file blobs from the unified diff for the zombie dep scan.
-                let blobs = forge::slop_filter::extract_patch_blobs(&patch);
-
-                // Entropy gate: patches with fewer than MIN_SHINGLE_ENTROPY byte
-                // 3-gram windows cannot form a unique MinHash sketch and must
-                // bypass swarm clustering to prevent null-vector collisions.
-                let entropy = forge::pr_collider::PrDeltaSignature::has_entropy(patch.as_bytes());
-                // Patch mode: no git ODB access, base lockfile unavailable.
-                (
-                    score,
-                    merkle_root,
-                    sig.min_hashes.to_vec(),
-                    blobs,
-                    entropy,
-                    None::<Vec<u8>>,
-                )
+            // Comment & PR metadata analysis (patch surface).
+            let scanner = forge::metadata::CommentScanner::new();
+            let comment_violations = scanner.scan_patch(&patch);
+            score.comment_violations = comment_violations.len() as u32;
+            // Populate detail strings for the violation phrases.
+            score.comment_violation_details = comment_violations
+                .iter()
+                .map(|v| format!("[line {}] {}", v.line, v.phrase))
+                .collect();
+            if let Some(body) = pr_body {
+                // Unlinked-PR penalty — suppressed for automation accounts.
+                // Detection layers (zero-allocation, evaluated in order):
+                //   1. Standard GitHub [bot] suffix (Dependabot, Renovate, etc.)
+                //   2. `trusted_bot_authors` list in janitor.toml
+                //   3. `[forge].automation_accounts` list in janitor.toml
+                //      (for ecosystem accounts like r-ryantm, app/nixpkgs-ci)
+                let author_is_automation = policy.is_automation_account(author.unwrap_or(""));
+                if scanner.is_pr_unlinked(body) && !author_is_automation {
+                    score.unlinked_pr = 1;
+                }
+                // Hallucinated security fix check (patch mode — all +++ b/ headers).
+                let changed_exts = forge::slop_filter::extract_all_patch_exts(&patch);
+                forge::slop_filter::check_hallucinated_fix(
+                    &mut score,
+                    body,
+                    &changed_exts,
+                    repo_slug.unwrap_or(""),
+                );
             }
-        };
+
+            // Extract per-file blobs from the unified diff for the zombie dep scan.
+            let blobs = forge::slop_filter::extract_patch_blobs(&patch);
+
+            // Entropy gate: patches with fewer than MIN_SHINGLE_ENTROPY byte
+            // 3-gram windows cannot form a unique MinHash sketch and must
+            // bypass swarm clustering to prevent null-vector collisions.
+            let entropy = forge::pr_collider::PrDeltaSignature::has_entropy(patch.as_bytes());
+            // Patch mode: no git ODB access, base lockfile unavailable.
+            // Provenance: source bytes = bytes on `+` added lines only
+            // (excludes `+++` headers and context lines).
+            let src_bytes: u64 = patch
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .map(|l| l.len() as u64)
+                .sum();
+            (
+                score,
+                merkle_root,
+                sig.min_hashes.to_vec(),
+                blobs,
+                entropy,
+                None::<Vec<u8>>,
+                src_bytes,
+            )
+        }
+    };
 
     // Cross-PR structural clone detection (Swarm Clustering).
     //
@@ -2950,7 +2973,7 @@ fn cmd_bounce(
         .parse::<report::PrState>()
         .unwrap_or(report::PrState::Open);
     let is_bot = policy.is_automation_account(author.unwrap_or(""));
-    let log_entry = report::BounceLogEntry {
+    let mut log_entry = report::BounceLogEntry {
         pr_number,
         author: author.map(|s| s.to_owned()),
         timestamp: utc_now_iso8601(),
@@ -3004,9 +3027,13 @@ fn cmd_bounce(
         } else {
             0.0
         },
+        provenance: report::Provenance {
+            analysis_duration_ms: bounce_start.elapsed().as_millis() as u64,
+            source_bytes_processed: source_bytes,
+            // egress_bytes_sent computed below — depends on whether we POST.
+            egress_bytes_sent: 0,
+        },
     };
-    report::append_bounce_log(&janitor_dir, &log_entry);
-    report::fire_webhook_if_configured(&log_entry, &policy);
 
     // ── Architecture Inversion: POST result to Governor ───────────────────────
     //
@@ -3018,6 +3045,18 @@ fn cmd_bounce(
     // a routine structural-slop or boilerplate PR.  The failure is logged to
     // `.janitor/diag.log` so the operator can diagnose connectivity issues
     // without seeing them in every CI transcript.
+
+    // Measure egress: serialise the entry (egress_bytes_sent = 0 placeholder),
+    // record the byte count, then set it on the entry before logging and POST.
+    if report_url.is_some() {
+        if let Ok(payload) = serde_json::to_string(&log_entry) {
+            log_entry.provenance.egress_bytes_sent = payload.len() as u64;
+        }
+    }
+
+    report::append_bounce_log(&janitor_dir, &log_entry);
+    report::fire_webhook_if_configured(&log_entry, &policy);
+
     if let (Some(url), Some(token)) = (report_url, analysis_token) {
         let is_critical = report::is_critical_threat(&log_entry);
         match report::post_bounce_result(url, token, &log_entry) {
