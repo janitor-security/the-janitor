@@ -575,10 +575,11 @@ fn bounce_one(
     }
 
     if !version_silos.is_empty() {
-        let detail = version_silos.join(", ");
-        score
-            .antipattern_details
-            .push(format!("architecture:version_silo ({detail})"));
+        for silo in &version_silos {
+            score
+                .antipattern_details
+                .push(format!("architecture:version_silo — {silo}"));
+        }
         score.version_silo_details = version_silos.clone();
     }
 
