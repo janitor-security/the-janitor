@@ -1,10 +1,13 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes four tools over the MCP stdio JSON-RPC protocol:
-//! - `janitor_scan`      — Run the 6-stage dead-symbol pipeline on a project path.
-//! - `janitor_dedup`     — Detect structurally-cloned symbols in a project.
-//! - `janitor_clean`     — Report dead symbols eligible for removal (dry-run).
-//! - `janitor_dep_check` — Identify zombie dependencies (declared but never imported).
+//! Exposes seven tools over the MCP stdio JSON-RPC protocol:
+//! - `janitor_scan`         — Run the 6-stage dead-symbol pipeline on a project path.
+//! - `janitor_dedup`        — Detect structurally-cloned symbols in a project.
+//! - `janitor_clean`        — Report dead symbols eligible for removal (dry-run).
+//! - `janitor_dep_check`    — Identify zombie dependencies (declared but never imported).
+//! - `janitor_bounce`       — Score a patch (or current git diff) for slop/antipatterns.
+//! - `janitor_silo_audit`   — Detect `architecture:version_silo` splits in the workspace lockfile.
+//! - `janitor_provenance`   — Return last analysis duration and source-vs-egress byte ratio.
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -15,7 +18,8 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 wire types
@@ -69,6 +73,24 @@ impl Response {
                 message: message.into(),
             }),
         }
+    }
+
+    /// Wrap a tool result value in the MCP `tools/call` content envelope.
+    ///
+    /// The MCP spec requires `tools/call` results to be:
+    /// `{ "content": [{ "type": "text", "text": "<serialised json>" }] }`
+    ///
+    /// Returning a raw JSON object as `result` causes MCP clients (including
+    /// Claude Code) to display `(completed with no output)` because there is
+    /// no recognised `content` array to render.
+    fn tool_ok(id: serde_json::Value, value: serde_json::Value) -> Self {
+        let text = serde_json::to_string_pretty(&value).unwrap_or_default();
+        Self::ok(
+            id,
+            serde_json::json!({
+                "content": [{ "type": "text", "text": text }]
+            }),
+        )
     }
 }
 
@@ -144,6 +166,52 @@ fn tool_list() -> serde_json::Value {
                         "path": {
                             "type": "string",
                             "description": "Absolute path to the project root."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_bounce",
+                "description": "Score a patch for slop, antipatterns, and logic clones. Returns a full BounceResult including slop_score and threat_class. When `patch` is omitted the tool scores the current uncommitted local changes via `git diff HEAD` run inside `path`.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "patch": {
+                            "type": "string",
+                            "description": "Unified diff text to score. If omitted, `git diff HEAD` is run in `path`."
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the repository root. Required when `patch` is omitted so the tool resolves `git diff HEAD` against the correct working tree regardless of daemon CWD."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_silo_audit",
+                "description": "Parse the workspace Cargo.lock (and any package-lock.json / yarn.lock) under `path` and return every `architecture:version_silo` violation — crates or packages resolved at more than one distinct version.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the workspace root."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_provenance",
+                "description": "Return the zero-upload provenance record for the last recorded bounce: analysis duration (ms), source bytes processed, egress bytes sent, and the source-vs-egress exfiltration percentage.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
                         }
                     },
                     "required": ["path"]
@@ -248,6 +316,202 @@ fn run_dedup(path: &str) -> Result<serde_json::Value> {
     }))
 }
 
+/// Resolve and validate a workspace root supplied by an MCP client.
+///
+/// Rejects relative paths (daemon CWD is unrelated to the client's working directory)
+/// then calls [`std::fs::canonicalize`] to strip symlinks and `..` components,
+/// producing a stable absolute path for all subsequent filesystem and subprocess calls.
+fn resolve_workspace_root(path: &str, field: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        Path::new(path).is_absolute(),
+        "`{field}` must be an absolute path (got {path:?}). \
+         The MCP daemon CWD is unrelated to the client's working directory — \
+         always pass the explicit repo root, e.g. /home/user/project."
+    );
+    std::fs::canonicalize(path).with_context(|| {
+        format!("cannot resolve workspace root `{path}`: path does not exist or is not accessible")
+    })
+}
+
+/// Score a patch (or current git diff) with [`forge::slop_filter::PatchBouncer`].
+///
+/// When `patch` is `None`, `git diff HEAD` is executed in `repo_path` to obtain
+/// the uncommitted changes.  An empty diff returns a clean Boilerplate result
+/// rather than an error.
+///
+/// `repo_path` is **required** — the daemon process has an unrelated CWD and
+/// must never fall back to `"."` for git operations.
+fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_json::Value> {
+    let raw = repo_path.as_deref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "`path` is required for janitor_bounce — pass the absolute repo root so the \
+             daemon resolves git operations against the correct working tree"
+        )
+    })?;
+    let root = resolve_workspace_root(raw, "path")?;
+
+    let patch_text = match patch {
+        Some(p) => p,
+        None => {
+            let out = std::process::Command::new("git")
+                .args(["diff", "HEAD"])
+                .current_dir(&root)
+                .output()
+                .context("failed to execute `git diff HEAD`")?;
+            String::from_utf8(out.stdout).context("git diff output is not valid UTF-8")?
+        }
+    };
+
+    if patch_text.trim().is_empty() {
+        return Ok(serde_json::json!({
+            "slop_score": 0,
+            "threat_class": "Boilerplate",
+            "is_clean": true,
+            "message": "no changes to analyse"
+        }));
+    }
+
+    use forge::slop_filter::{PRBouncer, PatchBouncer};
+    let registry = common::registry::SymbolRegistry::default();
+    let score = PatchBouncer
+        .bounce(&patch_text, &registry)
+        .context("PatchBouncer::bounce failed")?;
+
+    let threat_class = if score
+        .antipattern_details
+        .iter()
+        .any(|a| a.contains("security:"))
+    {
+        "Critical"
+    } else if score.score() > 0 {
+        "Necrotic"
+    } else {
+        "Boilerplate"
+    };
+
+    Ok(serde_json::json!({
+        "slop_score": score.score(),
+        "threat_class": threat_class,
+        "is_clean": score.is_clean(),
+        "logic_clones_found": score.logic_clones_found,
+        "zombie_symbols_added": score.zombie_symbols_added,
+        "dead_symbols_added": score.dead_symbols_added,
+        "antipatterns_found": score.antipatterns_found,
+        "antipattern_details": score.antipattern_details,
+        "comment_violations": score.comment_violations,
+        "version_silo_details": score.version_silo_details,
+        "suppressed_by_domain": score.suppressed_by_domain,
+    }))
+}
+
+/// Scan the workspace under `path` for `architecture:version_silo` violations.
+///
+/// Reads every `Cargo.lock`, `package-lock.json`, and `yarn.lock` found directly
+/// under `path` (non-recursive at the root level; use the full workspace root).
+/// Delegates to [`anatomist::manifest::find_version_silos_from_lockfile`] for
+/// Cargo and [`anatomist::manifest::find_version_silos_in_blobs`] for npm manifests.
+fn run_silo_audit(path: &str) -> Result<serde_json::Value> {
+    let root = resolve_workspace_root(path, "path")?;
+    anyhow::ensure!(root.is_dir(), "path is not a directory: {}", root.display());
+
+    // Collect every lockfile / manifest directly under the workspace root.
+    let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+    for name in &[
+        "Cargo.lock",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+    ] {
+        let p = root.join(name);
+        if p.exists() {
+            let bytes =
+                std::fs::read(&p).with_context(|| format!("failed to read {}", p.display()))?;
+            blobs.insert(PathBuf::from(name), bytes);
+        }
+    }
+
+    if blobs.is_empty() {
+        return Ok(serde_json::json!({
+            "silo_count": 0,
+            "silos": [],
+            "message": "no lockfiles found at workspace root"
+        }));
+    }
+
+    // Cargo lockfile silos — resolved version splits.
+    let cargo_silos = anatomist::manifest::find_version_silos_from_lockfile(&blobs, None);
+    // Manifest-level silos (npm package.json, Cargo.toml declared versions).
+    let manifest_silos = anatomist::manifest::find_version_silos_in_blobs(&blobs);
+
+    let cargo_entries: Vec<serde_json::Value> = cargo_silos
+        .iter()
+        .map(|s| serde_json::json!({ "name": s.name, "versions": s.versions, "display": s.display() }))
+        .collect();
+
+    let total = cargo_entries.len() + manifest_silos.len();
+    Ok(serde_json::json!({
+        "silo_count": total,
+        "cargo_lock_silos": cargo_entries,
+        "manifest_silos": manifest_silos,
+        "antipattern_label": "architecture:version_silo",
+    }))
+}
+
+/// Return the provenance record from the most recent bounce log entry.
+///
+/// Reads `.janitor/bounce_log.ndjson` under `path`, parses the last line as JSON,
+/// and returns the `provenance` sub-object together with a derived `exfil_pct`
+/// field (egress / source × 100).
+fn run_provenance(path: &str) -> Result<serde_json::Value> {
+    let root = resolve_workspace_root(path, "path")?;
+    let log_path = root.join(".janitor").join("bounce_log.ndjson");
+    anyhow::ensure!(
+        log_path.exists(),
+        "bounce log not found: {}",
+        log_path.display()
+    );
+
+    let content = std::fs::read_to_string(&log_path)
+        .with_context(|| format!("failed to read {}", log_path.display()))?;
+
+    let last_line = content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .next_back()
+        .ok_or_else(|| anyhow::anyhow!("bounce log is empty"))?;
+
+    let entry: serde_json::Value =
+        serde_json::from_str(last_line).context("failed to parse last bounce log entry")?;
+
+    let prov = entry.get("provenance").cloned().unwrap_or_default();
+    let source = prov
+        .get("source_bytes_processed")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let egress = prov
+        .get("egress_bytes_sent")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let duration_ms = prov
+        .get("analysis_duration_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let exfil_pct = if source > 0 {
+        (egress as f64 / source as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(serde_json::json!({
+        "analysis_duration_ms": duration_ms,
+        "source_bytes_processed": source,
+        "egress_bytes_sent": egress,
+        "exfil_pct": exfil_pct,
+        "zero_upload_verified": exfil_pct < 1.0,
+        "timestamp": entry.get("timestamp").cloned().unwrap_or(serde_json::Value::Null),
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Server entry point
 // ---------------------------------------------------------------------------
@@ -327,7 +591,7 @@ fn dispatch(req: Request) -> Response {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
                     match run_scan(&path, library) {
-                        Ok(v) => Response::ok(req.id, v),
+                        Ok(v) => Response::tool_ok(req.id, v),
                         Err(e) => Response::err(req.id, -32603, e.to_string()),
                     }
                 }
@@ -356,7 +620,7 @@ fn dispatch(req: Request) -> Response {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
                     match run_scan(&path, library) {
-                        Ok(v) => Response::ok(req.id, v),
+                        Ok(v) => Response::tool_ok(req.id, v),
                         Err(e) => Response::err(req.id, -32603, e.to_string()),
                     }
                 }
@@ -367,7 +631,7 @@ fn dispatch(req: Request) -> Response {
                         None => return Response::err(req.id, -32602, "missing `path` argument"),
                     };
                     match run_dedup(&path) {
-                        Ok(v) => Response::ok(req.id, v),
+                        Ok(v) => Response::tool_ok(req.id, v),
                         Err(e) => Response::err(req.id, -32603, e.to_string()),
                     }
                 }
@@ -378,7 +642,41 @@ fn dispatch(req: Request) -> Response {
                         None => return Response::err(req.id, -32602, "missing `path` argument"),
                     };
                     match run_dep_check(&path) {
-                        Ok(v) => Response::ok(req.id, v),
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
+                "janitor_bounce" => {
+                    let patch = args
+                        .get("patch")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_owned);
+                    let path = args.get("path").and_then(|v| v.as_str()).map(str::to_owned);
+                    match run_bounce(patch, path) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
+                "janitor_silo_audit" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    match run_silo_audit(&path) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
+                "janitor_provenance" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    match run_provenance(&path) {
+                        Ok(v) => Response::tool_ok(req.id, v),
                         Err(e) => Response::err(req.id, -32603, e.to_string()),
                     }
                 }
@@ -412,15 +710,18 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_four_tools() {
+    fn test_tools_list_contains_seven_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 4);
+        assert_eq!(tools.len(), 7);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
         assert!(names.contains(&"janitor_clean"));
         assert!(names.contains(&"janitor_dep_check"));
+        assert!(names.contains(&"janitor_bounce"));
+        assert!(names.contains(&"janitor_silo_audit"));
+        assert!(names.contains(&"janitor_provenance"));
     }
 
     #[test]
@@ -496,5 +797,127 @@ mod tests {
         let err = resp.error.as_ref().unwrap();
         assert_eq!(err.code, -32602);
         assert!(err.message.contains("invalid token"));
+    }
+
+    #[test]
+    fn test_janitor_bounce_empty_patch_returns_clean() {
+        // An explicitly empty patch string with an absolute path must resolve to Boilerplate.
+        // path is required; we pass /tmp which is always absolute and exists.
+        let result = run_bounce(Some(String::new()), Some("/tmp".to_owned())).unwrap();
+        assert_eq!(result["slop_score"], 0);
+        assert_eq!(result["threat_class"], "Boilerplate");
+        assert_eq!(result["is_clean"], true);
+    }
+
+    #[test]
+    fn test_janitor_bounce_relative_path_rejected() {
+        // Relative paths must be rejected to prevent daemon-CWD resolution.
+        let err = run_bounce(Some(String::new()), Some("relative/path".to_owned()))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("absolute"),
+            "error must mention absolute: {err}"
+        );
+    }
+
+    #[test]
+    fn test_janitor_bounce_no_path_rejected() {
+        // Missing path must always be rejected — path is mandatory.
+        let err = run_bounce(None, None).unwrap_err().to_string();
+        assert!(err.contains("`path` is required"), "error: {err}");
+    }
+
+    #[test]
+    fn test_janitor_bounce_dispatch_with_explicit_path_ok() {
+        // tools/call with an explicit absolute path and empty patch must succeed.
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(20),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_bounce",
+                "arguments": {
+                    "patch": "",
+                    "path": "/tmp"
+                }
+            }),
+        };
+        let resp = dispatch(req);
+        // An empty patch must not return a protocol error.
+        let result = resp.result.expect("empty-patch bounce must succeed");
+        // Result is wrapped in MCP content envelope.
+        assert!(
+            result.get("content").is_some(),
+            "must have content envelope"
+        );
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let inner: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(inner["slop_score"], 0);
+    }
+
+    #[test]
+    fn test_janitor_silo_audit_missing_path_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(21),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_silo_audit",
+                "arguments": {}
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_janitor_silo_audit_nonexistent_path_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(22),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_silo_audit",
+                "arguments": { "path": "/tmp/does_not_exist_janitor_mcp_test" }
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32603);
+    }
+
+    #[test]
+    fn test_janitor_provenance_missing_path_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(23),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_provenance",
+                "arguments": {}
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_janitor_provenance_no_log_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(24),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_provenance",
+                "arguments": { "path": "/tmp/does_not_exist_janitor_mcp_test" }
+            }),
+        };
+        let resp = dispatch(req);
+        // No bounce log → internal error, not a protocol error.
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32603);
     }
 }

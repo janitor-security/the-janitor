@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 anatomist = { path = "../anatomist" }
 common = { path = "../common" }
+forge = { path = "../forge" }
 vault = { path = "../vault" }
 anyhow.workspace = true
 serde.workspace = true
