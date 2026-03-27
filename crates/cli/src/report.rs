@@ -589,6 +589,67 @@ pub fn post_bounce_result(url: &str, token: &str, entry: &BounceLogEntry) -> any
 }
 
 // ---------------------------------------------------------------------------
+// Fail-Silent Diagnostics
+// ---------------------------------------------------------------------------
+
+/// Append a timestamped diagnostic message to `.janitor/diag.log`.
+///
+/// Always best-effort — any I/O error is silently discarded.  This facility
+/// is intentionally hidden from CI output; the operator inspects the log
+/// when troubleshooting rather than seeing noise in the CI transcript.
+pub fn append_diag_log(janitor_dir: &Path, msg: &str) {
+    use std::io::Write as _;
+    let path = janitor_dir.join("diag.log");
+    let ts = crate::utc_now_iso8601();
+    let line = format!("[{ts}] {msg}\n");
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// Fire a once-per-week "System OK" heartbeat to the Governor health endpoint.
+///
+/// - Checks the mtime of `.janitor/heartbeat`; skips if modified within the
+///   last 7 days.
+/// - On a due cycle: GETs `https://the-governor.fly.dev/health` with a 5-second
+///   timeout, logs the result to `.janitor/diag.log`, then touches the heartbeat
+///   file to reset the 7-day window.
+/// - Entirely best-effort and silent: no stdout/stderr output, no CI impact.
+pub fn send_heartbeat_if_due(janitor_dir: &Path) {
+    let heartbeat_path = janitor_dir.join("heartbeat");
+
+    let due = match std::fs::metadata(&heartbeat_path) {
+        Err(_) => true,
+        Ok(meta) => meta
+            .modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .map(|d| d.as_secs() > 7 * 24 * 3600)
+            .unwrap_or(true),
+    };
+
+    if !due {
+        return;
+    }
+
+    let msg = match ureq::get("https://the-governor.fly.dev/health")
+        .timeout(std::time::Duration::from_secs(5))
+        .call()
+    {
+        Ok(r) => format!("heartbeat: Governor /health → HTTP {}", r.status()),
+        Err(e) => format!("heartbeat: Governor unreachable — {e}"),
+    };
+    append_diag_log(janitor_dir, &msg);
+
+    // Touch the heartbeat file to reset the 7-day window.
+    let _ = std::fs::write(&heartbeat_path, b"");
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation
 // ---------------------------------------------------------------------------
 

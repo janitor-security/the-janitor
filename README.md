@@ -130,6 +130,8 @@ OOM events            : 0
 
 ## Quick Start
 
+**[→ 30-Second Sentinel Setup (copy-paste guide)](docs/onboarding.md)**
+
 ```bash
 # Detect dead code (free)
 janitor scan ./src

@@ -238,6 +238,8 @@ The cleanup is identical at every tier. What you are paying for is a cryptograph
 
 ---
 
+> **[→ 30-Second Setup Guide](onboarding.md)** — Install, paste YAML, drop token. Done.
+
 > See [The Manifesto](manifesto.md) for the full crisis framing, actuarial ledger, and technical stack.
 > See [Architecture](architecture.md) for the engine specification.
 > See [Security Posture](security.md) for the Shadow Tree isolation, atomic rollback protocol, and hermetic build details.
