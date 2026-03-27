@@ -74,6 +74,29 @@ No token flag. No manual step. The proof is issued by the SaaS on a clean merge 
 
 ---
 
+## THE SHADOW AI CRISIS
+
+Forrester's 2025 AI Developer Tools survey established a number that should alarm every CISO: **78% of developers use AI coding tools regardless of corporate policy.** Shadow AI is not a fringe phenomenon. It is the operating condition.
+
+The standard corporate response — policy memos, access controls, approval workflows — fails for a structural reason: the gap between writing code and merging it has collapsed. A developer who pastes a function from ChatGPT and commits it has bypassed every review control designed for a human contributor typing in an IDE. The code enters the branch. The lint passes. The PR opens. The merge button is available.
+
+**The Janitor is the only Hard-Point Defense that operates at the runner level.**
+
+It does not audit the developer's tool selection. It does not require a policy acknowledgement. It is not a training module. It is a circuit breaker installed at the single point where all code — whether AI-generated, AI-assisted, or human-authored — must pass before it enters the main branch: the pull request gate.
+
+When a Shadow AI user opens a PR, the Janitor gate fires against the diff — not the developer, not their toolchain, not their intent. The math either confirms structural integrity or it does not. The gate passes or it blocks. The policy is enforced at the runner, not at the user.
+
+| Control Layer | Where it fires | Bypassed by Shadow AI? |
+|:---|:---|:---:|
+| Policy memo | Developer awareness | **Yes** |
+| IDE plugin (Copilot filter) | Developer machine | **Yes** |
+| SAST cloud upload | CI pipeline, after commit | **Yes** |
+| **The Janitor (Hard-Point Defense)** | **Runner, before merge** | **No** |
+
+The Janitor enforces your architectural rules at the one choke point that Shadow AI cannot route around.
+
+---
+
 ## THE COMPETITIVE MOAT
 
 ### On-Device vs. Cloud Fabric

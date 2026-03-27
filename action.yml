@@ -82,9 +82,20 @@ runs:
         HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
         # Resolve installation ID — prefer explicit input, fall back to the
-        # installation context embedded in the App's webhook event payload,
-        # then default to 0 (Governor auto-resolves via /app/installations API).
+        # installation context embedded in the App's webhook event payload.
+        # If still absent or 0, call /v1/resolve-id to auto-resolve via the
+        # Governor's App token — eliminates the "Wrong ID" support overhead.
         INSTALL_ID="${{ inputs.installation_id || github.event.installation.id || '0' }}"
+        if [ "${INSTALL_ID}" = "0" ] || [ -z "${INSTALL_ID}" ]; then
+            RESOLVED=$(curl -sf -X POST \
+                https://the-governor.fly.dev/v1/resolve-id \
+                -H "Content-Type: application/json" \
+                -d "{\"repo_slug\":\"${{ github.repository }}\"}" \
+                | jq -r '.installation_id // 0')
+            if [ "${RESOLVED:-0}" != "0" ]; then
+                INSTALL_ID="${RESOLVED}"
+            fi
+        fi
 
         TOKEN_PAYLOAD=$(jq -n \
           --arg  repo "${{ github.repository }}" \

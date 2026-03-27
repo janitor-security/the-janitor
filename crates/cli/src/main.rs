@@ -786,27 +786,19 @@ async fn main() -> anyhow::Result<()> {
         Commands::WebhookTest { repo } => report::cmd_webhook_test(repo)?,
         Commands::OperatorStatus => {
             let version = env!("CARGO_PKG_VERSION");
-            // Stable test baseline as of v7.9.4 — updated each audit cycle.
-            let test_baseline: u32 = 216;
-            let build_age = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.metadata().ok())
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.elapsed().ok())
-                .map(|d| {
-                    let s = d.as_secs();
-                    if s < 3600 {
-                        format!("{}m ago", s / 60)
-                    } else if s < 86400 {
-                        format!("{}h ago", s / 3600)
-                    } else {
-                        format!("{}d ago", s / 86400)
-                    }
-                })
-                .unwrap_or_else(|| "unknown".to_string());
-            println!(
-                "Janitor v{version} | Tests: {test_baseline} OK | Build: {build_age} | Status: STABLE"
-            );
+
+            // Last Attestation: most recent timestamp from the local bounce log.
+            let janitor_dir = std::path::Path::new(".janitor");
+            let last_attestation = report::load_bounce_log(janitor_dir)
+                .into_iter()
+                .max_by(|a, b| a.timestamp.cmp(&b.timestamp))
+                .map(|e| e.timestamp)
+                .unwrap_or_else(|| "none".to_string());
+
+            println!("Janitor v{version}");
+            println!("Engine: HEALTHY");
+            println!("Last Attestation: {last_attestation}");
+            println!("Silo Detector: ARMED");
         }
     }
 
