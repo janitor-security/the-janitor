@@ -542,6 +542,7 @@ fn bounce_one(
             commit_sha: pr_sha.to_string(),
             policy_hash: String::new(),
             version_silos: Vec::new(),
+            agentic_pct: 0.0,
         });
     }
 
@@ -607,6 +608,7 @@ fn bounce_one(
         commit_sha: pr_sha.to_string(),
         policy_hash: String::new(),
         version_silos,
+        agentic_pct: 0.0,
     })
 }
 

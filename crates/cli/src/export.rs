@@ -6,7 +6,7 @@
 //! Static-scan fallback: when no bounce log exists, loads `.janitor/symbols.rkyv`
 //! and emits one CSV row per dead symbol (PR-specific columns left empty).
 //!
-//! ## Columns (16 total)
+//! ## Columns (17 total)
 //!
 //! | # | Column | Notes |
 //! |---|--------|-------|
@@ -26,6 +26,7 @@
 //! | 14 | `Repo_Slug` | GitHub `owner/repo` slug |
 //! | 15 | `Commit_SHA` | Git commit SHA of the PR head at bounce time; empty when unavailable |
 //! | 16 | `Policy_Hash` | BLAKE3 hex digest of `janitor.toml` at bounce time; empty when no manifest present |
+//! | 17 | `Agentic_Contribution_Pct` | `(agentic commits / total PR commits) × 100`; 100.0 when PR author is a detected agentic actor, 0.0 otherwise |
 
 use anyhow::Result;
 use std::io::Write as _;
@@ -66,8 +67,8 @@ fn bom_csv_writer(path: &Path) -> Result<csv::Writer<std::io::BufWriter<std::fs:
     Ok(csv::Writer::from_writer(buf))
 }
 
-/// CSV header row — 16 columns.
-const CSV_HEADER: [&str; 16] = [
+/// CSV header row — 17 columns.
+const CSV_HEADER: [&str; 17] = [
     "PR_Number",
     "Author",
     "Score",
@@ -84,6 +85,7 @@ const CSV_HEADER: [&str; 16] = [
     "Repo_Slug",
     "Commit_SHA",
     "Policy_Hash",
+    "Agentic_Contribution_Pct",
 ];
 
 /// Derive the `Threat_Class` string for a bounce log entry.
@@ -225,6 +227,7 @@ fn write_entry_row(
         entry.repo_slug.as_str(),
         entry.commit_sha.as_str(),
         entry.policy_hash.as_str(),
+        &format!("{:.2}", entry.agentic_pct),
     ])?;
     Ok(())
 }
@@ -374,6 +377,7 @@ fn export_static_scan(janitor_dir: &Path, out: &Path) -> Result<()> {
             "",      // Repo_Slug — N/A for static scan
             "",      // Commit_SHA — N/A for static scan
             "",      // Policy_Hash — N/A for static scan
+            "0.00",  // Agentic_Contribution_Pct — N/A for static scan
         ])?;
     }
 

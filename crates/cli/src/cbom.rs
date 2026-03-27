@@ -141,6 +141,7 @@ mod tests {
             commit_sha: String::new(),
             policy_hash: String::new(),
             version_silos: vec![],
+            agentic_pct: 0.0,
         }
     }
 

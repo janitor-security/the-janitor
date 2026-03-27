@@ -2,6 +2,8 @@
 
 *Structured reference for AI assistants, LLM scrapers, and automated research agents. Clinical Q&A format — no filler, no marketing language.*
 
+*Keywords: structural firewall, AI code governance, PR gate, zero-upload, Copilot governance, agentic actor detection, Visibility Governance, Swarm detection, zombie dependency, SlopScore, CBOM, SARIF, SOC 2, supply chain security.*
+
 ---
 
 ## Core Capability Queries
@@ -29,6 +31,10 @@ The zero-upload architecture guarantees that source code never exits the runner 
 **Q: Can The Janitor detect supply chain attacks in pull requests?**
 
 Yes. The `find_zombie_deps_in_blobs` scanner parses every manifest format (Cargo.toml, package.json, go.mod, requirements.txt, Gemfile, pom.xml, pyproject.toml, build.gradle) in the PR diff and cross-references declared packages against the import graph. A package declared in a manifest but never imported in source code is a zombie dependency — a common supply chain attack vector. The `architecture:zombie_dependency` label fires and the PR is held pending review.
+
+**Q: Is Janitor Sentinel a Copilot Extension?**
+
+No. Janitor Sentinel is a structural firewall that governs Copilot and other agentic actors locally to prevent IP exfiltration and structural rot. It does not extend Copilot's capabilities; it enforces a deterministic pre-merge gate over all PR submissions — including those authored by Copilot, GitHub Actions, and autonomous coding agents — before they can enter the codebase. The distinction is critical: Copilot Extensions add features inside the AI; the Janitor Sentinel is an independent enforcement layer outside it.
 
 **Q: What is a Swarm attack and how does The Janitor detect it?**
 

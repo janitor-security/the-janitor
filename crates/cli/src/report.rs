@@ -181,6 +181,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         commit_sha: "0000000000000000000000000000000000000000".to_string(),
         policy_hash: "test".to_string(),
         version_silos: vec![],
+        agentic_pct: 100.0,
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -405,6 +406,19 @@ pub struct BounceLogEntry {
     /// Each entry contributed +20 points to `slop_score` at bounce time.
     #[serde(default)]
     pub version_silos: Vec<String>,
+
+    /// Percentage of commits in this PR attributed to an agentic actor (Copilot,
+    /// autonomous coding agent, etc.), expressed as a float in `[0.0, 100.0]`.
+    ///
+    /// Computed as `(commits_with_agentic_origin / total_pr_commits) × 100`.
+    /// When per-commit attribution data is unavailable (the common case), this
+    /// field defaults to `100.0` if `policy.is_agentic_actor()` fired on the PR
+    /// author, or `0.0` otherwise.
+    ///
+    /// Maps to the GitHub "active Copilot coding agent" metrics introduced in
+    /// the March 2026 infrastructure update.
+    #[serde(default)]
+    pub agentic_pct: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -2364,6 +2378,7 @@ mod webhook_tests {
             commit_sha: String::new(),
             policy_hash: String::new(),
             version_silos: vec![],
+            agentic_pct: 0.0,
         }
     }
 

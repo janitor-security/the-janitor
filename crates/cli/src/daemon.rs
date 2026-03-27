@@ -405,6 +405,7 @@ pub mod unix {
                             commit_sha: String::new(),
                             policy_hash: String::new(),
                             version_silos: Vec::new(),
+                            agentic_pct: 0.0,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

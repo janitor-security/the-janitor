@@ -703,6 +703,7 @@ async fn main() -> anyhow::Result<()> {
                             commit_sha: timeout_commit_sha,
                             policy_hash: String::new(),
                             version_silos: vec![],
+                            agentic_pct: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -2919,6 +2920,15 @@ fn cmd_bounce(
             }
         },
         version_silos,
+        // Per-commit Copilot attribution: 100% when the PR author is a detected
+        // agentic actor (whole-PR signal); 0% otherwise.  Per-commit granularity
+        // requires GitHub Copilot commit metrics API data, which the CLI does not
+        // fetch at bounce time.
+        agentic_pct: if score.agentic_origin_penalty > 0 {
+            100.0
+        } else {
+            0.0
+        },
     };
     report::append_bounce_log(&janitor_dir, &log_entry);
     report::fire_webhook_if_configured(&log_entry, &policy);
