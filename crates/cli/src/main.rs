@@ -2843,6 +2843,27 @@ fn cmd_bounce(
 +50 structural quality surcharge applied"
                 .to_string(),
         );
+
+        // Author Impersonation sub-check — fires when the trigger came from the PR body
+        // (Co-authored-by: Copilot trailer) rather than from the PR author handle.
+        //
+        // Scenario: a human opens the PR; GitHub Copilot coding agent then pushes commits
+        // onto it.  The PR author field still shows the human; the committer is the AI.
+        // This creates an attribution gap: the commit author email does not match the
+        // GitHub Actor ID that actually wrote the code.  GPG signatures would surface
+        // this — unsigned commits on a human PR with Copilot co-authorship are a
+        // provenance red flag.
+        let author_handle_is_agentic = policy.is_agentic_actor(author.unwrap_or(""), None);
+        if !author_handle_is_agentic {
+            score.antipatterns_found += 1;
+            score.antipattern_score = score.antipattern_score.saturating_add(50);
+            score.antipattern_details.push(
+                "security:author_impersonation — Copilot committed onto a human-owned PR; \
+commit author attribution does not reflect actual code origin; \
+cross-reference GitHub Actor ID against commit author email and GPG signatures to verify provenance"
+                    .to_string(),
+            );
+        }
     }
 
     let effective_gate = policy.effective_gate(pr_body);
@@ -2924,6 +2945,28 @@ fn cmd_bounce(
     } else {
         Vec::new()
     };
+
+    // Model Decay Detector — Phantom Call detection.
+    //
+    // Cross-references every standalone function call in the PR diff against the
+    // base-branch SymbolRegistry.  A callee that is absent from both the registry
+    // and the current diff is a phantom hallucination: the AI called a function
+    // that does not exist in scope.
+    //
+    // Gated on `registry_loaded` for the same reason as zombie dep detection:
+    // without a full-codebase registry the false-positive rate is unacceptably high.
+    if registry_loaded {
+        let phantoms = anatomist::manifest::find_phantom_calls(&bounce_blobs, &registry);
+        for name in phantoms {
+            score.antipatterns_found += 1;
+            score.antipattern_score = score.antipattern_score.saturating_add(50);
+            score.antipattern_details.push(format!(
+                "security:phantom_hallucination — `{name}()` called but not found in \
+base registry and not defined in this diff; \
+probable AI context-collapse (hallucinated function reference)"
+            ));
+        }
+    }
 
     // Version silo detection — two-tier approach:
     //

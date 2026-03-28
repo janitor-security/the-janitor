@@ -1011,6 +1011,213 @@ fn parse_lockfile_silos(content: &str) -> Vec<CrateVersionSilo> {
 }
 
 // ---------------------------------------------------------------------------
+// Phantom call detection (Model Decay Detector)
+// ---------------------------------------------------------------------------
+
+/// PR-scoped phantom call detector — Model Decay signal.
+///
+/// Cross-references standalone function call sites in the PR's added lines
+/// against the base-branch [`common::registry::SymbolRegistry`].  A call is a
+/// **phantom hallucination** when:
+///
+/// 1. The callee name is absent from `registry` (not a known symbol in the base branch).
+/// 2. The callee name is not introduced by a function definition anywhere in the current diff.
+/// 3. The name meets the complexity threshold (≥ 8 characters, contains `_`) that
+///    distinguishes project-specific identifiers from single-word stdlib calls.
+///
+/// This is the structural signature of AI context-collapse: the model generates a call to a
+/// function it hallucinated — neither importing it from an external crate nor defining it in
+/// the current PR.  The callee resolves to nothing at compile time yet passes superficial
+/// review because the name is plausible.
+///
+/// **Performance**: O(B + R) where B = total bytes in `blobs` and R = registry entry count.
+/// No filesystem access — operates entirely on the in-memory blob map from
+/// [`forge::slop_filter::extract_patch_blobs`].
+///
+/// Returns a sorted `Vec` of callee names flagged as phantoms.  Empty when the registry
+/// is absent, no suspicious calls are detected, or the diff contains no analysable source files.
+pub fn find_phantom_calls(
+    blobs: &HashMap<PathBuf, Vec<u8>>,
+    registry: &common::registry::SymbolRegistry,
+) -> Vec<String> {
+    if registry.entries.is_empty() {
+        return Vec::new();
+    }
+
+    // Build the base-branch symbol name set for O(1) membership testing.
+    let known: HashSet<&str> = registry.entries.iter().map(|e| e.name.as_str()).collect();
+
+    // Pass 1: collect every function name *defined* anywhere in this diff so that
+    // a call to a function introduced by the same PR is not flagged.
+    let mut defined_in_diff: HashSet<String> = HashSet::new();
+    for (path, bytes) in blobs {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !is_source_ext(ext) || bytes.len() > 4 * 1024 * 1024 {
+            continue;
+        }
+        let Ok(src) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        phantom_extract_defined(src, &mut defined_in_diff);
+    }
+
+    // Pass 2: collect every standalone call site in the diff.
+    let mut calls: HashSet<String> = HashSet::new();
+    for (path, bytes) in blobs {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !is_source_ext(ext) || bytes.len() > 4 * 1024 * 1024 {
+            continue;
+        }
+        let Ok(src) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        phantom_extract_calls(src, &mut calls);
+    }
+
+    // Phantom = called AND (not in base registry) AND (not defined in this diff).
+    let mut phantoms: Vec<String> = calls
+        .into_iter()
+        .filter(|name| !known.contains(name.as_str()) && !defined_in_diff.contains(name))
+        .collect();
+    phantoms.sort();
+    phantoms
+}
+
+/// Extract function/method definition names from blob content.
+///
+/// Recognises:
+/// - Rust: `fn`, `pub fn`, `async fn`, `pub async fn`
+/// - Python: `def`
+/// - Go: `func`
+/// - JavaScript/TypeScript: `function`, `async function`
+fn phantom_extract_defined(src: &str, out: &mut HashSet<String>) {
+    for line in src.lines() {
+        let trimmed = line.trim();
+        // Check longest prefixes first to avoid `fn` matching inside `async fn`.
+        for prefix in &[
+            "pub async fn ",
+            "pub fn ",
+            "async fn ",
+            "fn ",
+            "async function ",
+            "function ",
+            "def ",
+            "func ",
+        ] {
+            if let Some(rest) = trimmed.strip_prefix(prefix) {
+                if let Some(name) = phantom_leading_ident(rest) {
+                    out.insert(name.to_owned());
+                }
+                break;
+            }
+        }
+    }
+}
+
+/// Extract standalone function call names from blob content.
+///
+/// Scans byte-by-byte for `identifier(` patterns.  Filters out:
+/// - Names shorter than 8 characters (stdlib noise: `len`, `push`, `unwrap`, etc.)
+/// - Names without an underscore (project functions are typically snake_case)
+/// - Language keywords and common builtins
+/// - Calls preceded by `::` (associated functions on external types)
+/// - Calls preceded by `.` (method chains on external types)
+fn phantom_extract_calls(src: &str, out: &mut HashSet<String>) {
+    let bytes = src.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'(' && i > 0 {
+            // Walk backwards past any whitespace between the name and `(`.
+            let mut j = i - 1;
+            while j > 0 && bytes[j] == b' ' {
+                j -= 1;
+            }
+            let end = j + 1;
+            // Collect the identifier characters preceding `(`.
+            while j > 0 && is_phantom_ident_byte(bytes[j - 1]) {
+                j -= 1;
+            }
+            if j < end {
+                // Skip calls that are path-qualified (`Foo::bar(`) or method chains (`.bar(`).
+                let preceded_by_colons = j >= 2 && bytes[j - 1] == b':' && bytes[j - 2] == b':';
+                let preceded_by_dot = j >= 1 && bytes[j - 1] == b'.';
+                if !preceded_by_colons && !preceded_by_dot {
+                    if let Ok(name) = std::str::from_utf8(&bytes[j..end]) {
+                        if phantom_is_candidate(name) {
+                            out.insert(name.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Returns `true` for bytes that can appear inside an identifier.
+#[inline]
+fn is_phantom_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Extract the leading identifier from a string (skips leading non-ident chars).
+fn phantom_leading_ident(s: &str) -> Option<&str> {
+    let bytes = s.as_bytes();
+    let start = bytes
+        .iter()
+        .position(|&b| b.is_ascii_alphabetic() || b == b'_')?;
+    let end = bytes[start..]
+        .iter()
+        .position(|&b| !b.is_ascii_alphanumeric() && b != b'_')
+        .map(|n| start + n)
+        .unwrap_or(bytes.len());
+    let name = &s[start..end];
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+/// Returns `true` when a callee name is a plausible phantom hallucination candidate.
+///
+/// Thresholds are chosen to exclude stdlib and single-word builtins while
+/// retaining multi-word project-specific identifiers that AI models are known to
+/// hallucinate (e.g. `validate_user_token`, `parse_config_payload`).
+fn phantom_is_candidate(name: &str) -> bool {
+    // Minimum length: excludes `unwrap`, `clone`, `collect`, etc.
+    if name.len() < 8 {
+        return false;
+    }
+    // Must contain at least one underscore: project functions are snake_case.
+    if !name.contains('_') {
+        return false;
+    }
+    // All-uppercase: likely a constant or macro (e.g. `MAX_RETRIES`).
+    if name.bytes().all(|b| b.is_ascii_uppercase() || b == b'_') {
+        return false;
+    }
+    // Language keywords and high-frequency builtins that take `(` arguments.
+    !phantom_is_keyword(name)
+}
+
+/// Returns `true` for keywords and high-frequency builtins that appear before `(`.
+fn phantom_is_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "assert_eq"
+            | "assert_ne"
+            | "debug_assert"
+            | "write_all"
+            | "to_string"
+            | "from_str"
+            | "into_iter"
+            | "to_owned"
+            | "to_vec"
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

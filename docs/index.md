@@ -192,6 +192,32 @@ Copilot is not the last. Devin, Cursor Agent, and equivalents follow the same pa
 
 ---
 
+## GROUND TRUTH VS. THE VIBE RADAR
+
+The market has a new category: **Vibe Radar**. These are tools — cloud-hosted or local — that use LLMs to review pull requests, describe what the code does, and emit an opinion. The opinion sounds authoritative. It is probabilistic. It cannot be audited. It cannot be reproduced. And it is blind to the structural category of threat that AI-generated code actually introduces.
+
+The Vibe Radar is a model reading code with a model. Every finding it surfaces is a confidence interval. Every clean verdict it issues is a bet against the model's training distribution. The attack surface it misses is the one that wasn't in the training data — which is, definitionally, the entire category of novel AI-generated antipatterns.
+
+**The Janitor is not a Vibe Radar. It is a proof system.**
+
+| Property | Vibe Radar (LLM review) | The Janitor (AST structural firewall) |
+|:---|:---:|:---:|
+| Output type | Probabilistic opinion | Deterministic proof |
+| Reproducible verdict | No — model non-determinism | Yes — same diff, same score, always |
+| Detects phantom hallucinations | No — calls a hallucinated function, gets a hallucinated analysis | Yes — `security:phantom_hallucination` cross-references base registry |
+| Detects Swarm coordination | No | Yes — MinHash LSH at Jaccard ≥ 0.85 across full PR history |
+| Source code egress | Yes — sent to inference cluster | No — memory-mapped on your runner |
+| Auditable | No | Yes — BLAKE3 hashes, ML-DSA-65 signed CBOM, policy hash |
+| Speed | 2–8 minutes per PR | Under 33 seconds for 3.5M-line repos |
+
+A Vibe Radar will catch many things. It will not catch what matters most: a structurally intact PR that calls a function your codebase does not define, introduces a clone of a symbol that was deleted two sprints ago, or submits the same structural scaffold from twenty accounts in a coordinated Swarm.
+
+Those patterns have no CVE record. They are invisible to tools trained on pre-AI codebases. They are invisible to probabilistic reviewers that cannot prove structural identity. They are not invisible to The Janitor — because The Janitor does not guess.
+
+**The Vibe Radar tells you what it thinks. The Janitor tells you what it proved.**
+
+---
+
 ## THE MAINTAINER SHIELD
 
 Open-source maintainers are experiencing **death by a thousand slops**.
