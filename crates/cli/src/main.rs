@@ -492,6 +492,20 @@ enum Commands {
     /// Not listed in `--help` output.
     #[command(hide = true)]
     SelfTest,
+
+    /// [INTERNAL] Emit a GitHub Actions Step Summary dashboard for the last bounce result.
+    ///
+    /// Reads the most recent entry from `.janitor/bounce_log.ndjson` and prints a
+    /// high-density Markdown dashboard to stdout.  Append the output to
+    /// `$GITHUB_STEP_SUMMARY` to surface an Integrity Radar, Structural Topology
+    /// snippet, Provenance Ledger, and Vibe-Check on every PR Actions run.
+    ///
+    /// Not listed in `--help` output.
+    #[command(hide = true)]
+    StepSummary {
+        /// Repository root (reads `.janitor/bounce_log.ndjson`).
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -853,6 +867,10 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::DebugSilo => {
             cmd_debug_silo()?;
+        }
+
+        Commands::StepSummary { path } => {
+            cmd_step_summary(path)?;
         }
     }
 
@@ -3775,6 +3793,27 @@ dependencies = [
             std::process::exit(1);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// step-summary — GitHub Actions Integrity Dashboard
+// ---------------------------------------------------------------------------
+
+/// Reads the last entry from `.janitor/bounce_log.ndjson` and emits a
+/// high-density GitHub Actions Step Summary Markdown dashboard to stdout.
+///
+/// Append the output to `$GITHUB_STEP_SUMMARY` in the CI shell to surface
+/// the Integrity Radar, Structural Topology, Provenance Ledger, and
+/// Vibe-Check on every PR Actions run.
+fn cmd_step_summary(path: &Path) -> anyhow::Result<()> {
+    let janitor_dir = path.join(".janitor");
+    let entries = report::load_bounce_log(&janitor_dir);
+    let entry = entries
+        .into_iter()
+        .next_back()
+        .ok_or_else(|| anyhow::anyhow!("no bounce log at {}", janitor_dir.display()))?;
+    print!("{}", report::render_step_summary(&entry));
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

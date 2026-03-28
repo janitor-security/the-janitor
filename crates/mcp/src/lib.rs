@@ -1,13 +1,14 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes seven tools over the MCP stdio JSON-RPC protocol:
-//! - `janitor_scan`         — Run the 6-stage dead-symbol pipeline on a project path.
-//! - `janitor_dedup`        — Detect structurally-cloned symbols in a project.
-//! - `janitor_clean`        — Report dead symbols eligible for removal (dry-run).
-//! - `janitor_dep_check`    — Identify zombie dependencies (declared but never imported).
-//! - `janitor_bounce`       — Score a patch (or current git diff) for slop/antipatterns.
-//! - `janitor_silo_audit`   — Detect `architecture:version_silo` splits in the workspace lockfile.
-//! - `janitor_provenance`   — Return last analysis duration and source-vs-egress byte ratio.
+//! Exposes eight tools over the MCP stdio JSON-RPC protocol:
+//! - `janitor_scan`           — Run the 6-stage dead-symbol pipeline on a project path.
+//! - `janitor_dedup`          — Detect structurally-cloned symbols in a project.
+//! - `janitor_clean`          — Report dead symbols eligible for removal (dry-run).
+//! - `janitor_dep_check`      — Identify zombie dependencies (declared but never imported).
+//! - `janitor_bounce`         — Score a patch (or current git diff) for slop/antipatterns.
+//! - `janitor_silo_audit`     — Detect `architecture:version_silo` splits in the workspace lockfile.
+//! - `janitor_provenance`     — Return last analysis duration and source-vs-egress byte ratio.
+//! - `janitor_wopr_snapshot`  — ASCII health snapshot of the repository derived from the bounce log.
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -206,6 +207,20 @@ fn tool_list() -> serde_json::Value {
             {
                 "name": "janitor_provenance",
                 "description": "Return the zero-upload provenance record for the last recorded bounce: analysis duration (ms), source bytes processed, egress bytes sent, and the source-vs-egress exfiltration percentage.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_wopr_snapshot",
+                "description": "Return an ASCII health snapshot of the repository derived from the bounce log. Shows total PRs audited, clean/flagged/critical counts, average slop score, and a health bar — giving the operator an instant 'vibe read' without opening the TUI.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -512,6 +527,157 @@ fn run_provenance(path: &str) -> Result<serde_json::Value> {
     }))
 }
 
+/// Build an ASCII health snapshot from all entries in `.janitor/bounce_log.ndjson`.
+///
+/// Aggregates the full bounce log under `path` and returns a text-based
+/// "WOPR Snapshot" of repository health — total PRs audited, clean/flagged/critical
+/// counts, average slop score, a 20-cell health bar, and last-scan metadata.
+///
+/// Returns clean placeholder output when no bounce log exists; never errors on
+/// a missing log so the operator can call this before the first bounce run.
+fn run_wopr_snapshot(path: &str) -> Result<serde_json::Value> {
+    let root = resolve_workspace_root(path, "path")?;
+    let log_path = root.join(".janitor").join("bounce_log.ndjson");
+
+    if !log_path.exists() {
+        let snapshot = "\
+╔══════════════════════════════════════╗\n\
+║  WOPR SNAPSHOT — NO DATA             ║\n\
+║  Run `janitor bounce` to populate.   ║\n\
+╚══════════════════════════════════════╝";
+        return Ok(serde_json::json!({
+            "snapshot": snapshot,
+            "total_prs": 0,
+            "status": "no_data"
+        }));
+    }
+
+    let content = std::fs::read_to_string(&log_path)
+        .with_context(|| format!("failed to read {}", log_path.display()))?;
+
+    // Parse only scalar fields needed for stats — zero String clones of source lines.
+    let entries: Vec<serde_json::Value> = content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+
+    if entries.is_empty() {
+        let snapshot = "\
+╔══════════════════════════════════════╗\n\
+║  WOPR SNAPSHOT — EMPTY LOG           ║\n\
+╚══════════════════════════════════════╝";
+        return Ok(serde_json::json!({
+            "snapshot": snapshot,
+            "total_prs": 0,
+            "status": "empty"
+        }));
+    }
+
+    let total = entries.len();
+
+    let critical_count = entries
+        .iter()
+        .filter(|e| {
+            let has_security = e
+                .get("antipatterns")
+                .and_then(|a| a.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .any(|a| a.as_str().is_some_and(|s| s.contains("security:")))
+                })
+                .unwrap_or(false);
+            let has_collision = e
+                .get("collided_pr_numbers")
+                .and_then(|c| c.as_array())
+                .map(|a| !a.is_empty())
+                .unwrap_or(false);
+            has_security || has_collision
+        })
+        .count();
+
+    let clean_count = entries
+        .iter()
+        .filter(|e| e.get("slop_score").and_then(|s| s.as_u64()).unwrap_or(0) == 0)
+        .count();
+
+    let flagged_count = total - clean_count;
+
+    let score_sum: u64 = entries
+        .iter()
+        .filter_map(|e| e.get("slop_score").and_then(|s| s.as_u64()))
+        .sum();
+    let avg_score = score_sum as f64 / total as f64;
+
+    let last_ts = entries
+        .last()
+        .and_then(|e| e.get("timestamp"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("unknown");
+    let last_score = entries
+        .last()
+        .and_then(|e| e.get("slop_score"))
+        .and_then(|s| s.as_u64())
+        .unwrap_or(0);
+
+    // 20-cell ASCII health bar: filled cells ∝ clean percentage.
+    let clean_cells = ((clean_count as f64 / total as f64) * 20.0) as usize;
+    let flagged_cells = 20usize.saturating_sub(clean_cells);
+    let health_bar = format!(
+        "[{}{}]",
+        "\u{2588}".repeat(clean_cells),   // █
+        "\u{2591}".repeat(flagged_cells), // ░
+    );
+
+    // Trim timestamp to 24 chars max so it fits the fixed-width box.
+    let ts_display = if last_ts.len() > 24 {
+        &last_ts[..24]
+    } else {
+        last_ts
+    };
+
+    let clean_pct = clean_count as f64 / total as f64 * 100.0;
+    let flagged_pct = flagged_count as f64 / total as f64 * 100.0;
+
+    let snapshot = format!(
+        "\
+╔══════════════════════════════════════════╗\n\
+║     WOPR SNAPSHOT — JANITOR INTEGRITY    ║\n\
+╠══════════════════════════════════════════╣\n\
+║  PRs Audited    : {total:>6}                 ║\n\
+║  Clean          : {clean_count:>6}  ({clean_pct:>5.1}%)         ║\n\
+║  Flagged        : {flagged_count:>6}  ({flagged_pct:>5.1}%)         ║\n\
+║  Critical       : {critical_count:>6}                 ║\n\
+║  Avg Slop Score : {avg_score:>9.1}             ║\n\
+╠══════════════════════════════════════════╣\n\
+║  Health: {health_bar:<22}   ║\n\
+╠══════════════════════════════════════════╣\n\
+║  Last Scan  : {ts_display:<28}║\n\
+║  Last Score : {last_score:>6}                    ║\n\
+╚══════════════════════════════════════════╝"
+    );
+
+    let status = if critical_count > 0 {
+        "critical"
+    } else if flagged_count > 0 {
+        "flagged"
+    } else {
+        "clean"
+    };
+
+    Ok(serde_json::json!({
+        "snapshot": snapshot,
+        "total_prs": total,
+        "clean_prs": clean_count,
+        "flagged_prs": flagged_count,
+        "critical_prs": critical_count,
+        "avg_slop_score": avg_score,
+        "last_scan": last_ts,
+        "last_score": last_score,
+        "status": status,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Server entry point
 // ---------------------------------------------------------------------------
@@ -681,6 +847,17 @@ fn dispatch(req: Request) -> Response {
                     }
                 }
 
+                "janitor_wopr_snapshot" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    match run_wopr_snapshot(&path) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
                 _ => Response::err(req.id, -32601, format!("unknown tool: {tool}")),
             }
         }
@@ -710,10 +887,10 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_seven_tools() {
+    fn test_tools_list_contains_eight_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 7);
+        assert_eq!(tools.len(), 8);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
@@ -722,6 +899,7 @@ mod tests {
         assert!(names.contains(&"janitor_bounce"));
         assert!(names.contains(&"janitor_silo_audit"));
         assert!(names.contains(&"janitor_provenance"));
+        assert!(names.contains(&"janitor_wopr_snapshot"));
     }
 
     #[test]
@@ -919,5 +1097,31 @@ mod tests {
         // No bounce log → internal error, not a protocol error.
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32603);
+    }
+
+    #[test]
+    fn test_janitor_wopr_snapshot_no_log_returns_no_data() {
+        // /tmp exists but has no .janitor/bounce_log.ndjson → clean no_data response.
+        let result = run_wopr_snapshot("/tmp").unwrap();
+        assert_eq!(result["total_prs"], 0);
+        assert_eq!(result["status"], "no_data");
+        let snapshot = result["snapshot"].as_str().unwrap();
+        assert!(snapshot.contains("NO DATA"), "snapshot must say NO DATA");
+    }
+
+    #[test]
+    fn test_janitor_wopr_snapshot_missing_path_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(25),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_wopr_snapshot",
+                "arguments": {}
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
     }
 }

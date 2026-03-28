@@ -116,12 +116,28 @@ runs:
           --analysis-token "$ANALYSIS_TOKEN" \
           --head-sha      "$HEAD_SHA"
 
-    # Step 6 — Tabula Rasa: vaporise all /tmp artefacts and local caches.
+    # Step 6 — Publish Integrity Dashboard to GitHub Actions Step Summary.
+    #
+    # Reads the bounce log written by step 5 and appends a high-density
+    # Markdown dashboard (Integrity Radar, Structural Topology, Provenance
+    # Ledger, Vibe-Check) to the job summary visible in the Actions tab.
+    # Best-effort (|| true): a rendering failure must never mask a real bounce
+    # verdict or leave the Check Run in an ambiguous state.
+    - name: Publish Integrity Dashboard
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f .janitor/bounce_log.ndjson ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          "$JANITOR_BIN" step-summary . >> "$GITHUB_STEP_SUMMARY" || true
+        fi
+
+    # Step 7 — Tabula Rasa: vaporise all /tmp artefacts and local caches.
     #
     # Runs unconditionally (even on failure) so that no state from this PR
     # execution can leak into a subsequent run on the same hosted runner.
     # Removes the compiled Janitor binary, the extracted patch, and any
-    # selftest artefacts written to /tmp.
+    # step-summary artefacts written to /tmp.
     - name: Cleanup Artifacts (Tabula Rasa)
       if: always()
       shell: bash
