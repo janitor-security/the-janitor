@@ -75,14 +75,16 @@ attestations/local/
 # CLAUDE.md     — internal architecture directives and AI coding-assistant config.
 # RUNBOOK.md    — designer-facing operational command reference (local paths,
 #                 Fly.io deployment commands, personal gauntlet targets).
-# .claude/      — Claude Code local state directory.
+# .claude/      — Claude Code project config.  Machine-local state files are
+#                 ignored; project-scoped rules/commands/skills ARE committed.
 # .agent/       — reserved for future agentic runtime state.
-# All four are local working documents; never commit to the public repository.
 # ------------------------------------------------------------------------------
 CLAUDE.md
 RUNBOOK.md
-.claude/
 .agent/
+# Machine-local Claude Code state — never commit.
+.claude/settings.local.json
+.claude/mcp.json
 
 
 # ------------------------------------------------------------------------------
