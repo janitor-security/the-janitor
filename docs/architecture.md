@@ -717,4 +717,28 @@ Results from **v6.12.7** gauntlet run. 22 Tier-1 repositories. Live PRs via
 
 ---
 
+## XI. STRUCTURAL PIPELINE
+
+```mermaid
+flowchart TD
+    A([PR Opened]) --> B[Vibe-Check Gate\nzstd NCD ratio < 0.15?]
+    B -->|NCD anomaly| C[antipattern:ncd_anomaly\n+10 pts — AI boilerplate signal]
+    B --> D[AST Autopsy\ntree-sitter 23 grammars\ngetsℹ strcpy · innerHTML · shell=True]
+    C --> D
+    D -->|findings| E[Silo Check\njanitor_dep_check\nversion-split pairs]
+    D --> E
+    E -->|silos ≥ 5| F[Hard block\nmerge prevented]
+    E --> G{Score ≤ gate?}
+    G -->|Yes — SANCTUARY INTACT| H[PQC Bond Issuance\nML-DSA-65 · CycloneDX v1.5\nCBOM written to .janitor/]
+    G -->|No — BREACH DETECTED| I[Check Run FAIL\nSARIF annotations uploaded\nwebhook fired]
+```
+
+The diagram above is the canonical execution sequence. Every PR traverses all
+stages left-to-right. The Vibe-Check Gate fires **before** AST parsing — an
+O(N) compression pass that short-circuits tree-sitter for statistically
+self-similar AI blobs. The PQC Bond is issued only when the score falls below
+the `min_slop_score` ceiling defined in `janitor.toml`.
+
+---
+
 *End of SOVEREIGN BRIEFING.*

@@ -854,7 +854,10 @@ pub fn check_logic_regression(patch: &str) -> Option<SlopFinding> {
             "architecture:logic_erasure — conditional branch count reduced by {pct}% \
 (base: {base_branches} → head: {head_branches}) while code volume remained similar \
 (base: {base_lines} lines, head: {head_lines} lines); \
-probable AI erasure of edge-case safety checks"
+probable AI erasure of edge-case safety checks. \
+Risk: significant loss of technical signal — sparse branch coverage degrades \
+documentation search relevance and may trigger low-quality content classifiers \
+on public repositories."
         ),
         domain: DOMAIN_FIRST_PARTY,
         severity: Severity::Critical,

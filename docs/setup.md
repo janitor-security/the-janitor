@@ -2,6 +2,15 @@
 
 Configuration reference and CI integration guide for The Janitor.
 
+> **For Engineering Managers:** The Janitor protects your public repository
+> from being flagged as low-quality AI spam by Google and other indexers.
+> Every pull request that passes the gate carries a cryptographically signed
+> Integrity Bond — machine-verifiable proof that the merged code meets your
+> structural quality threshold. AI-generated boilerplate (NCD ratio < 0.15)
+> is intercepted before merge, keeping your codebase's information density
+> consistent with human-authored work and out of reach of low-quality content
+> classifiers.
+
 ---
 
 ## Janitor Sentinel — GitHub App

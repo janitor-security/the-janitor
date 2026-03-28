@@ -2765,6 +2765,24 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         );
     }
 
+    // ── Search Reputation Risk ──────────────────────────────────────────────
+    out.push_str("### Search Reputation Risk\n\n");
+    if ncd_hit {
+        out.push_str(
+            "🔴 **HIGH** — NCD ratio < 0.15 indicates AI boilerplate. \
+             Merging this patch introduces statistically self-similar, \
+             low-variance content. Public repositories accumulate this signal \
+             across PRs; sustained high-NCD merge history degrades search \
+             engine relevance scores and may trigger low-quality content \
+             classifiers. Reject or refactor before merge.\n\n",
+        );
+    } else {
+        out.push_str(
+            "🟢 **LOW** — patch information density is within normal range. \
+             No search reputation risk detected.\n\n",
+        );
+    }
+
     out
 }
 
