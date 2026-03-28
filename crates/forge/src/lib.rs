@@ -25,6 +25,7 @@ pub mod agnostic_shield;
 pub mod brain;
 pub mod hashing;
 pub mod metadata;
+pub mod migration_guard;
 pub mod pr_collider;
 pub mod shadow_git;
 pub mod slop_filter;

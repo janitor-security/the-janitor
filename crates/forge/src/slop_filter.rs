@@ -550,6 +550,16 @@ impl PRBouncer for PatchBouncer {
                     total.antipattern_details.extend(s.antipattern_details);
                 }
             }
+            // ── API Migration Guard ───────────────────────────────────────────
+            // Runs at the multi-file aggregate level so it sees both Cargo.lock
+            // changes and Rust source changes in the same patch context.
+            // Each finding is Critical (50 pts) — a breaking API regression
+            // will fail to compile after the bump.
+            let mig = crate::migration_guard::scan_migration_regressions(patch);
+            let mig_count = mig.len() as u32;
+            total.antipatterns_found += mig_count;
+            total.antipattern_score += mig_count * 50;
+            total.antipattern_details.extend(mig);
             return Ok(total);
         }
 
