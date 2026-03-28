@@ -171,6 +171,22 @@ Thread A: janitor report --global --format pdf  → <gauntlet_dir>/global_report
 Thread B: janitor export --global               → <gauntlet_dir>/export.csv
 ```
 
+### Stage 6 — Crucible Validation (pre-release gate)
+
+After any modification to `crates/forge/` or `crates/anatomist/`, run:
+
+```bash
+cargo run -p crucible
+```
+
+The Crucible (`crates/crucible/src/main.rs`) feeds the Threat Gallery —
+hardcoded minimal source fixtures — directly to `forge::slop_hunter::find_slop`
+and asserts deterministic intercept/pass for every entry. Exit 0 = SANCTUARY
+INTACT. Exit 1 = BREACH DETECTED (blocks release).
+
+The gallery also runs as a `#[test]` block in `cargo test --workspace`
+(`just audit`). Any detector regression immediately blocks `just audit`.
+
 ---
 
 ## IV. THE THREAT MATRIX

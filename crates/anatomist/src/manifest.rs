@@ -493,7 +493,7 @@ fn parse_requirements_txt_content(content: &str, registry: &mut DependencyRegist
 
 /// Parse `pyproject.toml` content — supports PEP 621 `[project.dependencies]` and
 /// Poetry `[tool.poetry.dependencies]`.
-fn parse_pyproject_toml_content(content: &str, registry: &mut DependencyRegistry) {
+pub(crate) fn parse_pyproject_toml_content(content: &str, registry: &mut DependencyRegistry) {
     let Ok(val) = toml::from_str::<toml::Value>(content) else {
         return;
     };
@@ -1804,6 +1804,160 @@ fn main() {
         assert!(
             phantoms.is_empty(),
             "empty registry must short-circuit to no phantoms"
+        );
+    }
+
+    // ── parse_pyproject_toml_content ─────────────────────────────────────
+
+    #[test]
+    fn test_parse_pyproject_toml_pep621() {
+        let content = r#"
+[project]
+name = "my-app"
+dependencies = [
+    "requests>=2.28",
+    "click>=8.0",
+    "pydantic[dotenv]>=1.10",
+]
+"#;
+        let mut registry = DependencyRegistry::new();
+        parse_pyproject_toml_content(content, &mut registry);
+        let names: Vec<_> = registry.entries.iter().map(|e| e.name.clone()).collect();
+        assert!(
+            names.contains(&"requests".to_owned()),
+            "requests not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"click".to_owned()),
+            "click not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"pydantic".to_owned()),
+            "pydantic not found: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_pyproject_toml_poetry() {
+        let content = r#"
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.28"
+click = "^8.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0"
+"#;
+        let mut registry = DependencyRegistry::new();
+        parse_pyproject_toml_content(content, &mut registry);
+        let names: Vec<_> = registry.entries.iter().map(|e| e.name.clone()).collect();
+        // python is excluded by the parser
+        assert!(
+            !names.contains(&"python".to_owned()),
+            "python must be filtered: {names:?}"
+        );
+        assert!(
+            names.contains(&"requests".to_owned()),
+            "requests not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"click".to_owned()),
+            "click not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"pytest".to_owned()),
+            "pytest not found: {names:?}"
+        );
+        // pytest should be marked as dev dep
+        let pytest = registry
+            .entries
+            .iter()
+            .find(|e| e.name == "pytest")
+            .unwrap();
+        assert!(pytest.dev, "pytest must be marked as dev dependency");
+    }
+
+    #[test]
+    fn test_parse_pyproject_toml_empty_returns_empty() {
+        let content = "[build-system]\nrequires = [\"setuptools\"]\n";
+        let mut registry = DependencyRegistry::new();
+        parse_pyproject_toml_content(content, &mut registry);
+        assert!(
+            registry.is_empty(),
+            "no [project.dependencies] or [tool.poetry] → empty registry"
+        );
+    }
+
+    // ── parse_shell_script_content ───────────────────────────────────────
+
+    #[test]
+    fn test_parse_shell_script_apt_get_install() {
+        let content = "apt-get install -y curl git libssl-dev\n";
+        let mut registry = DependencyRegistry::new();
+        parse_shell_script_content(content, &mut registry);
+        let names: Vec<_> = registry.entries.iter().map(|e| e.name.clone()).collect();
+        assert!(
+            names.contains(&"curl".to_owned()),
+            "curl not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"git".to_owned()),
+            "git not found: {names:?}"
+        );
+        assert!(
+            names.contains(&"libssl-dev".to_owned()),
+            "libssl-dev not found: {names:?}"
+        );
+        // flags must not be included
+        assert!(
+            !names.iter().any(|n| n.starts_with('-')),
+            "flags must be filtered: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_shell_script_brew_install() {
+        let content = "brew install jq bc pandoc\n";
+        let mut registry = DependencyRegistry::new();
+        parse_shell_script_content(content, &mut registry);
+        let names: Vec<_> = registry.entries.iter().map(|e| e.name.clone()).collect();
+        assert!(names.contains(&"jq".to_owned()), "jq not found: {names:?}");
+        assert!(names.contains(&"bc".to_owned()), "bc not found: {names:?}");
+        assert!(
+            names.contains(&"pandoc".to_owned()),
+            "pandoc not found: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_shell_script_skips_comments_and_flags() {
+        let content = "\
+# Install build tools
+apt-get install -y --no-install-recommends build-essential
+# End of install block
+";
+        let mut registry = DependencyRegistry::new();
+        parse_shell_script_content(content, &mut registry);
+        let names: Vec<_> = registry.entries.iter().map(|e| e.name.clone()).collect();
+        assert!(
+            names.contains(&"build-essential".to_owned()),
+            "build-essential not found: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n.starts_with('-')),
+            "flags/options must be filtered: {names:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_shell_script_no_install_returns_empty() {
+        let content = "echo 'Hello, world!'\ncargo build --release\n";
+        let mut registry = DependencyRegistry::new();
+        parse_shell_script_content(content, &mut registry);
+        assert!(
+            registry.is_empty(),
+            "no install commands → empty registry: {:?}",
+            registry.entries.iter().map(|e| &e.name).collect::<Vec<_>>()
         );
     }
 }

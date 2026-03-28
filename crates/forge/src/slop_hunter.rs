@@ -1452,6 +1452,136 @@ resource \"aws_s3_bucket_acl\" \"example\" {
             "S3 private ACL must not be flagged: {findings:?}"
         );
     }
+
+    // ── YAML: remaining K8S_ROUTING_KINDS coverage ────────────────────────
+
+    #[test]
+    fn test_yaml_ingress_wildcard_host_detected() {
+        let src = b"\
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-ingress
+spec:
+  hosts:
+  - \"*\"
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            !findings.is_empty(),
+            "Ingress with wildcard host must be detected"
+        );
+        assert!(
+            findings[0].description.contains("Ingress"),
+            "description must name the resource kind: {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_yaml_httproute_wildcard_host_detected() {
+        let src = b"\
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route
+spec:
+  hosts:
+  - \"*\"
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            !findings.is_empty(),
+            "HTTPRoute with wildcard host must be detected"
+        );
+        assert!(
+            findings[0].description.contains("HTTPRoute"),
+            "description must name the resource kind: {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_yaml_gateway_wildcard_host_detected() {
+        let src = b"\
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gw
+spec:
+  hosts:
+  - \"*\"
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            !findings.is_empty(),
+            "Gateway with wildcard host must be detected"
+        );
+        assert!(
+            findings[0].description.contains("Gateway"),
+            "description must name the resource kind: {}",
+            findings[0].description
+        );
+    }
+
+    // ── C++: gap-fill for gets/sprintf/scanf (only strcpy was tested) ─────
+
+    #[test]
+    fn test_cpp_gets_detected() {
+        let src = b"#include <cstdio>\nvoid f() { char buf[64]; gets(buf); }\n";
+        let findings = find_slop("cpp", src);
+        assert!(
+            !findings.is_empty(),
+            "gets() in C++ must be detected: {findings:?}"
+        );
+        assert!(
+            findings[0].description.contains("gets()"),
+            "description must cite gets(): {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_cpp_sprintf_detected() {
+        let src =
+            b"#include <cstdio>\nvoid f(char *buf, const char *in) { sprintf(buf, \"%s\", in); }\n";
+        let findings = find_slop("cpp", src);
+        assert!(
+            !findings.is_empty(),
+            "sprintf() in C++ must be detected: {findings:?}"
+        );
+        assert!(
+            findings[0].description.contains("sprintf()"),
+            "description must cite sprintf(): {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_cpp_scanf_detected() {
+        let src = b"#include <cstdio>\nvoid f() { char buf[64]; scanf(\"%s\", buf); }\n";
+        let findings = find_slop("cpp", src);
+        assert!(
+            !findings.is_empty(),
+            "scanf() in C++ must be detected: {findings:?}"
+        );
+        assert!(
+            findings[0].description.contains("scanf()"),
+            "description must cite scanf(): {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_cpp_safe_strncpy_not_flagged() {
+        let src =
+            b"#include <cstring>\nvoid f(char *d, size_t n, const char *s) { strncpy(d, s, n - 1); d[n-1] = '\\0'; }\n";
+        let findings = find_slop("cpp", src);
+        assert!(
+            findings.is_empty(),
+            "strncpy() in C++ must not be flagged: {findings:?}"
+        );
+    }
 }
 
 #[cfg(test)]
