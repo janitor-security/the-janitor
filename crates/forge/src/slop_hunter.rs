@@ -1453,3 +1453,103 @@ resource \"aws_s3_bucket_acl\" \"example\" {
         );
     }
 }
+
+#[cfg(test)]
+mod logic_regression_tests {
+    use super::check_logic_regression;
+
+    /// Helper: build a minimal unified-diff patch from base and head line sets.
+    fn make_patch(base_lines: &[&str], head_lines: &[&str]) -> String {
+        let mut patch = String::from("--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n");
+        for l in base_lines {
+            patch.push('-');
+            patch.push_str(l);
+            patch.push('\n');
+        }
+        for l in head_lines {
+            patch.push('+');
+            patch.push_str(l);
+            patch.push('\n');
+        }
+        patch
+    }
+
+    #[test]
+    fn test_logic_erasure_fires_on_branch_reduction() {
+        // Base: 5 branch lines, Head: 1 branch line — 80% reduction, same volume.
+        let base = &[
+            "if x > 0 {",
+            "    if y > 0 {",
+            "    match z { A => 1, B => 2 }",
+            "    if w > 0 { return; }",
+            "    if q { break; }",
+            "    return base_value;",
+        ];
+        let head = &[
+            "if x > 0 {",
+            "    return simplified;",
+            "    let a = 1;",
+            "    let b = 2;",
+            "    let c = 3;",
+            "    return a + b + c;",
+        ];
+        let patch = make_patch(base, head);
+        let result = check_logic_regression(&patch);
+        assert!(result.is_some(), "logic_erasure should fire: {patch}");
+        let f = result.unwrap();
+        assert!(
+            f.description.contains("logic_erasure"),
+            "description must contain 'logic_erasure': {}",
+            f.description
+        );
+    }
+
+    #[test]
+    fn test_logic_erasure_does_not_fire_when_branches_preserved() {
+        // Base and head both have 4 branch lines — no regression.
+        let base = &[
+            "if a { do_x(); }",
+            "if b { do_y(); }",
+            "match c { X => 1, Y => 2 }",
+            "if d { return; }",
+        ];
+        let head = &[
+            "if a { do_x(); }",
+            "if b { do_y_v2(); }",
+            "match c { X => 1, Y => 2 }",
+            "if d { return; }",
+        ];
+        let patch = make_patch(base, head);
+        assert!(
+            check_logic_regression(&patch).is_none(),
+            "no regression when branch count is preserved"
+        );
+    }
+
+    #[test]
+    fn test_logic_erasure_does_not_fire_below_min_base_branches() {
+        // Base has only 2 branch lines — below the minimum threshold of 3.
+        let base = &["if a { do_x(); }", "if b { do_y(); }", "return z;"];
+        let head = &["return simplified;", "return simplified;", "return z;"];
+        let patch = make_patch(base, head);
+        assert!(
+            check_logic_regression(&patch).is_none(),
+            "should not fire when base has fewer than 3 branches"
+        );
+    }
+
+    #[test]
+    fn test_logic_erasure_does_not_fire_on_volume_change() {
+        // Base: 4 branches in 4 lines, Head: 0 branches in 40 lines — volume too different.
+        let base_lines: Vec<&str> = vec!["if a { 1 }", "if b { 2 }", "if c { 3 }", "if d { 4 }"];
+        let mut head_lines: Vec<&str> = Vec::new();
+        for _ in 0..40 {
+            head_lines.push("let x = 1;");
+        }
+        let patch = make_patch(&base_lines, &head_lines);
+        assert!(
+            check_logic_regression(&patch).is_none(),
+            "should not fire when code volume changes significantly"
+        );
+    }
+}

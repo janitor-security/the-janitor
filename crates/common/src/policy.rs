@@ -469,6 +469,22 @@ impl JanitorPolicy {
         false
     }
 
+    /// Returns `true` when the agentic-origin signal fires due to a
+    /// `Co-authored-by: Copilot` trailer rather than the author handle.
+    ///
+    /// This identifies *author impersonation*: a human-owned PR where the Copilot
+    /// coding agent autonomously pushed commits.  The commit author attribution
+    /// (human handle) does not reflect the actual code origin (Copilot).
+    ///
+    /// ## Invariant
+    /// ```text
+    /// is_author_impersonation(author, body)
+    ///   ≡ is_agentic_actor(author, body) && !is_agentic_actor(author, None)
+    /// ```
+    pub fn is_author_impersonation(&self, author: &str, pr_body: Option<&str>) -> bool {
+        self.is_agentic_actor(author, pr_body) && !self.is_agentic_actor(author, None)
+    }
+
     /// Returns `true` when `author` appears in [`Self::trusted_bot_authors`].
     ///
     /// Delegates to [`Self::is_automation_account`], which additionally
@@ -807,5 +823,52 @@ mod tests {
         let p = JanitorPolicy::default();
         assert!(p.is_automation_account("copilot[bot]"));
         assert!(p.is_agentic_actor("copilot[bot]", None));
+    }
+
+    // --- AuthorImpersonation detection ---
+
+    #[test]
+    fn human_pr_with_copilot_coauthor_trailer_is_impersonation() {
+        // A human opens the PR; Copilot autonomously pushed commits.
+        // The body trailer is the only trigger — the author handle is clean.
+        let p = JanitorPolicy::default();
+        let body = "Fixes #123\n\nCo-authored-by: Copilot <copilot@github.com>";
+        assert!(
+            p.is_author_impersonation("alice", Some(body)),
+            "human PR with Copilot co-author trailer must fire impersonation"
+        );
+    }
+
+    #[test]
+    fn copilot_bot_handle_is_not_impersonation() {
+        // When the PR author IS Copilot, it's agentic origin — not impersonation.
+        // Impersonation requires the handle to be clean while the body triggers.
+        let p = JanitorPolicy::default();
+        assert!(
+            !p.is_author_impersonation("copilot[bot]", None),
+            "Copilot handle author is agentic origin, not impersonation"
+        );
+    }
+
+    #[test]
+    fn human_pr_without_copilot_trailer_is_not_impersonation() {
+        let p = JanitorPolicy::default();
+        let body = "Fixes #456\n\nCo-authored-by: alice <alice@example.com>";
+        assert!(
+            !p.is_author_impersonation("alice", Some(body)),
+            "non-Copilot co-author trailer must not trigger impersonation"
+        );
+    }
+
+    #[test]
+    fn copilot_handle_with_copilot_body_is_not_impersonation() {
+        // Both handle and body fire → agentic_origin, NOT impersonation.
+        // Impersonation is only when body fires but handle does NOT.
+        let p = JanitorPolicy::default();
+        let body = "Co-authored-by: Copilot <copilot@github.com>";
+        assert!(
+            !p.is_author_impersonation("copilot[bot]", Some(body)),
+            "when handle already triggers, body trailer cannot add impersonation"
+        );
     }
 }

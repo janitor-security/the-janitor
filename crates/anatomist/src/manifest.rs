@@ -1209,11 +1209,19 @@ fn phantom_is_keyword(name: &str) -> bool {
             | "assert_ne"
             | "debug_assert"
             | "write_all"
+            | "read_line"
+            | "read_to_string"
+            | "from_utf8"
             | "to_string"
             | "from_str"
             | "into_iter"
             | "to_owned"
             | "to_vec"
+            | "vec_deque"
+            | "hash_map"
+            | "hash_set"
+            | "btree_map"
+            | "btree_set"
     )
 }
 
@@ -1691,5 +1699,111 @@ version = "1.0.200"
         let silos = find_version_silos_from_lockfile(&blobs, None);
         assert_eq!(silos.len(), 1, "with no base, all head silos returned");
         assert_eq!(silos[0].name, "serde");
+    }
+
+    // ── find_phantom_calls tests ─────────────────────────────────────────────
+
+    fn make_registry(names: &[&str]) -> common::registry::SymbolRegistry {
+        use common::registry::{SymbolEntry, SymbolRegistry};
+        let mut r = SymbolRegistry::new();
+        for (i, &name) in names.iter().enumerate() {
+            r.insert(SymbolEntry {
+                id: i as u64,
+                name: name.to_owned(),
+                qualified_name: name.to_owned(),
+                file_path: "src/lib.rs".to_owned(),
+                entity_type: 0,
+                start_line: 1,
+                end_line: 10,
+                start_byte: 0,
+                end_byte: 100,
+                structural_hash: 0,
+                protected_by: None,
+            });
+        }
+        r
+    }
+
+    #[test]
+    fn test_phantom_call_detected_when_absent_from_registry() {
+        // Registry knows `process_payload`; diff calls `send_telemetry_data`
+        // which neither exists in registry nor is defined in the diff.
+        let registry = make_registry(&["process_payload", "validate_input"]);
+
+        let src = b"\
+fn process_payload(data: &[u8]) -> bool {
+    // calls a helper that was hallucinated
+    send_telemetry_data(data);
+    true
+}
+";
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("src/handler.rs"), src.to_vec());
+
+        let phantoms = find_phantom_calls(&blobs, &registry);
+        assert!(
+            phantoms.iter().any(|p| p == "send_telemetry_data"),
+            "send_telemetry_data must be flagged as phantom; got: {phantoms:?}"
+        );
+    }
+
+    #[test]
+    fn test_phantom_call_not_flagged_when_defined_in_diff() {
+        // `send_telemetry_data` is both called and defined in the same diff blob.
+        let registry = make_registry(&["process_payload"]);
+
+        let src = b"\
+fn send_telemetry_data(data: &[u8]) {
+    // implementation present in diff
+}
+
+fn process_payload(data: &[u8]) -> bool {
+    send_telemetry_data(data);
+    true
+}
+";
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("src/handler.rs"), src.to_vec());
+
+        let phantoms = find_phantom_calls(&blobs, &registry);
+        assert!(
+            !phantoms.iter().any(|p| p == "send_telemetry_data"),
+            "send_telemetry_data is defined in diff — must not be flagged; got: {phantoms:?}"
+        );
+    }
+
+    #[test]
+    fn test_phantom_call_not_flagged_when_in_registry() {
+        let registry = make_registry(&["process_payload", "send_telemetry_data"]);
+
+        let src = b"\
+fn main() {
+    send_telemetry_data(&[]);
+    process_payload(&[]);
+}
+";
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("src/main.rs"), src.to_vec());
+
+        let phantoms = find_phantom_calls(&blobs, &registry);
+        assert!(
+            phantoms.is_empty(),
+            "both functions are in registry — no phantoms expected; got: {phantoms:?}"
+        );
+    }
+
+    #[test]
+    fn test_phantom_empty_registry_returns_no_phantoms() {
+        let registry = common::registry::SymbolRegistry::new();
+
+        let src = b"fn main() { some_unknown_function(); }\n";
+        let mut blobs: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        blobs.insert(PathBuf::from("src/main.rs"), src.to_vec());
+
+        let phantoms = find_phantom_calls(&blobs, &registry);
+        assert!(
+            phantoms.is_empty(),
+            "empty registry must short-circuit to no phantoms"
+        );
     }
 }
