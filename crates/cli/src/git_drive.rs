@@ -561,15 +561,26 @@ fn bounce_one(
 
     // Tier 2: resolved graph from in-memory Cargo.lock blob (supersedes Tier 1
     // for Rust crates; npm/pip entries from Tier 1 are preserved).
-    // Delta: fetch the base Cargo.lock from the ODB so we only report silos
-    // that are genuinely NEW in this PR, not pre-existing splits on the base.
+    //
+    // MANDATORY GATE: `Cargo.lock` must be present in the PR diff blobs before
+    // the lockfile silo detector runs.  `blobs` is built from the libgit2 diff
+    // (MergeSnapshot.patches) and contains only files changed by this PR — if
+    // Cargo.lock is absent the PR did not touch the dependency graph and CANNOT
+    // introduce new version silos.
     let base_lock = fetch_base_lockfile(repo_path, &merge_base_sha);
-    let lockfile_silos =
-        anatomist::manifest::find_version_silos_from_lockfile(&blobs, base_lock.as_deref());
+    let lockfile_in_diff = blobs
+        .keys()
+        .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock"));
+    let lockfile_silos = if lockfile_in_diff {
+        anatomist::manifest::find_version_silos_from_lockfile(&blobs, base_lock.as_deref())
+    } else {
+        Vec::new()
+    };
     if !lockfile_silos.is_empty() {
         let lock_names: std::collections::HashSet<&str> =
             lockfile_silos.iter().map(|s| s.name.as_str()).collect();
         version_silos.retain(|n| !lock_names.contains(n.as_str()));
+        // One antipattern_details entry per siloed crate for UI readability.
         version_silos.extend(lockfile_silos.iter().map(|s| s.display()));
         version_silos.sort();
     }

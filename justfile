@@ -179,7 +179,23 @@ check-branch branch pr='0':
 	set -euo pipefail
 	REPO_SLUG="$(git config --get remote.origin.url | sed -e 's/.*github.com[:/]//' -e 's/\.git$//')"
 	[[ -n "${REPO_SLUG}" ]] || { echo "error: could not resolve repo slug from git remote" >&2; exit 1; }
-	./target/release/janitor bounce . --base main --head {{branch}} --pr-number {{pr}} --repo-slug "${REPO_SLUG}" --format json
+	BASE_SHA="$(git rev-parse main)"
+	# Resolve branch to a commit SHA.  Resolution order:
+	#   1. Local branch ref (already checked out)
+	#   2. Remote-tracking ref (already fetched)
+	#   3. Locally cached PR ref from a prior fetch
+	#   4. Fetch via GitHub pull-request ref (works even when branch names
+	#      differ from the remote due to encoding, e.g. hyphens vs underscores
+	#      in Dependabot branch names)
+	PR_NUM="{{pr}}"
+	HEAD_SHA="$(git rev-parse --verify "{{branch}}" 2>/dev/null \
+	    || git rev-parse --verify "refs/remotes/origin/{{branch}}" 2>/dev/null \
+	    || { [[ "${PR_NUM}" != "0" ]] && git rev-parse --verify "refs/remotes/origin/pr/${PR_NUM}" 2>/dev/null; } \
+	    || { [[ "${PR_NUM}" != "0" ]] && git fetch --quiet origin "+refs/pull/${PR_NUM}/head:refs/remotes/origin/pr/${PR_NUM}" 2>/dev/null && git rev-parse "refs/remotes/origin/pr/${PR_NUM}"; } \
+	    || true)"
+	[[ -n "${HEAD_SHA}" ]] || { echo "error: could not resolve SHA for branch '{{branch}}' (pr={{pr}})" >&2; exit 1; }
+	./target/release/janitor bounce . --repo . --base "${BASE_SHA}" --head "${HEAD_SHA}" \
+	    --pr-number {{pr}} --repo-slug "${REPO_SLUG}" --format json
 
 # 9. WINDOWS SYNC
 sync:

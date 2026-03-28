@@ -2999,16 +2999,29 @@ probable AI context-collapse (hallucinated function reference)"
     };
 
     // Lockfile tier — authoritative resolved graph for Rust crates.
-    // Pass base_lock for delta computation: only silos NEW in this PR are flagged.
-    let lockfile_silos =
-        anatomist::manifest::find_version_silos_from_lockfile(&bounce_blobs, base_lock.as_deref());
+    //
+    // MANDATORY GATE: only runs when `Cargo.lock` is present in `bounce_blobs`,
+    // which contains exclusively files changed by this PR.  If `Cargo.lock` was
+    // not modified, the PR cannot introduce new version silos, so the detector
+    // MUST NOT run.  Without this gate the engine would scan the full workspace
+    // lockfile and emit false-positive silos for pre-existing splits that are
+    // completely unrelated to the PR (e.g. a YAML-only workflow update).
+    let lockfile_in_diff = bounce_blobs
+        .keys()
+        .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock"));
+    let lockfile_silos = if lockfile_in_diff {
+        // Delta: base_lock subtracts pre-existing splits — only NEW silos fire.
+        anatomist::manifest::find_version_silos_from_lockfile(&bounce_blobs, base_lock.as_deref())
+    } else {
+        Vec::new()
+    };
     if !lockfile_silos.is_empty() {
         // Remove blob-detected plain names superseded by lockfile entries
         // carrying full version detail.
         let lock_names: std::collections::HashSet<&str> =
             lockfile_silos.iter().map(|s| s.name.as_str()).collect();
         version_silos.retain(|n| !lock_names.contains(n.as_str()));
-        // Append rich lockfile entries (e.g. "toml (v1.0.6 vs v1.1.0)").
+        // One antipattern_details entry per siloed crate for UI readability.
         version_silos.extend(lockfile_silos.iter().map(|s| s.display()));
         version_silos.sort();
     }
