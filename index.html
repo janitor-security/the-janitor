@@ -454,9 +454,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#agentic-governance-structural-circuit-breaker-for-your-ai" class="md-nav__link">
+  <a href="#ground-truth-vs-the-vibe-radar" class="md-nav__link">
     <span class="md-ellipsis">
-      AGENTIC GOVERNANCE: STRUCTURAL CIRCUIT BREAKER FOR YOUR AI
+      GROUND TRUTH VS. THE VIBE RADAR
     </span>
   </a>
   
@@ -870,9 +870,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#agentic-governance-structural-circuit-breaker-for-your-ai" class="md-nav__link">
+  <a href="#ground-truth-vs-the-vibe-radar" class="md-nav__link">
     <span class="md-ellipsis">
-      AGENTIC GOVERNANCE: STRUCTURAL CIRCUIT BREAKER FOR YOUR AI
+      GROUND TRUTH VS. THE VIBE RADAR
     </span>
   </a>
   
@@ -1181,9 +1181,59 @@
 <p>The surcharge fires as <code>antipattern:agentic_origin</code> in the bounce log, CBOM, and SIEM webhook payload — providing a full audit trail of every PR where autonomous coding agent activity was detected and gated.</p>
 <p>Copilot is not the last. Devin, Cursor Agent, and equivalents follow the same pattern: non-human commits on human PRs, at machine velocity, bypassing the review queue. The AgenticOrigin gate is the enforcement layer that moves with the threat.</p>
 <hr />
-<h2 id="agentic-governance-structural-circuit-breaker-for-your-ai">AGENTIC GOVERNANCE: STRUCTURAL CIRCUIT BREAKER FOR YOUR AI</h2>
-<p>AI Agents move at machine velocity, producing code faster than human reviews can verify. The Janitor provides the deterministic grounding agents need to self-correct. By mounting the Janitor via MCP, your AI becomes architecturally aware—detecting version silos and security antipatterns before they ever reach your screen.</p>
-<p>See <a href="setup/#for-ai-agents-claude-code-cursor">Setup → For AI Agents</a> for MCP wiring instructions.</p>
+<h2 id="ground-truth-vs-the-vibe-radar">GROUND TRUTH VS. THE VIBE RADAR</h2>
+<p>The market has a new category: <strong>Vibe Radar</strong>. These are tools — cloud-hosted or local — that use LLMs to review pull requests, describe what the code does, and emit an opinion. The opinion sounds authoritative. It is probabilistic. It cannot be audited. It cannot be reproduced. And it is blind to the structural category of threat that AI-generated code actually introduces.</p>
+<p>The Vibe Radar is a model reading code with a model. Every finding it surfaces is a confidence interval. Every clean verdict it issues is a bet against the model's training distribution. The attack surface it misses is the one that wasn't in the training data — which is, definitionally, the entire category of novel AI-generated antipatterns.</p>
+<p><strong>The Janitor is not a Vibe Radar. It is a proof system.</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Property</th>
+<th style="text-align: center;">Vibe Radar (LLM review)</th>
+<th style="text-align: center;">The Janitor (AST structural firewall)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Output type</td>
+<td style="text-align: center;">Probabilistic opinion</td>
+<td style="text-align: center;">Deterministic proof</td>
+</tr>
+<tr>
+<td style="text-align: left;">Reproducible verdict</td>
+<td style="text-align: center;">No — model non-determinism</td>
+<td style="text-align: center;">Yes — same diff, same score, always</td>
+</tr>
+<tr>
+<td style="text-align: left;">Detects phantom hallucinations</td>
+<td style="text-align: center;">No — calls a hallucinated function, gets a hallucinated analysis</td>
+<td style="text-align: center;">Yes — <code>security:phantom_hallucination</code> cross-references base registry</td>
+</tr>
+<tr>
+<td style="text-align: left;">Detects Swarm coordination</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">Yes — MinHash LSH at Jaccard ≥ 0.85 across full PR history</td>
+</tr>
+<tr>
+<td style="text-align: left;">Source code egress</td>
+<td style="text-align: center;">Yes — sent to inference cluster</td>
+<td style="text-align: center;">No — memory-mapped on your runner</td>
+</tr>
+<tr>
+<td style="text-align: left;">Auditable</td>
+<td style="text-align: center;">No</td>
+<td style="text-align: center;">Yes — BLAKE3 hashes, ML-DSA-65 signed CBOM, policy hash</td>
+</tr>
+<tr>
+<td style="text-align: left;">Speed</td>
+<td style="text-align: center;">2–8 minutes per PR</td>
+<td style="text-align: center;">Under 33 seconds for 3.5M-line repos</td>
+</tr>
+</tbody>
+</table>
+<p>A Vibe Radar will catch many things. It will not catch what matters most: a structurally intact PR that calls a function your codebase does not define, introduces a clone of a symbol that was deleted two sprints ago, or submits the same structural scaffold from twenty accounts in a coordinated Swarm.</p>
+<p>Those patterns have no CVE record. They are invisible to tools trained on pre-AI codebases. They are invisible to probabilistic reviewers that cannot prove structural identity. They are not invisible to The Janitor — because The Janitor does not guess.</p>
+<p><strong>The Vibe Radar tells you what it thinks. The Janitor tells you what it proved.</strong></p>
 <hr />
 <h2 id="the-maintainer-shield">THE MAINTAINER SHIELD</h2>
 <p>Open-source maintainers are experiencing <strong>death by a thousand slops</strong>.</p>
