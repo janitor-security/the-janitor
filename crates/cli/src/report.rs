@@ -108,12 +108,12 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
     // ── Non-blocking POST ─────────────────────────────────────────────────
     std::thread::spawn(move || {
         let mut builder = ureq::post(&url)
-            .set("Content-Type", "application/json")
-            .set("X-Janitor-Event", event_name);
+            .header("Content-Type", "application/json")
+            .header("X-Janitor-Event", event_name);
         if !sig_header.is_empty() {
-            builder = builder.set("X-Janitor-Signature-256", &sig_header);
+            builder = builder.header("X-Janitor-Signature-256", &sig_header);
         }
-        match builder.send_string(&payload) {
+        match builder.send(payload.as_str()) {
             Ok(_) => {}
             Err(e) => eprintln!("warning: webhook delivery failed: {e}"),
         }
@@ -209,21 +209,20 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
 
     // ── Blocking POST ────────────────────────────────────────────────────────
     let mut builder = ureq::post(&cfg.url)
-        .set("Content-Type", "application/json")
-        .set("X-Janitor-Event", "critical_threat");
+        .header("Content-Type", "application/json")
+        .header("X-Janitor-Event", "critical_threat");
     if !sig_header.is_empty() {
-        builder = builder.set("X-Janitor-Signature-256", &sig_header);
+        builder = builder.header("X-Janitor-Signature-256", &sig_header);
     }
 
-    match builder.send_string(&payload) {
+    match builder.send(payload.as_str()) {
         Ok(resp) => {
             let status = resp.status();
             eprintln!("info: webhook-test — HTTP {status} ✓ delivery confirmed");
             println!("webhook-test OK — HTTP {status}");
         }
-        Err(ureq::Error::Status(code, resp)) => {
-            let body = resp.into_string().unwrap_or_default();
-            anyhow::bail!("webhook-test FAILED — HTTP {code}: {body}");
+        Err(ureq::Error::StatusCode(code)) => {
+            anyhow::bail!("webhook-test FAILED — HTTP {code}");
         }
         Err(e) => {
             anyhow::bail!("webhook-test FAILED — transport error: {e}");
@@ -671,9 +670,9 @@ fn render_badge_svg(score: u32) -> String {
 pub fn post_bounce_result(url: &str, token: &str, entry: &BounceLogEntry) -> anyhow::Result<()> {
     let body = serde_json::to_string(entry)?;
     let result = ureq::post(url)
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("Content-Type", "application/json")
-        .send_string(&body);
+        .header("Authorization", &format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .send(body.as_str());
     match result {
         Ok(r) if r.status() == 200 || r.status() == 201 => {
             eprintln!("info: bounce result reported to Governor");
@@ -742,7 +741,9 @@ pub fn send_heartbeat_if_due(janitor_dir: &Path) {
     }
 
     let msg = match ureq::get("https://the-governor.fly.dev/health")
-        .timeout(std::time::Duration::from_secs(5))
+        .config()
+        .timeout_global(Some(std::time::Duration::from_secs(5)))
+        .build()
         .call()
     {
         Ok(r) => format!("heartbeat: Governor /health → HTTP {}", r.status()),

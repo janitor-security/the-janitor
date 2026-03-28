@@ -48,8 +48,8 @@ pub fn induce(source: &[u8], ext: &str) -> Option<InducedEntry> {
         "snippet": snippet.as_ref(),
     });
 
-    let response = ureq::post(INDUCE_URL)
-        .set("Content-Type", "application/json")
+    let mut response = ureq::post(INDUCE_URL)
+        .header("Content-Type", "application/json")
         .send_json(&payload)
         .map_err(|e| {
             eprintln!("induce: POST to {INDUCE_URL} failed for .{ext}: {e}");
@@ -57,7 +57,8 @@ pub fn induce(source: &[u8], ext: &str) -> Option<InducedEntry> {
         .ok()?;
 
     let body: serde_json::Value = response
-        .into_json()
+        .body_mut()
+        .read_json()
         .map_err(|e| {
             eprintln!("induce: response parse error for .{ext}: {e}");
         })

@@ -3574,17 +3574,15 @@ fn cmd_report(
 /// On any network or I/O failure the function returns an error — no partial
 /// write is left on disk (the download is buffered before overwriting).
 fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
-    use std::io::Read as _;
     const WISDOM_URL: &str = "https://api.thejanitor.app/v1/wisdom.rkyv";
 
-    let response = ureq::get(WISDOM_URL)
+    let mut response = ureq::get(WISDOM_URL)
         .call()
         .map_err(|e| anyhow::anyhow!("update-wisdom: GET {WISDOM_URL} failed: {e}"))?;
 
-    let mut bytes: Vec<u8> = Vec::new();
-    response
-        .into_reader()
-        .read_to_end(&mut bytes)
+    let bytes = response
+        .body_mut()
+        .read_to_vec()
         .map_err(|e| anyhow::anyhow!("update-wisdom: reading response body failed: {e}"))?;
 
     let janitor_dir = project_root.join(".janitor");

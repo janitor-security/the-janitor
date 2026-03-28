@@ -7,6 +7,6 @@ repository.workspace = true
 
 [dependencies]
 ratatui = "0.30"
-crossterm = "0.28"
+crossterm = "0.29"
 common = { path = "../common" }
 serde_json.workspace = true

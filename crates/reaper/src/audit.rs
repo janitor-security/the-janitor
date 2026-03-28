@@ -233,7 +233,7 @@ pub fn send_deletion_feedback(token: &str, project_hash: &str, deleted_symbols: 
         "timestamp": utc_now(),
     });
     if let Err(e) = ureq::post(FEEDBACK_URL)
-        .set("Authorization", &format!("Bearer {token}"))
+        .header("Authorization", &format!("Bearer {token}"))
         .send_json(&payload)
     {
         eprintln!("Warning: deletion feedback POST failed (non-fatal): {e}");
@@ -275,13 +275,14 @@ fn remote_attest(token: &str, entries: &[AuditEntry]) -> Result<String, ReaperEr
         "files_modified": files_modified,
     });
 
-    let response = ureq::post(ATTEST_URL)
-        .set("Authorization", &format!("Bearer {token}"))
+    let mut response = ureq::post(ATTEST_URL)
+        .header("Authorization", &format!("Bearer {token}"))
         .send_json(&payload)
         .map_err(|e| ReaperError::AttestError(e.to_string()))?;
 
     let body: serde_json::Value = response
-        .into_json()
+        .body_mut()
+        .read_json()
         .map_err(|e| ReaperError::AttestError(format!("response parse error: {e}")))?;
 
     body["signature"].as_str().map(String::from).ok_or_else(|| {
