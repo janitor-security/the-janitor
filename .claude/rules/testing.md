@@ -1,9 +1,17 @@
 ---
 # Rule: Testing Mandate — Deterministic Regression Coverage
 
+## The Law
+
+Every functional change to a crate under `crates/` MUST be accompanied by a
+corresponding `#[test]` in the same commit. For detectors, a new entry in the
+`crates/crucible` Threat Gallery is mandatory.
+
 Every new or modified detection path MUST ship with at least one `#[test]`
 in the same PR. No exceptions. Tests must be deterministic: no network
 calls, no filesystem side-effects, no `thread::sleep`.
+
+See `.claude/skills/crucible-enforcement/SKILL.md` for the enforced TDD cycle.
 
 ## Scope
 
