@@ -68,7 +68,7 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
             Ok(v) => v,
             Err(_) => {
                 eprintln!(
-                    "warning: webhook secret env var '{var_name}' not set — delivering unsigned"
+                    "Structural Integrity Warning: Webhook secret environment variable is not set. Delivering unsigned payload."
                 );
                 String::new()
             }
@@ -151,7 +151,9 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
     let secret = if cfg.secret.starts_with("env:") {
         let var_name = &cfg.secret[4..];
         std::env::var(var_name).unwrap_or_else(|_| {
-            eprintln!("warning: env var '{var_name}' not set — delivering unsigned");
+            eprintln!(
+                "Structural Integrity Warning: Webhook secret environment variable is not set. Delivering unsigned payload."
+            );
             String::new()
         })
     } else {
