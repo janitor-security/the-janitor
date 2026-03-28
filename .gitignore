@@ -242,11 +242,16 @@ package-lock.json
 *.patch
 *.diff
 *.ndjson
+# Root-level JSON and TXT scan artifacts (runtime output, not source)
+/*.json
+/*.txt
 # Gauntlet target lists (operator-local, not committed — base + variants)
 gauntlet_targets.txt
 gauntlet_targets_*.txt
 # Forensic strike output packages (just strike → strikes/<repo>/)
 strikes/
+# Gauntlet test harness output
+janitor-test-gauntlet/
 
 # Whitelist: official docs assets are intentionally tracked.
 !docs/assets/*.pdf

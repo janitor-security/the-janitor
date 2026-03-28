@@ -268,7 +268,7 @@ gc_value_usd            = gc_only_count × $20
 total_economic_impact   = ci_compute_saved_usd + gc_value_usd
 ```
 
-### CSV Column Schema (16 columns, exact order)
+### CSV Column Schema (17 columns, exact order)
 
 ```
  1. PR_Number
@@ -287,6 +287,7 @@ total_economic_impact   = ci_compute_saved_usd + gc_value_usd
 14. Repo_Slug
 15. Commit_SHA            Git SHA of the PR head at bounce time; from --head or GITHUB_SHA; empty when unavailable
 16. Policy_Hash           BLAKE3 hex digest of janitor.toml at bounce time; empty when no manifest present (SOC 2 audit trail)
+17. Agentic_Contribution_Pct  100.0 when is_agentic_actor() fires; 0.0 otherwise (v7.9.5)
 ```
 
 **`[billing]` TOML table** (override actuarial defaults):
@@ -458,7 +459,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-7.9.4
+8.0.1
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
@@ -467,6 +468,15 @@ Release profile: `opt-level = "z"`, `lto = true`, `codegen-units = 1`, `strip = 
 MSRV: `rust-version = "1.88"` (enforced by CI MSRV workflow).
 Edition: `2021`.
 License: `BUSL-1.1` (all workspace crates via `license.workspace = true`).
+
+### v8.0.1 — Full-Spectrum Governance
+
+`.claude/` governance expanded to 21 entries (8 rules, 10 commands, 2 skills). New rules:
+`testing.md`, `physarum.md`, `hardware-scaling.md`, `agentic-metrics.md`. New commands:
+`publish-audit.md`, `generate-client.md`, `update-wisdom.md`. Dependency Guard skill hardened
+to fail-closed gate on all lockfile and manifest changes. `agentic_pct` column 17 added to CSV
+(v7.9.5). `ureq` upgraded from v2 to v3 (graph-compressed to <5 version silos; getrandom
+0.2/0.4 is the one documented unfixable exception).
 
 ### v7.9.4 — Architecture Inversion Implementation
 
@@ -483,6 +493,92 @@ Architecture Inversion (Steps 1–4 complete):
 New env var: `GOVERNOR_INVERT_MODE=1` — gates all inversion behaviour in the Governor. Default: `0` (legacy clone path).
 New CLI flags: `janitor bounce --report-url <url> --analysis-token <jwt>`
 New `AppState` fields: `invert_mode: bool`, `token_rate_limit: DashMap`, `pending_checks: DashMap`
+
+---
+
+---
+
+## X. POLYGLOT GRAMMAR TABLE (EXACT CRATE VERSIONS)
+
+All 23 grammars exposed via `crates/polyglot`. Each is a `OnceLock<Language>` static.
+The new tree-sitter API (crate `tree-sitter-language ^0.1`) exports `pub const LANGUAGE: LanguageFn`.
+Old API (`pub fn language() -> Language`) is incompatible with workspace tree-sitter 0.26 — reject any grammar crate using the old signature.
+
+| Static | Crate | Extensions |
+|--------|-------|------------|
+| `PYTHON` | `tree-sitter-python 0.25` | `py` |
+| `RUST` | `tree-sitter-rust 0.23` | `rs` |
+| `TYPESCRIPT` | `tree-sitter-typescript 0.23` | `ts` |
+| `TSX` | `tree-sitter-typescript 0.23` | `tsx` |
+| `JAVASCRIPT` | `tree-sitter-javascript 0.25` | `js`, `jsx`, `mjs`, `cjs` |
+| `CPP` | `tree-sitter-cpp 0.23` | `cpp`, `cxx`, `cc`, `hpp`, `hxx` |
+| `C` | `tree-sitter-c 0.23` | `c`, `h` |
+| `JAVA` | `tree-sitter-java 0.23` | `java` |
+| `CSHARP` | `tree-sitter-c-sharp 0.23` | `cs` |
+| `GO` | `tree-sitter-go 0.23` | `go` |
+| `GLSL` | `tree-sitter-glsl 0.2.0` | `glsl`, `vert`, `frag` |
+| `OBJC` | `tree-sitter-objc 3.0.2` | `m`, `mm` |
+| `YAML` | `tree-sitter-yaml 0.7.2` | `yaml`, `yml` |
+| `BASH` | `tree-sitter-bash 0.23` | `sh`, `bash`, `cmd`, `zsh` |
+| `SCALA` | `tree-sitter-scala 0.24` | `scala` |
+| `RUBY` | `tree-sitter-ruby 0.23` | `rb` |
+| `PHP` | `tree-sitter-php 0.24` | `php` (uses `LANGUAGE_PHP` — parses `<?php` context) |
+| `SWIFT` | `tree-sitter-swift 0.7` | `swift` |
+| `LUA` | `tree-sitter-lua 0.5` | `lua` |
+| `HCL` | `tree-sitter-hcl 1.1.0` | `tf`, `hcl` |
+| `NIX` | `tree-sitter-nix 0.3.0` | `nix` |
+| `GDSCRIPT` | `tree-sitter-gdscript 6.1.0` | `gd` |
+| `KOTLIN` | `tree-sitter-kotlin-ng 1.1.0` | `kt`, `kts` |
+
+**Rejected**: `tree-sitter-dockerfile 0.2` — exports `pub fn language()` (old API, incompatible with ts 0.26). Not available on crates.io with a 0.26-compatible version.
+
+---
+
+## XI. SLOP HUNTER — LANGUAGE-SPECIFIC AST PATTERNS
+
+`find_slop(lang, source)` in `crates/forge/src/slop_hunter.rs`. Walks CST and returns `Vec<SlopFinding>`.
+
+| Language | Pattern | Rationale |
+|----------|---------|-----------|
+| Python | Import inside function body where the imported name is never used in that scope | Ghost import — adds dep weight, zero call path |
+| Rust | `unsafe` block containing no pointer dereference, FFI call, or inline assembly | Safety theatre — `unsafe` with no unsafe operation |
+| Go | Goroutine closure capturing a loop variable by reference | Classic data race — variable escapes loop iteration |
+
+All three patterns fire at AST level — no regex, no string heuristics. Findings land in `SlopScore.antipattern_details`.
+
+---
+
+## XII. VAULT — 90-DAY IMMATURITY HARD-GATE
+
+`crates/vault/src/lib.rs` — `SigningOracle`.
+
+`enforce_maturity(file, mtime_secs, override_tax)` returns `Err(VaultError::ImmatureCode)` when a dead symbol's source file was modified fewer than **90 days** ago. Bypass requires the explicit `--override-tax` flag — not silently skippable.
+
+Token format: base64-encoded Ed25519 signature of `"JANITOR_PURGE_AUTHORIZED"`. Binary embeds only `VERIFYING_KEY_BYTES` (32-byte public key). `TEST_SIGNING_KEY_SEED` exists `#[cfg(test)]` only — zero private key material in release builds.
+
+---
+
+## XIII. SCAN PRAGMA SUPPRESSION
+
+`has_suppression_pragma(data, byte_offset, label)` in `crates/cli/src/main.rs`.
+
+Reverse-scans from `byte_offset` to find the current line start, then extracts the immediately preceding source line. Returns `true` if that line contains `// janitor:ignore {label}` or `# janitor:ignore {label}`.
+
+Applied in Phase 6.5 to both `unicode_gate::scan` and `lotl_hunter::scan` findings. Legitimate detector source code and CI scripts self-annotate with this pragma to suppress false positives on their own pattern constants.
+
+---
+
+## XIV. ARCHITECTURE INVERSION — SECURITY PROPERTIES
+
+After full retirement of the legacy clone path (Sprint 5+ from v7.9.4), the following holds for ALL deployment models:
+
+- Source code is memory-mapped on the customer's hardware and never transmitted.
+- The Governor receives only scored metadata (`BounceLogEntry` JSON, ~2 KB per PR) — no source code, no diff, no file content.
+- `commit_sha` (col 15) + `policy_hash` (col 16) provide cryptographic reference to the exact code state without transmitting code.
+- SOC 2 Type II trail: `policy_hash` (BLAKE3 of `janitor.toml`) + ML-DSA-65 CBOM bond + `commit_sha` establish provenance without requiring source custody.
+- The Governor is a pure attestation relay — no data retention requirement, no DPA surface.
+
+Until legacy mode is retired, the deployment model table in `docs/index.md` qualifies the zero-upload claim per mode.
 
 ---
 
