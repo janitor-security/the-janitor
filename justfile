@@ -78,7 +78,7 @@ release version: audit
 	cargo build --release --workspace
 	strip target/release/janitor
 	git add .
-	git commit -m "chore: release v{{version}}"
+	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
 	git tag v{{version}}
 	# Floating major-version tag — lets users pin to a major and always receive
 	# the latest stable patch without editing their workflows.
