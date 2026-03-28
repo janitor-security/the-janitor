@@ -56,6 +56,23 @@ existing scanner workflow produces a finding that is not also caught by the
 Crucible, the correct response is to add a Crucible gate — not to defer to
 the external tool.
 
+## Credential Detection Sovereignty Law
+
+Credential detection must occur on-device. We do not delegate secret management
+to third-party cloud scanners (GitHub Secret Scanning, Gitleaks cloud mode, or
+any service that uploads source for analysis).
+
+Rationale: uploading source to a remote secret scanner for analysis defeats the
+zero-upload guarantee — the code being scanned is precisely what must not leave
+the device.  Local detection via `binary_hunter.rs` AhoCorasick patterns and
+`detect_secret_entropy()` Shannon entropy analysis provides equivalent coverage
+without exfiltrating the code under inspection.
+
+**Enforcement**: new credential pattern classes MUST be added to
+`binary_hunter.rs` (payload/diff patterns) and `slop_hunter.rs`
+(`find_credential_slop` and `detect_secret_entropy`).  Never add a cloud
+secret-scanning API call as a substitute for a local gate.
+
 ## Extension
 
 When adding a new `DepMigrationRule`:

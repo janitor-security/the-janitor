@@ -560,6 +560,17 @@ impl PRBouncer for PatchBouncer {
             total.antipatterns_found += mig_count;
             total.antipattern_score += mig_count * 50;
             total.antipattern_details.extend(mig);
+            // ── Secret Entropy Gate ───────────────────────────────────────────
+            // Runs at the multi-file aggregate level so it sees the full unified
+            // diff context including added lines across all file types.
+            // Each finding is +150 pts — live credential exposure is
+            // severity-escalated above standard Critical (50 pts) because an
+            // adversary can act on it immediately after the PR is merged.
+            let sec = crate::slop_hunter::detect_secret_entropy(patch);
+            let sec_count = sec.len() as u32;
+            total.antipatterns_found += sec_count;
+            total.antipattern_score += sec_count * 150;
+            total.antipattern_details.extend(sec);
             return Ok(total);
         }
 

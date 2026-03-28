@@ -288,6 +288,40 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         desc_fragment: None,
     },
 
+    // ── Credential Leak — Secret Interception ─────────────────────────────
+    // Uses find_slop("rs", source) because the credential scan runs on ALL
+    // languages via find_credential_slop() called from find_slop().
+    Entry {
+        name: "Rust/AWS IAM key prefix — INTERCEPT",
+        lang: "rs",
+        source: b"const AWS_KEY: &str = \"AKIAIOSFODNN7EXAMPLE\";",
+        must_intercept: true,
+        desc_fragment: Some("credential_leak"),
+    },
+    Entry {
+        name: "Rust/RSA private key PEM header — INTERCEPT",
+        lang: "rs",
+        source: b"let pem = \"-----BEGIN RSA PRIVATE KEY-----\";",
+        must_intercept: true,
+        desc_fragment: Some("RSA private key"),
+    },
+    Entry {
+        name: "Rust/Stripe live key prefix — INTERCEPT",
+        lang: "rs",
+        // Minimal fixture: only the prefix is needed to trigger the detector.
+        // No realistic suffix to avoid triggering repository push-protection.
+        source: b"const KEY: &str = \"sk_live_\";",
+        must_intercept: true,
+        desc_fragment: Some("credential_leak"),
+    },
+    Entry {
+        name: "Rust/clean string constant — SAFE",
+        lang: "rs",
+        source: b"const APP_NAME: &str = \"prod-service-v2\";",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
     // ── JavaScript / TypeScript ───────────────────────────────────────────
     Entry {
         name: "JS/innerHTML assignment — INTERCEPT",

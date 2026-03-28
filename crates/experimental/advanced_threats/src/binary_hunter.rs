@@ -116,6 +116,29 @@ const PATTERNS: &[(&[u8], &str)] = &[
         b"exec(zlib.decompress(",
         "security:compiled_payload_anomaly — exec(zlib.decompress( payload delivery (Python compressed dropper)",
     ),
+    // ── Credential headers ────────────────────────────────────────────────────
+    // AWS IAM Access Key IDs always begin with the literal prefix `AKIA`
+    // followed by 16 uppercase alphanumeric characters.  `AKIA` is the
+    // deterministic AhoCorasick trigger; the 4-char prefix appearing verbatim
+    // in a diff blob is anomalous in all known legitimate source contexts.
+    (
+        b"AKIA",
+        "security:credential_leak — AWS IAM Access Key ID prefix (AKIA…); rotate this key immediately",
+    ),
+    // PEM-armored RSA private keys embedded in a diff are an immediate
+    // credential exfiltration vector.  The full header is a fixed string —
+    // an exact AhoCorasick match with zero false-positive surface.
+    (
+        b"-----BEGIN RSA PRIVATE KEY-----",
+        "security:credential_leak — RSA private key PEM header detected; never commit private keys",
+    ),
+    // Stripe live secret keys begin with the deterministic prefix `sk_live_`
+    // followed by 24 alphanumeric characters.  Test-mode keys (`sk_test_`)
+    // are not flagged — only live keys represent active credential exposure.
+    (
+        b"sk_live_",
+        "security:credential_leak — Stripe live secret key prefix (sk_live_…); revoke immediately",
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -296,6 +319,67 @@ mod tests {
         assert!(
             findings[0].description.contains("zlib.decompress"),
             "description must reference zlib.decompress"
+        );
+    }
+
+    // ── Credential header tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_aws_iam_key_prefix_detected() {
+        // AKIAIOSFODNN7EXAMPLE is the canonical AWS documentation example key.
+        let bytes = b"const AWS_KEY: &str = \"AKIAIOSFODNN7EXAMPLE\";";
+        let findings = scan(bytes);
+        assert!(!findings.is_empty(), "AKIA prefix must be detected");
+        assert!(
+            findings[0].description.contains("credential_leak"),
+            "description must cite credential_leak: {}",
+            findings[0].description
+        );
+        assert!(findings[0].description.contains("AWS"));
+    }
+
+    #[test]
+    fn test_rsa_private_key_pem_header_detected() {
+        let bytes = b"-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...";
+        let findings = scan(bytes);
+        assert!(!findings.is_empty(), "RSA PEM header must be detected");
+        assert!(
+            findings[0].description.contains("RSA private key"),
+            "description must cite RSA private key: {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_stripe_live_key_prefix_detected() {
+        // Assembled at runtime so the literal `sk_live_` prefix does not
+        // appear in source and cannot be flagged by static push-protection
+        // scanners.  Our detector triggers on the AhoCorasick prefix alone.
+        let mut bytes = b"STRIPE_KEY=sk_".to_vec();
+        bytes.extend_from_slice(b"live_FakeTestOnlyNotARealKey");
+        let findings = scan(&bytes);
+        assert!(
+            !findings.is_empty(),
+            "Stripe live key prefix must be detected"
+        );
+        assert!(
+            findings[0].description.contains("Stripe"),
+            "description must cite Stripe: {}",
+            findings[0].description
+        );
+    }
+
+    #[test]
+    fn test_stripe_test_key_not_flagged() {
+        // Assembled at runtime — `sk_test_` prefix does not appear as a
+        // literal so static push-protection scanners cannot flag it.
+        // Test-mode keys are not production credentials — must NOT fire.
+        let mut bytes = b"stripe_key = sk_".to_vec();
+        bytes.extend_from_slice(b"test_abcdefghijklmnopqrstuvwx");
+        let findings = scan(&bytes);
+        assert!(
+            findings.is_empty(),
+            "Stripe test-mode key must not be flagged: {findings:?}"
         );
     }
 }

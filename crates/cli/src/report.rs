@@ -2633,7 +2633,25 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
     out.push_str(crit_icon);
     out.push_str(" |\n");
 
-    // Tier 2: Necrotic GC
+    // Tier 2: Secrets / Credential Leak
+    let secret_count = entry
+        .antipatterns
+        .iter()
+        .filter(|a| a.contains("credential_leak"))
+        .count();
+    let secret_icon = if secret_count > 0 { "🔴" } else { "🟢" };
+    let secret_signal = if secret_count > 0 {
+        format!("{secret_count} credential finding(s) — rotate immediately")
+    } else {
+        "None".to_owned()
+    };
+    out.push_str("| Secrets | ");
+    out.push_str(&secret_signal);
+    out.push_str(" | ");
+    out.push_str(secret_icon);
+    out.push_str(" |\n");
+
+    // Tier 3: Necrotic GC
     let nec_icon = if is_necrotic { "🔴" } else { "🟢" };
     let nec_signal = entry.necrotic_flag.as_deref().unwrap_or("None");
     out.push_str("| Necrotic GC | `");

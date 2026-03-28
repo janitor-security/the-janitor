@@ -43,6 +43,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use aho_corasick::{AhoCorasick, MatchKind};
 use tree_sitter::{Language, Node};
 
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
@@ -168,7 +169,7 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     };
 
-    match language {
+    let mut findings = match language {
         "yaml" | "yml" => find_yaml_slop(eng, source),
         "c" | "h" => find_c_slop(eng, source),
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
@@ -176,7 +177,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "py" => find_python_slop(source),
         "js" | "jsx" | "ts" | "tsx" => find_js_slop(eng, source),
         _ => Vec::new(),
-    }
+    };
+    // Language-agnostic: credential header scan runs on every source file
+    // regardless of detected language.  Secrets can appear in any file type.
+    findings.extend(find_credential_slop(source));
+    findings
 }
 
 // ---------------------------------------------------------------------------
@@ -974,6 +979,152 @@ pub fn detect_recursive_boilerplate(language: &str, source: &[u8]) -> Option<Slo
     })
 }
 
+// ---------------------------------------------------------------------------
+// Credential Leak Detection — Language-Agnostic
+// ---------------------------------------------------------------------------
+
+/// Credential header patterns indexed by AhoCorasick pattern ID.
+///
+/// Uses deterministic string prefixes where possible to stay within the
+/// AhoCorasick performance envelope.  Each pattern maps to a human-readable
+/// description containing the `security:credential_leak` antipattern label.
+const CREDENTIAL_PATTERNS: &[(&[u8], &str)] = &[
+    // AWS IAM Access Key IDs always begin with `AKIA` followed by 16 uppercase
+    // alphanumeric characters.  `AKIA` is the deterministic AhoCorasick trigger.
+    (
+        b"AKIA",
+        "security:credential_leak — AWS IAM Access Key ID prefix (AKIA…); rotate this key immediately",
+    ),
+    // Full PEM header — fixed string, zero false-positive surface.
+    (
+        b"-----BEGIN RSA PRIVATE KEY-----",
+        "security:credential_leak — RSA private key PEM header detected; never commit private keys",
+    ),
+    // Stripe live secret key prefix.  Test-mode keys (`sk_test_`) are not flagged.
+    (
+        b"sk_live_",
+        "security:credential_leak — Stripe live secret key prefix (sk_live_…); revoke immediately",
+    ),
+];
+
+static CREDENTIAL_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn credential_automaton() -> &'static AhoCorasick {
+    CREDENTIAL_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(CREDENTIAL_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: credential AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan `source` bytes for known credential header patterns.
+///
+/// Language-agnostic — called from [`find_slop`] on every source file
+/// regardless of detected language.  Secrets can appear in any file type.
+/// Returns one [`SlopFinding`] per match; never panics or errors.
+pub fn find_credential_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let ac = credential_automaton();
+    ac.find_iter(source)
+        .map(|mat| SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: CREDENTIAL_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
+            domain: DOMAIN_ALL,
+            severity: Severity::Critical,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// High-Entropy Token Gate (patch-level)
+// ---------------------------------------------------------------------------
+
+/// Compute Shannon entropy of `bytes` in bits per symbol.
+///
+/// Returns `0.0` for empty input.  Maximum theoretical value is `log2(|alphabet|)`.
+pub fn shannon_entropy(bytes: &[u8]) -> f64 {
+    if bytes.is_empty() {
+        return 0.0;
+    }
+    let mut freq = [0u32; 256];
+    for &b in bytes {
+        freq[b as usize] += 1;
+    }
+    let len = bytes.len() as f64;
+    freq.iter()
+        .filter(|&&c| c > 0)
+        .map(|&c| {
+            let p = c as f64 / len;
+            -p * p.log2()
+        })
+        .sum()
+}
+
+/// Scan a unified-diff `patch` for high-entropy alphanumeric tokens.
+///
+/// Operates only on added lines (prefix `+`, excluding `+++` headers).
+/// Emits one `security:credential_leak` finding per continuous alphanumeric
+/// run that satisfies **both**:
+/// - length > 32 characters, and
+/// - Shannon entropy > 4.5 bits/symbol.
+///
+/// The 4.5-bit threshold separates random credential tokens (typical entropy
+/// ≥5.0 bits) from dictionary words, base64-padded known strings, and UUIDs.
+///
+/// Each finding contributes +150 pts when wired into
+/// [`crate::slop_filter::PatchBouncer::bounce`] — escalated above the
+/// standard Critical tier (50 pts) because exposed live credentials are
+/// immediately actionable by an adversary.
+pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
+    let mut findings = Vec::new();
+    for line in patch.lines() {
+        if !line.starts_with('+') || line.starts_with("+++") {
+            continue;
+        }
+        let src = &line[1..];
+        let bytes = src.as_bytes();
+        let mut run_start: Option<usize> = None;
+
+        for (i, &b) in bytes.iter().enumerate() {
+            if b.is_ascii_alphanumeric() {
+                if run_start.is_none() {
+                    run_start = Some(i);
+                }
+            } else if let Some(s) = run_start.take() {
+                let token = &bytes[s..i];
+                if token.len() > 32 {
+                    let entropy = shannon_entropy(token);
+                    if entropy > 4.5 {
+                        findings.push(format!(
+                            "security:credential_leak — high-entropy token \
+                             ({:.2} bits/symbol, {} chars); possible API key or secret",
+                            entropy,
+                            token.len()
+                        ));
+                    }
+                }
+            }
+        }
+        // Check trailing run at end of line.
+        if let Some(s) = run_start {
+            let token = &bytes[s..];
+            if token.len() > 32 {
+                let entropy = shannon_entropy(token);
+                if entropy > 4.5 {
+                    findings.push(format!(
+                        "security:credential_leak — high-entropy token \
+                         ({:.2} bits/symbol, {} chars); possible API key or secret",
+                        entropy,
+                        token.len()
+                    ));
+                }
+            }
+        }
+    }
+    findings
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1680,6 +1831,148 @@ mod logic_regression_tests {
         assert!(
             check_logic_regression(&patch).is_none(),
             "should not fire when code volume changes significantly"
+        );
+    }
+}
+
+#[cfg(test)]
+mod credential_tests {
+    use super::*;
+
+    // ── find_credential_slop ─────────────────────────────────────────────
+
+    #[test]
+    fn test_aws_key_prefix_detected_by_credential_slop() {
+        let src = b"const KEY: &str = \"AKIAIOSFODNN7EXAMPLE\";";
+        let findings = find_credential_slop(src);
+        assert!(
+            !findings.is_empty(),
+            "AKIA prefix must be detected: {findings:?}"
+        );
+        assert!(
+            findings[0].description.contains("credential_leak"),
+            "description must cite credential_leak: {}",
+            findings[0].description
+        );
+        assert!(findings[0].description.contains("AWS"));
+    }
+
+    #[test]
+    fn test_rsa_private_key_header_detected() {
+        let src = b"-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA";
+        let findings = find_credential_slop(src);
+        assert!(
+            !findings.is_empty(),
+            "RSA PEM header must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("RSA private key"));
+    }
+
+    #[test]
+    fn test_stripe_live_key_detected() {
+        // Assembled at runtime so the literal `sk_live_` prefix does not
+        // appear in source and cannot be flagged by static push-protection
+        // scanners.  Our AhoCorasick trigger fires on the prefix alone.
+        let mut src = b"key = sk_".to_vec();
+        src.extend_from_slice(b"live_FakeTestOnlyNotARealKey");
+        let findings = find_credential_slop(&src);
+        assert!(
+            !findings.is_empty(),
+            "Stripe live key prefix must be detected: {findings:?}"
+        );
+        assert!(findings[0].description.contains("Stripe"));
+    }
+
+    #[test]
+    fn test_clean_source_not_flagged() {
+        let src = b"fn greet(name: &str) { println!(\"Hello, {name}!\"); }";
+        let findings = find_credential_slop(src);
+        assert!(
+            findings.is_empty(),
+            "clean source must not trigger credential scanner: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_propagates_credential_findings_for_all_langs() {
+        // Rust is not in the language match arms — verifies the credential
+        // scan runs even for unsupported language extensions.
+        let src = b"const KEY: &str = \"AKIAIOSFODNN7EXAMPLE\";";
+        let findings = find_slop("rs", src);
+        assert!(
+            !findings.is_empty(),
+            "find_slop must forward credential findings for unknown lang: {findings:?}"
+        );
+    }
+
+    // ── shannon_entropy ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_shannon_entropy_uniform_bytes_is_zero() {
+        // All identical bytes → entropy = 0.
+        assert_eq!(shannon_entropy(b"aaaa"), 0.0);
+    }
+
+    #[test]
+    fn test_shannon_entropy_two_equal_probability_bytes() {
+        // Two equally probable symbols → entropy = 1.0 bit/symbol.
+        let h = shannon_entropy(b"aabb");
+        assert!(
+            (h - 1.0).abs() < 1e-9,
+            "two equal-prob bytes: entropy must be 1.0, got {h}"
+        );
+    }
+
+    #[test]
+    fn test_shannon_entropy_empty_is_zero() {
+        assert_eq!(shannon_entropy(b""), 0.0);
+    }
+
+    // ── detect_secret_entropy ────────────────────────────────────────────
+
+    #[test]
+    fn test_high_entropy_token_in_added_line_detected() {
+        // 33-char mixed-case alphanumeric token (all unique chars) — entropy
+        // = log2(33) ≈ 5.04 bits/symbol, well above the 4.5-bit threshold.
+        let patch = "+const SECRET: &str = \"xK9mP2nQ8wR5vL3jB7hF4dC6uT1iY0eAz\";\n";
+        let findings = detect_secret_entropy(patch);
+        assert!(
+            !findings.is_empty(),
+            "high-entropy 33-char token must be detected: {findings:?}"
+        );
+        assert!(findings[0].contains("credential_leak"));
+    }
+
+    #[test]
+    fn test_removed_line_not_flagged_by_entropy_gate() {
+        // Lines starting with `-` are removals — must NOT be scanned.
+        let patch = "-const SECRET: &str = \"xK9mP2nQ8wR5vL3jB7hF4dC6uT1iY0eAz\";\n";
+        let findings = detect_secret_entropy(patch);
+        assert!(
+            findings.is_empty(),
+            "removed lines must not be flagged by entropy detector: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_low_entropy_long_token_not_flagged() {
+        // 40 repeated characters — entropy = 0, well below 4.5.
+        let patch = "+const KEY: &str = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\n";
+        let findings = detect_secret_entropy(patch);
+        assert!(
+            findings.is_empty(),
+            "low-entropy repeated characters must not trigger entropy gate: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_short_token_under_threshold_not_flagged() {
+        // 16-char token — below the > 32-char length gate.
+        let patch = "+const KEY: &str = \"xK9mP2nQ8wR5vL3j\";\n";
+        let findings = detect_secret_entropy(patch);
+        assert!(
+            findings.is_empty(),
+            "token ≤32 chars must not trigger entropy gate: {findings:?}"
         );
     }
 }
