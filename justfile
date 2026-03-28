@@ -160,6 +160,31 @@ hyper-gauntlet *ARGS:
 strike repo pr_limit='1000':
 	PR_LIMIT={{pr_limit}} ./tools/generate_client_package.sh {{repo}}
 
+# 6b. PUBLISH FORENSIC STRIKE — execute strike + publish evidence + update intelligence index
+#
+# Wraps publish_forensic_strike.sh.  Runs generate_client_package.sh internally,
+# so there is no need to call `just strike` separately first.
+#
+# Usage:
+#   just publish-strike vercel/next.js
+#   just publish-strike godotengine/godot
+#   SKIP_STRIKE=1 just publish-strike godotengine/godot   # reuse existing artefacts
+#
+publish-strike repo:
+	./tools/publish_forensic_strike.sh {{repo}}
+
+# 6c. STRIKE PIPELINE TESTS — regression harness for generate_client_package.sh
+#     and publish_forensic_strike.sh
+#
+# Verifies: binary --version contract, script hygiene, argument contract,
+# artefact manifest integrity.  Requires a built release binary.
+#
+# Usage:
+#   just test-strike-pipeline
+#
+test-strike-pipeline:
+	./tools/tests/test_strike_pipeline.sh
+
 # 7. DOCUMENTATION
 deploy-docs:
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force

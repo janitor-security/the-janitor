@@ -38,7 +38,7 @@ REPO_NAME="${SLUG##*/}"          # "godot" from "godotengine/godot"
 PR_LIMIT="${PR_LIMIT:-1000}"
 JANITOR="${JANITOR:-./target/release/janitor}"
 # Pre-strike: use existing binary if present; refreshed post-strike below.
-JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}' || echo "dev")"
+JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"
 STRIKES_DIR="${STRIKES_DIR:-${PWD}/strikes}"
 AUDIT_ORG="${AUDIT_ORG:-janitor-security}"
 SKIP_STRIKE="${SKIP_STRIKE:-0}"
@@ -59,9 +59,9 @@ for cmd in gh git jq bc; do
     fi
 done
 
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  publish_forensic_strike — The Janitor v${JANITOR_VERSION}               ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
+printf '╔══════════════════════════════════════════════════════════════╗\n'
+printf '║  %-58s  ║\n' "publish_forensic_strike — The Janitor v${JANITOR_VERSION}"
+printf '╚══════════════════════════════════════════════════════════════╝\n'
 echo ""
 echo "  Target     : ${SLUG}"
 echo "  PR limit   : ${PR_LIMIT}"
@@ -84,7 +84,7 @@ else
 fi
 
 # Resolve version from the freshly-built binary.
-JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}')"
+JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"
 
 # Verify all 7 expected artefacts are present.
 EXPECTED_ARTIFACTS=(

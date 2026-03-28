@@ -12,6 +12,7 @@ mod report;
 
 #[derive(Parser)]
 #[command(name = "janitor")]
+#[command(version)]
 #[command(about = "Code Integrity Protocol — Automated Dead Symbol Detection & Cleanup")]
 struct Cli {
     /// Number of parallel rayon worker threads (0 = auto-detect from system RAM).

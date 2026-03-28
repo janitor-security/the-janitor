@@ -286,7 +286,7 @@ BOUNCE_TIMEOUT="${BOUNCE_TIMEOUT:-30}"
 GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet}"
 JANITOR="${JANITOR:-./target/release/janitor}"
 # Pre-build: use existing binary if present; refreshed post-build below.
-JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}' || echo "dev")"
+JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"
 OUT_DIR="${2:-${PWD}/strikes/${REPO_NAME}}"
 REPO_DIR="${GAUNTLET_DIR}/${REPO_NAME}"
 
@@ -303,9 +303,9 @@ if ! command -v bc &>/dev/null; then
     exit 1
 fi
 
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  generate_client_package — The Janitor v${JANITOR_VERSION}               ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
+printf '╔══════════════════════════════════════════════════════════════╗\n'
+printf '║  %-58s  ║\n' "generate_client_package — The Janitor v${JANITOR_VERSION}"
+printf '╚══════════════════════════════════════════════════════════════╝\n'
 echo ""
 echo "  Target  : ${SLUG}"
 echo "  PR limit: ${PR_LIMIT}"
@@ -319,7 +319,7 @@ mkdir -p "${OUT_DIR}"
 
 echo "[1/6] Building release binaries..."
 cargo build --release -p cli -p gauntlet-runner
-JANITOR_VERSION="$("${JANITOR}" --version 2>&1 | awk '{print $2}')"
+JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"
 
 # ── Step 2: Bounce PRs via hyper-drive ────────────────────────────────────────
 #
