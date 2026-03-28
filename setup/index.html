@@ -531,6 +531,57 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#for-ai-agents-claude-code-cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      For AI Agents (Claude Code, Cursor)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="For AI Agents (Claude Code, Cursor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#register-via-claude-mcp-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      Register via claude mcp add
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-resurrection-via-mcp-wrappersh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Auto-Resurrection via mcp-wrapper.sh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#available-mcp-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      Available MCP Tools
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cursor
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -791,6 +842,57 @@
   <a href="#pqc_enforced" class="md-nav__link">
     <span class="md-ellipsis">
       pqc_enforced
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-ai-agents-claude-code-cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      For AI Agents (Claude Code, Cursor)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="For AI Agents (Claude Code, Cursor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#register-via-claude-mcp-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      Register via claude mcp add
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-resurrection-via-mcp-wrappersh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Auto-Resurrection via mcp-wrapper.sh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#available-mcp-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      Available MCP Tools
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cursor
     </span>
   </a>
   
@@ -1126,6 +1228,66 @@ be issued (e.g. the Governor is unreachable), the PR is blocked:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>BLOCKED by repository-defined governance policy (janitor.toml).
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Reason: pqc_enforced = true. The ML-DSA-65 Integrity Bond could not be issued.
 </code></pre></div>
+<hr />
+<h2 id="for-ai-agents-claude-code-cursor">For AI Agents (Claude Code, Cursor)</h2>
+<p>Mount The Janitor as an MCP server so your AI agent gains real-time structural governance — version silo detection, antipattern scanning, and dead-symbol awareness — without any cloud upload.</p>
+<h3 id="register-via-claude-mcp-add">Register via <code>claude mcp add</code></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>janitor<span class="w"> </span>/path/to/the-janitor/tools/mcp-wrapper.sh
+</code></pre></div>
+<p>Replace <code>/path/to/the-janitor</code> with the absolute path to your local clone. The wrapper is at <code>tools/mcp-wrapper.sh</code> in the repository root.</p>
+<p>For a project-scoped registration (checked into <code>.mcp.json</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>claude<span class="w"> </span>mcp<span class="w"> </span>add<span class="w"> </span>--scope<span class="w"> </span>project<span class="w"> </span>janitor<span class="w"> </span>/path/to/the-janitor/tools/mcp-wrapper.sh
+</code></pre></div>
+<h3 id="auto-resurrection-via-mcp-wrappersh">Auto-Resurrection via <code>mcp-wrapper.sh</code></h3>
+<p><code>tools/mcp-wrapper.sh</code> is a zero-configuration stdio bridge. On every session start:</p>
+<ol>
+<li>It checks whether the Janitor UDS daemon is listening on <code>/tmp/janitor.sock</code> via <code>ss -lx</code>.</li>
+<li>If the daemon is absent or stale, it spawns <code>janitor serve --socket /tmp/janitor.sock</code> silently in the background and waits 1 second for the socket to bind.</li>
+<li>It then <code>exec</code>s <code>janitor mcp</code> — bridging Claude Code's stdio to the JSON-RPC 2.0 transport.</li>
+</ol>
+<p>The result: the daemon is always live when the agent needs it, with no manual <code>janitor serve</code> step required.</p>
+<h3 id="available-mcp-tools">Available MCP Tools</h3>
+<p>Once registered, your agent has access to:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>janitor_scan</code></td>
+<td>Full dead-symbol scan of a path</td>
+</tr>
+<tr>
+<td><code>janitor_bounce</code></td>
+<td>Score uncommitted changes or a patch for slop and antipatterns</td>
+</tr>
+<tr>
+<td><code>janitor_dedup</code></td>
+<td>Detect structural clones</td>
+</tr>
+<tr>
+<td><code>janitor_dep_check</code></td>
+<td>Zombie dependency audit</td>
+</tr>
+<tr>
+<td><code>janitor_silo_audit</code></td>
+<td>Version silo detection across <code>Cargo.lock</code> / <code>package-lock.json</code></td>
+</tr>
+<tr>
+<td><code>janitor_clean</code></td>
+<td>Token-gated dead-symbol removal</td>
+</tr>
+<tr>
+<td><code>janitor_provenance</code></td>
+<td>Gatekeeper provenance ledger query</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cursor">Cursor</h3>
+<p>In Cursor, add the MCP server under <strong>Settings → MCP</strong> with command <code>tools/mcp-wrapper.sh</code> (absolute path). No additional arguments required.</p>
 
 
 
