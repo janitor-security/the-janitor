@@ -494,7 +494,7 @@ to fail-closed gate on all lockfile and manifest changes. `agentic_pct` column 1
 (v7.9.5). `ureq` upgraded from v2 to v3 (graph-compressed to <5 version silos; getrandom
 0.2/0.4 is the one documented unfixable exception).
 
-### v7.9.4 — Architecture Inversion Implementation
+### v8.0.7 — Architecture Inversion Implementation
 
 Architecture Inversion (Steps 1–4 complete):
 
@@ -586,7 +586,7 @@ Applied in Phase 6.5 to both `unicode_gate::scan` and `lotl_hunter::scan` findin
 
 ## XIV. ARCHITECTURE INVERSION — SECURITY PROPERTIES
 
-After full retirement of the legacy clone path (Sprint 5+ from v7.9.4), the following holds for ALL deployment models:
+After full retirement of the legacy clone path (Sprint 5+ from v8.0.7), the following holds for ALL deployment models:
 
 - Source code is memory-mapped on the customer's hardware and never transmitted.
 - The Governor receives only scored metadata (`BounceLogEntry` JSON, ~2 KB per PR) — no source code, no diff, no file content.

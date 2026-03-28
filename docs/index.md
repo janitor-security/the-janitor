@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v7.9.4 — Deterministic Structural Firewall. Attosecond-grade integrity for the AI-assisted development economy.**
+**v8.0.7 — Deterministic Structural Firewall. Attosecond-grade integrity for the AI-assisted development economy.**
 
 ---
 
