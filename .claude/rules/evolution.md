@@ -40,6 +40,22 @@ a `DepMigrationRule` was implemented in `crates/forge/src/migration_guard.rs`:
 - Fires at `Critical` severity (50 pts) — compile-breaking regressions are
   equivalent to `gets()` or an open CIDR rule in impact
 
+## Scanner Sovereignty Law
+
+We reject third-party cloud-based quality scanners (CodeQL, SonarCloud, and
+equivalents). The Janitor Crucible is the sole authority for this repository's
+structural integrity.
+
+Rationale: third-party scanners upload source to remote infrastructure, apply
+opaque rule sets we cannot audit, and introduce a false equivalence between
+their findings and the structural invariants enforced by the Crucible. Any
+external scanner badge is decorative noise. The Crucible is proof.
+
+**Enforcement**: do not add new third-party scanner workflow files. If an
+existing scanner workflow produces a finding that is not also caught by the
+Crucible, the correct response is to add a Crucible gate — not to defer to
+the external tool.
+
 ## Extension
 
 When adding a new `DepMigrationRule`:

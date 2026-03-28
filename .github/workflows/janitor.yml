@@ -1,0 +1,92 @@
+name: Janitor Self-Attestation
+
+# Runs on every push to main. Scans HEAD, then commits the generated
+# integrity badge back to the repository so the README always reflects
+# the ground-truth of the last merged commit.
+
+on:
+  push:
+    branches:
+      - main
+
+# Workflow-level: deny all by default.
+permissions: read-all
+
+jobs:
+  self-attest:
+    name: Integrity Scan & Badge Commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required: commit badge back to main
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Fetch full history so janitor can walk the commit graph.
+          fetch-depth: 0
+          # Use default GITHUB_TOKEN — has contents:write via job permission above.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Restore cached janitor binary.  Key mirrors action.yml so PR-gate
+      # and self-attestation hits share the same cache entry.
+      - name: Cache Janitor Binary
+        id: cache-build
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: /tmp/the-janitor/target/release/janitor
+          key: ${{ runner.os }}-rust-stable-janitor-v3-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
+
+      - name: Bootstrap Janitor Engine
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
+          cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
+
+      - name: Export Janitor Binary Path
+        shell: bash
+        run: echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> "$GITHUB_ENV"
+
+      # Execute Stateless Firewall — full repo scan on HEAD.
+      # Writes .janitor/janitor_badge.svg as part of the scan report.
+      - name: Execute Stateless Firewall
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$JANITOR_BIN" scan .
+
+      # Commit Integrity Badge back to main so the README badge always
+      # reflects the last merged HEAD.  [skip ci] prevents a loop.
+      - name: Commit Integrity Badge
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f .janitor/janitor_badge.svg ]; then
+            echo "No badge generated — skipping commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .janitor/janitor_badge.svg
+          if git diff --cached --quiet; then
+            echo "Badge unchanged — no commit needed."
+          else
+            git commit -m "chore: update integrity badge [skip ci]"
+            git push
+          fi
+
+      # Tabula Rasa: wipe /tmp artefacts so no state leaks to the next run.
+      - name: Cleanup Artifacts (Tabula Rasa)
+        if: always()
+        shell: bash
+        run: |
+          rm -rf /tmp/the-janitor || true
