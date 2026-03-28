@@ -587,6 +587,74 @@ pub fn append_bounce_log(janitor_dir: &Path, entry: &BounceLogEntry) {
 }
 
 // ---------------------------------------------------------------------------
+// SVG Integrity Badge
+// ---------------------------------------------------------------------------
+
+/// Write a color-coded status badge to `.janitor/janitor_badge.svg`.
+///
+/// Color coding:
+/// - **Green** (`#4c1`):  score 0 — structurally clean.
+/// - **Yellow** (`#db5`): score 1–99 — warnings present, gate not yet failed.
+/// - **Red** (`#e05d44`): score ≥ 100 — gate failure.
+///
+/// The badge uses a flat shields.io-compatible format and can be embedded in
+/// GitHub READMEs, status pages, or automated PR comments.
+///
+/// Best-effort: silently logs a warning on I/O failure, never panics.
+pub fn write_badge(janitor_dir: &Path, score: u32) {
+    if let Err(e) = std::fs::create_dir_all(janitor_dir) {
+        eprintln!("janitor: cannot create .janitor dir for badge: {e}");
+        return;
+    }
+    let svg = render_badge_svg(score);
+    let path = janitor_dir.join("janitor_badge.svg");
+    if let Err(e) = std::fs::write(&path, svg.as_bytes()) {
+        eprintln!("janitor: failed to write badge {}: {e}", path.display());
+    }
+}
+
+/// Render a minimal shields.io-style flat SVG badge for the given slop score.
+///
+/// Zero external dependencies — all geometry is computed from character counts
+/// using an 11px Verdana approximate width of 6.5 px/char.
+fn render_badge_svg(score: u32) -> String {
+    let (status, color) = if score == 0 {
+        ("CLEAN", "#4c1")
+    } else if score < 100 {
+        ("WARN", "#db5")
+    } else {
+        ("FAIL", "#e05d44")
+    };
+
+    let label = "janitor";
+    let value_text = format!("{score} \u{00b7} {status}"); // middle dot separator
+
+    // Approximate 6.5px per char + 10px horizontal padding per section.
+    let label_w = label.len() * 65 / 10 + 10;
+    let value_w = value_text.chars().count() * 65 / 10 + 10;
+    let total_w = label_w + value_w;
+    let label_cx = label_w / 2;
+    let value_cx = label_w + value_w / 2;
+
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20">
+  <linearGradient id="a" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <rect rx="3" width="{total_w}" height="20" fill="#555"/>
+  <rect rx="3" x="{label_w}" width="{value_w}" height="20" fill="{color}"/>
+  <rect x="{label_w}" width="4" height="20" fill="{color}"/>
+  <rect rx="3" width="{total_w}" height="20" fill="url(#a)"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="{label_cx}" y="15">{label}</text>
+    <text x="{value_cx}" y="15">{value_text}</text>
+  </g>
+</svg>"##
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Architecture Inversion — Governor result submission
 // ---------------------------------------------------------------------------
 

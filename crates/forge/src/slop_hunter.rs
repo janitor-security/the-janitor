@@ -746,6 +746,117 @@ pub fn check_entropy(patch_bytes: &[u8]) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
+// Logic Erasure Detector (Structural Regression)
+// ---------------------------------------------------------------------------
+
+/// Patch-level Logic Erasure Detector — structural regression signal.
+///
+/// Counts conditional branch keywords in removed lines (`-`) vs. added lines (`+`)
+/// of a unified diff.  A PR that reduces branch density by more than 20% while
+/// keeping total code volume similar (+/− 10%) is flagged as
+/// `architecture:logic_erasure` — the structural signature of an AI model
+/// silently "optimising" away edge-case safety checks.
+///
+/// ## Detection thresholds
+/// - `base_branches ≥ 3` — avoids firing on trivial single-branch changes.
+/// - `head_branches < base_branches × 0.8` — >20% branch count reduction.
+/// - `|head_lines − base_lines| ≤ base_lines / 10` — code volume stays similar;
+///   prevents false positives on large net-deletions where branch loss is trivially
+///   explained by the removal itself.
+///
+/// ## Language coverage
+/// Keyword counting is language-agnostic: covers `if`/`match`/`switch`/`guard`/
+/// `case`/`elif`/`elsif`/`else if` in every language supported by the pipeline.
+///
+/// Returns `None` for add-only patches, delete-only patches, or patches that do
+/// not meet the combined thresholds.
+pub fn check_logic_regression(patch: &str) -> Option<SlopFinding> {
+    // Branch keyword prefixes (ASCII).  Each needle must be followed by a
+    // non-ident char in practice, but a literal substring count is sufficient
+    // for this density-based heuristic — rare false hits do not cross the 20%
+    // threshold on real code.
+    const BRANCH_NEEDLES: &[&[u8]] = &[
+        b"if ", b"if(", b"match ", b"match{", b"match(", b"switch ", b"switch(", b"switch{",
+        b"case ", b"guard ", b"elif ", b"elsif ", b"else if",
+    ];
+
+    let count_branches_in_line = |line: &str| -> u32 {
+        let b = line.as_bytes();
+        BRANCH_NEEDLES
+            .iter()
+            .map(|needle| {
+                let n = needle.len();
+                let mut count = 0u32;
+                let mut i = 0;
+                while i + n <= b.len() {
+                    if b[i..i + n] == **needle {
+                        count += 1;
+                        i += n;
+                    } else {
+                        i += 1;
+                    }
+                }
+                count
+            })
+            .sum()
+    };
+
+    let mut base_branches: u32 = 0;
+    let mut head_branches: u32 = 0;
+    let mut base_lines: u32 = 0;
+    let mut head_lines: u32 = 0;
+
+    for line in patch.lines() {
+        if line.starts_with('-') && !line.starts_with("---") {
+            let content = &line[1..];
+            if !content.trim().is_empty() {
+                base_lines += 1;
+                base_branches += count_branches_in_line(content);
+            }
+        } else if line.starts_with('+') && !line.starts_with("+++") {
+            let content = &line[1..];
+            if !content.trim().is_empty() {
+                head_lines += 1;
+                head_branches += count_branches_in_line(content);
+            }
+        }
+    }
+
+    // Minimum base branch count — avoid triggering on trivial single-branch changes.
+    if base_branches < 3 {
+        return None;
+    }
+    // Both sides must have substantive code.
+    if base_lines == 0 || head_lines == 0 {
+        return None;
+    }
+    // Total code volume must stay within 10%: detects neutral rewrites, not deletions.
+    let tolerance = (base_lines / 10).max(1);
+    if head_lines.abs_diff(base_lines) > tolerance {
+        return None;
+    }
+    // Branch reduction must exceed 20%.
+    // head < base * 0.8  ⟺  head * 10 < base * 8
+    if head_branches * 10 >= base_branches * 8 {
+        return None;
+    }
+
+    let pct = 100u32.saturating_sub(head_branches * 100 / base_branches.max(1));
+    Some(SlopFinding {
+        start_byte: 0,
+        end_byte: 0,
+        description: format!(
+            "architecture:logic_erasure — conditional branch count reduced by {pct}% \
+(base: {base_branches} → head: {head_branches}) while code volume remained similar \
+(base: {base_lines} lines, head: {head_lines} lines); \
+probable AI erasure of edge-case safety checks"
+        ),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::Critical,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

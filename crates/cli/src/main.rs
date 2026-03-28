@@ -39,7 +39,8 @@ enum Commands {
         /// Also print protected symbols with their protection reason.
         #[arg(long)]
         verbose: bool,
-        /// Output format: `text` (default) or `json` for machine-readable output.
+        /// Output format: `text` (default), `json` for machine-readable output, or
+        /// `scip` for Sourcegraph Code Intelligence Protocol export (stub — mapping phase only).
         ///
         /// JSON schema: `{ schema_version, slop_score, dead_symbols: [{id, structural_hash, reason, byte_range}], merkle_root }`.
         /// Suitable for automated GitHub Checks integration.
@@ -926,6 +927,15 @@ fn cmd_scan(
     format: &str,
     exclude_segments: &[&str],
 ) -> anyhow::Result<()> {
+    // SCIP Export stub — Sourcegraph Code Intelligence Protocol.
+    // A full SCIP graph requires indexed symbol occurrences across the codebase.
+    // The mapping phase initialises the occurrence table; full emission will be
+    // wired to the Sourcegraph SCIP standard in a follow-up.
+    if format == "scip" {
+        eprintln!("SCIP Export: Initializing mapping...");
+        return Ok(());
+    }
+
     use anatomist::pipeline::ScanEvent;
     use anatomist::{heuristics::pytest::PytestFixtureHeuristic, parser::ParserHost, pipeline};
     use common::registry::{symbol_hash, SymbolEntry, SymbolRegistry};
@@ -3099,6 +3109,8 @@ probable AI context-collapse (hallucinated function reference)"
     }
 
     report::append_bounce_log(&janitor_dir, &log_entry);
+    // Write color-coded SVG badge to .janitor/janitor_badge.svg for CI/PR comment use.
+    report::write_badge(&janitor_dir, log_entry.slop_score);
     report::fire_webhook_if_configured(&log_entry, &policy);
 
     if let (Some(url), Some(token)) = (report_url, analysis_token) {

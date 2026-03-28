@@ -1127,8 +1127,22 @@ impl PRBouncer for PatchBouncer {
             .into_iter()
             .collect();
 
-        // Merge NCD entropy gate, Compiled Payload Shield, and Recursive Boilerplate
-        // findings into the antipattern totals.
+        // Logic Erasure Detector — Structural Regression signal.
+        //
+        // Fires Critical (+50 pts) when the PR reduces conditional branch count by
+        // >20% while keeping code volume similar (+/- 10%).  This is the structural
+        // fingerprint of an AI model "optimising" away edge-case safety checks: the
+        // code stays roughly the same size but the branching logic that guards
+        // error paths, permission checks, or input validation is silently removed.
+        let logic_regression_finding = crate::slop_hunter::check_logic_regression(patch);
+        let regression_count = logic_regression_finding.is_some() as u32;
+        let regression_details: Vec<String> = logic_regression_finding
+            .map(|f| f.description)
+            .into_iter()
+            .collect();
+
+        // Merge NCD entropy gate, Compiled Payload Shield, Recursive Boilerplate,
+        // and Logic Erasure findings into the antipattern totals.
         //
         // Severity split (v7.9.0 Threat Demotion):
         //   NCD (antipattern:ncd_anomaly)  → Warning tier: 10 pts.
@@ -1141,15 +1155,23 @@ impl PRBouncer for PatchBouncer {
         //   Recursive Boilerplate           → Critical tier: 50 pts.
         //     Structural topology flood is a direct AI-generation artefact;
         //     Critical billing is correct and intentional.
+        //   Logic Erasure                   → Critical tier: 50 pts.
+        //     Branch reduction on volume-neutral rewrites is direct AI safety-check
+        //     erasure — Critical billing is correct and intentional.
         let ncd_count = ncd_findings.len() as u32;
         let payload_count = payload_findings.len() as u32;
-        let antipatterns_found = antipatterns_found + ncd_count + payload_count + boilerplate_count;
-        let antipattern_score =
-            antipattern_score + ncd_count * 10 + payload_count * 50 + boilerplate_count * 50;
+        let antipatterns_found =
+            antipatterns_found + ncd_count + payload_count + boilerplate_count + regression_count;
+        let antipattern_score = antipattern_score
+            + ncd_count * 10
+            + payload_count * 50
+            + boilerplate_count * 50
+            + regression_count * 50;
         let mut antipattern_details = antipattern_details;
         antipattern_details.extend(ncd_findings);
         antipattern_details.extend(payload_findings);
         antipattern_details.extend(boilerplate_details);
+        antipattern_details.extend(regression_details);
 
         Ok(SlopScore {
             dead_symbols_added,
