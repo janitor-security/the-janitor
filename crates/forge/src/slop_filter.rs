@@ -864,9 +864,24 @@ impl PRBouncer for PatchBouncer {
             .set_language(&cfg.language)
             .map_err(|e| anyhow::anyhow!("Failed to load grammar for .{ext}: {e}"))?;
 
-        let tree = match parser.parse(source, None) {
+        let tree = match crate::slop_hunter::parse_with_timeout(&mut parser, source) {
             Some(t) => t,
-            None => return Ok(SlopScore::default()),
+            None => {
+                // parse() returning None after set_timeout_micros means the 500 ms
+                // deadline expired — probable AST Bomb.  Return a scored SlopScore
+                // rather than a neutral default so the finding reaches the audit log.
+                let desc = format!(
+                    "security:parser_exhaustion_anomaly — tree-sitter parse of .{ext} file \
+                     exceeded 500 ms timeout; probable AST Bomb (deeply nested adversarial \
+                     input designed to exhaust the parser); file rejected"
+                );
+                return Ok(SlopScore {
+                    antipatterns_found: 1,
+                    antipattern_score: 100,
+                    antipattern_details: vec![desc],
+                    ..SlopScore::default()
+                });
+            }
         };
 
         // Parser Error Neutrality: if the AST contains ERROR or MISSING nodes the
@@ -934,9 +949,14 @@ impl PRBouncer for PatchBouncer {
             let passes_domain = (f.domain & file_domain) != 0;
             // Test domain exemption (Phase 3): on test-path files, Warning and Lint
             // findings are suppressed — test code is allowed to be structurally
-            // vacuous or cloned.  Only Critical findings fire unconditionally.
+            // vacuous or cloned.  Critical and Exhaustion findings fire unconditionally
+            // because parser DoS attacks are supply-chain threats regardless of domain.
             let passes_severity = file_domain != crate::metadata::DOMAIN_TEST
-                || f.severity == crate::slop_hunter::Severity::Critical;
+                || matches!(
+                    f.severity,
+                    crate::slop_hunter::Severity::Critical
+                        | crate::slop_hunter::Severity::Exhaustion
+                );
             if passes_domain && passes_severity {
                 antipattern_score += f.severity.points();
                 accepted.push(f);

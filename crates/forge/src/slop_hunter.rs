@@ -41,7 +41,9 @@
 //! ```
 
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::sync::OnceLock;
+use std::time::Instant;
 
 use aho_corasick::{AhoCorasick, MatchKind};
 use tree_sitter::{Language, Node};
@@ -57,17 +59,25 @@ use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
 /// All currently active rules fire at [`Severity::Critical`].  `Warning` and
 /// `Lint` are retained in the public API for backwards compatibility.
 ///
-/// | Tier       | Points |
-/// |------------|--------|
-/// | `Critical` |  50    |
-/// | `Warning`  |  10    |
-/// | `Lint`     |   0    |
+/// | Tier          | Points |
+/// |---------------|--------|
+/// | `Exhaustion`  | 100    |
+/// | `Critical`    |  50    |
+/// | `Warning`     |  10    |
+/// | `Lint`        |   0    |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
+    /// Parser exhaustion — contributes 100 points.
+    ///
+    /// Fired when the tree-sitter parse of a single file exceeds
+    /// [`PARSER_TIMEOUT_MICROS`] (500 ms).  Indicates a probable AST Bomb:
+    /// an adversarially crafted deeply-nested source file designed to exhaust
+    /// the parser and stack-overflow the GitHub Action runner.
+    Exhaustion,
     /// Security-critical finding — contributes 50 points.
     ///
     /// Examples: Kubernetes wildcard hosts, open-world CIDR rules, `gets()` calls,
-    /// Unicode injection, LotL execution, AST-Bomb DoS.
+    /// Unicode injection, LotL execution.
     Critical,
     /// Code-quality warning — contributes 10 points.
     Warning,
@@ -80,11 +90,66 @@ impl Severity {
     /// by one finding of this severity.
     pub fn points(self) -> u32 {
         match self {
+            Self::Exhaustion => 100,
             Self::Critical => 50,
             Self::Warning => 10,
             Self::Lint => 0,
         }
     }
+}
+
+/// Hard timeout applied to every tree-sitter `parse()` call (500 ms).
+///
+/// Prevents adversarially crafted deeply-nested AST Bombs from exhausting the
+/// parser and stack-overflowing the GitHub Action runner.  When `parse()` returns
+/// `None` after this deadline, [`parser_exhaustion_finding`] is emitted instead.
+pub const PARSER_TIMEOUT_MICROS: u64 = 500_000;
+
+/// Construct a [`SlopFinding`] representing a parser timeout on `lang_hint`.
+///
+/// Called at every tree-sitter parse site when `parser.parse()` returns `None`
+/// after [`PARSER_TIMEOUT_MICROS`] have elapsed.
+pub fn parser_exhaustion_finding(lang_hint: &str) -> SlopFinding {
+    SlopFinding {
+        start_byte: 0,
+        end_byte: 0,
+        description: format!(
+            "security:parser_exhaustion_anomaly — tree-sitter parse of .{lang_hint} file \
+             exceeded 500 ms timeout; probable AST Bomb (deeply nested adversarial input \
+             designed to exhaust the parser); file rejected"
+        ),
+        domain: DOMAIN_ALL,
+        severity: Severity::Exhaustion,
+    }
+}
+
+/// Parse `source` with a hard timeout of [`PARSER_TIMEOUT_MICROS`] (500 ms).
+///
+/// Uses `tree_sitter::ParseOptions::progress_callback` to abort the parse when
+/// the deadline has elapsed.  Returns `None` both on timeout and on cancellation;
+/// callers must emit [`parser_exhaustion_finding`] when `None` is returned after
+/// setting up this guard (as opposed to the legacy `parser.parse()` which also
+/// returns `None` on complete parse failure — that case is handled by the
+/// `tree.root_node().has_error()` guard that follows).
+pub(crate) fn parse_with_timeout(
+    parser: &mut tree_sitter::Parser,
+    source: &[u8],
+) -> Option<tree_sitter::Tree> {
+    let start = Instant::now();
+    let mut timeout_cb = |_: &tree_sitter::ParseState| -> ControlFlow<()> {
+        if start.elapsed().as_micros() as u64 >= PARSER_TIMEOUT_MICROS {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    };
+    let len = source.len();
+    let opts = tree_sitter::ParseOptions::new().progress_callback(&mut timeout_cb);
+    parser.parse_with_options(
+        &mut |i, _| if i < len { &source[i..] } else { b"" },
+        None,
+        Some(opts),
+    )
 }
 
 /// A single antipattern finding within a source file.
@@ -207,8 +272,8 @@ fn find_yaml_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     if parser.set_language(&eng.yaml_lang).is_err() {
         return Vec::new();
     }
-    let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("yaml")];
     };
 
     let mut findings = Vec::new();
@@ -418,8 +483,8 @@ fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     if parser.set_language(&eng.c_lang).is_err() {
         return Vec::new();
     }
-    let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("c")];
     };
     let mut findings = Vec::new();
     find_banned_c_calls(tree.root_node(), source, &mut findings);
@@ -661,8 +726,8 @@ fn find_js_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     if parser.set_language(&eng.js_lang).is_err() {
         return Vec::new();
     }
-    let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("js")];
     };
 
     let mut findings = Vec::new();
@@ -956,7 +1021,10 @@ pub fn detect_recursive_boilerplate(language: &str, source: &[u8]) -> Option<Slo
     if parser.set_language(&ts_lang).is_err() {
         return None;
     }
-    let tree = parser.parse(source, None)?;
+    let tree = match parse_with_timeout(&mut parser, source) {
+        Some(t) => t,
+        None => return Some(parser_exhaustion_finding(language)),
+    };
     if tree.root_node().has_error() {
         return None;
     }
@@ -2113,6 +2181,60 @@ mod credential_tests {
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
             "find_slop must forward supply-chain findings: {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod exhaustion_tests {
+    use super::*;
+
+    #[test]
+    fn test_exhaustion_severity_points() {
+        assert_eq!(
+            Severity::Exhaustion.points(),
+            100,
+            "Exhaustion tier must contribute 100 points"
+        );
+    }
+
+    #[test]
+    fn test_critical_severity_points_unchanged() {
+        // Regression guard: adding Exhaustion must not shift Critical.
+        assert_eq!(Severity::Critical.points(), 50);
+        assert_eq!(Severity::Warning.points(), 10);
+        assert_eq!(Severity::Lint.points(), 0);
+    }
+
+    #[test]
+    fn test_parser_exhaustion_finding_content() {
+        let f = parser_exhaustion_finding("yaml");
+        assert!(
+            f.description.contains("parser_exhaustion_anomaly"),
+            "finding must cite parser_exhaustion_anomaly: {}",
+            f.description
+        );
+        assert!(
+            f.description.contains(".yaml"),
+            "finding must embed the lang hint: {}",
+            f.description
+        );
+        assert_eq!(
+            f.severity,
+            Severity::Exhaustion,
+            "finding severity must be Exhaustion"
+        );
+        assert_eq!(f.domain, crate::metadata::DOMAIN_ALL);
+    }
+
+    #[test]
+    fn test_parser_exhaustion_finding_clean_source_does_not_fire() {
+        // A trivial source file must parse in well under 500 ms — no exhaustion finding.
+        let src = b"fn main() {}";
+        let findings = find_slop("rs", src);
+        assert!(
+            findings.iter().all(|f| f.severity != Severity::Exhaustion),
+            "clean trivial source must not trigger exhaustion: {findings:?}"
         );
     }
 }

@@ -402,3 +402,177 @@ one true-positive + one true-negative fixture added to `crates/crucible/src/main
 | MinHash throughput (10 KB patch, AVX-256 runner) | 1× baseline | 3× baseline |
 | False-positive rate (gauntlet, 1000 PRs) | < 1% | < 1% (maintained) |
 | Crucible gallery entries | Current count | +12 minimum (2 per new rule class) |
+
+---
+
+## VI. The CVE-to-AST Translation Protocol
+
+> **Mandate**: every CISA Known Exploited Vulnerability that maps to a detectable
+> source pattern MUST be translated into a Crucible-verified structural gate within
+> one sprint of publication. A KEV without a gate is a deferred breach.
+
+The protocol has five steps. Each step has a single owner, a single artifact, and
+a single acceptance criterion. There is no step 6 — if a gate cannot be expressed
+in steps 1–5, the vulnerability class is escalated to the Hardware Acceleration
+track (Section II) or deferred with a documented rationale.
+
+---
+
+### Step 1 — Identify the CISA KEV Patch
+
+**Input**: CISA Known Exploited Vulnerabilities catalog
+(`https://www.cisa.gov/known-exploited-vulnerabilities-catalog`), filtered to
+CVEs affecting languages in the engine's grammar registry (23 languages in
+`crates/polyglot/src/lib.rs`).
+
+**Action**:
+1. Pull the CISA KEV JSON feed daily (or on-demand via `/update-wisdom`).
+2. Filter entries where `product` or `vendorProject` maps to a language in
+   `polyglot`: e.g., `spring` → Java, `log4j` → Java, `newtonsoft.json` → C#,
+   `lodash` → JavaScript.
+3. Cross-reference with the NVD CVE record to extract the **vulnerable code
+   pattern** — the specific API call, configuration value, or AST construct that
+   triggers the vulnerability.
+
+**Artifact**: A one-paragraph vulnerability brief stating: CVE ID, affected
+language, vulnerable pattern (as a code snippet), and the CVSS base score.
+
+**Acceptance criterion**: The brief names a specific function, method, or
+configuration key — not just a library name.
+
+---
+
+### Step 2 — Extract the Vulnerable AST Structure
+
+**Input**: The vulnerable code snippet from Step 1.
+
+**Action**:
+1. Run the snippet through the tree-sitter playground
+   (`https://tree-sitter.github.io/tree-sitter/playground`) for the target
+   language grammar (use the same grammar version as `Cargo.toml`).
+2. Identify the minimal AST node type that uniquely identifies the vulnerability:
+   - For method calls: `call_expression` or `method_invocation` with specific
+     `function`/`callee` field values.
+   - For assignments: `assignment_expression` with specific right-hand-side
+     identifier text.
+   - For object construction: `object_creation_expression` with specific `type`.
+3. Document the **suppression rule** — the AST context in which the pattern
+   is safe and must NOT fire (e.g., override method signatures, `#[cfg(test)]`
+   scope, comment-line positions).
+
+**Artifact**: An AST node description in this form:
+
+```
+node_type: call_expression
+field[function]: attribute_expression
+  field[object]: identifier (text == "ObjectInputStream")
+  field[attribute]: identifier (text == "readObject")
+suppression: method body where parent function name is "readObject" and
+             parameter type is "ObjectInputStream" (override signature)
+```
+
+**Acceptance criterion**: The node description is unambiguous — a mechanical
+walk of the tree-sitter AST for the vulnerable snippet produces exactly this
+node, and the suppression rule excludes all known safe uses.
+
+---
+
+### Step 3 — Write the Tree-Sitter Query or AhoCorasick Pattern
+
+**Input**: The AST node description from Step 2.
+
+**Decision rule**:
+
+| If the pattern requires... | Use |
+|---|---|
+| Structural context (receiver type, field name, argument count) | Tree-sitter AST walk in `slop_hunter.rs` (Tier 1) |
+| Exact byte string match without context (API key prefix, banned function name in a language with no grammar active yet) | AhoCorasick in `slop_hunter.rs` or `binary_hunter.rs` (Tier 2) |
+| Dependency-version-conditioned activation | `DepMigrationRule` in `migration_guard.rs` (Tier 2) |
+| Cross-file data-flow (taint source → sink) | Defer to Phase 2 Grammar Depth Upgrade (Section I) |
+
+**Action**:
+- **AST path**: Add a `find_<lang>_<cve_short>_slop` function to `slop_hunter.rs`.
+  Set `severity: Severity::Critical` (+50 pts). Document the CVE ID in the
+  function's `///` doc comment. Call the new function from `find_slop()`.
+- **AhoCorasick path**: Append the pattern to the appropriate `*_PATTERNS` const
+  (e.g., `CREDENTIAL_PATTERNS`, `SUPPLY_CHAIN_PATTERNS`). The pattern tuple is
+  `(b"<byte_pattern>", "security:<label> — <description>")`.
+
+**Artifact**: The diff — a new function or a new pattern entry, with doc comment
+citing the CVE ID and CVSS score.
+
+**Acceptance criterion**: `cargo clippy -- -D warnings` exits 0. The new code
+path is covered by at least one true-positive and one true-negative fixture
+(added in Step 4).
+
+---
+
+### Step 4 — Add to the Crucible Threat Gallery
+
+**Input**: The detector from Step 3.
+
+**Action**:
+1. Open `crates/crucible/src/main.rs`.
+2. Add a **true-positive** entry to `GALLERY` (or `BOUNCE_GALLERY` if the
+   pattern fires at the `PatchBouncer` level):
+
+   ```rust
+   GalleryEntry {
+       label: "CVE-YYYY-NNNNN — <short description>",
+       language: "java",  // or relevant language
+       source: br#"<minimal snippet that triggers the rule>"#,
+       desc_fragment: Some("<label substring present in the finding description>"),
+   },
+   ```
+
+3. Add a **true-negative** entry — the safe variant of the same code that must
+   NOT produce the finding. The true-negative label must include `"clean"` or
+   `"safe"` so reviewers can identify it at a glance.
+
+4. Run `cargo run -p crucible`. All gallery entries must yield
+   `SANCTUARY INTACT`.
+
+**Artifact**: Two new `GalleryEntry` structs in `crucible/src/main.rs`.
+
+**Acceptance criterion**: `cargo run -p crucible` exits 0 with the new entries
+present. A PR that omits the true-negative fixture is rejected at review.
+
+---
+
+### Step 5 — Deploy
+
+**Input**: All of Steps 1–4 complete, `cargo run -p crucible` exits 0,
+`just audit` exits 0.
+
+**Action**:
+1. Bump `Cargo.toml [workspace.package].version` (patch increment: `8.X.Y` →
+   `8.X.(Y+1)`).
+2. Commit with message format:
+   `feat(<crate>): CVE-YYYY-NNNNN <language> <vulnerability class> gate`
+3. Execute `/release 8.X.(Y+1)` — this runs `just audit`, builds the release
+   binary, tags `v8.X.(Y+1)`, and publishes the GitHub Release.
+4. If the Governor API contract changed, execute `/deploy-gov` immediately after.
+
+**Artifact**: A tagged GitHub Release with the new gate active in the binary.
+
+**Acceptance criterion**: The GitHub Release page for `v8.X.(Y+1)` exists.
+The binary embedded in the release, when run against a synthetic fixture
+matching the CVE pattern, produces a non-zero exit code with
+`security:<label>` in the antipattern details.
+
+---
+
+### Protocol Timing Targets
+
+| Step | Maximum elapsed time from KEV publication |
+|------|--------------------------------------------|
+| 1 — KEV brief | 24 hours |
+| 2 — AST extraction | 48 hours |
+| 3 — Detector written | 72 hours |
+| 4 — Crucible verified | 96 hours |
+| 5 — Release deployed | 120 hours (5 business days) |
+
+A CVE that cannot reach Step 5 within 5 business days must be escalated with
+a documented blocker. The blocker is either: (a) grammar not yet in `polyglot`
+— triggers a grammar addition sprint; or (b) cross-file taint required — deferred
+to Phase 2 with a `TODO(CVE-YYYY-NNNNN)` comment in `slop_hunter.rs`.
