@@ -283,7 +283,9 @@ REPO_NAME="${SLUG##*/}"   # "kubernetes" from "kubernetes/kubernetes"
 
 PR_LIMIT="${PR_LIMIT:-100}"
 BOUNCE_TIMEOUT="${BOUNCE_TIMEOUT:-30}"
-GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet}"
+# Per-repo isolated workspace: prevents prior-run data from other repos bleeding
+# into the PDF/CSV aggregation step (gauntlet-runner scans the entire gauntlet dir).
+GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet-strike-${REPO_NAME}}"
 JANITOR="${JANITOR:-./target/release/janitor}"
 # Pre-build: use existing binary if present; refreshed post-build below.
 JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"

@@ -2004,10 +2004,13 @@ fn load_wopr_graph(janitor_dir: &std::path::Path) -> Vec<(String, usize, usize)>
 
 /// Render a single-line ASCII bar chart entry for a repository.
 ///
-/// Format: `<repo_name padded>  ████████░░░░  N Critical  N Necrotic  N Clean`
+/// Format: `<repo_name padded>  ########----  N Critical  N Necrotic  N Clean`
 ///
-/// `█` blocks represent Critical PRs (scaled), `░` blocks represent Necrotic PRs,
+/// `#` blocks represent Critical PRs (scaled), `-` blocks represent Necrotic PRs,
 /// remaining width is implied Clean.  Total bar width is `width` characters.
+///
+/// Uses plain ASCII so the bar survives `\begin{verbatim}` in LaTeX PDF output.
+/// Unicode block characters (█ / ░) are intentionally avoided here.
 pub fn render_ascii_bar(
     repo_name: &str,
     critical: u64,
@@ -2023,7 +2026,7 @@ pub fn render_ascii_bar(
         let n = ((necrotic as f64 / total as f64) * width as f64).round() as usize;
         (c.min(width), n.min(width.saturating_sub(c)))
     };
-    let bar: String = "█".repeat(crit_blocks) + &"░".repeat(nec_blocks);
+    let bar: String = "#".repeat(crit_blocks) + &"-".repeat(nec_blocks);
     // Left-pad repo name to 30 chars for alignment.
     let name_display: String = if repo_name.chars().count() > 28 {
         repo_name.chars().take(27).collect::<String>() + "…"
