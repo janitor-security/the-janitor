@@ -874,6 +874,48 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#xii-blast-radius-gate-v8011" class="md-nav__link">
+    <span class="md-ellipsis">
+      XII. BLAST RADIUS GATE (v8.0.11)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="XII. BLAST RADIUS GATE (v8.0.11)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Gate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supply-chain-integrity-guard-v8011" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supply Chain Integrity Guard (v8.0.11)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1524,6 +1566,48 @@
       XI. STRUCTURAL PIPELINE
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#xii-blast-radius-gate-v8011" class="md-nav__link">
+    <span class="md-ellipsis">
+      XII. BLAST RADIUS GATE (v8.0.11)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="XII. BLAST RADIUS GATE (v8.0.11)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Gate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supply-chain-integrity-guard-v8011" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supply Chain Integrity Guard (v8.0.11)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3001,6 +3085,71 @@ stages left-to-right. The Vibe-Check Gate fires <strong>before</strong> AST pars
 O(N) compression pass that short-circuits tree-sitter for statistically
 self-similar AI blobs. The PQC Bond is issued only when the score falls below
 the <code>min_slop_score</code> ceiling defined in <code>janitor.toml</code>.</p>
+<hr />
+<h2 id="xii-blast-radius-gate-v8011">XII. BLAST RADIUS GATE (v8.0.11)</h2>
+<h3 id="problem">Problem</h3>
+<p>Autonomous coding agents (Copilot, Cursor, Devin) frequently produce "hallucinated
+refactors" — PRs that modify files across 6, 8, or even 12 unrelated subsystems
+in a single change.  These shotgun diffs are indistinguishable from legitimate
+cross-cutting refactors by score alone; they often have <em>zero</em> antipattern
+findings and low clone counts.</p>
+<h3 id="gate">Gate</h3>
+<p><code>PatchBouncer</code> counts the number of <strong>distinct top-level directories</strong> touched
+by a multi-file PR.  Canonical lockfile updates (<code>Cargo.lock</code>, <code>package-lock.json</code>,
+<code>yarn.lock</code>, <code>pnpm-lock.yaml</code>, <code>Gemfile.lock</code>, <code>poetry.lock</code>, <code>go.sum</code>,
+<code>flake.lock</code>) are excluded from the count — dependency bumps legitimately touch
+lockfiles across the entire repo.</p>
+<table>
+<thead>
+<tr>
+<th>Distinct top-level dirs (excl. lockfiles)</th>
+<th>Verdict</th>
+<th>Score delta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>≤ 5</td>
+<td>PASS</td>
+<td>+0</td>
+</tr>
+<tr>
+<td>&gt; 5</td>
+<td><code>architecture:blast_radius_violation</code></td>
+<td>+50 pts</td>
+</tr>
+</tbody>
+</table>
+<p>The +50 Critical penalty is <strong>additive</strong> to all other findings.  An agentic PR
+that also carries a single other Critical finding scores 100 (50 + 50) and fails
+the default 100-point gate.</p>
+<h3 id="supply-chain-integrity-guard-v8011">Supply Chain Integrity Guard (v8.0.11)</h3>
+<p>Two new supply-chain patterns are active at Critical severity (+50 pts each):</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Label</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;script src="http</code></td>
+<td><code>security:unpinned_asset</code></td>
+<td>External script without SRI — CDN hijack vector</td>
+</tr>
+<tr>
+<td><code>.github.io/</code></td>
+<td><code>security:unpinned_asset</code></td>
+<td>GitHub Pages URL in production — no integrity SLA</td>
+</tr>
+</tbody>
+</table>
+<p>Both patterns run via <code>find_supply_chain_slop()</code> (language-agnostic, called from
+<code>find_slop()</code>) <strong>and</strong> via <code>binary_hunter::scan()</code> for diff-level coverage on
+non-source file types.  The Crucible Threat Gallery carries true-positive and
+true-negative fixtures for both patterns.</p>
 <hr />
 <p><em>End of SOVEREIGN BRIEFING.</em></p>
 
