@@ -741,4 +741,47 @@ the `min_slop_score` ceiling defined in `janitor.toml`.
 
 ---
 
+## XII. BLAST RADIUS GATE (v8.0.11)
+
+### Problem
+
+Autonomous coding agents (Copilot, Cursor, Devin) frequently produce "hallucinated
+refactors" — PRs that modify files across 6, 8, or even 12 unrelated subsystems
+in a single change.  These shotgun diffs are indistinguishable from legitimate
+cross-cutting refactors by score alone; they often have *zero* antipattern
+findings and low clone counts.
+
+### Gate
+
+`PatchBouncer` counts the number of **distinct top-level directories** touched
+by a multi-file PR.  Canonical lockfile updates (`Cargo.lock`, `package-lock.json`,
+`yarn.lock`, `pnpm-lock.yaml`, `Gemfile.lock`, `poetry.lock`, `go.sum`,
+`flake.lock`) are excluded from the count — dependency bumps legitimately touch
+lockfiles across the entire repo.
+
+| Distinct top-level dirs (excl. lockfiles) | Verdict            | Score delta |
+|------------------------------------------|--------------------|-------------|
+| ≤ 5                                       | PASS               | +0          |
+| > 5                                       | `architecture:blast_radius_violation` | +50 pts |
+
+The +50 Critical penalty is **additive** to all other findings.  An agentic PR
+that also carries a single other Critical finding scores 100 (50 + 50) and fails
+the default 100-point gate.
+
+### Supply Chain Integrity Guard (v8.0.11)
+
+Two new supply-chain patterns are active at Critical severity (+50 pts each):
+
+| Pattern              | Label                    | Rationale                                         |
+|----------------------|--------------------------|---------------------------------------------------|
+| `<script src="http`  | `security:unpinned_asset` | External script without SRI — CDN hijack vector   |
+| `.github.io/`        | `security:unpinned_asset` | GitHub Pages URL in production — no integrity SLA |
+
+Both patterns run via `find_supply_chain_slop()` (language-agnostic, called from
+`find_slop()`) **and** via `binary_hunter::scan()` for diff-level coverage on
+non-source file types.  The Crucible Threat Gallery carries true-positive and
+true-negative fixtures for both patterns.
+
+---
+
 *End of SOVEREIGN BRIEFING.*

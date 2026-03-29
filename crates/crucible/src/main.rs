@@ -17,6 +17,7 @@
 //! - `0` — SANCTUARY INTACT: all threat entries intercepted, all safe entries passed
 //! - `1` — BREACH DETECTED: one or more entries failed
 
+use forge::slop_filter::{PRBouncer, PatchBouncer, SlopScore};
 use forge::slop_hunter::find_slop;
 
 // ---------------------------------------------------------------------------
@@ -344,6 +345,36 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Supply Chain Integrity ────────────────────────────────────────────
+    Entry {
+        name: "HTML/external script without SRI — INTERCEPT",
+        lang: "html",
+        source: b"<script src=\"https://cdn.example.com/analytics.js\"></script>",
+        must_intercept: true,
+        desc_fragment: Some("unpinned_asset"),
+    },
+    Entry {
+        name: "HTML/github.io CDN URL — INTERCEPT",
+        lang: "html",
+        source: b"const lib = \"https://some-org.github.io/dist/lib.js\";",
+        must_intercept: true,
+        desc_fragment: Some("unpinned_asset"),
+    },
+    Entry {
+        name: "HTML/relative script path — SAFE",
+        lang: "html",
+        source: b"<script src=\"/assets/app.js\" type=\"module\"></script>",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "JS/github.com URL (not github.io) — SAFE",
+        lang: "js",
+        source: b"const REPO = \"https://github.com/owner/repo/releases\";",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -418,8 +449,143 @@ pub fn run_gallery() -> bool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Blast Radius Bounce Gallery — exercises PatchBouncer directly
+// ---------------------------------------------------------------------------
+
+fn make_multi_dir_patch(paths: &[&str]) -> String {
+    paths
+        .iter()
+        .map(|p| {
+            format!(
+                "diff --git a/{p} b/{p}\n\
+                 index 0000000..1111111 100644\n\
+                 --- a/{p}\n\
+                 +++ b/{p}\n\
+                 @@ -0,0 +1 @@\n\
+                 +// change\n"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+struct BounceEntry {
+    name: &'static str,
+    paths: &'static [&'static str],
+    must_intercept: bool,
+    desc_fragment: Option<&'static str>,
+}
+
+const BOUNCE_GALLERY: &[BounceEntry] = &[
+    BounceEntry {
+        name: "BlastRadius/6-dir PR — INTERCEPT",
+        paths: &[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+            "infra/main.tf",
+        ],
+        must_intercept: true,
+        desc_fragment: Some("blast_radius_violation"),
+    },
+    BounceEntry {
+        name: "BlastRadius/5-dir PR (at boundary) — SAFE",
+        paths: &[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+        ],
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    BounceEntry {
+        name: "BlastRadius/6-dir but lockfile excluded — SAFE",
+        paths: &[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+            "Cargo.lock",
+        ],
+        must_intercept: false,
+        desc_fragment: None,
+    },
+];
+
+/// Run the Blast Radius Bounce Gallery.
+/// Returns `true` when all entries pass; `false` if any fail.
+pub fn run_bounce_gallery() -> bool {
+    use common::registry::SymbolRegistry;
+    let registry = SymbolRegistry::default();
+    let bouncer = PatchBouncer;
+
+    let mut passed: usize = 0;
+    let mut failed: usize = 0;
+
+    for entry in BOUNCE_GALLERY {
+        let patch = make_multi_dir_patch(entry.paths);
+        let score: SlopScore = match bouncer.bounce(&patch, &registry) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[FAIL] {} — bounce error: {e}", entry.name);
+                failed += 1;
+                continue;
+            }
+        };
+        let intercepted = score
+            .antipattern_details
+            .iter()
+            .any(|d| entry.desc_fragment.is_none_or(|frag| d.contains(frag)));
+
+        let ok = if entry.must_intercept {
+            intercepted
+        } else {
+            // Must NOT intercept on the specific fragment
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| entry.desc_fragment.is_some_and(|frag| d.contains(frag)))
+        };
+
+        if ok {
+            println!("[PASS] {}", entry.name);
+            passed += 1;
+        } else if entry.must_intercept {
+            eprintln!(
+                "[FAIL] {} — expected blast_radius_violation, got: {:?}",
+                entry.name, score.antipattern_details
+            );
+            failed += 1;
+        } else {
+            eprintln!(
+                "[FAIL] {} — expected clean, got: {:?}",
+                entry.name, score.antipattern_details
+            );
+            failed += 1;
+        }
+    }
+
+    let total = passed + failed;
+    if failed == 0 {
+        println!("\nBlast Radius Gallery: {passed}/{total} — SANCTUARY INTACT.");
+        true
+    } else {
+        let s = if failed == 1 { "" } else { "ES" };
+        eprintln!("\nBlast Radius Gallery: {passed}/{total} passed — {failed} BREACH{s} DETECTED.");
+        false
+    }
+}
+
 fn main() {
-    if !run_gallery() {
+    let gallery_ok = run_gallery();
+    let bounce_ok = run_bounce_gallery();
+    if !gallery_ok || !bounce_ok {
         std::process::exit(1);
     }
 }
@@ -439,6 +605,15 @@ mod tests {
         assert!(
             run_gallery(),
             "Crucible: Threat Gallery breach — one or more detectors failed"
+        );
+    }
+
+    /// Blast Radius Bounce Gallery must pass — verifies the 5-directory gate.
+    #[test]
+    fn blast_radius_gallery_all_intercepted() {
+        assert!(
+            run_bounce_gallery(),
+            "Crucible: Blast Radius Gallery breach — PatchBouncer gate failed"
         );
     }
 }

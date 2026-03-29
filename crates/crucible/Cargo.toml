@@ -12,3 +12,4 @@ path = "src/main.rs"
 
 [dependencies]
 forge = { path = "../forge" }
+common = { path = "../common" }

@@ -537,6 +537,37 @@ impl PRBouncer for PatchBouncer {
         let sections = split_patch_by_file(patch);
         if sections.len() > 1 {
             let mut total = SlopScore::default();
+            // ── Blast Radius Gate — collect top-level dirs before consuming sections ──
+            //
+            // A PR that modifies files in more than 5 distinct top-level directories
+            // (excluding canonical lockfile paths) is an agentic-refactor signal —
+            // a "shotgun" change spanning unrelated subsystems with no clear
+            // architectural motivation.  Collected before the main loop because
+            // `for section in sections` moves the Vec.
+            let blast_dirs: Vec<String> = {
+                const LOCKFILE_NAMES: &[&str] = &[
+                    "Cargo.lock",
+                    "package-lock.json",
+                    "yarn.lock",
+                    "pnpm-lock.yaml",
+                    "Gemfile.lock",
+                    "poetry.lock",
+                    "go.sum",
+                    "flake.lock",
+                ];
+                let mut dirs: HashSet<String> = HashSet::new();
+                for section in &sections {
+                    let path = extract_patch_path(section);
+                    if !path.is_empty() && !LOCKFILE_NAMES.iter().any(|l| path.ends_with(l)) {
+                        if let Some(top) = path.split('/').next() {
+                            dirs.insert(top.to_string());
+                        }
+                    }
+                }
+                let mut v: Vec<String> = dirs.into_iter().collect();
+                v.sort();
+                v
+            };
             for section in sections {
                 // Errors are non-fatal: a parse failure in one file section does
                 // not invalidate the analysis of the remaining sections.
@@ -571,6 +602,23 @@ impl PRBouncer for PatchBouncer {
             total.antipatterns_found += sec_count;
             total.antipattern_score += sec_count * 150;
             total.antipattern_details.extend(sec);
+            // ── Blast Radius Gate ─────────────────────────────────────────────
+            // Fire at Critical (+50 pts) when the PR spans more than 5 distinct
+            // top-level directories.  Lockfile-only paths are excluded from the
+            // count — dependency bumps legitimately touch Cargo.lock/go.sum
+            // across the entire repo without indicating a hallucinated refactor.
+            if blast_dirs.len() > 5 {
+                let desc = format!(
+                    "architecture:blast_radius_violation — PR modifies files in {} distinct \
+                     top-level directories ({}); exceeds the 5-directory gate, probable \
+                     agentic hallucinated refactor spanning unrelated subsystems",
+                    blast_dirs.len(),
+                    blast_dirs.join(", "),
+                );
+                total.antipatterns_found += 1;
+                total.antipattern_score += 50;
+                total.antipattern_details.push(desc);
+            }
             return Ok(total);
         }
 
@@ -2045,6 +2093,92 @@ mod tests {
         assert_eq!(
             score.logic_clones_found, 1,
             "Rust logic clones must be detectable"
+        );
+    }
+
+    // ── Blast Radius Gate ────────────────────────────────────────────────────
+
+    fn make_multi_dir_patch(paths: &[&str]) -> String {
+        paths
+            .iter()
+            .map(|p| {
+                format!(
+                    "diff --git a/{p} b/{p}\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/{p}\n\
+                     +++ b/{p}\n\
+                     @@ -0,0 +1 @@\n\
+                     +// change\n"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn test_blast_radius_gate_fires_on_six_dirs() {
+        // 6 distinct top-level directories → must fire
+        let patch = make_multi_dir_patch(&[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+            "infra/main.tf",
+        ]);
+        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("blast_radius_violation")),
+            "6-dir PR must trigger blast_radius_violation: {:?}",
+            score.antipattern_details
+        );
+        assert!(
+            score.antipattern_score >= 50,
+            "blast_radius_violation must contribute 50 pts"
+        );
+    }
+
+    #[test]
+    fn test_blast_radius_gate_silent_on_five_dirs() {
+        // 5 distinct top-level directories → must NOT fire (threshold is > 5)
+        let patch = make_multi_dir_patch(&[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+        ]);
+        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("blast_radius_violation")),
+            "5-dir PR must NOT trigger blast_radius_violation"
+        );
+    }
+
+    #[test]
+    fn test_blast_radius_gate_excludes_lockfiles() {
+        // 5 real dirs + lockfile update → lockfile must not count toward the gate
+        let patch = make_multi_dir_patch(&[
+            "crates/forge/src/lib.rs",
+            "docs/setup.md",
+            "tools/script.sh",
+            "frontend/app.js",
+            "backend/api.rs",
+            "Cargo.lock",
+        ]);
+        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("blast_radius_violation")),
+            "Cargo.lock must not count toward blast radius dir count"
         );
     }
 }

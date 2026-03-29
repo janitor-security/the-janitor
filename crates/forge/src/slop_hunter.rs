@@ -181,6 +181,9 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     // Language-agnostic: credential header scan runs on every source file
     // regardless of detected language.  Secrets can appear in any file type.
     findings.extend(find_credential_slop(source));
+    // Language-agnostic: supply-chain integrity scan runs on every source file.
+    // Catches external script loading without SRI and GitHub Pages URL embedding.
+    findings.extend(find_supply_chain_slop(source));
     findings
 }
 
@@ -1033,6 +1036,73 @@ pub fn find_credential_slop(source: &[u8]) -> Vec<SlopFinding> {
             start_byte: mat.start(),
             end_byte: mat.end(),
             description: CREDENTIAL_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
+            domain: DOMAIN_ALL,
+            severity: Severity::Critical,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Supply Chain Integrity Detection — Language-Agnostic
+// ---------------------------------------------------------------------------
+
+/// Supply-chain threat patterns indexed by AhoCorasick pattern ID.
+///
+/// Detects external script loading without Subresource Integrity (SRI) and
+/// GitHub Pages URLs embedded in production source — both are supply-chain
+/// attack vectors that bypass traditional dependency auditing.
+///
+/// | Pattern                  | Threat Class                                          |
+/// |--------------------------|-------------------------------------------------------|
+/// | `<script src="http`      | External script without SRI — CDN hijack vector       |
+/// | `.github.io/`            | GitHub Pages URL in production — no SLA or integrity  |
+const SUPPLY_CHAIN_PATTERNS: &[(&[u8], &str)] = &[
+    // `<script src="http` fires on both `http://` (always wrong — cleartext
+    // resource loading) and `https://` (acceptable only with SRI).  Any external
+    // script loaded without `integrity="sha…"` lets CDN/DNS compromise silently
+    // replace the payload delivered to every page consumer.
+    (
+        b"<script src=\"http",
+        "security:unpinned_asset — <script src=\"http\u{2026}\" loads an external script without \
+         Subresource Integrity (integrity=\"sha\u{2026}\"); CDN or DNS hijack can inject arbitrary \
+         code into all consumers of this page",
+    ),
+    // GitHub Pages URLs coupled into production source have no SLA, can be taken
+    // over if the owning org is renamed, and carry no content-integrity guarantee.
+    (
+        b".github.io/",
+        "security:unpinned_asset — .github.io/ URL embedded in production source; \
+         GitHub Pages is not a CDN and has no integrity guarantee — \
+         use a versioned package dependency instead",
+    ),
+];
+
+static SUPPLY_CHAIN_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn supply_chain_automaton() -> &'static AhoCorasick {
+    SUPPLY_CHAIN_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(SUPPLY_CHAIN_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: supply_chain AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan `source` bytes for supply-chain integrity violations.
+///
+/// Language-agnostic — called from [`find_slop`] on every source file
+/// regardless of detected language.  Detects external script loading without
+/// Subresource Integrity and GitHub Pages URL embedding in production code.
+///
+/// Returns one [`SlopFinding`] per match at [`Severity::Critical`] (+50 pts).
+/// Never panics or returns an error.
+pub fn find_supply_chain_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let ac = supply_chain_automaton();
+    ac.find_iter(source)
+        .map(|mat| SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: SUPPLY_CHAIN_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
             domain: DOMAIN_ALL,
             severity: Severity::Critical,
         })
@@ -1976,6 +2046,73 @@ mod credential_tests {
         assert!(
             findings.is_empty(),
             "token ≤32 chars must not trigger entropy gate: {findings:?}"
+        );
+    }
+
+    // ── find_supply_chain_slop ────────────────────────────────────────────────
+
+    #[test]
+    fn test_external_script_tag_detected_by_supply_chain() {
+        let src = b"<script src=\"https://cdn.example.com/analytics.js\"></script>";
+        let findings = find_supply_chain_slop(src);
+        assert!(
+            !findings.is_empty(),
+            "<script src=\"https://…\" must be flagged as unpinned_asset"
+        );
+        assert!(
+            findings[0].description.contains("unpinned_asset"),
+            "description must cite unpinned_asset: {}",
+            findings[0].description
+        );
+        assert_eq!(findings[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn test_relative_script_not_flagged_by_supply_chain() {
+        let src = b"<script src=\"/js/app.js\" type=\"module\"></script>";
+        let findings = find_supply_chain_slop(src);
+        assert!(
+            findings.is_empty(),
+            "relative script path must not trigger supply-chain detector: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_github_io_url_detected_by_supply_chain() {
+        let src = b"const LIB = \"https://some-org.github.io/lib/v2/bundle.js\";";
+        let findings = find_supply_chain_slop(src);
+        assert!(
+            !findings.is_empty(),
+            ".github.io/ URL must be flagged as unpinned_asset"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "must have unpinned_asset finding: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_github_com_not_flagged_by_supply_chain() {
+        let src = b"const REPO = \"https://github.com/owner/repo/releases\";";
+        let findings = find_supply_chain_slop(src);
+        assert!(
+            findings.is_empty(),
+            "github.com URL must not be flagged by supply-chain detector: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_propagates_supply_chain_findings() {
+        // Verify find_slop() surfaces supply-chain findings for any language.
+        let src = b"var cdn = \"https://evil.github.io/inject.js\";";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "find_slop must forward supply-chain findings: {findings:?}"
         );
     }
 }

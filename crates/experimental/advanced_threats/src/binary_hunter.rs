@@ -139,6 +139,32 @@ const PATTERNS: &[(&[u8], &str)] = &[
         b"sk_live_",
         "security:credential_leak — Stripe live secret key prefix (sk_live_…); revoke immediately",
     ),
+    // ── Supply-chain integrity patterns ──────────────────────────────────────
+    // `<script src="http` fires on both `http://` (always wrong — cleartext
+    // resource loading) and `https://` (acceptable only when accompanied by
+    // an SRI `integrity="sha…"` attribute).  Any external script tag without
+    // SRI is a supply-chain attack surface: a CDN compromise, DNS hijack, or
+    // BGP hijack can silently replace the loaded JS with an adversarial payload
+    // affecting every user of the page.  Pattern catches the common prefix;
+    // the `https` variant is deliberately included because HTTPS alone
+    // provides transport security but not content integrity.
+    (
+        b"<script src=\"http",
+        "security:unpinned_asset — <script src=\"http\u{2026}\" loads an external script without \
+         Subresource Integrity (integrity=\"sha\u{2026}\"); CDN or DNS hijack can inject arbitrary \
+         code into all consumers of this page",
+    ),
+    // GitHub Pages `.github.io/` URLs embedded in production source couple the
+    // application to personal or organisation GitHub Pages deployments — not a
+    // CDN.  These endpoints have no SLA, can be taken over if the owning org is
+    // renamed or deleted, and carry no content-integrity guarantee.  Legitimate
+    // library dependencies belong in package.json or Cargo.toml, not hard-coded.
+    (
+        b".github.io/",
+        "security:unpinned_asset — .github.io/ URL embedded in production source; \
+         GitHub Pages is not a CDN and has no integrity guarantee — \
+         use a versioned package dependency instead",
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -380,6 +406,64 @@ mod tests {
         assert!(
             findings.is_empty(),
             "Stripe test-mode key must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── Supply-chain integrity tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_external_https_script_tag_detected() {
+        // https:// external script without SRI — pattern fires on "http" prefix.
+        let bytes = b"<script src=\"https://cdn.example.com/lib.js\"></script>";
+        let findings = scan(bytes);
+        assert!(
+            !findings.is_empty(),
+            "<script src=\"https://…\" must be detected as unpinned_asset"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "description must cite unpinned_asset: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_relative_script_path_not_flagged() {
+        // Relative paths have no supply-chain risk — must not fire.
+        let bytes = b"<script src=\"/assets/app.js\" defer></script>";
+        let findings = scan(bytes);
+        assert!(
+            findings.is_empty(),
+            "relative script path must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_github_io_url_detected() {
+        // .github.io/ URL in production source — supply-chain risk.
+        let bytes = b"const CDN = \"https://myorg.github.io/dist/lib.js\";";
+        let findings = scan(bytes);
+        assert!(
+            !findings.is_empty(),
+            ".github.io/ URL must be detected as unpinned_asset"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "must have unpinned_asset finding: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_github_com_url_not_flagged() {
+        // github.com (not .github.io) is not flagged — different risk profile.
+        let bytes = b"const REPO = \"https://github.com/org/repo\";";
+        let findings = scan(bytes);
+        assert!(
+            findings.is_empty(),
+            "github.com URL must not be flagged: {findings:?}"
         );
     }
 }
