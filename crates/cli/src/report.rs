@@ -2188,15 +2188,9 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
          (comment_violations × 5) + (unlinked_pr × 20) + (hallucinated_fix × 100)`\n\n",
     );
 
-    // ── Appendix: Full Audit Log ───────────────────────────────────────────
-    // This is the ONLY preserved \newpage in the global render: the executive
-    // brief ends here and the per-repo audit log starts on a clean page.
-    out.push_str("\n\\newpage\n\n");
-    out.push_str("## Appendix: Full Audit Log\n\n");
-
     // ── Per-repo dedicated pages ───────────────────────────────────────────
-    // Each repo starts on a new page inside the Appendix.  Subsections within
-    // each repo (Sloppiest, Cleanest, Silos) flow without internal breaks;
+    // Each repo starts on a new page.  Subsections within each repo
+    // (Sloppiest, Cleanest, Silos) flow without internal breaks;
     // \needspace before each heading prevents orphaned headings at page bottom.
     for repo in &data.repos {
         out.push_str("\n\\newpage\n\n");
