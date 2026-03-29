@@ -85,7 +85,7 @@ impl Response {
     /// Claude Code) to display `(completed with no output)` because there is
     /// no recognised `content` array to render.
     fn tool_ok(id: serde_json::Value, value: serde_json::Value) -> Self {
-        let text = serde_json::to_string_pretty(&value).unwrap_or_default();
+        let text = serde_json::to_string(&value).unwrap_or_default();
         Self::ok(
             id,
             serde_json::json!({
