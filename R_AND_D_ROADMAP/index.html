@@ -1,0 +1,1746 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot.">
+      
+      
+      
+        <link rel="canonical" href="https://thejanitor.app/R_AND_D_ROADMAP/">
+      
+      
+        <link rel="prev" href="../privacy/">
+      
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.50">
+    
+    
+      
+        <title>R&D Roadmap - The Janitor</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.a40c8224.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Mono:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto Mono";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  
+  <!--
+    Content Security Policy — defence-in-depth for a static documentation site.
+
+    Threat model: prevent injected <script> payloads from loading external code
+    or exfiltrating data, should any content-injection path reach the rendered HTML.
+
+    Directives:
+      script-src 'self' 'unsafe-inline'  — mkdocs-material 9.x uses inline scripts
+                                           for search configuration; 'self' blocks all
+                                           external script sources.
+      connect-src 'self'                 — blocks XHR/fetch data-exfiltration to
+                                           foreign origins.
+      frame-ancestors 'none'             — clickjacking prevention.
+      base-uri 'self'                    — blocks <base href="…"> injection attacks.
+      form-action 'none'                 — static docs site has no forms.
+      worker-src blob:                   — mkdocs-material search uses blob: workers.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src  'self' 'unsafe-inline';
+    style-src   'self' 'unsafe-inline';
+    img-src     'self' data:;
+    font-src    'self' data:;
+    connect-src 'self';
+    worker-src  blob:;
+    frame-ancestors 'none';
+    base-uri    'self';
+    form-action 'none';
+  ">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rd-roadmap-architectural-supremacy-blueprint" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="The Janitor" class="md-header__button md-logo" aria-label="The Janitor" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            The Janitor
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              R&D Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/janitor-security/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    janitor-security/the-janitor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="The Janitor" class="md-nav__button md-logo" aria-label="The Janitor" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    The Janitor
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/janitor-security/the-janitor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    janitor-security/the-janitor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manifesto/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manifesto
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Setup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../intelligence/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Intelligence
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../discovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Discovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../terms/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Terms
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Privacy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    R&D Roadmap
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    R&D Roadmap
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#i-grammar-depth-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      I. Grammar Depth Audit
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. Grammar Depth Audit">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-coverage-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current Coverage Map
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-1-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 1 — Python
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-2-java" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 2 — Java
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-3-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 3 — C#
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-hardware-acceleration-simd-minhash" class="md-nav__link">
+    <span class="md-ellipsis">
+      II. Hardware Acceleration — SIMD MinHash
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="II. Hardware Acceleration — SIMD MinHash">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current Architecture
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vectorization-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Vectorization Strategy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-threat-matrix-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      III. Threat Matrix Expansion
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. Threat Matrix Expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-threat-class-1-prototype-pollution-javascript-typescript" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Threat Class 1 — Prototype Pollution (JavaScript / TypeScript)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-threat-class-2-deserialization-gadget-chains-java-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Threat Class 2 — Deserialization Gadget Chains (Java / C#)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-implementation-sequencing" class="md-nav__link">
+    <span class="md-ellipsis">
+      IV. Implementation Sequencing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-measurement-targets-9-month-horizon" class="md-nav__link">
+    <span class="md-ellipsis">
+      V. Measurement Targets (9-Month Horizon)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-the-cve-to-ast-translation-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      VI. The CVE-to-AST Translation Protocol
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. The CVE-to-AST Translation Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-identify-the-cisa-kev-patch" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1 — Identify the CISA KEV Patch
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-extract-the-vulnerable-ast-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2 — Extract the Vulnerable AST Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-write-the-tree-sitter-query-or-ahocorasick-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3 — Write the Tree-Sitter Query or AhoCorasick Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-add-to-the-crucible-threat-gallery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4 — Add to the Crucible Threat Gallery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5 — Deploy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#protocol-timing-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Protocol Timing Targets
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#i-grammar-depth-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      I. Grammar Depth Audit
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. Grammar Depth Audit">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-coverage-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current Coverage Map
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-1-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 1 — Python
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-2-java" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 2 — Java
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shallow-language-3-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shallow Language 3 — C#
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-hardware-acceleration-simd-minhash" class="md-nav__link">
+    <span class="md-ellipsis">
+      II. Hardware Acceleration — SIMD MinHash
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="II. Hardware Acceleration — SIMD MinHash">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current Architecture
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vectorization-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Vectorization Strategy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-threat-matrix-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      III. Threat Matrix Expansion
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. Threat Matrix Expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-threat-class-1-prototype-pollution-javascript-typescript" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Threat Class 1 — Prototype Pollution (JavaScript / TypeScript)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-threat-class-2-deserialization-gadget-chains-java-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      New Threat Class 2 — Deserialization Gadget Chains (Java / C#)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-implementation-sequencing" class="md-nav__link">
+    <span class="md-ellipsis">
+      IV. Implementation Sequencing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-measurement-targets-9-month-horizon" class="md-nav__link">
+    <span class="md-ellipsis">
+      V. Measurement Targets (9-Month Horizon)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-the-cve-to-ast-translation-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      VI. The CVE-to-AST Translation Protocol
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. The CVE-to-AST Translation Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-identify-the-cisa-kev-patch" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1 — Identify the CISA KEV Patch
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-extract-the-vulnerable-ast-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2 — Extract the Vulnerable AST Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-write-the-tree-sitter-query-or-ahocorasick-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3 — Write the Tree-Sitter Query or AhoCorasick Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-add-to-the-crucible-threat-gallery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4 — Add to the Crucible Threat Gallery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5 — Deploy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#protocol-timing-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Protocol Timing Targets
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="rd-roadmap-architectural-supremacy-blueprint">R&amp;D Roadmap — Architectural Supremacy Blueprint</h1>
+<blockquote>
+<p><strong>Classification</strong>: Internal Engineering Reference
+<strong>Engine Baseline</strong>: v8.0.11
+<strong>Horizon</strong>: 9-Month Structural Firewall Initiative</p>
+</blockquote>
+<p>This document is a pure architecture blueprint. No production code is changed here.
+Every proposal below is a specification — complete enough that implementation is a
+mechanical translation, not a design exercise. Each item names the exact file, the
+exact function, and the exact invariant to encode.</p>
+<hr />
+<h2 id="i-grammar-depth-audit">I. Grammar Depth Audit</h2>
+<h3 id="current-coverage-map">Current Coverage Map</h3>
+<p>The engine hosts 23 tree-sitter grammars in <code>crates/polyglot/src/lib.rs</code>. Only three
+receive active AST-walk query logic in <code>crates/forge/src/slop_hunter.rs</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Grammar</th>
+<th>Detection depth</th>
+<th>Active rules</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>YAML</td>
+<td>Tree-sitter AST walk</td>
+<td>K8s wildcard host (1 rule)</td>
+</tr>
+<tr>
+<td>C / C++</td>
+<td>Tree-sitter AST walk</td>
+<td><code>gets</code>, <code>strcpy</code>, <code>sprintf</code>, <code>scanf</code> (4 rules)</td>
+</tr>
+<tr>
+<td>JavaScript / TypeScript</td>
+<td>Tree-sitter AST walk</td>
+<td><code>innerHTML</code> assignment (1 rule)</td>
+</tr>
+<tr>
+<td>HCL / Terraform</td>
+<td>Byte-level scan only</td>
+<td>Open CIDR, S3 public ACL</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>Byte-level scan only</td>
+<td><code>subprocess</code> + <code>shell=True</code></td>
+</tr>
+<tr>
+<td><strong>Java, C#, Go, Kotlin, Swift, Scala, Ruby, PHP, Bash, Lua, GLSL, ObjC, Nix, GDScript</strong></td>
+<td><strong>Zero</strong></td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>The three languages with the shallowest AST coverage relative to their attack
+surface are: <strong>Python</strong>, <strong>Java</strong>, and <strong>C#</strong>. Each has a grammar loaded into
+<code>OnceLock&lt;Language&gt;</code> and zero AST walks.</p>
+<hr />
+<h3 id="shallow-language-1-python">Shallow Language 1 — Python</h3>
+<p><strong>Current gap</strong>: <code>find_python_slop</code> is a byte-level window scan. The tree-sitter
+<code>PYTHON</code> grammar (<code>crates/polyglot/src/lib.rs::python()</code>) is never called from
+<code>slop_hunter.rs</code>. Python has five high-priority AST targets that byte scanning
+cannot reliably hit without false positives:</p>
+<table>
+<thead>
+<tr>
+<th>Attack class</th>
+<th>Byte pattern (unreliable)</th>
+<th>AST pattern (precise)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Code execution</td>
+<td><code>exec(</code></td>
+<td><code>call_expression</code> with <code>function.name == "exec"</code></td>
+</tr>
+<tr>
+<td>Dynamic eval</td>
+<td><code>eval(</code></td>
+<td>Same as exec — but <code>eval</code> is idiomatic in test harnesses; AST context disambiguates</td>
+</tr>
+<tr>
+<td>Unsafe deserialization</td>
+<td><code>pickle.loads(</code></td>
+<td><code>call_expression</code> where callee is <code>attribute</code> with <code>object.name == "pickle"</code> and <code>attribute == "loads"</code></td>
+</tr>
+<tr>
+<td>OS command injection</td>
+<td><code>os.system(</code></td>
+<td><code>call_expression</code> callee attribute <code>os.system</code></td>
+</tr>
+<tr>
+<td>Dynamic import</td>
+<td><code>__import__(</code></td>
+<td><code>call_expression</code> with <code>function.name == "__import__"</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Proposed upgrade — <code>find_python_slop_ast</code> in <code>slop_hunter.rs</code></strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>fn find_python_slop_ast(source: &amp;[u8]) -&gt; Vec&lt;SlopFinding&gt;
+</code></pre></div>
+<ol>
+<li>Fast pre-filter: check for any of <code>exec(</code>, <code>eval(</code>, <code>pickle</code>, <code>os.system</code>,
+   <code>__import__</code> bytes before loading the grammar.</li>
+<li><code>parser.set_language(&amp;polyglot::python())</code> — grammar is already compiled.</li>
+<li>Walk <code>call_expression</code> nodes. For each:</li>
+<li><code>function</code> field kind <code>identifier</code> → match name against the table above.</li>
+<li><code>function</code> field kind <code>attribute</code> → match <code>object.text + "." + attribute.text</code>.</li>
+<li>The <code>eval(</code> rule must suppress findings inside <code>test_</code> function scopes and
+   <code># noqa</code> comment lines to stay below 1% false-positive rate on real repos.</li>
+<li><code>pickle.loads</code> and <code>pickle.load</code> both fire; <code>pickle.dumps</code> does not.</li>
+</ol>
+<p><strong>Tier</strong>: AST invariant (Tier 1 per <code>.claude/rules/evolution.md</code>).
+<strong>Points</strong>: 50 (Critical) for <code>exec</code>, <code>os.system</code>, <code>pickle.loads</code>, <code>__import__</code>.
+10 (Warning) for bare <code>eval</code> without test-scope suppression.</p>
+<hr />
+<h3 id="shallow-language-2-java">Shallow Language 2 — Java</h3>
+<p><strong>Current gap</strong>: The <code>JAVA</code> grammar is loaded (<code>crates/polyglot/src/lib.rs::java()</code>)
+but <code>find_slop()</code> has no <code>"java"</code> branch. Java's two highest-impact vulnerability
+classes are deserialization gadget chains and JNDI injection — both require AST
+context to avoid drowning in false positives from legitimate library calls.</p>
+<table>
+<thead>
+<tr>
+<th>Attack class</th>
+<th>Why byte scan fails</th>
+<th>AST anchor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ObjectInputStream.readObject()</code></td>
+<td><code>readObject</code> is a valid name on many types</td>
+<td>Receiver type must resolve to <code>ObjectInputStream</code> — check variable declaration chain</td>
+</tr>
+<tr>
+<td><code>XMLDecoder.readObject()</code></td>
+<td>Same</td>
+<td>Receiver type <code>XMLDecoder</code></td>
+</tr>
+<tr>
+<td><code>Runtime.exec(String[])</code></td>
+<td><code>exec</code> appears in test frameworks</td>
+<td>Receiver chain: <code>Runtime.getRuntime().exec(</code></td>
+</tr>
+<tr>
+<td>JNDI injection (<code>InitialContext.lookup(user_input)</code>)</td>
+<td><code>lookup</code> is generic</td>
+<td>Callee is <code>attribute</code> <code>"lookup"</code> on <code>InitialContext</code> instance</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Proposed upgrade — <code>find_java_slop</code> in <code>slop_hunter.rs</code></strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>fn find_java_slop(eng: &amp;QueryEngine, source: &amp;[u8]) -&gt; Vec&lt;SlopFinding&gt;
+</code></pre></div>
+<ol>
+<li>Pre-filter: <code>ObjectInputStream</code>, <code>XMLDecoder</code>, <code>Runtime.getRuntime</code>, <code>InitialContext</code>.</li>
+<li>Walk <code>method_invocation</code> nodes. Extract <code>object</code> (the receiver expression) and
+   <code>name</code> (the method name). Match the receiver text against the table above — the
+   receiver text is <code>node.child_by_field_name("object")?.utf8_text(source)</code>.</li>
+<li>For <code>InitialContext.lookup</code>: flag only when the argument is NOT a string literal
+   (i.e., <code>argument_list</code> child is not <code>string_literal</code>). This eliminates false
+   positives on static JNDI config lookups.</li>
+<li><code>QueryEngine</code> struct needs a <code>java_lang: Language</code> field added alongside the
+   existing <code>yaml_lang</code>, <code>c_lang</code>, <code>js_lang</code>.</li>
+</ol>
+<p><strong>Tier</strong>: AST invariant (Tier 1).
+<strong>Points</strong>: 50 (Critical) for all four patterns.</p>
+<hr />
+<h3 id="shallow-language-3-c">Shallow Language 3 — C#</h3>
+<p><strong>Current gap</strong>: <code>CSHARP</code> grammar loaded, zero <code>find_slop()</code> branch. C#'s highest-risk
+pattern is <code>TypeNameHandling</code> in Newtonsoft.Json — a configuration flag that enables
+arbitrary type deserialization. This was the root cause of multiple CVE-bearing RCEs
+in ASP.NET applications between 2019 and 2023. The AST approach is far more precise
+than a string scan because the dangerous value is <code>TypeNameHandling.Auto</code>,
+<code>TypeNameHandling.All</code>, or <code>TypeNameHandling.Objects</code> — not <code>TypeNameHandling.None</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Attack class</th>
+<th>Dangerous variant</th>
+<th>Safe variant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Newtonsoft.Json deserialization</td>
+<td><code>TypeNameHandling.Auto</code>, <code>.All</code>, <code>.Objects</code></td>
+<td><code>TypeNameHandling.None</code></td>
+</tr>
+<tr>
+<td><code>BinaryFormatter</code></td>
+<td>Any use post-.NET 5</td>
+<td>Blocked by <code>SYSLIB0011</code> — but legacy projects remain</td>
+</tr>
+<tr>
+<td><code>Process.Start</code> shell exec</td>
+<td><code>ProcessStartInfo.UseShellExecute = true</code> + user-controlled <code>FileName</code></td>
+<td><code>UseShellExecute = false</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Proposed upgrade — <code>find_csharp_slop</code> in <code>slop_hunter.rs</code></strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>fn find_csharp_slop(eng: &amp;QueryEngine, source: &amp;[u8]) -&gt; Vec&lt;SlopFinding&gt;
+</code></pre></div>
+<ol>
+<li>Pre-filter: <code>TypeNameHandling</code>, <code>BinaryFormatter</code>, <code>UseShellExecute</code>.</li>
+<li>Walk <code>assignment_expression</code> nodes where right-hand side text matches
+   <code>TypeNameHandling.Auto</code>, <code>TypeNameHandling.All</code>, or <code>TypeNameHandling.Objects</code>.
+   <code>TypeNameHandling.None</code> is safe — explicitly exclude it.</li>
+<li>Walk <code>object_creation_expression</code> nodes where <code>type</code> text is <code>BinaryFormatter</code>.</li>
+<li><code>QueryEngine</code> needs a <code>csharp_lang: Language</code> field.</li>
+</ol>
+<p><strong>Tier</strong>: AST invariant (Tier 1).
+<strong>Points</strong>: 50 (Critical) for TypeNameHandling dangerous values and BinaryFormatter.</p>
+<hr />
+<h2 id="ii-hardware-acceleration-simd-minhash">II. Hardware Acceleration — SIMD MinHash</h2>
+<h3 id="current-architecture">Current Architecture</h3>
+<p><code>crates/forge/src/pr_collider.rs</code> implements a 64-hash MinHash sketch computed over
+byte 3-grams. The hot path is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">for</span><span class="w"> </span><span class="n">window</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">windows</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">seed</span><span class="p">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">HASH_SEEDS</span><span class="p">.</span><span class="n">iter</span><span class="p">().</span><span class="n">enumerate</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hash_shingle</span><span class="p">(</span><span class="n">window</span><span class="p">,</span><span class="w"> </span><span class="n">seed</span><span class="p">);</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">min_hashes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">            </span><span class="n">min_hashes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="p">;</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>For a 10 KB patch (≈10,000 bytes, ≈9,998 3-gram windows), this executes
+<strong>9,998 × 64 = 639,872 scalar hash evaluations</strong>. Each <code>hash_shingle</code> call
+is a 5-instruction multiply-xor-shift pipeline on a <code>u64</code>.</p>
+<p>The bottleneck is the inner loop: 64 independent hash seeds processed
+sequentially, with a conditional minimum update per seed. This structure
+is a textbook SIMD candidate — the 64 seeds are independent of each other,
+the minimum update is a lane-wise <code>min</code>, and the multiply/XOR/shift operations
+map directly to SIMD intrinsics.</p>
+<h3 id="vectorization-strategy">Vectorization Strategy</h3>
+<p><strong>Target ISAs</strong>: AVX-512 (8× <code>u64</code> lanes, x86-64), AVX-256 (4× <code>u64</code> lanes,
+x86-64 fallback), NEON (2× <code>u64</code> lanes, ARM64/M-series).</p>
+<p>The hash function operating on a single 3-gram <code>[b0, b1, b2]</code> and seed <code>s</code> is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>h = s
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>h ^= b0; h = h * M1; h ^= h &gt;&gt; 16; h = h * M2; h ^= h &gt;&gt; 32
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>h ^= b1; h = h * M1; h ^= h &gt;&gt; 16; h = h * M2; h ^= h &gt;&gt; 32
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>h ^= b2; h = h * M1; h ^= h &gt;&gt; 16; h = h * M2; h ^= h &gt;&gt; 32
+</code></pre></div>
+<p>where <code>M1 = 0x6c62272e07bb0142</code> and <code>M2 = 0x94d049bb133111eb</code>.</p>
+<p><strong>AVX-512 vectorization</strong> — 8 seeds in parallel per SIMD call:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>lane[k] = HASH_SEEDS[i*8 + k]   for k in 0..8
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>for byte in [b0, b1, b2]:
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    lane ^= broadcast(byte)
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    lane = lane * broadcast(M1)   // _mm512_mullo_epi64
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    lane ^= lane &gt;&gt; broadcast(16) // _mm512_srli_epi64 + xor
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    lane = lane * broadcast(M2)
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    lane ^= lane &gt;&gt; broadcast(32)
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>min_hashes[i*8..(i+1)*8] = min(min_hashes[i*8..(i+1)*8], lane)
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    // _mm512_min_epu64
+</code></pre></div>
+<p>This reduces 64 scalar calls to <strong>8 SIMD calls</strong> per 3-gram window — an 8× reduction
+in instruction count (excluding loop overhead and memory latency).</p>
+<p><strong>AVX-256 fallback</strong> — 4 seeds per SIMD call, 16 calls per window. <code>_mm256_mullo_epi64</code>
+requires AVX-512VL; for pure AVX-256 without AVX-512VL, use two <code>_mm256_mul_epu32</code>
+calls to emulate 64-bit multiply. This reduces instruction count by 4× over scalar.</p>
+<p><strong>NEON (ARM64)</strong> — 2 seeds per <code>uint64x2_t</code> lane, 32 SIMD calls per window.
+<code>vmulq_u64</code> is natively supported on ARMv8. Provides a 2× reduction — modest,
+but meaningful for M-series runners where this runs in GitHub Actions.</p>
+<p><strong>Implementation sketch</strong> — <code>PrDeltaSignature::from_bytes_simd</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="cp">#[cfg(target_arch = </span><span class="s">&quot;x86_64&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="cp">#[target_feature(enable = </span><span class="s">&quot;avx512f,avx512dq&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">from_bytes_avx512</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="p">[</span><span class="kt">u64</span><span class="p">;</span><span class="w"> </span><span class="n">NUM_HASHES</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">..</span><span class="p">.</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="cp">#[cfg(target_arch = </span><span class="s">&quot;x86_64&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="cp">#[target_feature(enable = </span><span class="s">&quot;avx2&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">from_bytes_avx256</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="p">[</span><span class="kt">u64</span><span class="p">;</span><span class="w"> </span><span class="n">NUM_HASHES</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">..</span><span class="p">.</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="cp">#[cfg(target_arch = </span><span class="s">&quot;aarch64&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="cp">#[target_feature(enable = </span><span class="s">&quot;neon&quot;</span><span class="cp">)]</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">unsafe</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">from_bytes_neon</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="p">[</span><span class="kt">u64</span><span class="p">;</span><span class="w"> </span><span class="n">NUM_HASHES</span><span class="p">]</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">..</span><span class="p">.</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="k">pub</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">from_bytes</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nc">Self</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="c1">// Runtime dispatch via std::arch::is_x86_feature_detected! or</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="c1">// std::arch::is_aarch64_feature_detected!</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="c1">// Falls back to existing scalar implementation.</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Expected throughput gains</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>ISA</th>
+<th>Lanes</th>
+<th>Speedup (theoretical)</th>
+<th>Realistic (memory-bound correction)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AVX-512</td>
+<td>8</td>
+<td>8×</td>
+<td>4–6×</td>
+</tr>
+<tr>
+<td>AVX-256</td>
+<td>4</td>
+<td>4×</td>
+<td>2–3×</td>
+</tr>
+<tr>
+<td>NEON</td>
+<td>2</td>
+<td>2×</td>
+<td>1.5–2×</td>
+</tr>
+<tr>
+<td>Scalar</td>
+<td>1</td>
+<td>baseline</td>
+<td>baseline</td>
+</tr>
+</tbody>
+</table>
+<p>At the current swarm threshold of 1,000 PRs per gauntlet run, 4× throughput
+halves gauntlet wall-clock time on AVX-256 GitHub runners.</p>
+<p><strong>Gate</strong>: Any SIMD implementation must pass the existing
+<code>test_identical_patches_have_high_jaccard</code> and <code>test_completely_different_patches_have_low_jaccard</code>
+tests with identical output to the scalar path. A <code>#[test] fn simd_matches_scalar()</code>
+fixture must be added that checks <code>from_bytes_avx256(data).min_hashes == from_bytes_scalar(data).min_hashes</code>
+for a representative set of patch sizes.</p>
+<hr />
+<h2 id="iii-threat-matrix-expansion">III. Threat Matrix Expansion</h2>
+<h3 id="new-threat-class-1-prototype-pollution-javascript-typescript">New Threat Class 1 — Prototype Pollution (JavaScript / TypeScript)</h3>
+<p><strong>Why the current matrix misses it</strong>: The JS/TS rule in <code>find_js_slop</code> detects
+<code>innerHTML</code> assignments via a direct field walk on <code>assignment_expression</code> nodes.
+Prototype pollution requires tracing a <em>key</em> through a merge/assign call — a
+different AST shape entirely.</p>
+<p><strong>Attack anatomy</strong>: Prototype pollution occurs when an attacker controls a key used
+to index an object, and that key is <code>__proto__</code> or <code>constructor</code>. The typical
+vector is a recursive merge utility called on untrusted JSON:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">function</span><span class="w"> </span><span class="nx">merge</span><span class="p">(</span><span class="nx">target</span><span class="p">,</span><span class="w"> </span><span class="nx">source</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">let</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="nx">source</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">        </span><span class="nx">target</span><span class="p">[</span><span class="nx">key</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">merge</span><span class="p">(</span><span class="nx">target</span><span class="p">[</span><span class="nx">key</span><span class="p">],</span><span class="w"> </span><span class="nx">source</span><span class="p">[</span><span class="nx">key</span><span class="p">]);</span><span class="w"> </span><span class="c1">// &#39;key&#39; can be &#39;__proto__&#39;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">}</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nx">merge</span><span class="p">({},</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">userControlledInput</span><span class="p">));</span>
+</code></pre></div>
+<p><strong>Two-layer detection plan</strong>:</p>
+<p><strong>Layer A — AhoCorasick patterns</strong> (zero-cost pre-filter, catches the obvious cases):</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Label</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.__proto__</code></td>
+<td><code>security:prototype_pollution</code></td>
+<td>Direct proto access in object expression</td>
+</tr>
+<tr>
+<td><code>["__proto__"]</code></td>
+<td><code>security:prototype_pollution</code></td>
+<td>Computed key access</td>
+</tr>
+<tr>
+<td><code>['__proto__']</code></td>
+<td><code>security:prototype_pollution</code></td>
+<td>Single-quote variant</td>
+</tr>
+<tr>
+<td><code>[constructor][prototype]</code></td>
+<td><code>security:prototype_pollution</code></td>
+<td>Indirect proto chain traversal</td>
+</tr>
+</tbody>
+</table>
+<p>These four patterns go in <code>SUPPLY_CHAIN_PATTERNS</code> (or a new <code>PROTOTYPE_PATTERNS</code>
+const in <code>slop_hunter.rs</code>) under a <code>find_prototype_pollution_slop</code> function.</p>
+<p><strong>Layer B — AST patterns</strong> (catches unsafe merge utilities):</p>
+<p>Target <code>call_expression</code> nodes where the callee matches known merge utilities:
+<code>_.merge(</code>, <code>lodash.merge(</code>, <code>deepMerge(</code>, <code>mergeDeep(</code>, <code>Object.assign(</code>.</p>
+<p>For each such call, walk the <code>arguments</code> list. If any argument derives from a
+<code>JSON.parse(</code> call expression, or is named <code>body</code>, <code>params</code>, <code>query</code>, <code>input</code>,
+or <code>data</code> (common HTTP request properties), flag
+<code>security:prototype_pollution_merge_sink</code>.</p>
+<p>The false-positive suppression rule: suppress if the call site is inside a
+<code>node_modules/</code> path or a function whose name contains <code>sanitize</code>, <code>validate</code>,
+or <code>freeze</code>.</p>
+<p><strong>Points</strong>: 50 (Critical) for both layers.
+<strong>Tier</strong>: Layer A is AhoCorasick (Tier 2). Layer B is AST invariant (Tier 1).</p>
+<hr />
+<h3 id="new-threat-class-2-deserialization-gadget-chains-java-c">New Threat Class 2 — Deserialization Gadget Chains (Java / C#)</h3>
+<p><strong>Why the current matrix misses it</strong>: Neither Java nor C# has a <code>find_slop()</code> branch.
+The Tier 2 AhoCorasick credential patterns in <code>binary_hunter.rs</code> scan for secret
+strings, not dangerous API invocations.</p>
+<p><strong>Attack anatomy</strong>: Gadget chain deserialization is the mechanism behind CVE-2015-4852
+(Apache Commons Collections), CVE-2021-44228 (Log4Shell JNDI vector), and dozens of
+Newtonsoft.Json-based ASP.NET RCEs. The vulnerability class is <strong>critical</strong> by
+definition: a single call to <code>ObjectInputStream.readObject()</code> on attacker-controlled
+bytes yields remote code execution on a JVM with Commons Collections on the classpath.</p>
+<p><strong>Java detection — AhoCorasick patterns</strong> (Tier 2, immediate value):</p>
+<table>
+<thead>
+<tr>
+<th>Pattern bytes</th>
+<th>Label</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>new ObjectInputStream(</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>XMLDecoder(</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>XStream().fromXML(</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>.readObject()</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>Runtime.getRuntime().exec(</code></td>
+<td><code>security:runtime_exec</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>InitialContext().lookup(</code></td>
+<td><code>security:jndi_injection</code></td>
+<td>50</td>
+</tr>
+</tbody>
+</table>
+<p>These go in a new <code>JAVA_DANGER_PATTERNS</code> const in <code>slop_hunter.rs</code>, guarded by
+a pre-filter on <code>".java"</code> extension. The <code>find_java_slop_fast</code> function using these
+patterns is the immediate deliverable; the full AST walk described in Section I is
+the follow-on upgrade.</p>
+<p><strong>C# detection — AhoCorasick patterns</strong> (Tier 2, immediate value):</p>
+<table>
+<thead>
+<tr>
+<th>Pattern bytes</th>
+<th>Label</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>new BinaryFormatter()</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>TypeNameHandling.Auto</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>TypeNameHandling.All</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>TypeNameHandling.Objects</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>LosFormatter</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>ObjectStateFormatter</code></td>
+<td><code>security:unsafe_deserialization</code></td>
+<td>50</td>
+</tr>
+</tbody>
+</table>
+<p><code>TypeNameHandling.None</code> must be explicitly excluded from the pattern list — it is
+the safe configuration and must never fire.</p>
+<p><strong>False-positive controls</strong>:</p>
+<ul>
+<li>Java: suppress <code>.readObject()</code> when the containing class name ends in <code>Serializable</code>
+  and the method is <code>readObject(ObjectInputStream in)</code> — this is the override
+  signature used to <em>implement</em> custom deserialization safely.</li>
+<li>C#: <code>TypeNameHandling.All</code> in a comment (<code>// TypeNameHandling.All</code>) must not fire.
+  The AhoCorasick match position must be outside a comment region. Use the existing
+  <code>CommentScanner</code> infrastructure in <code>metadata.rs</code> to filter positions.</li>
+</ul>
+<p><strong>Tier</strong>: Tier 2 (AhoCorasick) immediately; Tier 1 (AST) in follow-on sprint.
+<strong>Points</strong>: 50 (Critical) for all patterns.</p>
+<hr />
+<h2 id="iv-implementation-sequencing">IV. Implementation Sequencing</h2>
+<p>The three initiatives have a natural dependency ordering:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Phase 1 (Immediate — 1 sprint):
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  ├── Java/C# AhoCorasick patterns (III, Tier 2)
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>  │     Files: slop_hunter.rs, crucible/src/main.rs
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>  │     Gate: crucible exit 0, just audit exit 0
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>  └── Prototype Pollution AhoCorasick Layer A (III, Tier 2)
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        Files: slop_hunter.rs, crucible/src/main.rs
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>Phase 2 (Short-term — 2 sprints):
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>  ├── Python AST walk upgrade (I, Tier 1)
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>  │     Files: slop_hunter.rs, polyglot/src/lib.rs (python() already exists)
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>  │     Gate: crucible exit 0
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>  └── Java AST walk upgrade (I, Tier 1)
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        Files: slop_hunter.rs (add QueryEngine::java_lang field)
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>Phase 3 (Medium-term — 3 sprints):
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>  ├── C# AST walk upgrade (I, Tier 1)
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>  │     Files: slop_hunter.rs (add QueryEngine::csharp_lang field)
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>  ├── Prototype Pollution AST Layer B (III, Tier 1)
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>  └── SIMD MinHash (II)
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>        Files: pr_collider.rs
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>        Gate: simd_matches_scalar() test passes
+</code></pre></div>
+<p>Every phase gate is: <strong>Crucible exits 0</strong> AND <strong><code>just audit</code> exits 0</strong> AND at least
+one true-positive + one true-negative fixture added to <code>crates/crucible/src/main.rs</code>.</p>
+<hr />
+<h2 id="v-measurement-targets-9-month-horizon">V. Measurement Targets (9-Month Horizon)</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Baseline (v8.0.11)</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Languages with active AST rules</td>
+<td>3 (YAML, C/C++, JS/TS)</td>
+<td>6 (+Python, Java, C#)</td>
+</tr>
+<tr>
+<td>Active threat classes</td>
+<td>7</td>
+<td>13 (+prototype_pollution, unsafe_deserialization ×2, runtime_exec, jndi_injection, python_exec ×5)</td>
+</tr>
+<tr>
+<td>MinHash throughput (10 KB patch, AVX-256 runner)</td>
+<td>1× baseline</td>
+<td>3× baseline</td>
+</tr>
+<tr>
+<td>False-positive rate (gauntlet, 1000 PRs)</td>
+<td>&lt; 1%</td>
+<td>&lt; 1% (maintained)</td>
+</tr>
+<tr>
+<td>Crucible gallery entries</td>
+<td>Current count</td>
+<td>+12 minimum (2 per new rule class)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vi-the-cve-to-ast-translation-protocol">VI. The CVE-to-AST Translation Protocol</h2>
+<blockquote>
+<p><strong>Mandate</strong>: every CISA Known Exploited Vulnerability that maps to a detectable
+source pattern MUST be translated into a Crucible-verified structural gate within
+one sprint of publication. A KEV without a gate is a deferred breach.</p>
+</blockquote>
+<p>The protocol has five steps. Each step has a single owner, a single artifact, and
+a single acceptance criterion. There is no step 6 — if a gate cannot be expressed
+in steps 1–5, the vulnerability class is escalated to the Hardware Acceleration
+track (Section II) or deferred with a documented rationale.</p>
+<hr />
+<h3 id="step-1-identify-the-cisa-kev-patch">Step 1 — Identify the CISA KEV Patch</h3>
+<p><strong>Input</strong>: CISA Known Exploited Vulnerabilities catalog
+(<code>https://www.cisa.gov/known-exploited-vulnerabilities-catalog</code>), filtered to
+CVEs affecting languages in the engine's grammar registry (23 languages in
+<code>crates/polyglot/src/lib.rs</code>).</p>
+<p><strong>Action</strong>:
+1. Pull the CISA KEV JSON feed daily (or on-demand via <code>/update-wisdom</code>).
+2. Filter entries where <code>product</code> or <code>vendorProject</code> maps to a language in
+   <code>polyglot</code>: e.g., <code>spring</code> → Java, <code>log4j</code> → Java, <code>newtonsoft.json</code> → C#,
+   <code>lodash</code> → JavaScript.
+3. Cross-reference with the NVD CVE record to extract the <strong>vulnerable code
+   pattern</strong> — the specific API call, configuration value, or AST construct that
+   triggers the vulnerability.</p>
+<p><strong>Artifact</strong>: A one-paragraph vulnerability brief stating: CVE ID, affected
+language, vulnerable pattern (as a code snippet), and the CVSS base score.</p>
+<p><strong>Acceptance criterion</strong>: The brief names a specific function, method, or
+configuration key — not just a library name.</p>
+<hr />
+<h3 id="step-2-extract-the-vulnerable-ast-structure">Step 2 — Extract the Vulnerable AST Structure</h3>
+<p><strong>Input</strong>: The vulnerable code snippet from Step 1.</p>
+<p><strong>Action</strong>:
+1. Run the snippet through the tree-sitter playground
+   (<code>https://tree-sitter.github.io/tree-sitter/playground</code>) for the target
+   language grammar (use the same grammar version as <code>Cargo.toml</code>).
+2. Identify the minimal AST node type that uniquely identifies the vulnerability:
+   - For method calls: <code>call_expression</code> or <code>method_invocation</code> with specific
+     <code>function</code>/<code>callee</code> field values.
+   - For assignments: <code>assignment_expression</code> with specific right-hand-side
+     identifier text.
+   - For object construction: <code>object_creation_expression</code> with specific <code>type</code>.
+3. Document the <strong>suppression rule</strong> — the AST context in which the pattern
+   is safe and must NOT fire (e.g., override method signatures, <code>#[cfg(test)]</code>
+   scope, comment-line positions).</p>
+<p><strong>Artifact</strong>: An AST node description in this form:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>node_type: call_expression
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>field[function]: attribute_expression
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  field[object]: identifier (text == &quot;ObjectInputStream&quot;)
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  field[attribute]: identifier (text == &quot;readObject&quot;)
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>suppression: method body where parent function name is &quot;readObject&quot; and
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>             parameter type is &quot;ObjectInputStream&quot; (override signature)
+</code></pre></div>
+<p><strong>Acceptance criterion</strong>: The node description is unambiguous — a mechanical
+walk of the tree-sitter AST for the vulnerable snippet produces exactly this
+node, and the suppression rule excludes all known safe uses.</p>
+<hr />
+<h3 id="step-3-write-the-tree-sitter-query-or-ahocorasick-pattern">Step 3 — Write the Tree-Sitter Query or AhoCorasick Pattern</h3>
+<p><strong>Input</strong>: The AST node description from Step 2.</p>
+<p><strong>Decision rule</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>If the pattern requires...</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Structural context (receiver type, field name, argument count)</td>
+<td>Tree-sitter AST walk in <code>slop_hunter.rs</code> (Tier 1)</td>
+</tr>
+<tr>
+<td>Exact byte string match without context (API key prefix, banned function name in a language with no grammar active yet)</td>
+<td>AhoCorasick in <code>slop_hunter.rs</code> or <code>binary_hunter.rs</code> (Tier 2)</td>
+</tr>
+<tr>
+<td>Dependency-version-conditioned activation</td>
+<td><code>DepMigrationRule</code> in <code>migration_guard.rs</code> (Tier 2)</td>
+</tr>
+<tr>
+<td>Cross-file data-flow (taint source → sink)</td>
+<td>Defer to Phase 2 Grammar Depth Upgrade (Section I)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Action</strong>:
+- <strong>AST path</strong>: Add a <code>find_&lt;lang&gt;_&lt;cve_short&gt;_slop</code> function to <code>slop_hunter.rs</code>.
+  Set <code>severity: Severity::Critical</code> (+50 pts). Document the CVE ID in the
+  function's <code>///</code> doc comment. Call the new function from <code>find_slop()</code>.
+- <strong>AhoCorasick path</strong>: Append the pattern to the appropriate <code>*_PATTERNS</code> const
+  (e.g., <code>CREDENTIAL_PATTERNS</code>, <code>SUPPLY_CHAIN_PATTERNS</code>). The pattern tuple is
+  <code>(b"&lt;byte_pattern&gt;", "security:&lt;label&gt; — &lt;description&gt;")</code>.</p>
+<p><strong>Artifact</strong>: The diff — a new function or a new pattern entry, with doc comment
+citing the CVE ID and CVSS score.</p>
+<p><strong>Acceptance criterion</strong>: <code>cargo clippy -- -D warnings</code> exits 0. The new code
+path is covered by at least one true-positive and one true-negative fixture
+(added in Step 4).</p>
+<hr />
+<h3 id="step-4-add-to-the-crucible-threat-gallery">Step 4 — Add to the Crucible Threat Gallery</h3>
+<p><strong>Input</strong>: The detector from Step 3.</p>
+<p><strong>Action</strong>:
+1. Open <code>crates/crucible/src/main.rs</code>.
+2. Add a <strong>true-positive</strong> entry to <code>GALLERY</code> (or <code>BOUNCE_GALLERY</code> if the
+   pattern fires at the <code>PatchBouncer</code> level):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">GalleryEntry</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span><span class="n">label</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;CVE-YYYY-NNNNN — &lt;short description&gt;&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="n">language</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;java&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// or relevant language</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="n">source</span><span class="p">:</span><span class="w"> </span><span class="nc">br</span><span class="p">#</span><span class="s">&quot;&lt;minimal snippet that triggers the rule&gt;&quot;</span><span class="p">#,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="n">desc_fragment</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">&quot;&lt;label substring present in the finding description&gt;&quot;</span><span class="p">),</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">},</span>
+</code></pre></div>
+<ol>
+<li>
+<p>Add a <strong>true-negative</strong> entry — the safe variant of the same code that must
+   NOT produce the finding. The true-negative label must include <code>"clean"</code> or
+   <code>"safe"</code> so reviewers can identify it at a glance.</p>
+</li>
+<li>
+<p>Run <code>cargo run -p crucible</code>. All gallery entries must yield
+   <code>SANCTUARY INTACT</code>.</p>
+</li>
+</ol>
+<p><strong>Artifact</strong>: Two new <code>GalleryEntry</code> structs in <code>crucible/src/main.rs</code>.</p>
+<p><strong>Acceptance criterion</strong>: <code>cargo run -p crucible</code> exits 0 with the new entries
+present. A PR that omits the true-negative fixture is rejected at review.</p>
+<hr />
+<h3 id="step-5-deploy">Step 5 — Deploy</h3>
+<p><strong>Input</strong>: All of Steps 1–4 complete, <code>cargo run -p crucible</code> exits 0,
+<code>just audit</code> exits 0.</p>
+<p><strong>Action</strong>:
+1. Bump <code>Cargo.toml [workspace.package].version</code> (patch increment: <code>8.X.Y</code> →
+   <code>8.X.(Y+1)</code>).
+2. Commit with message format:
+   <code>feat(&lt;crate&gt;): CVE-YYYY-NNNNN &lt;language&gt; &lt;vulnerability class&gt; gate</code>
+3. Execute <code>/release 8.X.(Y+1)</code> — this runs <code>just audit</code>, builds the release
+   binary, tags <code>v8.X.(Y+1)</code>, and publishes the GitHub Release.
+4. If the Governor API contract changed, execute <code>/deploy-gov</code> immediately after.</p>
+<p><strong>Artifact</strong>: A tagged GitHub Release with the new gate active in the binary.</p>
+<p><strong>Acceptance criterion</strong>: The GitHub Release page for <code>v8.X.(Y+1)</code> exists.
+The binary embedded in the release, when run against a synthetic fixture
+matching the CVE pattern, produces a non-zero exit code with
+<code>security:&lt;label&gt;</code> in the antipattern details.</p>
+<hr />
+<h3 id="protocol-timing-targets">Protocol Timing Targets</h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Maximum elapsed time from KEV publication</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 — KEV brief</td>
+<td>24 hours</td>
+</tr>
+<tr>
+<td>2 — AST extraction</td>
+<td>48 hours</td>
+</tr>
+<tr>
+<td>3 — Detector written</td>
+<td>72 hours</td>
+</tr>
+<tr>
+<td>4 — Crucible verified</td>
+<td>96 hours</td>
+</tr>
+<tr>
+<td>5 — Release deployed</td>
+<td>120 hours (5 business days)</td>
+</tr>
+</tbody>
+</table>
+<p>A CVE that cannot reach Step 5 within 5 business days must be escalated with
+a documented blocker. The blocker is either: (a) grammar not yet in <code>polyglot</code>
+— triggers a grammar addition sprint; or (b) cross-file taint required — deferred
+to Phase 2 with a <code>TODO(CVE-YYYY-NNNNN)</code> comment in <code>slop_hunter.rs</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.60a45f97.min.js"></script>
+      
+    
+  </body>
+</html>
