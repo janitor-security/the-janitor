@@ -26,3 +26,4 @@ Findings: 717 dead symbols (library mode), 8 antipatterns (raw `new` usage in C+
 **Repository**: [github.com/kubernetes/kubernetes](https://github.com/kubernetes/kubernetes)
 
 Go container orchestration platform. 166 MB peak RSS. 4 antipatterns (open CIDR ingress rules in HCL), 85/98 PRs unlinked.
+| vercel/next.js | 2026-03-28 | [next.js-audit-2026](https://github.com/janitor-security/next.js-audit-2026) |
