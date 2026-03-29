@@ -59,14 +59,23 @@ use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
 /// All currently active rules fire at [`Severity::Critical`].  `Warning` and
 /// `Lint` are retained in the public API for backwards compatibility.
 ///
-/// | Tier          | Points |
-/// |---------------|--------|
-/// | `Exhaustion`  | 100    |
-/// | `Critical`    |  50    |
-/// | `Warning`     |  10    |
-/// | `Lint`        |   0    |
+/// | Tier           | Points |
+/// |----------------|--------|
+/// | `KevCritical`  | 150    |
+/// | `Exhaustion`   | 100    |
+/// | `Critical`     |  50    |
+/// | `Warning`      |  10    |
+/// | `Lint`         |   0    |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
+    /// CISA Known Exploited Vulnerability — contributes 150 points.
+    ///
+    /// Fired for patterns confirmed to be actively exploited in the wild per the
+    /// CISA KEV catalog: SQL injection via string concatenation, SSRF via dynamic
+    /// URL construction, and path traversal via string concatenation.  This tier
+    /// is above [`Exhaustion`][Self::Exhaustion] because confirmed exploitation
+    /// evidence elevates the finding above a speculative DoS risk.
+    KevCritical,
     /// Parser exhaustion — contributes 100 points.
     ///
     /// Fired when the tree-sitter parse of a single file exceeds
@@ -90,6 +99,7 @@ impl Severity {
     /// by one finding of this severity.
     pub fn points(self) -> u32 {
         match self {
+            Self::KevCritical => 150,
             Self::Exhaustion => 100,
             Self::Critical => 50,
             Self::Warning => 10,
@@ -198,8 +208,11 @@ struct QueryEngine {
     yaml_lang: Language,
     /// Plain C grammar — AST walk for banned libc calls.
     c_lang: Language,
-    /// JavaScript grammar — used for `innerHTML` assignment detection.
+    /// JavaScript grammar — used for `innerHTML` assignment, SQLi, SSRF, and
+    /// path-traversal detection.
     js_lang: Language,
+    /// Python grammar — used for CISA KEV AST gates (SQLi, SSRF, PathTraversal).
+    python_lang: Language,
 }
 
 impl QueryEngine {
@@ -207,10 +220,12 @@ impl QueryEngine {
         let yaml_lang: Language = tree_sitter_yaml::LANGUAGE.into();
         let c_lang: Language = tree_sitter_c::LANGUAGE.into();
         let js_lang: Language = tree_sitter_javascript::LANGUAGE.into();
+        let python_lang: Language = tree_sitter_python::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
             js_lang,
+            python_lang,
         })
     }
 }
@@ -239,8 +254,30 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "c" | "h" => find_c_slop(eng, source),
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
         "hcl" | "tf" => find_hcl_slop(source),
-        "py" => find_python_slop(source),
-        "js" | "jsx" | "ts" | "tsx" => find_js_slop(eng, source),
+        "py" => {
+            let mut f = find_python_slop(source);
+            // CISA KEV gates — AST-based (Python grammar)
+            f.extend(find_python_sqli_slop(eng, source));
+            f.extend(find_python_ssrf_slop(eng, source));
+            f.extend(find_python_path_traversal_slop(eng, source));
+            f
+        }
+        "js" | "jsx" | "ts" | "tsx" => {
+            let mut f = find_js_slop(eng, source);
+            // CISA KEV gates — AST-based (JS grammar)
+            f.extend(find_js_sqli_slop(eng, source));
+            f.extend(find_js_ssrf_slop(eng, source));
+            f.extend(find_js_path_traversal_slop(eng, source));
+            f
+        }
+        // CISA KEV gates — byte-level Tier 2 (no active grammar branch yet)
+        "java" => find_java_sqli_slop(source),
+        "go" => {
+            let mut f = find_go_sqli_slop(source);
+            f.extend(find_go_ssrf_slop(source));
+            f
+        }
+        "cs" => find_csharp_sqli_slop(source),
         _ => Vec::new(),
     };
     // Language-agnostic: credential header scan runs on every source file
@@ -1175,6 +1212,656 @@ pub fn find_supply_chain_slop(source: &[u8]) -> Vec<SlopFinding> {
             severity: Severity::Critical,
         })
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// CISA KEV Constants — SQL Injection / SSRF / Path Traversal
+// ---------------------------------------------------------------------------
+
+/// Database execution method names targeted by the SQL injection AST gate.
+/// A `call`/`call_expression` whose callee text matches or ends with one of
+/// these is subject to the string-concatenation SQL argument check.
+const SQL_EXEC_METHODS: &[&str] = &[
+    "execute",
+    "executemany",
+    "query",
+    "raw",
+    "do",
+    "exec",
+    "execute_query",
+];
+
+/// SQL keywords whose presence in a string literal indicates a SQL query context
+/// (used by [`has_sql_string_leaf`] to confirm injection risk).
+const SQL_KEYWORDS_STR: &[&str] = &[
+    "SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE",
+];
+
+/// Python HTTP client callees targeted by the SSRF AST gate.
+const SSRF_HTTP_CALLEES_PY: &[&str] = &[
+    "requests.get",
+    "requests.post",
+    "requests.put",
+    "requests.delete",
+    "requests.head",
+    "requests.patch",
+    "requests.request",
+    "urllib.request.urlopen",
+    "httpx.get",
+    "httpx.post",
+    "httpx.put",
+    "httpx.delete",
+];
+
+/// JavaScript HTTP client callees targeted by the SSRF AST gate.
+const SSRF_HTTP_CALLEES_JS: &[&str] = &[
+    "fetch",
+    "axios.get",
+    "axios.post",
+    "axios.put",
+    "axios.delete",
+    "axios.patch",
+    "axios.request",
+    "got.get",
+    "got.post",
+    "superagent.get",
+    "superagent.post",
+    "request",
+];
+
+/// Node.js filesystem callees targeted by the path-traversal AST gate.
+const FS_OPEN_CALLEES_JS: &[&str] = &[
+    "fs.readFile",
+    "fs.readFileSync",
+    "fs.writeFile",
+    "fs.writeFileSync",
+    "fs.appendFile",
+    "fs.appendFileSync",
+    "fs.createReadStream",
+    "fs.createWriteStream",
+    "fs.open",
+    "fs.openSync",
+];
+
+// ---------------------------------------------------------------------------
+// CISA KEV — Shared AST helpers
+// ---------------------------------------------------------------------------
+
+/// Return `true` if `node` (a `binary_operator` or `binary_expression`) uses
+/// `+` as its operator.  Handles Python (`binary_operator` with named `operator`
+/// field) and JavaScript (`binary_expression`, same field name) tree-sitter
+/// grammars, with an unnamed-child fallback for other grammars.
+fn binary_node_has_plus_op(node: Node<'_>, source: &[u8]) -> bool {
+    if let Some(op) = node.child_by_field_name("operator") {
+        return op.utf8_text(source).ok() == Some("+");
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if !child.is_named() && child.utf8_text(source).ok() == Some("+") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Recursively search `node` and its descendants for a string literal that
+/// contains any [`SQL_KEYWORDS_STR`] entry.  Returns `true` on first match.
+fn has_sql_string_leaf(node: Node<'_>, source: &[u8]) -> bool {
+    if matches!(
+        node.kind(),
+        "string" | "string_literal" | "interpreted_string_literal"
+    ) {
+        if let Ok(text) = node.utf8_text(source) {
+            return SQL_KEYWORDS_STR.iter().any(|kw| text.contains(kw));
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if has_sql_string_leaf(child, source) {
+            return true;
+        }
+    }
+    false
+}
+
+// ---------------------------------------------------------------------------
+// CISA KEV — Python AST gates (tree-sitter Python grammar)
+// ---------------------------------------------------------------------------
+
+/// SQL injection detection for Python: flags [`SQL_EXEC_METHODS`] calls whose
+/// first argument is a `binary_operator` (`+`) containing a SQL keyword literal.
+fn find_python_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    let has_sql = SQL_KEYWORDS_STR
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
+    if !has_sql {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b" + ") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.python_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("py")];
+    };
+    let mut findings = Vec::new();
+    find_sqli_calls_py(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_sqli_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            let is_db_call = SQL_EXEC_METHODS
+                .iter()
+                .any(|m| func_text == *m || func_text.ends_with(&format!(".{m}")));
+            if is_db_call {
+                let mut ac = args_node.walk();
+                for arg in args_node.children(&mut ac) {
+                    if arg.kind() == "binary_operator"
+                        && binary_node_has_plus_op(arg, source)
+                        && has_sql_string_leaf(arg, source)
+                    {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:sqli_concatenation — `{func_text}()` called with a \
+                                 SQL query built by string concatenation (`+`); use \
+                                 parameterized queries (e.g. cursor.execute(sql, params)) \
+                                 to prevent SQL injection — CISA KEV class"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                        return; // one finding per call node; siblings handled by recursion
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_sqli_calls_py(child, source, findings);
+    }
+}
+
+/// SSRF detection for Python: flags [`SSRF_HTTP_CALLEES_PY`] calls whose URL
+/// argument is a `binary_operator` (`+`), indicating dynamic URL construction.
+fn find_python_ssrf_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    let has_http = SSRF_HTTP_CALLEES_PY
+        .iter()
+        .any(|c| source.windows(c.len()).any(|w| w == c.as_bytes()));
+    if !has_http {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.python_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("py")];
+    };
+    let mut findings = Vec::new();
+    find_ssrf_calls_py(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_ssrf_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            if SSRF_HTTP_CALLEES_PY.contains(&func_text) {
+                let first_named = {
+                    let mut ac = args_node.walk();
+                    let x = args_node.children(&mut ac).find(|c| c.is_named());
+                    x
+                };
+                if let Some(arg) = first_named {
+                    if arg.kind() == "binary_operator" && binary_node_has_plus_op(arg, source) {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:ssrf_dynamic_url — `{func_text}()` called with a \
+                                 URL constructed via string concatenation (`+`); if any \
+                                 component is user-controlled this is an SSRF vector — \
+                                 validate and allowlist URL hosts before issuing HTTP \
+                                 requests — CISA KEV class"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_ssrf_calls_py(child, source, findings);
+    }
+}
+
+/// Path traversal detection for Python: flags `open()` calls whose first
+/// argument is a `binary_operator` (`+`) instead of `os.path.join()`.
+fn find_python_path_traversal_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    if !source.windows(5).any(|w| w == b"open(") {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b" + ") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.python_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("py")];
+    };
+    let mut findings = Vec::new();
+    find_path_traversal_py(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_path_traversal_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            let is_open = matches!(func_text, "open" | "io.open" | "codecs.open")
+                || func_text.ends_with(".open");
+            if is_open {
+                let mut ac = args_node.walk();
+                for arg in args_node.children(&mut ac) {
+                    if arg.kind() == "binary_operator" && binary_node_has_plus_op(arg, source) {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description:
+                                "security:path_traversal_concatenation — `open()` called with \
+                                 a path built by string concatenation (`+`); use \
+                                 `os.path.join()` and validate the resolved path against an \
+                                 allowed base directory to prevent directory traversal — \
+                                 CISA KEV class"
+                                    .to_string(),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_path_traversal_py(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CISA KEV — JavaScript / TypeScript AST gates
+// ---------------------------------------------------------------------------
+
+/// SQL injection detection for JS/TS: flags [`SQL_EXEC_METHODS`] calls whose
+/// argument list contains a `binary_expression` (`+`) with a SQL string leaf.
+fn find_js_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    let has_sql = SQL_KEYWORDS_STR
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
+    if !has_sql {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b" + ") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("js")];
+    };
+    let mut findings = Vec::new();
+    find_sqli_calls_js(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_sqli_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            let is_db_call = SQL_EXEC_METHODS
+                .iter()
+                .any(|m| func_text == *m || func_text.ends_with(&format!(".{m}")));
+            if is_db_call {
+                let mut ac = args_node.walk();
+                for arg in args_node.children(&mut ac) {
+                    if arg.kind() == "binary_expression"
+                        && binary_node_has_plus_op(arg, source)
+                        && has_sql_string_leaf(arg, source)
+                    {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:sqli_concatenation — `{func_text}()` called with a \
+                                 SQL query built by string concatenation (`+`); use \
+                                 parameterized queries with `?` or `$N` placeholders \
+                                 to prevent SQL injection — CISA KEV class"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_sqli_calls_js(child, source, findings);
+    }
+}
+
+/// SSRF detection for JS/TS: flags [`SSRF_HTTP_CALLEES_JS`] calls whose first
+/// argument is a `binary_expression` or `template_string` (dynamic URL).
+fn find_js_ssrf_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    let has_http = SSRF_HTTP_CALLEES_JS
+        .iter()
+        .any(|c| source.windows(c.len()).any(|w| w == c.as_bytes()));
+    if !has_http {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("js")];
+    };
+    let mut findings = Vec::new();
+    find_ssrf_calls_js(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            if SSRF_HTTP_CALLEES_JS.contains(&func_text) {
+                let first_named = {
+                    let mut ac = args_node.walk();
+                    let x = args_node.children(&mut ac).find(|c| c.is_named());
+                    x
+                };
+                if let Some(arg) = first_named {
+                    if matches!(arg.kind(), "binary_expression" | "template_string") {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:ssrf_dynamic_url — `{func_text}()` called with a \
+                                 dynamically constructed URL (string concatenation or template \
+                                 literal); if any component is user-controlled this is an SSRF \
+                                 vector — validate and allowlist URL hosts — CISA KEV class"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_ssrf_calls_js(child, source, findings);
+    }
+}
+
+/// Path traversal detection for JS/TS: flags [`FS_OPEN_CALLEES_JS`] calls
+/// whose first argument is a `binary_expression` (`+`) instead of
+/// `path.join()`.
+fn find_js_path_traversal_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    let has_fs = FS_OPEN_CALLEES_JS.iter().any(|c| {
+        let method = c.split('.').next_back().unwrap_or("");
+        source.windows(method.len()).any(|w| w == method.as_bytes())
+    });
+    if !has_fs {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b" + ") {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("js")];
+    };
+    let mut findings = Vec::new();
+    find_path_traversal_js(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_path_traversal_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            let is_fs_call = FS_OPEN_CALLEES_JS.contains(&func_text)
+                || func_text.ends_with(".readFile")
+                || func_text.ends_with(".readFileSync")
+                || func_text.ends_with(".writeFile")
+                || func_text.ends_with(".writeFileSync");
+            if is_fs_call {
+                let first_named = {
+                    let mut ac = args_node.walk();
+                    let x = args_node.children(&mut ac).find(|c| c.is_named());
+                    x
+                };
+                if let Some(arg) = first_named {
+                    if arg.kind() == "binary_expression" && binary_node_has_plus_op(arg, source) {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:path_traversal_concatenation — `{func_text}()` \
+                                 called with a path built by string concatenation (`+`); use \
+                                 `path.join()` or `path.resolve()` and validate the result \
+                                 against an allowed base directory — CISA KEV class"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_path_traversal_js(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CISA KEV — Java / Go / C# byte-level Tier 2 gates
+//
+// Grammars for these languages are loaded in `crates/polyglot` but have no
+// active AST-walk branch in this module yet.  The byte-level approach (marker
+// co-occurrence check) is the Tier 2 interim gate per the CVE-to-AST protocol
+// in `docs/R_AND_D_ROADMAP.md`.  Phase 1 upgrade (full AST walk) is tracked there.
+// ---------------------------------------------------------------------------
+
+/// SQL injection — Java: DB execution method + SQL keyword + string concat
+/// close-quote pattern all present in the same file.
+fn find_java_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const JAVA_EXEC: &[&[u8]] = &[
+        b"executeQuery(",
+        b"executeUpdate(",
+        b"execute(\"",
+        b"prepareStatement(",
+    ];
+    if !JAVA_EXEC
+        .iter()
+        .any(|p| source.windows(p.len()).any(|w| w == *p))
+    {
+        return Vec::new();
+    }
+    if !SQL_KEYWORDS_STR
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()))
+    {
+        return Vec::new();
+    }
+    // `" +` — string literal close-quote immediately followed by concatenation
+    if !source.windows(3).any(|w| w == b"\" +") {
+        return Vec::new();
+    }
+    vec![SlopFinding {
+        start_byte: 0,
+        end_byte: 0,
+        description: "security:sqli_concatenation — SQL query assembled via string \
+                      concatenation in a Java database execution call; use \
+                      PreparedStatement with `?` placeholders to prevent SQL \
+                      injection — CISA KEV class"
+            .to_string(),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::KevCritical,
+    }]
+}
+
+/// SQL injection — Go: `database/sql` method + SQL keyword + concat pattern.
+fn find_go_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const GO_DB: &[&[u8]] = &[
+        b"db.Query(",
+        b"db.QueryRow(",
+        b"db.Exec(",
+        b"tx.Query(",
+        b"tx.Exec(",
+    ];
+    if !GO_DB
+        .iter()
+        .any(|p| source.windows(p.len()).any(|w| w == *p))
+    {
+        return Vec::new();
+    }
+    if !SQL_KEYWORDS_STR
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()))
+    {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b"\" +") {
+        return Vec::new();
+    }
+    vec![SlopFinding {
+        start_byte: 0,
+        end_byte: 0,
+        description: "security:sqli_concatenation — SQL query assembled via string \
+                      concatenation in a Go database/sql call; use `$1/$2` \
+                      placeholders with `db.Query(sql, args...)` to prevent SQL \
+                      injection — CISA KEV class"
+            .to_string(),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::KevCritical,
+    }]
+}
+
+/// SSRF — Go: `net/http` call where the URL argument does not begin with a
+/// string literal (next byte after `(` is not `"` or `` ` ``).
+fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const GO_HTTP: &[&[u8]] = &[b"http.Get(", b"http.Post(", b"http.Head("];
+    let mut findings = Vec::new();
+    'outer: for pattern in GO_HTTP {
+        for (i, _) in source
+            .windows(pattern.len())
+            .enumerate()
+            .filter(|(_, w)| w == pattern)
+        {
+            let after = i + pattern.len();
+            if let Some(&nb) = source.get(after) {
+                if nb != b'"' && nb != b'`' {
+                    findings.push(SlopFinding {
+                        start_byte: i,
+                        end_byte: i + pattern.len(),
+                        description: "security:ssrf_dynamic_url — Go `http.Get/Post/Head()` \
+                                      called with a dynamic URL argument; if user-controlled \
+                                      this is an SSRF vector — validate and allowlist URL \
+                                      hosts before issuing HTTP requests — CISA KEV class"
+                            .to_string(),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::KevCritical,
+                    });
+                    continue 'outer;
+                }
+            }
+        }
+    }
+    findings
+}
+
+/// SQL injection — C#: SqlCommand/MySqlCommand + SQL keyword + concat pattern.
+fn find_csharp_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const CS_EXEC: &[&[u8]] = &[
+        b"ExecuteNonQuery()",
+        b"ExecuteReader()",
+        b"ExecuteScalar()",
+        b"new SqlCommand(",
+        b"new MySqlCommand(",
+        b"CommandText =",
+    ];
+    if !CS_EXEC
+        .iter()
+        .any(|p| source.windows(p.len()).any(|w| w == *p))
+    {
+        return Vec::new();
+    }
+    if !SQL_KEYWORDS_STR
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()))
+    {
+        return Vec::new();
+    }
+    if !source.windows(3).any(|w| w == b"\" +") {
+        return Vec::new();
+    }
+    vec![SlopFinding {
+        start_byte: 0,
+        end_byte: 0,
+        description: "security:sqli_concatenation — SQL query assembled via string \
+                      concatenation in a C# database command; use SqlParameter \
+                      objects with parameterized queries to prevent SQL injection — \
+                      CISA KEV class"
+            .to_string(),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::KevCritical,
+    }]
 }
 
 // ---------------------------------------------------------------------------
@@ -2181,6 +2868,188 @@ mod credential_tests {
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
             "find_slop must forward supply-chain findings: {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod kev_tests {
+    use super::*;
+
+    // ── Severity tier ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_kev_critical_severity_points() {
+        assert_eq!(
+            Severity::KevCritical.points(),
+            150,
+            "KevCritical tier must contribute 150 points"
+        );
+    }
+
+    #[test]
+    fn test_kev_critical_does_not_shift_lower_tiers() {
+        // Regression guard: inserting KevCritical must not renumber existing tiers.
+        assert_eq!(Severity::Exhaustion.points(), 100);
+        assert_eq!(Severity::Critical.points(), 50);
+        assert_eq!(Severity::Warning.points(), 10);
+        assert_eq!(Severity::Lint.points(), 0);
+    }
+
+    // ── Python SQLi ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_python_sqli_concatenation_detected() {
+        let src = b"cursor.execute(\"SELECT * FROM users WHERE id=\" + user_id)";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("sqli_concatenation")),
+            "Python SQLi concat must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_sqli_parameterized_not_flagged() {
+        let src = b"cursor.execute(\"SELECT * FROM users WHERE id=?\", (user_id,))";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "parameterized Python query must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── Go SQLi ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_go_sqli_concatenation_detected() {
+        let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id=\" + userId)";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("sqli_concatenation")),
+            "Go SQLi concat must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_go_sqli_parameterized_not_flagged() {
+        let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id=$1\", userId)";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "parameterized Go query must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── Python SSRF ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_python_ssrf_dynamic_url_detected() {
+        let src = b"response = requests.get(\"https://internal.corp/\" + user_input)";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("ssrf_dynamic_url")),
+            "Python SSRF dynamic URL must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_ssrf_static_url_not_flagged() {
+        let src = b"response = requests.get(\"https://api.example.com/users/123\")";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "Python SSRF static URL must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── JS SSRF ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_js_ssrf_dynamic_fetch_detected() {
+        let src = b"const resp = await fetch(\"https://api.example.com/\" + userId);";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("ssrf_dynamic_url")),
+            "JS SSRF dynamic fetch must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_js_ssrf_static_fetch_not_flagged() {
+        let src = b"const resp = await fetch(\"https://api.example.com/users/123\");";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "JS SSRF static fetch must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── Python path traversal ──────────────────────────────────────────────
+
+    #[test]
+    fn test_python_path_traversal_concat_detected() {
+        let src = b"with open(base_dir + user_file, 'r') as f:\n    content = f.read()\n";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("path_traversal_concatenation")),
+            "Python path traversal concat must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_path_traversal_os_path_join_not_flagged() {
+        let src =
+            b"import os\nwith open(os.path.join(base_dir, user_file), 'r') as f:\n    content = f.read()\n";
+        let findings = find_slop("py", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("path_traversal_concatenation")),
+            "os.path.join must not be flagged: {findings:?}"
+        );
+    }
+
+    // ── JS path traversal ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_js_path_traversal_readfile_concat_detected() {
+        let src = b"fs.readFile(uploadDir + filename, 'utf8', callback);";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("path_traversal_concatenation")),
+            "JS path traversal readFile concat must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_js_path_traversal_path_join_not_flagged() {
+        let src = b"const p = path.join(uploadDir, filename);\nfs.readFile(p, 'utf8', callback);";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("path_traversal_concatenation")),
+            "path.join must not be flagged: {findings:?}"
         );
     }
 }

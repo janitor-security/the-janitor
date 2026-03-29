@@ -30,14 +30,17 @@
 //!           + (hallucinated_security_fix × 100)
 //! ```
 //! Antipattern scoring is stratified by [`crate::slop_hunter::Severity`]:
-//! - `Critical` (50 pts): AST-Bombs, `gets()`, open CIDR rules, K8s wildcard hosts,
+//! - `KevCritical` (150 pts): CISA KEV-class exploits — SQLi concatenation, SSRF dynamic URL,
+//!   path traversal concatenation, obfuscated build-script payloads (XZ Utils DNA).
+//! - `Exhaustion`  (100 pts): Parser DoS / AST-Bomb patterns.
+//! - `Critical`    ( 50 pts): `gets()`, open CIDR rules, K8s wildcard hosts,
 //!   compiled payload injection.
-//! - `Warning`  (10 pts): NCD entropy anomaly (`antipattern:ncd_anomaly`).
-//! - `Lint`     ( 0 pts): Reserved for future non-scoring informational rules.
+//! - `Warning`     ( 10 pts): NCD entropy anomaly (`antipattern:ncd_anomaly`).
+//! - `Lint`        (  0 pts): Reserved for future non-scoring informational rules.
 //!
 //! The `antipattern_score` field accumulates these per-finding values; `antipatterns_found`
 //! remains the raw count for reporting purposes.  `antipattern_score` is capped at 500 pts
-//! (equivalent to 10 Critical findings) to prevent runaway score inflation.
+//! (equivalent to ~3 KevCritical findings) to prevent runaway score inflation.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -949,12 +952,14 @@ impl PRBouncer for PatchBouncer {
             let passes_domain = (f.domain & file_domain) != 0;
             // Test domain exemption (Phase 3): on test-path files, Warning and Lint
             // findings are suppressed — test code is allowed to be structurally
-            // vacuous or cloned.  Critical and Exhaustion findings fire unconditionally
-            // because parser DoS attacks are supply-chain threats regardless of domain.
+            // vacuous or cloned.  KevCritical, Critical, and Exhaustion findings fire
+            // unconditionally — CISA KEV-class and parser DoS attacks are supply-chain
+            // threats regardless of domain.
             let passes_severity = file_domain != crate::metadata::DOMAIN_TEST
                 || matches!(
                     f.severity,
-                    crate::slop_hunter::Severity::Critical
+                    crate::slop_hunter::Severity::KevCritical
+                        | crate::slop_hunter::Severity::Critical
                         | crate::slop_hunter::Severity::Exhaustion
                 );
             if passes_domain && passes_severity {

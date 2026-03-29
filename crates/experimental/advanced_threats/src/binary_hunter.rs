@@ -165,6 +165,26 @@ const PATTERNS: &[(&[u8], &str)] = &[
          GitHub Pages is not a CDN and has no integrity guarantee — \
          use a versioned package dependency instead",
     ),
+    // ── XZ Utils backdoor DNA (CVE-2024-3094) ─────────────────────────────
+    // The XZ Utils supply-chain backdoor used `eval $(echo ...)` to obfuscate
+    // malicious commands injected into the autotools build script.  This pattern
+    // does not appear in any legitimate build system.
+    (
+        b"eval $(echo ",
+        "security:obfuscated_build_script — eval of base64-encoded subshell \
+         (XZ Utils backdoor DNA; CVE-2024-3094 build script pattern); \
+         eval $(echo ...) is used exclusively for obfuscated command execution",
+    ),
+    // Decoding a base64 blob and piping the result directly to bash executes
+    // arbitrary encoded payloads at build time — never appears in legitimate
+    // build scripts.  Second obfuscation vector from CVE-2024-3094.
+    (
+        b"| base64 -d | bash",
+        "security:obfuscated_build_script — base64 decode pipeline piped to bash \
+         (XZ Utils backdoor DNA; CVE-2024-3094 build script pattern); \
+         this executes arbitrary encoded payloads at build time — \
+         never appears in legitimate build scripts",
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -464,6 +484,62 @@ mod tests {
         assert!(
             findings.is_empty(),
             "github.com URL must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_xz_eval_echo_detected() {
+        // CVE-2024-3094 build-script pattern: eval $(echo ...) obfuscated command.
+        let bytes = b"eval $(echo aGVsbG8gd29ybGQ=)";
+        let findings = scan(bytes);
+        assert!(
+            !findings.is_empty(),
+            "eval $(echo ...) must be detected as obfuscated_build_script"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("obfuscated_build_script")),
+            "must have obfuscated_build_script finding: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_xz_base64_pipe_bash_detected() {
+        // CVE-2024-3094 build-script pattern: base64 decode piped directly to bash.
+        let bytes = b"cat payload.b64 | base64 -d | bash";
+        let findings = scan(bytes);
+        assert!(
+            !findings.is_empty(),
+            "| base64 -d | bash must be detected as obfuscated_build_script"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("obfuscated_build_script")),
+            "must have obfuscated_build_script finding: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_base64_encode_not_flagged() {
+        // base64 encoding (not decoding to bash) is legitimate — e.g. CI artifact upload.
+        let bytes = b"echo 'hello world' | base64 -e > encoded.txt";
+        let findings = scan(bytes);
+        assert!(
+            findings.is_empty(),
+            "base64 encode to file must not be flagged: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_legitimate_base64_decode_to_file_not_flagged() {
+        // base64 -d writing to a file (not piped to bash) is legitimate.
+        let bytes = b"base64 -d encoded.txt > decoded_output.bin";
+        let findings = scan(bytes);
+        assert!(
+            findings.is_empty(),
+            "base64 decode to file must not be flagged: {findings:?}"
         );
     }
 }
