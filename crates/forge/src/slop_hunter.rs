@@ -15,6 +15,9 @@
 //! | HCL/Terraform | `public-read` S3 ACL | Public S3 bucket exposes data to the internet |
 //! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
 //! | JS/TS | `innerHTML` assignment | Direct DOM XSS vector — use `textContent` or sanitize input |
+//! | JS/TS | `.__proto__`, `["__proto__"]`, `[constructor][prototype]` | Prototype pollution via direct proto key access |
+//! | Java | `new ObjectInputStream(`, `XMLDecoder(`, `XStream().fromXML(`, `.readObject()`, `Runtime.getRuntime().exec(`, `InitialContext().lookup(` | Unsafe deserialization and runtime exec (Phase 1 AhoCorasick) |
+//! | C# | `new BinaryFormatter()`, `TypeNameHandling.Auto/All/Objects`, `LosFormatter`, `ObjectStateFormatter` | Unsafe deserialization — Newtonsoft.Json RCE class |
 //!
 //! ## Removed Rules (v7.6.0 — Linter Annihilation)
 //!
@@ -268,16 +271,27 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_js_sqli_slop(eng, source));
             f.extend(find_js_ssrf_slop(eng, source));
             f.extend(find_js_path_traversal_slop(eng, source));
+            // Phase 1 R&D: prototype pollution Layer A (AhoCorasick)
+            f.extend(find_prototype_pollution_slop(source));
             f
         }
         // CISA KEV gates — byte-level Tier 2 (no active grammar branch yet)
-        "java" => find_java_sqli_slop(source),
+        // Phase 1 R&D additions: Java/C# deserialization
+        "java" => {
+            let mut f = find_java_sqli_slop(source);
+            f.extend(find_java_slop_fast(source));
+            f
+        }
         "go" => {
             let mut f = find_go_sqli_slop(source);
             f.extend(find_go_ssrf_slop(source));
             f
         }
-        "cs" => find_csharp_sqli_slop(source),
+        "cs" => {
+            let mut f = find_csharp_sqli_slop(source);
+            f.extend(find_csharp_slop_fast(source));
+            f
+        }
         _ => Vec::new(),
     };
     // Language-agnostic: credential header scan runs on every source file
@@ -1865,6 +1879,255 @@ fn find_csharp_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 1 R&D: Java deserialization gadget chain detection (AhoCorasick Tier 2)
+//
+// Covers CVE-2015-4852 (Apache Commons Collections ObjectInputStream gadget),
+// CVE-2021-44228 (Log4Shell JNDI InitialContext.lookup), XStream RCE class,
+// and Runtime.exec shell injection.  Full AST walk (Tier 1) is Phase 2.
+// ---------------------------------------------------------------------------
+
+/// Java dangerous API patterns — deserialization gadget chains and runtime exec.
+///
+/// | Pattern                        | Label                            | CVE class          |
+/// |--------------------------------|----------------------------------|--------------------|
+/// | `new ObjectInputStream(`       | `security:unsafe_deserialization`| CVE-2015-4852 class|
+/// | `XMLDecoder(`                  | `security:unsafe_deserialization`| Java XML deser RCE |
+/// | `XStream().fromXML(`           | `security:unsafe_deserialization`| XStream RCE class  |
+/// | `.readObject()`                | `security:unsafe_deserialization`| Generic deser sink |
+/// | `Runtime.getRuntime().exec(`   | `security:runtime_exec`          | Shell exec via Java |
+/// | `InitialContext().lookup(`     | `security:jndi_injection`        | CVE-2021-44228 class|
+const JAVA_DANGER_PATTERNS: &[(&[u8], &str)] = &[
+    (
+        b"new ObjectInputStream(",
+        "security:unsafe_deserialization — `new ObjectInputStream(` instantiates a Java \
+         object deserializer; attacker-controlled bytes fed into `readObject()` enable \
+         RCE via gadget chains (CVE-2015-4852 class); use Jackson with type restrictions \
+         or schema validation instead",
+    ),
+    (
+        b"XMLDecoder(",
+        "security:unsafe_deserialization — `XMLDecoder(` deserializes arbitrary Java \
+         objects from XML; attacker-controlled XML enables RCE; replace with JAXB \
+         with explicit class allow-list",
+    ),
+    (
+        b"XStream().fromXML(",
+        "security:unsafe_deserialization — `XStream().fromXML(` deserializes arbitrary \
+         Java objects from XML without type restrictions; enable XStream security \
+         framework `allowTypesByWildcard` or migrate to Jackson",
+    ),
+    (
+        b".readObject()",
+        "security:unsafe_deserialization — `.readObject()` is a Java deserialization sink; \
+         if the stream source is user-controlled this enables RCE via gadget chains; \
+         validate the source and apply `ObjectInputFilter` allow-list",
+    ),
+    (
+        b"Runtime.getRuntime().exec(",
+        "security:runtime_exec — `Runtime.getRuntime().exec(` executes an OS command; \
+         if the command string contains user input this is a command injection vector; \
+         use ProcessBuilder with an explicit argument array instead",
+    ),
+    (
+        b"InitialContext().lookup(",
+        "security:jndi_injection — `InitialContext().lookup(` with a user-controlled \
+         name string is the Log4Shell (CVE-2021-44228) JNDI injection vector; \
+         restrict to static config strings and disable remote JNDI class loading",
+    ),
+];
+
+static JAVA_DANGER_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn java_danger_automaton() -> &'static AhoCorasick {
+    JAVA_DANGER_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(JAVA_DANGER_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: java_danger AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan `.java` source bytes for unsafe deserialization and runtime exec patterns.
+///
+/// Phase 1 AhoCorasick (Tier 2) gate per `docs/R_AND_D_ROADMAP.md` Section III.
+/// Returns one [`SlopFinding`] per match at [`Severity::Critical`] (+50 pts).
+pub fn find_java_slop_fast(source: &[u8]) -> Vec<SlopFinding> {
+    let ac = java_danger_automaton();
+    ac.find_iter(source)
+        .map(|mat| SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: JAVA_DANGER_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 R&D: C# deserialization detection (AhoCorasick Tier 2)
+//
+// Covers Newtonsoft.Json TypeNameHandling RCE class (multiple CVEs 2019-2023),
+// BinaryFormatter (SYSLIB0011 deprecated, still active in legacy projects), and
+// LosFormatter/ObjectStateFormatter (legacy ASP.NET ViewState deser sinks).
+// `TypeNameHandling.None` is the safe value — explicitly excluded.
+// ---------------------------------------------------------------------------
+
+/// C# dangerous deserialization patterns.
+///
+/// | Pattern                  | Label                            | Notes                     |
+/// |--------------------------|----------------------------------|---------------------------|
+/// | `new BinaryFormatter()`  | `security:unsafe_deserialization`| SYSLIB0011, banned .NET 5+|
+/// | `TypeNameHandling.Auto`  | `security:unsafe_deserialization`| Newtonsoft.Json RCE class |
+/// | `TypeNameHandling.All`   | `security:unsafe_deserialization`| Newtonsoft.Json RCE class |
+/// | `TypeNameHandling.Objects`| `security:unsafe_deserialization`| Newtonsoft.Json RCE class |
+/// | `LosFormatter`           | `security:unsafe_deserialization`| Legacy ASP.NET ViewState  |
+/// | `ObjectStateFormatter`   | `security:unsafe_deserialization`| Legacy ASP.NET ViewState  |
+///
+/// `TypeNameHandling.None` is safe and is NOT in this list.
+const CSHARP_DANGER_PATTERNS: &[(&[u8], &str)] = &[
+    (
+        b"new BinaryFormatter()",
+        "security:unsafe_deserialization — `new BinaryFormatter()` is banned in .NET 5+ \
+         (SYSLIB0011) and enables RCE via gadget chains on attacker-controlled bytes; \
+         replace with System.Text.Json or XmlSerializer with type restrictions",
+    ),
+    (
+        b"TypeNameHandling.Auto",
+        "security:unsafe_deserialization — `TypeNameHandling.Auto` in Newtonsoft.Json \
+         enables arbitrary type deserialization; attacker-controlled JSON containing \
+         `$type` fields yields RCE on servers with gadget-bearing assemblies; \
+         set `TypeNameHandling.None` (the safe default)",
+    ),
+    (
+        b"TypeNameHandling.All",
+        "security:unsafe_deserialization — `TypeNameHandling.All` in Newtonsoft.Json \
+         unconditionally deserializes every `$type` annotation; equivalent attack \
+         surface to `TypeNameHandling.Auto` — set `TypeNameHandling.None` instead",
+    ),
+    (
+        b"TypeNameHandling.Objects",
+        "security:unsafe_deserialization — `TypeNameHandling.Objects` in Newtonsoft.Json \
+         deserializes `$type` annotations on object properties; partial exposure to the \
+         same RCE gadget chain as `TypeNameHandling.All` — set `TypeNameHandling.None`",
+    ),
+    (
+        b"LosFormatter",
+        "security:unsafe_deserialization — `LosFormatter` is a legacy ASP.NET ViewState \
+         formatter that deserializes arbitrary .NET objects; superseded by \
+         `MachineKey`-protected ViewState — do not use in new code",
+    ),
+    (
+        b"ObjectStateFormatter",
+        "security:unsafe_deserialization — `ObjectStateFormatter` is a legacy ASP.NET \
+         formatter that deserializes arbitrary .NET objects; superseded by \
+         `DataProtection` API — do not use in new code",
+    ),
+];
+
+static CSHARP_DANGER_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn csharp_danger_automaton() -> &'static AhoCorasick {
+    CSHARP_DANGER_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(CSHARP_DANGER_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: csharp_danger AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan `.cs` source bytes for unsafe deserialization patterns.
+///
+/// Phase 1 AhoCorasick (Tier 2) gate per `docs/R_AND_D_ROADMAP.md` Section III.
+/// `TypeNameHandling.None` is NOT in the pattern list — it is the safe value.
+/// Returns one [`SlopFinding`] per match at [`Severity::Critical`] (+50 pts).
+pub fn find_csharp_slop_fast(source: &[u8]) -> Vec<SlopFinding> {
+    let ac = csharp_danger_automaton();
+    ac.find_iter(source)
+        .map(|mat| SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: CSHARP_DANGER_PATTERNS[mat.pattern().as_usize()]
+                .1
+                .to_owned(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 R&D: Prototype Pollution detection — Layer A AhoCorasick (JS/TS)
+//
+// Covers direct `__proto__` key access patterns.  Layer B (unsafe merge
+// utility AST walk) is Phase 3 per `docs/R_AND_D_ROADMAP.md`.
+// ---------------------------------------------------------------------------
+
+/// Prototype pollution patterns — direct `__proto__` and constructor chain access.
+///
+/// | Pattern                   | Rationale                                      |
+/// |---------------------------|------------------------------------------------|
+/// | `.__proto__`              | Direct prototype access in expression          |
+/// | `["__proto__"]`           | Computed key bracket access                    |
+/// | `['__proto__']`           | Single-quote computed key variant              |
+/// | `[constructor][prototype]`| Indirect prototype chain traversal             |
+const PROTOTYPE_PATTERNS: &[(&[u8], &str)] = &[
+    (
+        b".__proto__",
+        "security:prototype_pollution — `.__proto__` directly accesses the object \
+         prototype chain; if this property path is reachable from user-controlled \
+         input it enables prototype pollution, overwriting shared object properties \
+         across all instances and potentially achieving RCE in Node.js via gadget chains",
+    ),
+    (
+        b"[\"__proto__\"]",
+        "security:prototype_pollution — `[\"__proto__\"]` computed key accesses the \
+         prototype chain; user-controlled keys fed into a merge/assign loop over \
+         this bracket form enable prototype pollution",
+    ),
+    (
+        b"['__proto__']",
+        "security:prototype_pollution — `['__proto__']` computed key (single-quote \
+         variant) accesses the prototype chain; same attack surface as the \
+         double-quote form",
+    ),
+    (
+        b"[constructor][prototype]",
+        "security:prototype_pollution — `[constructor][prototype]` traverses the \
+         prototype chain indirectly via the constructor property; this form is \
+         used to bypass naive `__proto__` keyword filters in merge utilities",
+    ),
+];
+
+static PROTOTYPE_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn prototype_automaton() -> &'static AhoCorasick {
+    PROTOTYPE_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(PROTOTYPE_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: prototype AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan JS/TS source bytes for prototype pollution patterns (Layer A).
+///
+/// Phase 1 AhoCorasick (Tier 2) gate per `docs/R_AND_D_ROADMAP.md` Section III.
+/// Returns one [`SlopFinding`] per match at [`Severity::Critical`] (+50 pts).
+pub fn find_prototype_pollution_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let ac = prototype_automaton();
+    ac.find_iter(source)
+        .map(|mat| SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: PROTOTYPE_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // High-Entropy Token Gate (patch-level)
 // ---------------------------------------------------------------------------
 
@@ -3104,6 +3367,195 @@ mod exhaustion_tests {
         assert!(
             findings.iter().all(|f| f.severity != Severity::Exhaustion),
             "clean trivial source must not trigger exhaustion: {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod phase1_rd_tests {
+    use super::*;
+
+    // ── Java deserialization ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_java_object_input_stream_fires() {
+        let src = b"ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());\nObject obj = ois.readObject();\n";
+        let findings = find_java_slop_fast(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "new ObjectInputStream( must fire unsafe_deserialization: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_runtime_exec_fires() {
+        let src = b"Process p = Runtime.getRuntime().exec(userInput);\n";
+        let findings = find_java_slop_fast(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("runtime_exec")),
+            "Runtime.getRuntime().exec( must fire runtime_exec: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_jndi_lookup_fires() {
+        let src = b"Context ctx = new InitialContext();\nObject obj = ctx.lookup(userInput);\nInitialContext().lookup(userInput);\n";
+        let findings = find_java_slop_fast(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("jndi_injection")),
+            "InitialContext().lookup( must fire jndi_injection: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_clean_serializable_override_safe() {
+        // A class that only implements Serializable with no dangerous API calls
+        let src = b"public class Foo implements Serializable {\n    private static final long serialVersionUID = 1L;\n}\n";
+        let findings = find_java_slop_fast(src);
+        assert!(
+            findings.is_empty(),
+            "clean Serializable class must not fire: {findings:?}"
+        );
+    }
+
+    // ── C# deserialization ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_csharp_binary_formatter_fires() {
+        let src = b"var bf = new BinaryFormatter();\nbf.Serialize(stream, obj);\n";
+        let findings = find_csharp_slop_fast(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "new BinaryFormatter() must fire unsafe_deserialization: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_type_name_handling_auto_fires() {
+        let src = b"var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto };\n";
+        let findings = find_csharp_slop_fast(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "TypeNameHandling.Auto must fire unsafe_deserialization: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_type_name_handling_none_is_safe() {
+        // TypeNameHandling.None is the safe default — must NOT fire.
+        let src = b"var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };\n";
+        let findings = find_csharp_slop_fast(src);
+        assert!(
+            findings.is_empty(),
+            "TypeNameHandling.None must not fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_clean_json_settings_safe() {
+        let src = b"var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore };\n";
+        let findings = find_csharp_slop_fast(src);
+        assert!(
+            findings.is_empty(),
+            "clean JsonSerializerSettings must not fire: {findings:?}"
+        );
+    }
+
+    // ── Prototype Pollution ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_prototype_pollution_dunder_proto_fires() {
+        let src = b"obj.__proto__.isAdmin = true;\n";
+        let findings = find_prototype_pollution_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution")),
+            ".__proto__ must fire prototype_pollution: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_prototype_pollution_bracket_fires() {
+        let src = b"target[\"__proto__\"][\"admin\"] = true;\n";
+        let findings = find_prototype_pollution_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution")),
+            "[\"__proto__\"] must fire prototype_pollution: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_prototype_pollution_constructor_chain_fires() {
+        let src = b"obj[constructor][prototype].isAdmin = true;\n";
+        let findings = find_prototype_pollution_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution")),
+            "[constructor][prototype] must fire prototype_pollution: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_prototype_pollution_clean_proto_string_safe() {
+        // A string literal that mentions "__proto__" in a comment or doc — must not fire
+        // because the pattern `.__proto__` requires the dot prefix.
+        let src = b"// The __proto__ key is dangerous in merge utilities.\nconst safe = { key: 'value' };\n";
+        let findings = find_prototype_pollution_slop(src);
+        assert!(
+            findings.is_empty(),
+            "bare __proto__ in comment without dot prefix must not fire: {findings:?}"
+        );
+    }
+
+    // ── find_slop dispatch integration ──────────────────────────────────────
+
+    #[test]
+    fn test_find_slop_java_dispatches_danger_patterns() {
+        let src = b"ObjectInputStream ois = new ObjectInputStream(in);\n";
+        let findings = find_slop("java", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "find_slop(java) must route to java danger patterns: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_cs_dispatches_danger_patterns() {
+        let src = b"var bf = new BinaryFormatter();\n";
+        let findings = find_slop("cs", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "find_slop(cs) must route to csharp danger patterns: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_js_dispatches_prototype_pollution() {
+        let src = b"merge(target, src);\ntarget.__proto__.admin = true;\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution")),
+            "find_slop(js) must route to prototype pollution patterns: {findings:?}"
         );
     }
 }

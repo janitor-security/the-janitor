@@ -460,6 +460,96 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Phase 1 R&D: Java Deserialization Gadget Chains ──────────────────────
+    Entry {
+        name: "Java/ObjectInputStream gadget chain — INTERCEPT",
+        lang: "java",
+        source: b"ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());\nObject obj = ois.readObject();\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "Java/Runtime.getRuntime().exec() shell injection — INTERCEPT",
+        lang: "java",
+        source: b"Process p = Runtime.getRuntime().exec(userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("runtime_exec"),
+    },
+    Entry {
+        name: "Java/InitialContext JNDI injection — INTERCEPT",
+        lang: "java",
+        source: b"Object obj = new InitialContext().lookup(userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("jndi_injection"),
+    },
+    Entry {
+        name: "Java/clean Serializable class — SAFE",
+        lang: "java",
+        source: b"public class Config implements Serializable {\n    private static final long serialVersionUID = 1L;\n    private String name;\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 1 R&D: C# Deserialization (Newtonsoft.Json + BinaryFormatter) ──
+    Entry {
+        name: "C#/BinaryFormatter instantiation — INTERCEPT",
+        lang: "cs",
+        source: b"var formatter = new BinaryFormatter();\nformatter.Serialize(stream, obj);\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "C#/TypeNameHandling.Auto — INTERCEPT",
+        lang: "cs",
+        source: b"var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto };\nvar obj = JsonConvert.DeserializeObject(json, settings);\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "C#/TypeNameHandling.None safe setting — SAFE",
+        lang: "cs",
+        source: b"var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };\nvar obj = JsonConvert.DeserializeObject<MyType>(json, settings);\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "C#/clean System.Text.Json deserialization — SAFE",
+        lang: "cs",
+        source: b"var obj = System.Text.Json.JsonSerializer.Deserialize<MyType>(json);\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 1 R&D: Prototype Pollution (JavaScript / TypeScript) ───────────
+    Entry {
+        name: "JS/.__proto__ direct access — INTERCEPT",
+        lang: "js",
+        source: b"function merge(target, src) {\n    for (const key in src) {\n        target[key] = src[key];\n    }\n}\nconst payload = JSON.parse(userInput);\nmerge(target, payload);\ntarget.__proto__.isAdmin = true;\n",
+        must_intercept: true,
+        desc_fragment: Some("prototype_pollution"),
+    },
+    Entry {
+        name: "JS/[\"__proto__\"] bracket access — INTERCEPT",
+        lang: "js",
+        source: b"obj[\"__proto__\"][\"admin\"] = true;\n",
+        must_intercept: true,
+        desc_fragment: Some("prototype_pollution"),
+    },
+    Entry {
+        name: "JS/[constructor][prototype] chain — INTERCEPT",
+        lang: "js",
+        source: b"obj[constructor][prototype].polluted = true;\n",
+        must_intercept: true,
+        desc_fragment: Some("prototype_pollution"),
+    },
+    Entry {
+        name: "JS/Object.freeze prototype defense — SAFE",
+        lang: "js",
+        source: b"Object.freeze(Object.prototype);\nconst safe = Object.create(null);\nsafe.key = value;\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

@@ -365,12 +365,12 @@ the safe configuration and must never fire.
 The three initiatives have a natural dependency ordering:
 
 ```
-Phase 1 (Immediate — 1 sprint):
+Phase 1 [COMPLETED — v8.1.0]:
   ├── Java/C# AhoCorasick patterns (III, Tier 2)
   │     Files: slop_hunter.rs, crucible/src/main.rs
-  │     Gate: crucible exit 0, just audit exit 0
+  │     Gate: crucible exit 0, just audit exit 0 ✓
   └── Prototype Pollution AhoCorasick Layer A (III, Tier 2)
-        Files: slop_hunter.rs, crucible/src/main.rs
+        Files: slop_hunter.rs, crucible/src/main.rs ✓
 
 Phase 2 (Short-term — 2 sprints):
   ├── Python AST walk upgrade (I, Tier 1)
