@@ -236,19 +236,35 @@ pub fn cmd_hyper_drive(
 
     pool.install(|| {
         pr_entries.par_iter().for_each(|(pr_num, pr_sha)| {
-            // Physarum Viscosity Gate — elastic RAM backpressure.
+            // Physarum Viscosity Gate — elastic RAM backpressure with deadlock guard.
             //
-            // When RAM pressure exceeds 90% (Stop pulse) we park this thread
-            // for 500 ms rather than evicting the PR.  At this point in the
-            // control flow the thread holds NO heap allocations beyond its own
-            // stack — all bounce data lives inside `bounce_one` and will be
-            // dropped when that function returns.  Parking here lets sibling
-            // workers complete their bounces and the OS reclaim those pages
-            // during the sleep window.  We only proceed once pressure returns
-            // to Constrict or Flow, ensuring forward progress without OOM risk.
+            // When RAM pressure exceeds 90% (Stop pulse) we park this thread for
+            // 500 ms to let sibling workers complete their bounces and free pages.
+            // At this point the thread holds NO heap allocations beyond its own stack.
+            //
+            // Deadlock guard: if ALL rayon workers enter this sleep simultaneously no
+            // work completes, RAM never drops, and the loop never exits.  We cap
+            // retries at MAX_STOP_RETRIES (10 × 500 ms = 5 s).  After the cap one
+            // worker breaks through, completes a bounce, frees memory, and unblocks
+            // the remaining parked workers on their next check.
+            const MAX_STOP_RETRIES: u32 = 10;
+            let mut stop_retries = 0u32;
             while let Pulse::Stop = heart.beat() {
-                eprintln!("  [PHYSARUM] RAM >90%. Pausing thread for 500ms to allow GC...");
+                if stop_retries >= MAX_STOP_RETRIES {
+                    eprintln!(
+                        "  [PHYSARUM] RAM still >90% after {}ms — proceeding to prevent deadlock.",
+                        MAX_STOP_RETRIES * 500
+                    );
+                    break;
+                }
+                eprintln!(
+                    "  [PHYSARUM] RAM >90%. Pausing thread for 500ms to allow GC... \
+                     ({}/{})",
+                    stop_retries + 1,
+                    MAX_STOP_RETRIES
+                );
                 std::thread::sleep(std::time::Duration::from_millis(500));
+                stop_retries += 1;
             }
 
             let entry = bounce_one(repo_path_arc, &base_sha, pr_sha, &registry, *pr_num, &slug);
