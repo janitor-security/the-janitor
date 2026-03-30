@@ -1457,13 +1457,18 @@ the safe configuration and must never fire.</p>
 <a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>  └── Java AST walk upgrade (I, Tier 1)
 <a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        Files: slop_hunter.rs (find_java_slop; QueryEngine::java_lang field added) ✓
 <a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>Phase 3 (Medium-term — 3 sprints):
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>Phase 3 [COMPLETED — v8.3.0]:
 <a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>  ├── C# AST walk upgrade (I, Tier 1)
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>  │     Files: slop_hunter.rs (add QueryEngine::csharp_lang field)
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>  ├── Prototype Pollution AST Layer B (III, Tier 1)
-<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>  └── SIMD MinHash (II)
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>        Files: pr_collider.rs
-<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>        Gate: simd_matches_scalar() test passes
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>  │     Files: slop_hunter.rs (QueryEngine::csharp_lang; find_csharp_slop;
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>  │            find_csharp_danger_nodes; CSHARP_DANGEROUS_TNH) ✓
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>  ├── Prototype Pollution AST Layer B (III, Tier 1)
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>  │     Files: slop_hunter.rs (find_prototype_merge_sink_slop;
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>  │            find_merge_sink_calls; argument_is_tainted;
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>  │            MERGE_CALL_TARGETS; USER_INPUT_NAMES) ✓
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>  └── SIMD MinHash AVX-256 (II)
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>        Files: pr_collider.rs (from_bytes_avx256; mul64_avx2;
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>               from_bytes_scalar; runtime dispatch in from_bytes) ✓
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>        Gate: simd_matches_scalar() 100-trial correctness test ✓
 </code></pre></div>
 <p>Every phase gate is: <strong>Crucible exits 0</strong> AND <strong><code>just audit</code> exits 0</strong> AND at least
 one true-positive + one true-negative fixture added to <code>crates/crucible/src/main.rs</code>.</p>
