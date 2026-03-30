@@ -19,7 +19,7 @@ Each audit package includes: PDF intelligence report, 16-column CSV audit trail,
 
 **Repository**: [github.com/godotengine/godot](https://github.com/godotengine/godot)
 
-Polyglot C++ game engine. 3.5 million lines across C++, C#, Java, Objective-C, GLSL, and Python. 265 PRs audited (1.18 GB source processed). 11 actionable intercepts, 6 critical threats, highest score 750. TEI: $1,000.
+Polyglot C++ game engine. 3.5 million lines across C++, C#, Java, Objective-C, GLSL, and Python. 952 PRs audited (4.04 GB source processed). 53 actionable intercepts, 27 critical threats, 177 antipatterns, highest score 750. TEI: $4,570.
 
 ### HashiCorp Terraform
 
