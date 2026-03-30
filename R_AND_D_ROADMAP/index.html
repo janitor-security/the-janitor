@@ -1450,12 +1450,12 @@ the safe configuration and must never fire.</p>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>  └── Prototype Pollution AhoCorasick Layer A (III, Tier 2)
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        Files: slop_hunter.rs, crucible/src/main.rs ✓
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>Phase 2 (Short-term — 2 sprints):
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>Phase 2 [COMPLETED — v8.2.0]:
 <a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>  ├── Python AST walk upgrade (I, Tier 1)
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>  │     Files: slop_hunter.rs, polyglot/src/lib.rs (python() already exists)
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>  │     Gate: crucible exit 0
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>  │     Files: slop_hunter.rs (find_python_slop_ast; test_ suppression; # noqa guard)
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>  │     Gate: crucible exit 0 ✓
 <a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>  └── Java AST walk upgrade (I, Tier 1)
-<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        Files: slop_hunter.rs (add QueryEngine::java_lang field)
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        Files: slop_hunter.rs (find_java_slop; QueryEngine::java_lang field added) ✓
 <a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
 <a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>Phase 3 (Medium-term — 3 sprints):
 <a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>  ├── C# AST walk upgrade (I, Tier 1)
