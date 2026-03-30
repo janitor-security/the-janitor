@@ -285,7 +285,7 @@ PR_LIMIT="${PR_LIMIT:-100}"
 BOUNCE_TIMEOUT="${BOUNCE_TIMEOUT:-30}"
 # Per-repo isolated workspace: prevents prior-run data from other repos bleeding
 # into the PDF/CSV aggregation step (gauntlet-runner scans the entire gauntlet dir).
-GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet-strike-${REPO_NAME}}"
+GAUNTLET_DIR="${GAUNTLET_DIR:-$HOME/dev/gauntlet}"
 JANITOR="${JANITOR:-./target/release/janitor}"
 # Pre-build: use existing binary if present; refreshed post-build below.
 JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo "dev")"
@@ -334,6 +334,12 @@ JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo
 #   gauntlet_report.json
 
 echo "[2/6] Running hyper-drive audit for ${SLUG} (limit=${PR_LIMIT})..."
+
+# Scorched-earth pre-clean: wipe sandbox before every strike so no prior-run
+# data from a different repo can bleed into this run's packfile or clone.
+mkdir -p "${GAUNTLET_DIR}"
+echo "  [pre-clean] Wiping ${GAUNTLET_DIR} ..."
+rm -rf "${GAUNTLET_DIR:?}"/*
 
 TARGETS_TMP="$(mktemp /tmp/gcpkg_targets_XXXXXX.txt)"
 trap 'rm -f "${TARGETS_TMP}"' EXIT
@@ -404,6 +410,11 @@ _synthesize_case_study \
     "${PR_LIMIT}"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
+
+# Scorched-earth post-clean: all 7 artefacts are now in OUT_DIR; the gauntlet
+# sandbox clone is no longer needed.  Wipe it to keep ~/dev pristine.
+echo "  [post-clean] Wiping ${GAUNTLET_DIR} ..."
+rm -rf "${GAUNTLET_DIR:?}"/*
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
