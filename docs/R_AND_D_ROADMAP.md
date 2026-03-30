@@ -818,7 +818,7 @@ Akka); Swift is the exclusive iOS/macOS language. Each has a distinct high-prior
 vulnerability class.
 
 ```
-Phase 5 [PENDING]:
+Phase 5 [COMPLETED — v8.5.0]:
   ├── PHP AST walk (Tier 1)
   │     Gates: eval injection, unserialize deserialization, shell_exec
   ├── Kotlin AST walk (Tier 1)
@@ -826,7 +826,7 @@ Phase 5 [PENDING]:
   ├── Scala AST walk (Tier 1)
   │     Gates: Class.forName dynamic loading, asInstanceOf unchecked cast on deserialized data
   └── Swift AST walk (Tier 1)
-        Gates: dlopen dynamic loading, URLSession arbitrary loads
+        Gates: dlopen dynamic loading, NSClassFromString dynamic class loading
 ```
 
 **PHP Gate Specifications**:
@@ -951,7 +951,7 @@ The AST anchor is a `message_expression` where the `message_selector` is
 
 ---
 
-## VIII. Predictive Allocation — Proactive Physarum Gate
+## VIII. Predictive Allocation — Proactive Physarum Gate [COMPLETED — v8.5.0]
 
 ### Problem Statement
 

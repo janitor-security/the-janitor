@@ -1615,6 +1615,25 @@ pub fn bounce_git(
             _ => continue, // no diff lines for this file — skip
         };
 
+        // Predictive Physarum gate — proactive memory-pressure check before
+        // tree-sitter AST allocation.  JVM and PHP grammars can allocate 15–25×
+        // the raw byte size; this gate catches the 100 KB–1 MB range where the
+        // 1 MiB circuit breaker above does not fire but risk is non-negligible.
+        {
+            use common::physarum::check_predictive_pressure;
+            if check_predictive_pressure(patch.len() as u64) {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if check_predictive_pressure(patch.len() as u64) {
+                    let projected_mb = (patch.len() as u64).saturating_mul(20) / (1024 * 1024);
+                    total.antipattern_details.push(format!(
+                        "physarum:predictive_skip — File skipped: projected AST peak \
+                        ({projected_mb} MB) would exceed Constrict threshold"
+                    ));
+                    continue;
+                }
+            }
+        }
+
         if let Ok(mut score) = PatchBouncer.bounce(patch, registry) {
             total.dead_symbols_added += score.dead_symbols_added;
             total.logic_clones_found += score.logic_clones_found;

@@ -28,6 +28,7 @@ tree-sitter-scala.workspace = true
 tree-sitter-ruby.workspace = true
 tree-sitter-php.workspace = true
 tree-sitter-swift.workspace = true
+tree-sitter-kotlin-ng.workspace = true
 tree-sitter-lua.workspace = true
 arc-swap.workspace = true
 git2.workspace = true

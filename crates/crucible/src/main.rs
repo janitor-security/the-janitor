@@ -781,6 +781,140 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Phase 5 R&D: PHP AST Walk ─────────────────────────────────────────────
+    Entry {
+        name: "PHP/eval() dynamic arg — INTERCEPT (PHP-1)",
+        lang: "php",
+        source: b"<?php\neval($userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("eval_injection"),
+    },
+    Entry {
+        name: "PHP/eval() string literal — SAFE (PHP-1 TN)",
+        lang: "php",
+        source: b"<?php\neval('phpinfo();');\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "PHP/unserialize() dynamic arg — INTERCEPT (PHP-2)",
+        lang: "php",
+        source: b"<?php\n$obj = unserialize($data);\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "PHP/unserialize() string literal — SAFE (PHP-2 TN)",
+        lang: "php",
+        source: b"<?php\n$obj = unserialize('O:8:\"stdClass\":0:{}');\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "PHP/system() dynamic arg — INTERCEPT (PHP-3)",
+        lang: "php",
+        source: b"<?php\nsystem($cmd);\n",
+        must_intercept: true,
+        desc_fragment: Some("command_injection"),
+    },
+    Entry {
+        name: "PHP/shell_exec() literal arg — SAFE (PHP-3 TN)",
+        lang: "php",
+        source: b"<?php\n$out = shell_exec('ls -la');\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 5 R&D: Kotlin AST Walk ──────────────────────────────────────────
+    Entry {
+        name: "Kotlin/Runtime.getRuntime().exec() dynamic — INTERCEPT (Kotlin-1)",
+        lang: "kt",
+        source: b"val p = Runtime.getRuntime().exec(userCommand)\n",
+        must_intercept: true,
+        desc_fragment: Some("command_injection_runtime_exec"),
+    },
+    Entry {
+        name: "Kotlin/Runtime.getRuntime().exec() literal — SAFE (Kotlin-1 TN)",
+        lang: "kt",
+        source: b"val p = Runtime.getRuntime().exec(\"git status\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Kotlin/Class.forName() dynamic — INTERCEPT (Kotlin-2)",
+        lang: "kt",
+        source: b"val cls = Class.forName(className)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_class_loading"),
+    },
+    Entry {
+        name: "Kotlin/Class.forName() literal — SAFE (Kotlin-2 TN)",
+        lang: "kt",
+        source: b"val cls = Class.forName(\"com.example.MyClass\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 5 R&D: Scala AST Walk ───────────────────────────────────────────
+    Entry {
+        name: "Scala/Class.forName() dynamic — INTERCEPT (Scala-1)",
+        lang: "scala",
+        source: b"val cls = Class.forName(userInput)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_class_loading"),
+    },
+    Entry {
+        name: "Scala/Class.forName() literal — SAFE (Scala-1 TN)",
+        lang: "scala",
+        source: b"val cls = Class.forName(\"com.example.Safe\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Scala/asInstanceOf on readObject() — INTERCEPT (Scala-2)",
+        lang: "scala",
+        source: b"val obj = ois.readObject().asInstanceOf[String]\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "Scala/asInstanceOf without deser — SAFE (Scala-2 TN)",
+        lang: "scala",
+        source: b"val x = anyRef.asInstanceOf[String]\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 5 R&D: Swift AST Walk ───────────────────────────────────────────
+    Entry {
+        name: "Swift/dlopen() dynamic path — INTERCEPT (Swift-1)",
+        lang: "swift",
+        source: b"let lib = dlopen(libraryPath, RTLD_LAZY)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_symbol_resolution"),
+    },
+    Entry {
+        name: "Swift/dlopen() string literal — SAFE (Swift-1 TN)",
+        lang: "swift",
+        source: b"let lib = dlopen(\"/usr/lib/libz.dylib\", RTLD_LAZY)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Swift/NSClassFromString() dynamic — INTERCEPT (Swift-2)",
+        lang: "swift",
+        source: b"let cls = NSClassFromString(className)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_class_loading"),
+    },
+    Entry {
+        name: "Swift/NSClassFromString() literal — SAFE (Swift-2 TN)",
+        lang: "swift",
+        source: b"let cls = NSClassFromString(\"NSString\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

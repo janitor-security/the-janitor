@@ -231,6 +231,14 @@ struct QueryEngine {
     ruby_lang: Language,
     /// Bash grammar — used for Phase 4 R&D curl|bash + eval injection AST walk.
     bash_lang: Language,
+    /// PHP grammar — used for Phase 5 R&D eval injection, unserialize, shell execution.
+    php_lang: Language,
+    /// Kotlin grammar — used for Phase 5 R&D Runtime.exec + Class.forName AST walk.
+    kotlin_lang: Language,
+    /// Scala grammar — used for Phase 5 R&D Class.forName + asInstanceOf AST walk.
+    scala_lang: Language,
+    /// Swift grammar — used for Phase 5 R&D dlopen + NSClassFromString AST walk.
+    swift_lang: Language,
 }
 
 impl QueryEngine {
@@ -244,6 +252,10 @@ impl QueryEngine {
         let go_lang: Language = tree_sitter_go::LANGUAGE.into();
         let ruby_lang: Language = tree_sitter_ruby::LANGUAGE.into();
         let bash_lang: Language = tree_sitter_bash::LANGUAGE.into();
+        let php_lang: Language = tree_sitter_php::LANGUAGE_PHP.into();
+        let kotlin_lang: Language = tree_sitter_kotlin_ng::LANGUAGE.into();
+        let scala_lang: Language = tree_sitter_scala::LANGUAGE.into();
+        let swift_lang: Language = tree_sitter_swift::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
@@ -254,6 +266,10 @@ impl QueryEngine {
             go_lang,
             ruby_lang,
             bash_lang,
+            php_lang,
+            kotlin_lang,
+            scala_lang,
+            swift_lang,
         })
     }
 }
@@ -321,6 +337,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         }
         "rb" => find_ruby_slop(eng, source),
         "sh" | "bash" | "zsh" => find_bash_slop(eng, source),
+        // Phase 5 R&D: PHP, Kotlin, Scala, Swift AST walks
+        "php" => find_php_slop(eng, source),
+        "kt" | "kts" => find_kotlin_slop(eng, source),
+        "scala" => find_scala_slop(eng, source),
+        "swift" => find_swift_slop(eng, source),
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
@@ -2923,6 +2944,408 @@ fn find_bash_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
 }
 
 // ---------------------------------------------------------------------------
+// Phase 5 R&D: PHP AST Walk — eval injection (PHP-1), unserialize (PHP-2),
+//   shell execution (PHP-3) per `docs/R_AND_D_ROADMAP.md` Section VII Phase 5.
+// ---------------------------------------------------------------------------
+
+/// PHP function names that constitute dangerous code-execution sinks.
+const PHP_SHELL_EXEC_FUNS: &[&str] = &["system", "exec", "shell_exec", "passthru"];
+
+/// Scan PHP source for eval injection, unsafe deserialization, and shell execution.
+///
+/// Gates:
+/// - **PHP-1** (`security:eval_injection`, +50): `eval(dynamic_arg)` outside test scope.
+/// - **PHP-2** (`security:unsafe_deserialization`, +50): `unserialize(non_literal)`.
+/// - **PHP-3** (`security:command_injection`, +50): `system`/`exec`/`shell_exec`/`passthru`
+///   with a non-literal first argument, outside test scope.
+///
+/// Suppression: PHP-1 and PHP-3 are suppressed when the call site is inside a
+/// function/method whose name begins with `test`.
+fn find_php_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const PHP_MARKERS: &[&[u8]] = &[
+        b"eval(",
+        b"unserialize(",
+        b"system(",
+        b"exec(",
+        b"shell_exec(",
+    ];
+    if !PHP_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.php_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("php")];
+    };
+    let mut findings = Vec::new();
+    find_php_danger_nodes(tree.root_node(), source, false, &mut findings);
+    findings
+}
+
+fn find_php_danger_nodes(
+    node: Node<'_>,
+    source: &[u8],
+    inside_test: bool,
+    findings: &mut Vec<SlopFinding>,
+) {
+    let in_test = if inside_test {
+        true
+    } else if node.kind() == "function_definition" || node.kind() == "method_declaration" {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        name.starts_with("test")
+    } else {
+        false
+    };
+
+    if node.kind() == "function_call_expression" {
+        let func_text = node
+            .child_by_field_name("function")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+
+        let first_arg_is_literal = || -> bool {
+            let Some(args) = node.child_by_field_name("arguments") else {
+                return false;
+            };
+            let Some(first_arg) = args.named_children(&mut args.walk()).next() else {
+                return false;
+            };
+            // In PHP, `arguments` contains `argument` wrapper nodes.  The actual
+            // expression is nested inside via the `value` field or as the first
+            // named child.  Unwrap one level before checking the kind.
+            let kind = if let Some(value) = first_arg.child_by_field_name("value") {
+                value.kind().to_owned()
+            } else {
+                let mut c = first_arg.walk();
+                let k = first_arg
+                    .named_children(&mut c)
+                    .next()
+                    .map(|n| n.kind())
+                    .unwrap_or_else(|| first_arg.kind());
+                k.to_owned()
+            };
+            kind == "string" || kind == "encapsed_string"
+        };
+
+        match func_text {
+            "eval" if !in_test && !first_arg_is_literal() => {
+                findings.push(SlopFinding {
+                    description: "security:eval_injection — PHP eval() with dynamic argument; \
+                        allows arbitrary code execution from attacker-controlled input"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+            "unserialize" if !first_arg_is_literal() => {
+                findings.push(SlopFinding {
+                    description: "security:unsafe_deserialization — PHP unserialize() with \
+                        dynamic argument enables object injection (CVE-2016-7124)"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+            f if !in_test && PHP_SHELL_EXEC_FUNS.contains(&f) && !first_arg_is_literal() => {
+                findings.push(SlopFinding {
+                    description: format!(
+                        "security:command_injection — PHP {f}() with dynamic argument \
+                        passes attacker input to the system shell"
+                    ),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_php_danger_nodes(child, source, in_test, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 R&D: Kotlin AST Walk — Runtime.exec injection (Kotlin-1),
+//   Class.forName dynamic loading (Kotlin-2).
+// ---------------------------------------------------------------------------
+
+/// Scan Kotlin source for Runtime.exec shell injection and Class.forName gadget chain entry.
+///
+/// Gates:
+/// - **Kotlin-1** (`security:command_injection_runtime_exec`, +50): `Runtime.getRuntime().exec(`
+///   with a non-literal first argument.
+/// - **Kotlin-2** (`security:dynamic_class_loading`, +50): `Class.forName(` with a
+///   non-literal argument.
+fn find_kotlin_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const KOTLIN_MARKERS: &[&[u8]] = &[b"Runtime.getRuntime", b"Class.forName"];
+    if !KOTLIN_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.kotlin_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("kt")];
+    };
+    let mut findings = Vec::new();
+    find_kotlin_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_kotlin_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+
+        // Kotlin-1: Runtime.getRuntime().exec(cmd) where cmd is not a literal.
+        if call_text.contains("getRuntime") && call_text.contains(".exec(") {
+            if let Some(exec_pos) = call_text.find(".exec(") {
+                let after_exec = call_text[exec_pos + 6..].trim_start();
+                if !after_exec.starts_with('"') && !after_exec.starts_with('\'') {
+                    findings.push(SlopFinding {
+                        description: "security:command_injection_runtime_exec — \
+                            Kotlin Runtime.getRuntime().exec() with dynamic argument \
+                            passes attacker input to the OS shell"
+                            .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_FIRST_PARTY,
+                    });
+                }
+            }
+        }
+
+        // Kotlin-2: Class.forName(className) where className is not a literal.
+        if let Some(pos) = call_text.find("Class.forName(") {
+            let after = call_text[pos + 14..].trim_start();
+            if !after.starts_with('"') && !after.starts_with('\'') {
+                findings.push(SlopFinding {
+                    description: "security:dynamic_class_loading — Kotlin Class.forName() \
+                        with dynamic argument enables gadget chain entry \
+                        (CVE-2011-4894 class)"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_kotlin_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 R&D: Scala AST Walk — Class.forName dynamic loading (Scala-1),
+//   asInstanceOf on deserialized data (Scala-2).
+// ---------------------------------------------------------------------------
+
+/// Deserialization method names that, when followed by `.asInstanceOf`, indicate
+/// an unsafe cast on untrusted data in Scala.
+const SCALA_DESER_METHODS: &[&str] = &[
+    "readObject",
+    "fromXML",
+    "readResolve",
+    "deserialize",
+    "parseBytes",
+    "fromBytes",
+];
+
+/// Scan Scala source for Class.forName dynamic class loading and
+/// unsafe asInstanceOf casts on deserialized data.
+///
+/// Gates:
+/// - **Scala-1** (`security:dynamic_class_loading`, +50): `Class.forName(` with
+///   a non-literal argument.
+/// - **Scala-2** (`security:unsafe_deserialization`, +50): `.asInstanceOf[` immediately
+///   following a known deserialization call.
+fn find_scala_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const SCALA_MARKERS: &[&[u8]] = &[b"Class.forName", b"asInstanceOf"];
+    if !SCALA_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.scala_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("scala")];
+    };
+    let mut findings = Vec::new();
+    // Scala-1: Class.forName AST walk (call_expression nodes)
+    find_scala_danger_nodes(tree.root_node(), source, &mut findings);
+    // Scala-2: .asInstanceOf after deserialization — byte-level heuristic.
+    // tree-sitter-scala represents `asInstanceOf[T]` as a `generic_function`
+    // node rather than a plain `call_expression`, so AST-node matching is
+    // grammar-version sensitive.  The pre-filter already confirmed both bytes
+    // are present; the deser-method check is the false-positive guard.
+    let has_as_instance_of = source
+        .windows(b".asInstanceOf".len())
+        .any(|w| w == b".asInstanceOf");
+    if has_as_instance_of {
+        let has_deser_method = SCALA_DESER_METHODS.iter().any(|m| {
+            let mb = m.as_bytes();
+            source.windows(mb.len()).any(|w| w == mb)
+        });
+        if has_deser_method
+            && !findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization"))
+        {
+            let pos = source
+                .windows(b".asInstanceOf".len())
+                .position(|w| w == b".asInstanceOf")
+                .unwrap_or(0);
+            findings.push(SlopFinding {
+                description: "security:unsafe_deserialization — Scala \
+                    .asInstanceOf cast on deserialized object; type confusion \
+                    enables arbitrary code execution via gadget chains"
+                    .to_string(),
+                severity: Severity::Critical,
+                start_byte: pos,
+                end_byte: pos + b".asInstanceOf".len(),
+                domain: DOMAIN_FIRST_PARTY,
+            });
+        }
+    }
+    findings
+}
+
+fn find_scala_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+
+        // Scala-1: Class.forName(dynamic_arg)
+        if let Some(pos) = call_text.find("Class.forName(") {
+            let after = call_text[pos + 14..].trim_start();
+            if !after.starts_with('"') && !after.starts_with('\'') {
+                findings.push(SlopFinding {
+                    description: "security:dynamic_class_loading — Scala Class.forName() \
+                        with dynamic argument enables gadget chain entry"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+
+        // Scala-2 is handled at the byte level in find_scala_slop because
+        // tree-sitter-scala represents asInstanceOf[T] as a generic_function
+        // rather than a plain call_expression across grammar versions.
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_scala_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 R&D: Swift AST Walk — dlopen dynamic symbol resolution (Swift-1),
+//   NSClassFromString dynamic class loading (Swift-2).
+// ---------------------------------------------------------------------------
+
+/// Scan Swift source for dlopen dynamic symbol resolution and NSClassFromString class loading.
+///
+/// Gates:
+/// - **Swift-1** (`security:dynamic_symbol_resolution`, +50): `dlopen(` with a
+///   non-literal first argument.
+/// - **Swift-2** (`security:dynamic_class_loading`, +50): `NSClassFromString(` with a
+///   non-literal argument.
+fn find_swift_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const SWIFT_MARKERS: &[&[u8]] = &[b"dlopen", b"NSClassFromString"];
+    if !SWIFT_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.swift_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("swift")];
+    };
+    let mut findings = Vec::new();
+    find_swift_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_swift_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+
+        // Swift-1: dlopen(path, flags) where path is not a string literal.
+        if let Some(pos) = call_text.find("dlopen(") {
+            let after = call_text[pos + 7..].trim_start();
+            if !after.starts_with('"') && !after.starts_with('#') {
+                findings.push(SlopFinding {
+                    description: "security:dynamic_symbol_resolution — Swift dlopen() \
+                        with dynamic path argument enables loading of attacker-controlled \
+                        native libraries"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+
+        // Swift-2: NSClassFromString(className) where className is not a literal.
+        if let Some(pos) = call_text.find("NSClassFromString(") {
+            let after = call_text[pos + 18..].trim_start();
+            if !after.starts_with('"') && !after.starts_with('#') {
+                findings.push(SlopFinding {
+                    description: "security:dynamic_class_loading — Swift NSClassFromString() \
+                        with dynamic argument enables loading of arbitrary Objective-C classes"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_swift_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1 R&D: Prototype Pollution detection — Layer A AhoCorasick (JS/TS)
 //
 // Covers direct `__proto__` key access patterns.  Layer B (unsafe merge
@@ -5097,6 +5520,299 @@ mod phase4_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("curl_pipe_execution")),
             "find_slop(sh) must dispatch to Phase 4 Bash AST walk"
+        );
+    }
+}
+
+#[cfg(test)]
+mod phase5_rd_tests {
+    use super::*;
+
+    fn eng() -> &'static QueryEngine {
+        engine().expect("QueryEngine must initialise in tests")
+    }
+
+    // ── PHP-1: eval injection ────────────────────────────────────────────────
+
+    #[test]
+    fn test_php_eval_dynamic_arg_fires() {
+        let src = b"<?php\neval($userInput);\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("eval_injection")),
+            "PHP eval with dynamic arg must fire eval_injection"
+        );
+    }
+
+    #[test]
+    fn test_php_eval_string_literal_clean() {
+        let src = b"<?php\neval('echo 1;');\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("eval_injection")),
+            "PHP eval with string literal must not fire"
+        );
+    }
+
+    // ── PHP-2: unserialize deserialization ───────────────────────────────────
+
+    #[test]
+    fn test_php_unserialize_dynamic_arg_fires() {
+        let src = b"<?php\n$obj = unserialize($data);\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "PHP unserialize with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_php_unserialize_literal_clean() {
+        let src = b"<?php\n$obj = unserialize('O:8:\"stdClass\":0:{}');\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "PHP unserialize with string literal must not fire"
+        );
+    }
+
+    // ── PHP-3: shell execution ───────────────────────────────────────────────
+
+    #[test]
+    fn test_php_system_dynamic_arg_fires() {
+        let src = b"<?php\nsystem($cmd);\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "PHP system() with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_php_shell_exec_literal_clean() {
+        let src = b"<?php\n$out = shell_exec('ls -la');\n";
+        let findings = find_php_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "PHP shell_exec with string literal must not fire"
+        );
+    }
+
+    // ── Kotlin-1: Runtime.getRuntime().exec() ───────────────────────────────
+
+    #[test]
+    fn test_kotlin_runtime_exec_dynamic_fires() {
+        let src = b"val p = Runtime.getRuntime().exec(userCommand)\n";
+        let findings = find_kotlin_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection_runtime_exec")),
+            "Kotlin Runtime.exec with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_kotlin_runtime_exec_literal_clean() {
+        let src = b"val p = Runtime.getRuntime().exec(\"git status\")\n";
+        let findings = find_kotlin_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("command_injection_runtime_exec")),
+            "Kotlin Runtime.exec with string literal must not fire"
+        );
+    }
+
+    // ── Kotlin-2: Class.forName() ────────────────────────────────────────────
+
+    #[test]
+    fn test_kotlin_class_for_name_dynamic_fires() {
+        let src = b"val cls = Class.forName(className)\n";
+        let findings = find_kotlin_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Kotlin Class.forName with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_kotlin_class_for_name_literal_clean() {
+        let src = b"val cls = Class.forName(\"com.example.MyClass\")\n";
+        let findings = find_kotlin_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Kotlin Class.forName with string literal must not fire"
+        );
+    }
+
+    // ── Scala-1: Class.forName() ─────────────────────────────────────────────
+
+    #[test]
+    fn test_scala_class_for_name_dynamic_fires() {
+        let src = b"val cls = Class.forName(userInput)\n";
+        let findings = find_scala_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Scala Class.forName with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_scala_class_for_name_literal_clean() {
+        let src = b"val cls = Class.forName(\"com.example.Safe\")\n";
+        let findings = find_scala_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Scala Class.forName with string literal must not fire"
+        );
+    }
+
+    // ── Scala-2: asInstanceOf on deserialized data ───────────────────────────
+
+    #[test]
+    fn test_scala_as_instance_of_after_deser_fires() {
+        let src = b"val obj = ois.readObject().asInstanceOf[String]\n";
+        let findings = find_scala_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "Scala asInstanceOf on readObject must fire"
+        );
+    }
+
+    #[test]
+    fn test_scala_as_instance_of_no_deser_clean() {
+        let src = b"val x = anyRef.asInstanceOf[String]\n";
+        let findings = find_scala_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "Scala asInstanceOf without deser call must not fire"
+        );
+    }
+
+    // ── Swift-1: dlopen() ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_swift_dlopen_dynamic_arg_fires() {
+        let src = b"let lib = dlopen(libraryPath, RTLD_LAZY)\n";
+        let findings = find_swift_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_symbol_resolution")),
+            "Swift dlopen with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_swift_dlopen_literal_clean() {
+        let src = b"let lib = dlopen(\"/usr/lib/libz.dylib\", RTLD_LAZY)\n";
+        let findings = find_swift_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_symbol_resolution")),
+            "Swift dlopen with string literal must not fire"
+        );
+    }
+
+    // ── Swift-2: NSClassFromString() ─────────────────────────────────────────
+
+    #[test]
+    fn test_swift_ns_class_from_string_dynamic_fires() {
+        let src = b"let cls = NSClassFromString(className)\n";
+        let findings = find_swift_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Swift NSClassFromString with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_swift_ns_class_from_string_literal_clean() {
+        let src = b"let cls = NSClassFromString(\"NSString\")\n";
+        let findings = find_swift_slop(eng(), src);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "Swift NSClassFromString with string literal must not fire"
+        );
+    }
+
+    // ── find_slop dispatch tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_find_slop_dispatches_php() {
+        let src = b"<?php\neval($userInput);\n";
+        let findings = find_slop("php", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("eval_injection")),
+            "find_slop(php) must dispatch to Phase 5 PHP AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_kotlin() {
+        let src = b"val cls = Class.forName(name)\n";
+        let findings = find_slop("kt", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "find_slop(kt) must dispatch to Phase 5 Kotlin AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_scala() {
+        let src = b"val cls = Class.forName(userInput)\n";
+        let findings = find_slop("scala", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "find_slop(scala) must dispatch to Phase 5 Scala AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_swift() {
+        let src = b"let lib = dlopen(libraryPath, RTLD_LAZY)\n";
+        let findings = find_slop("swift", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_symbol_resolution")),
+            "find_slop(swift) must dispatch to Phase 5 Swift AST walk"
         );
     }
 }

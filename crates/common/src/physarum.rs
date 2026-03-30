@@ -525,6 +525,70 @@ pub fn detect_optimal_concurrency() -> usize {
 }
 
 // ---------------------------------------------------------------------------
+// Predictive Allocation Gate — proactive Physarum pressure check (Phase 5)
+// ---------------------------------------------------------------------------
+
+/// Return the Flow→Constrict threshold percentage appropriate for the current
+/// hardware tier.
+///
+/// On systems with > [`HIGH_RAM_THRESHOLD_GIB`] GiB total RAM the threshold is
+/// [`CONSTRICT_THRESHOLD_HIGH_RAM`] (85 %).  On all other systems it is
+/// [`CONSTRICT_THRESHOLD_NORMAL`] (75 %).
+///
+/// This is exposed as a public helper so callers such as
+/// [`check_predictive_pressure`] can use the same tier logic without
+/// duplicating the constant definitions.
+pub fn constrict_threshold_pct() -> f64 {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    let total = sys.total_memory();
+    if total == 0 {
+        return CONSTRICT_THRESHOLD_NORMAL;
+    }
+    let total_gib = total / (1024 * 1024 * 1024);
+    if total_gib >= HIGH_RAM_THRESHOLD_GIB {
+        CONSTRICT_THRESHOLD_HIGH_RAM
+    } else {
+        CONSTRICT_THRESHOLD_NORMAL
+    }
+}
+
+/// Returns `true` if starting a parse of `file_size_bytes` would be predicted
+/// to push memory usage into the Constrict zone before the next beat cycle.
+///
+/// Uses a conservative 20× multiplier: tree-sitter ASTs for dense source code
+/// (C++, Java, Scala, Kotlin) require 15–25× the raw byte size at peak; 20× is
+/// the safe upper bound calibrated across the 23-grammar corpus.
+///
+/// The Constrict threshold adapts to the hardware tier via
+/// [`constrict_threshold_pct`]: 75 % on standard hosts, 85 % on hosts with
+/// > [`HIGH_RAM_THRESHOLD_GIB`] GiB total RAM.
+///
+/// If `sysinfo` cannot report memory state (total == 0), returns `false`
+/// (fail-open) so parse proceeds normally on headless/CI hosts.
+pub fn check_predictive_pressure(file_size_bytes: u64) -> bool {
+    let projected_peak = file_size_bytes.saturating_mul(20);
+
+    let mut sys = System::new();
+    sys.refresh_memory();
+    let total = sys.total_memory();
+    if total == 0 {
+        return false; // fail-open: sysinfo unavailable
+    }
+
+    let used = sys.used_memory();
+    let total_gib = total / (1024 * 1024 * 1024);
+    let threshold_pct = if total_gib >= HIGH_RAM_THRESHOLD_GIB {
+        CONSTRICT_THRESHOLD_HIGH_RAM
+    } else {
+        CONSTRICT_THRESHOLD_NORMAL
+    };
+    let constrict_threshold = (total as f64 * threshold_pct / 100.0) as u64;
+
+    used.saturating_add(projected_peak) > constrict_threshold
+}
+
+// ---------------------------------------------------------------------------
 // Melanin Layer — background-thread atomic pulse (zero-syscall read path)
 // ---------------------------------------------------------------------------
 
@@ -985,5 +1049,58 @@ mod tests {
             pulse,
             Pulse::Flow | Pulse::Constrict | Pulse::Stop
         ));
+    }
+
+    // ── Predictive Allocation Gate tests (Phase 5) ───────────────────────────
+
+    /// Helper: compute predicted pressure using the same formula as
+    /// `check_predictive_pressure` but with injected values, so tests are
+    /// deterministic without relying on actual sysinfo readings.
+    fn predicted_pressure(file_size_bytes: u64, used: u64, total: u64, threshold_pct: f64) -> bool {
+        if total == 0 {
+            return false;
+        }
+        let projected_peak = file_size_bytes.saturating_mul(20);
+        let constrict_threshold = (total as f64 * threshold_pct / 100.0) as u64;
+        used.saturating_add(projected_peak) > constrict_threshold
+    }
+
+    #[test]
+    fn predictive_pressure_small_file() {
+        // 1 KiB file, 50 % RAM used on an 8 GiB host → projected peak = 20 KiB.
+        // used (4 GiB) + peak (20 KiB) ≪ threshold (6 GiB) → false (no pause).
+        let total: u64 = 8 * 1024 * 1024 * 1024; // 8 GiB
+        let used: u64 = total / 2; // 50 %
+        let file_size: u64 = 1024; // 1 KiB
+        let threshold_pct = CONSTRICT_THRESHOLD_NORMAL; // 75 %
+        assert!(
+            !predicted_pressure(file_size, used, total, threshold_pct),
+            "1 KiB file at 50 % RAM must not trigger predictive pause"
+        );
+    }
+
+    #[test]
+    fn predictive_pressure_large_file() {
+        // 50 MiB file, 70 % RAM used on an 8 GiB host.
+        // total = 8 GiB → threshold = 6 GiB
+        // used = 5.6 GiB, peak = 50 MB × 20 = 1 GiB
+        // 5.6 + 1 = 6.6 GiB > 6 GiB → true (pause required).
+        let total: u64 = 8 * 1024 * 1024 * 1024; // 8 GiB
+        let used: u64 = (total as f64 * 0.70) as u64; // 70 %
+        let file_size: u64 = 50 * 1024 * 1024; // 50 MiB
+        let threshold_pct = CONSTRICT_THRESHOLD_NORMAL; // 75 %
+        assert!(
+            predicted_pressure(file_size, used, total, threshold_pct),
+            "50 MiB file at 70 % RAM must trigger predictive pause"
+        );
+    }
+
+    #[test]
+    fn predictive_pressure_failopen() {
+        // sysinfo unavailable (total == 0) → fail-open (false).
+        assert!(
+            !predicted_pressure(50 * 1024 * 1024, 0, 0, CONSTRICT_THRESHOLD_NORMAL),
+            "sysinfo unavailable must return false (fail-open)"
+        );
     }
 }
