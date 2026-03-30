@@ -1,0 +1,232 @@
+{
+  "schema_version": "1.0",
+  "name": "Janitor Sentinel",
+  "description": "Zero-upload structural firewall and AST analysis engine. Intercepts AI-generated and human pull requests before merge via tree-sitter AST walks, MinHash LSH clone detection, and NCD entropy gating. All analysis runs on-device inside the customer's CI runner — no source code leaves the environment.",
+  "homepage": "https://thejanitor.app",
+  "vendor": "Janitor Security",
+  "license": "BUSL-1.1",
+  "transport": "stdio",
+  "command": "janitor",
+  "args": ["serve", "--mcp"],
+  "env": {},
+  "tools": [
+    {
+      "name": "janitor_bounce",
+      "description": "Score a patch for slop, antipatterns, and logic clones. Returns a full BounceResult including slop_score and threat_class. When `patch` is omitted the tool scores the current uncommitted local changes via `git diff HEAD` run inside `path`. Primary enforcement tool — call this before merging any PR.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "Unified diff text to score. If omitted, `git diff HEAD` is run in `path`."
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the repository root. Required so the tool resolves git operations against the correct working tree."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "slop_score": { "type": "integer", "description": "Aggregate structural risk score. 0 = clean. ≥100 = block." },
+          "threat_class": { "type": "string", "enum": ["Boilerplate", "Necrotic", "Critical"], "description": "TEI classification. Critical = $150 economic intercept value per PR." },
+          "is_clean": { "type": "boolean" },
+          "antipattern_details": { "type": "array", "items": { "type": "string" }, "description": "Human-readable list of every fired rule." },
+          "clone_count": { "type": "integer", "description": "Number of logic-clone pairs detected via MinHash LSH." },
+          "zombie_count": { "type": "integer", "description": "Number of zombie dependency introductions." },
+          "collided_pr_numbers": { "type": "array", "items": { "type": "integer" }, "description": "PR numbers with Jaccard ≥ 0.70 structural similarity — Swarm detection." }
+        }
+      }
+    },
+    {
+      "name": "janitor_silo_audit",
+      "description": "Parse the workspace Cargo.lock (and any package-lock.json / yarn.lock) under `path` and return every `architecture:version_silo` violation — crates or packages resolved at more than one distinct version. Run this whenever dependency manifests change.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the workspace root."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "silo_count": { "type": "integer", "description": "Number of version-split pairs. Target: < 5." },
+          "silos": { "type": "array", "items": { "type": "object" }, "description": "Each silo: package name, versions present, anchoring crates." }
+        }
+      }
+    },
+    {
+      "name": "janitor_scan",
+      "description": "Run the 6-stage dead-symbol detection pipeline on a project directory. Returns total symbol count, dead symbol count, and dead symbol names. Use this to identify unused code eligible for deletion before a refactor.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the project root."
+          },
+          "library": {
+            "type": "boolean",
+            "description": "Enable library mode — protect all public symbols.",
+            "default": false
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string", "enum": ["live", "cache"] },
+          "total": { "type": "integer", "description": "Total symbols analysed." },
+          "dead": { "type": "integer", "description": "Dead (unreachable) symbol count." },
+          "dead_symbols": { "type": "array", "items": { "type": "string" } },
+          "orphan_files": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "name": "janitor_dedup",
+      "description": "Detect structurally identical (cloned) symbols within a project. Returns groups of symbols with the same structural hash. Use before a merge to surface copy-paste debt or coordinated Swarm patterns.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the project root."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "duplicate_groups": { "type": "integer" },
+          "groups": { "type": "array", "items": { "type": "object", "properties": { "duplicates": { "type": "array", "items": { "type": "string" } } } } }
+        }
+      }
+    },
+    {
+      "name": "janitor_dep_check",
+      "description": "Scan manifest files (package.json, Cargo.toml, requirements.txt, pyproject.toml) and identify zombie dependencies — packages declared but never imported in any source file. Use this when reviewing dependency upgrades or auditing attack surface.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the project root."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "total_declared": { "type": "integer" },
+          "zombie_count": { "type": "integer" },
+          "zombie_deps": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    {
+      "name": "janitor_provenance",
+      "description": "Return the zero-upload provenance record for the last recorded bounce: analysis duration (ms), source bytes processed, egress bytes sent, and the source-vs-egress exfiltration percentage. Use to verify the zero-upload guarantee is holding and to produce compliance evidence.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "analysis_duration_ms": { "type": "integer" },
+          "source_bytes": { "type": "integer" },
+          "egress_bytes": { "type": "integer" },
+          "exfiltration_pct": { "type": "number", "description": "egress / source × 100. Target: < 0.01%." }
+        }
+      }
+    },
+    {
+      "name": "janitor_visualize_ledger",
+      "description": "Render the actuarial intercept ledger as a Mermaid.js pie chart and a markdown TEI table. Classifies every bounced PR into Critical ($150), Necrotic ($20), StructuralSlop ($0), or Boilerplate ($0) and computes Total Economic Impact. Call this when asked for an executive summary, ROI report, or intercept breakdown.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "mermaid_chart": { "type": "string", "description": "Mermaid.js pie chart source for embedding in markdown." },
+          "tei_table": { "type": "string", "description": "Markdown table: tier, count, TEI contribution." },
+          "total_economic_impact_usd": { "type": "number" }
+        }
+      }
+    },
+    {
+      "name": "janitor_wopr_snapshot",
+      "description": "Return an ASCII health snapshot of the repository derived from the bounce log. Shows total PRs audited, clean/flagged/critical counts, average slop score, and a health bar. Use for a quick repository health vibe-check without opening the TUI dashboard.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
+          }
+        },
+        "required": ["path"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "snapshot": { "type": "string", "description": "Multi-line ASCII health report." }
+        }
+      }
+    },
+    {
+      "name": "janitor_clean",
+      "description": "Dry-run report of symbols eligible for removal. Equivalent to `janitor scan` without physical deletion. Requires a valid bearer token issued by thejanitor.app. Use before a cleanup commit to enumerate what is safe to delete.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the project root."
+          },
+          "library": {
+            "type": "boolean",
+            "description": "Enable library mode.",
+            "default": false
+          },
+          "token": {
+            "type": "string",
+            "description": "Bearer token issued by thejanitor.app. Required for janitor_clean."
+          }
+        },
+        "required": ["path", "token"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "eligible_for_removal": { "type": "array", "items": { "type": "string" } },
+          "count": { "type": "integer" }
+        }
+      }
+    }
+  ]
+}

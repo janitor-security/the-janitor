@@ -74,3 +74,89 @@ Additionally, `janitor export` produces a 16-column CSV audit trail (columns inc
 **Ghost Protocol** — The SafeDeleter's rollback mechanism: before any physical symbol deletion, the original byte range is archived to `.janitor/ghost/<qualified_name>.bak`; deletion is reversible at any point via `janitor restore`.
 
 **LotL (Living off the Land)** — An attack technique in which a pull request embeds legitimate system binaries, base64-encoded payloads, or shell metacharacter chains to execute arbitrary code using tools already present on the host; detected by `lotl_hunter.rs` via AhoCorasick pattern matching over the diff bytes.
+
+---
+
+## Enterprise MCP Registry Integration
+
+*Keywords: MCP registry, Model Context Protocol, enterprise AI tooling, LangGraph, Azure MCP Center, internal AI agent, autonomous code governance.*
+
+Janitor Sentinel ships a machine-readable `mcp-manifest.json` at the repository root. Platform engineers can ingest this manifest directly into any enterprise MCP registry — Azure MCP Center, a LangGraph tool router, a custom OpenAI function registry, or any orchestrator that speaks the Model Context Protocol — to grant internal AI agents autonomous access to the structural firewall.
+
+**Why this matters**: once registered, any internal AI agent (Copilot Workspace, a LangGraph orchestrator, a Claude-powered code review bot) can call `janitor_bounce` before proposing a merge, `janitor_silo_audit` after updating dependencies, or `janitor_visualize_ledger` when generating an executive security report — without any human in the loop and without any code leaving the environment.
+
+### Manifest location
+
+```
+https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json
+```
+
+Or clone the repository and reference the file at `./mcp-manifest.json`.
+
+### Manifest structure
+
+```json
+{
+  "schema_version": "1.0",
+  "name": "Janitor Sentinel",
+  "transport": "stdio",
+  "command": "janitor",
+  "args": ["serve", "--mcp"],
+  "tools": [ ... ]
+}
+```
+
+The `command` + `args` fields tell the registry how to spawn the MCP server process. The `transport: "stdio"` field declares the JSON-RPC 2.0 wire protocol (newline-delimited, stdin/stdout). No port, no daemon, no sidecar required.
+
+### Ingestion: Azure MCP Center
+
+```bash
+# Register via the Azure MCP CLI
+az mcp server register \
+  --name janitor-sentinel \
+  --manifest-url https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json \
+  --scope organization
+```
+
+After registration, any Azure AI Foundry agent or Copilot Studio orchestrator in the organization can discover and invoke the nine Janitor tools by name.
+
+### Ingestion: LangGraph / LangChain
+
+```python
+from langchain_mcp import MCPToolkit
+
+toolkit = MCPToolkit.from_manifest(
+    "https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json"
+)
+tools = toolkit.get_tools()
+# tools now contains janitor_bounce, janitor_silo_audit, janitor_scan, etc.
+```
+
+### Ingestion: Custom OpenAI / Claude function registry
+
+The `inputSchema` and `outputSchema` fields in each tool entry are valid JSON Schema objects. Paste them directly into an OpenAI function definition or an Anthropic tool definition — no translation required.
+
+### Available tools (summary)
+
+| Tool | Primary use | When to call |
+|------|------------|--------------|
+| `janitor_bounce` | Score a PR diff for structural risk | Before any merge — primary enforcement gate |
+| `janitor_silo_audit` | Detect duplicate dependency versions | After any `Cargo.toml` / `package.json` change |
+| `janitor_scan` | Find dead symbols in a project | Before a refactor or cleanup commit |
+| `janitor_dedup` | Find structurally cloned symbols | When reviewing AI-generated code at scale |
+| `janitor_dep_check` | Find zombie (unused) dependencies | During dependency audit or supply chain review |
+| `janitor_provenance` | Verify zero-upload guarantee | Compliance evidence generation |
+| `janitor_visualize_ledger` | Executive ROI / intercept summary | Board reporting, security review meetings |
+| `janitor_wopr_snapshot` | Repository health vibe-check | Quick status during on-call or sprint review |
+| `janitor_clean` | Enumerate symbols safe to delete | Before a dead-code removal commit (token required) |
+
+### Security model for autonomous agents
+
+When an AI agent invokes `janitor_bounce` via the registry, the same zero-upload guarantee applies as in the GitHub Actions deployment:
+
+- The `janitor serve --mcp` process runs inside the agent's execution environment.
+- No source bytes are transmitted to `api.thejanitor.app` — only a signed `BounceResult` struct if the agent chooses to call the optional Governor reporting endpoint.
+- The agent receives the full `BounceResult` (score, labels, collisions) and decides whether to block, flag, or approve the proposed change.
+- Bearer token (`janitor_clean`) is the only tool that requires outbound network contact with `thejanitor.app`.
+
+Registry ingestion does not change the threat model. The structural firewall is still local. The registry is a discovery mechanism, not a data channel.
