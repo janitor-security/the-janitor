@@ -16,7 +16,9 @@
 //! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
 //! | JS/TS | `innerHTML` assignment | Direct DOM XSS vector — use `textContent` or sanitize input |
 //! | JS/TS | `.__proto__`, `["__proto__"]`, `[constructor][prototype]` | Prototype pollution via direct proto key access |
-//! | Java | `new ObjectInputStream(`, `XMLDecoder(`, `XStream().fromXML(`, `.readObject()`, `Runtime.getRuntime().exec(`, `InitialContext().lookup(` | Unsafe deserialization and runtime exec (Phase 1 AhoCorasick) |
+//! | Python | `exec`, `pickle.loads/load`, `os.system`, `__import__` | Dangerous call AST walk — Phase 2 (Tier 1); `eval` at Warning, suppressed in `test_*` scope |
+//! | Java | `ObjectInputStream.readObject`, `XMLDecoder.readObject`, `Runtime.getRuntime().exec`, `InitialContext.lookup` (dynamic only) | Deserialization gadget chains + JNDI — Phase 2 AST walk (Tier 1) |
+//! | Java | `new ObjectInputStream(`, `XStream().fromXML(`, `.readObject()`, `Runtime.getRuntime().exec(`, `InitialContext().lookup(` | Same patterns — Phase 1 AhoCorasick (Tier 2) backup |
 //! | C# | `new BinaryFormatter()`, `TypeNameHandling.Auto/All/Objects`, `LosFormatter`, `ObjectStateFormatter` | Unsafe deserialization — Newtonsoft.Json RCE class |
 //!
 //! ## Removed Rules (v7.6.0 — Linter Annihilation)
@@ -214,8 +216,11 @@ struct QueryEngine {
     /// JavaScript grammar — used for `innerHTML` assignment, SQLi, SSRF, and
     /// path-traversal detection.
     js_lang: Language,
-    /// Python grammar — used for CISA KEV AST gates (SQLi, SSRF, PathTraversal).
+    /// Python grammar — used for CISA KEV AST gates (SQLi, SSRF, PathTraversal)
+    /// and Phase 2 R&D dangerous-call AST walk (exec, eval, pickle, os.system).
     python_lang: Language,
+    /// Java grammar — used for Phase 2 R&D deserialization/JNDI AST walk.
+    java_lang: Language,
 }
 
 impl QueryEngine {
@@ -224,11 +229,13 @@ impl QueryEngine {
         let c_lang: Language = tree_sitter_c::LANGUAGE.into();
         let js_lang: Language = tree_sitter_javascript::LANGUAGE.into();
         let python_lang: Language = tree_sitter_python::LANGUAGE.into();
+        let java_lang: Language = tree_sitter_java::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
             js_lang,
             python_lang,
+            java_lang,
         })
     }
 }
@@ -263,6 +270,8 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_python_sqli_slop(eng, source));
             f.extend(find_python_ssrf_slop(eng, source));
             f.extend(find_python_path_traversal_slop(eng, source));
+            // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
+            f.extend(find_python_slop_ast(eng, source));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -275,11 +284,12 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_prototype_pollution_slop(source));
             f
         }
-        // CISA KEV gates — byte-level Tier 2 (no active grammar branch yet)
-        // Phase 1 R&D additions: Java/C# deserialization
+        // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
         "java" => {
             let mut f = find_java_sqli_slop(source);
             f.extend(find_java_slop_fast(source));
+            // Phase 2 R&D: method_invocation AST walk (deser + JNDI + runtime exec)
+            f.extend(find_java_slop(eng, source));
             f
         }
         "go" => {
@@ -1523,6 +1533,379 @@ fn find_path_traversal_py(node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         find_path_traversal_py(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 R&D: Python dangerous-call AST walk (Tier 1)
+// ---------------------------------------------------------------------------
+
+/// Python dangerous API targets for the Phase 2 AST walk.
+///
+/// Each entry is `(callee_text, label_fragment, severity)`.
+/// `eval` is rated [`Severity::Warning`] (10 pts) because bare `eval` is idiomatic
+/// in test harnesses; all other targets fire at [`Severity::Critical`] (50 pts).
+/// `eval` findings are additionally suppressed inside `test_*` function scopes and
+/// when the call line contains a `# noqa` comment.
+const PYTHON_DANGER_CALLS: &[(&str, &str, Severity)] = &[
+    (
+        "exec",
+        "security:code_execution — Python `exec()` executes an arbitrary string as \
+         code; if the argument is user-controlled this achieves RCE; use a safe \
+         interpreter (e.g. `ast.literal_eval`) or an explicit allow-list instead",
+        Severity::Critical,
+    ),
+    (
+        "eval",
+        "security:dynamic_eval — Python `eval()` evaluates an arbitrary expression; \
+         user-controlled input enables RCE; prefer `ast.literal_eval()` for data \
+         parsing or refactor to avoid dynamic evaluation",
+        Severity::Warning,
+    ),
+    (
+        "pickle.loads",
+        "security:unsafe_deserialization — `pickle.loads()` deserializes arbitrary \
+         Python objects; attacker-controlled bytes enable RCE; use JSON or \
+         `ast.literal_eval` for data exchange",
+        Severity::Critical,
+    ),
+    (
+        "pickle.load",
+        "security:unsafe_deserialization — `pickle.load()` deserializes arbitrary \
+         Python objects from a file object; same RCE risk as `pickle.loads()`",
+        Severity::Critical,
+    ),
+    (
+        "os.system",
+        "security:os_command_injection — `os.system()` executes a shell command string; \
+         if any component is user-controlled this is a command injection vector; \
+         use `subprocess.run([...], shell=False)` with an explicit argument array",
+        Severity::Critical,
+    ),
+    (
+        "__import__",
+        "security:dynamic_import — `__import__()` performs a dynamic module import by \
+         name string; if the module name is user-controlled an attacker can load \
+         arbitrary code; use explicit static imports instead",
+        Severity::Critical,
+    ),
+];
+
+/// Return `true` if the source line containing `byte_offset` contains `# noqa`.
+fn line_has_noqa(source: &[u8], byte_offset: usize) -> bool {
+    let line_start = source[..byte_offset]
+        .iter()
+        .rposition(|&b| b == b'\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let line_end = source[byte_offset..]
+        .iter()
+        .position(|&b| b == b'\n')
+        .map(|p| byte_offset + p)
+        .unwrap_or(source.len());
+    let line = &source[line_start..line_end];
+    line.windows(6).any(|w| w == b"# noqa")
+}
+
+/// Walk the Python AST for dangerous call expressions.
+///
+/// `in_test_scope` is set to `true` when recursing into a `function_definition`
+/// whose name starts with `test_`; within such a scope `eval` findings are
+/// suppressed (test harnesses routinely call `eval` for coverage purposes).
+fn find_python_danger_calls(
+    node: Node<'_>,
+    source: &[u8],
+    findings: &mut Vec<SlopFinding>,
+    in_test_scope: bool,
+) {
+    // When entering a function_definition, check if it is a test_ function.
+    let next_in_test_scope = if node.kind() == "function_definition" {
+        let name_is_test = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .is_some_and(|name| name.starts_with("test_"));
+        // Once inside a test scope we stay in it for all nested calls.
+        in_test_scope || name_is_test
+    } else {
+        in_test_scope
+    };
+
+    if node.kind() == "call" {
+        if let Some(func_node) = node.child_by_field_name("function") {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            for &(callee, description, severity) in PYTHON_DANGER_CALLS {
+                if func_text != callee {
+                    continue;
+                }
+                // `eval` suppression: inside a test_ scope or `# noqa` on the line.
+                if callee == "eval" {
+                    if next_in_test_scope {
+                        break;
+                    }
+                    if line_has_noqa(source, node.start_byte()) {
+                        break;
+                    }
+                }
+                // General `# noqa` suppression for all dangerous calls.
+                if line_has_noqa(source, node.start_byte()) {
+                    break;
+                }
+                findings.push(SlopFinding {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    description: description.to_owned(),
+                    domain: DOMAIN_FIRST_PARTY,
+                    severity,
+                });
+                break;
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_python_danger_calls(child, source, findings, next_in_test_scope);
+    }
+}
+
+/// Scan Python source for dangerous call expressions via tree-sitter AST walk.
+///
+/// Covers `exec`, `eval`, `pickle.loads`, `pickle.load`, `os.system`, and
+/// `__import__`.  `eval` findings are suppressed inside `test_*` function scopes
+/// and on lines containing `# noqa`.
+///
+/// Phase 2 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 1).
+fn find_python_slop_ast(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files that can't contain any dangerous call.
+    let has_any = PYTHON_DANGER_CALLS.iter().any(|(callee, _, _)| {
+        let needle = callee.as_bytes();
+        source.windows(needle.len()).any(|w| w == needle)
+    });
+    if !has_any {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.python_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("py")];
+    };
+    let mut findings = Vec::new();
+    find_python_danger_calls(tree.root_node(), source, &mut findings, false);
+    findings
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 R&D: Java deserialization / JNDI AST walk (Tier 1)
+// ---------------------------------------------------------------------------
+
+/// Scan Java source for dangerous `method_invocation` patterns via tree-sitter.
+///
+/// Detects:
+/// - `ObjectInputStream` / `XMLDecoder` receiver + `readObject()` call
+/// - `Runtime.getRuntime()` receiver + `exec()` call (shell injection)
+/// - `InitialContext` receiver + `lookup()` call **only when the argument is not
+///   a string literal** (dynamic JNDI injection; static config lookups are safe)
+///
+/// For JNDI, receivers declared as `InitialContext varName = ...` are tracked at
+/// the file level so that `varName.lookup(dynamic)` correctly fires even when the
+/// receiver text does not literally contain `"InitialContext"`.
+///
+/// Phase 2 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 2).
+fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: at least one dangerous class or method name present.
+    const JAVA_MARKERS: &[&[u8]] = &[
+        b"ObjectInputStream",
+        b"XMLDecoder",
+        b"readObject",
+        b"getRuntime",
+        b"InitialContext",
+        b"lookup",
+    ];
+    if !JAVA_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.java_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("java")];
+    };
+
+    // Collect variable names by declared type so that short variable names
+    // (e.g. `ois`, `ctx`) resolve to their dangerous type at invocation sites.
+    let deser_var_names: Vec<String> = ["ObjectInputStream", "XMLDecoder", "XStream"]
+        .iter()
+        .flat_map(|t| collect_java_typed_vars(source, t))
+        .collect();
+    let ctx_var_names = collect_java_typed_vars(source, "InitialContext");
+
+    let mut findings = Vec::new();
+    find_java_danger_invocations(
+        tree.root_node(),
+        source,
+        &deser_var_names,
+        &ctx_var_names,
+        &mut findings,
+    );
+    findings
+}
+
+/// Scan `source` for Java variable declarations `TypeName varName` where the type
+/// contains `type_substr`.  Returns all matching variable names (lowercase-first
+/// identifiers) to enable file-level type resolution without full type inference.
+///
+/// Example: `collect_java_typed_vars(src, "InitialContext")` returns `["ctx"]` for
+/// `InitialContext ctx = new InitialContext();`.
+fn collect_java_typed_vars(source: &[u8], type_substr: &str) -> Vec<String> {
+    let needle = type_substr.as_bytes();
+    let mut names: Vec<String> = Vec::new();
+    let mut pos = 0usize;
+    while pos + needle.len() <= source.len() {
+        if &source[pos..pos + needle.len()] == needle {
+            let after_type = pos + needle.len();
+            // Skip whitespace after the type token.
+            let name_start = source[after_type..]
+                .iter()
+                .position(|&b| b == b' ' || b == b'\t')
+                .map(|p| after_type + p + 1)
+                .unwrap_or(after_type);
+            let name_end = source[name_start..]
+                .iter()
+                .position(|&b| !b.is_ascii_alphanumeric() && b != b'_')
+                .map(|p| name_start + p)
+                .unwrap_or(source.len());
+            if name_end > name_start {
+                if let Ok(name) = std::str::from_utf8(&source[name_start..name_end]) {
+                    let name = name.trim();
+                    // Only accept lowercase-first identifiers (variable names, not class names).
+                    if !name.is_empty()
+                        && name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+                    {
+                        names.push(name.to_owned());
+                    }
+                }
+            }
+        }
+        pos += 1;
+    }
+    names
+}
+
+/// Return `true` if `arg_list` (a Java `argument_list` node) has its first
+/// argument as a `string_literal` — i.e. the JNDI lookup target is a static
+/// constant rather than a user-controlled value.
+fn java_first_arg_is_string_literal(arg_list: Node<'_>) -> bool {
+    let mut cursor = arg_list.walk();
+    for child in arg_list.children(&mut cursor) {
+        if child.is_named() {
+            return child.kind() == "string_literal";
+        }
+    }
+    false
+}
+
+fn find_java_danger_invocations(
+    node: Node<'_>,
+    source: &[u8],
+    deser_var_names: &[String],
+    ctx_var_names: &[String],
+    findings: &mut Vec<SlopFinding>,
+) {
+    if node.kind() == "method_invocation" {
+        let name_text = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        let object_text = node
+            .child_by_field_name("object")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("")
+            .to_owned();
+
+        match name_text {
+            "readObject" => {
+                // Fire when the receiver type is ObjectInputStream or XMLDecoder,
+                // either by literal class name in the receiver expression OR by
+                // matching a variable name declared with one of those types.
+                let is_deser_receiver = object_text.contains("ObjectInputStream")
+                    || object_text.contains("XMLDecoder")
+                    || object_text.contains("XStream")
+                    || deser_var_names.iter().any(|v| v == &object_text);
+                if is_deser_receiver {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:unsafe_deserialization — `{object_text}.readObject()` \
+                             deserializes arbitrary Java objects; attacker-controlled bytes \
+                             enable RCE via gadget chains (CVE-2015-4852 class); apply \
+                             `ObjectInputFilter` allow-list or migrate to a safe format"
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+            "exec" => {
+                // Fire when the receiver chain contains `getRuntime` — i.e. the
+                // pattern is `Runtime.getRuntime().exec(...)`.
+                if object_text.contains("getRuntime") {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:runtime_exec — `{object_text}.exec()` executes an OS \
+                             command; if the command string contains user input this is a \
+                             command injection vector; use ProcessBuilder with an explicit \
+                             argument array instead"
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+            "lookup" => {
+                // Fire only when:
+                // (a) Receiver text directly names an InitialContext/JNDI context class, OR
+                // (b) Receiver variable was declared as InitialContext in this file, AND
+                // (c) First argument is NOT a string literal (dynamic JNDI injection).
+                let is_jndi_receiver = object_text.contains("InitialContext")
+                    || object_text.contains("Context")
+                    || ctx_var_names.iter().any(|v| v == &object_text);
+                if is_jndi_receiver {
+                    if let Some(args) = node.child_by_field_name("arguments") {
+                        if !java_first_arg_is_string_literal(args) {
+                            findings.push(SlopFinding {
+                                start_byte: node.start_byte(),
+                                end_byte: node.end_byte(),
+                                description: format!(
+                                    "security:jndi_injection — `{object_text}.lookup()` with a \
+                                     dynamic (non-literal) argument is the Log4Shell \
+                                     (CVE-2021-44228) JNDI injection vector; restrict to \
+                                     static config strings and disable remote JNDI class loading"
+                                ),
+                                domain: DOMAIN_FIRST_PARTY,
+                                severity: Severity::Critical,
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_java_danger_invocations(child, source, deser_var_names, ctx_var_names, findings);
     }
 }
 
@@ -3556,6 +3939,179 @@ mod phase1_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution")),
             "find_slop(js) must route to prototype pollution patterns: {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod phase2_rd_tests {
+    use super::*;
+
+    fn eng() -> &'static QueryEngine {
+        engine().expect("QueryEngine must initialise in tests")
+    }
+
+    // ── Python dangerous-call AST walk ───────────────────────────────────────
+
+    #[test]
+    fn test_python_exec_fires() {
+        let src = b"exec(user_input)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("code_execution")),
+            "exec() must fire code_execution: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_eval_fires_in_production_code() {
+        let src = b"result = eval(expression)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_eval")),
+            "eval() in production code must fire dynamic_eval: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_eval_suppressed_in_test_function() {
+        let src =
+            b"def test_eval_behavior():\n    result = eval('1 + 2')\n    assert result == 3\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dynamic_eval")),
+            "eval() inside test_ function must be suppressed: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_eval_suppressed_by_noqa() {
+        let src = b"result = eval(expression)  # noqa\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dynamic_eval")),
+            "eval() with # noqa must be suppressed: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_pickle_loads_fires() {
+        let src = b"import pickle\nobj = pickle.loads(data)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "pickle.loads() must fire unsafe_deserialization: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_os_system_fires() {
+        let src = b"import os\nos.system(cmd)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("os_command_injection")),
+            "os.system() must fire os_command_injection: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_dunder_import_fires() {
+        let src = b"mod = __import__(module_name)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_import")),
+            "__import__() must fire dynamic_import: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_ast_literal_eval_safe() {
+        let src = b"import ast\nresult = ast.literal_eval(user_input)\n";
+        let findings = find_python_slop_ast(eng(), src);
+        // ast.literal_eval is not in PYTHON_DANGER_CALLS — must be silent.
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dynamic_eval")),
+            "ast.literal_eval() must not fire: {findings:?}"
+        );
+    }
+
+    // ── Java method-invocation AST walk ─────────────────────────────────────
+
+    #[test]
+    fn test_java_read_object_fires() {
+        let src =
+            b"ObjectInputStream ois = new ObjectInputStream(in);\nObject obj = ois.readObject();\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "ObjectInputStream.readObject() must fire unsafe_deserialization: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_runtime_exec_fires() {
+        let src = b"Process p = Runtime.getRuntime().exec(userInput);\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("runtime_exec")),
+            "Runtime.getRuntime().exec() must fire runtime_exec: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_jndi_dynamic_fires() {
+        let src =
+            b"InitialContext ctx = new InitialContext();\nObject obj = ctx.lookup(userInput);\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("jndi_injection")),
+            "ctx.lookup(dynamic) must fire jndi_injection: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_jndi_static_string_safe() {
+        let src = b"InitialContext ctx = new InitialContext();\nDataSource ds = (DataSource) ctx.lookup(\"java:comp/env/jdbc/mydb\");\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("jndi_injection")),
+            "ctx.lookup(string_literal) must NOT fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_java_clean_mapper_read_value_safe() {
+        let src = b"ObjectMapper mapper = new ObjectMapper();\nMyClass obj = mapper.readValue(json, MyClass.class);\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unsafe_deserialization")),
+            "ObjectMapper.readValue() must not fire: {findings:?}"
         );
     }
 }

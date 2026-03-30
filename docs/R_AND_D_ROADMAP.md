@@ -372,12 +372,12 @@ Phase 1 [COMPLETED — v8.1.0]:
   └── Prototype Pollution AhoCorasick Layer A (III, Tier 2)
         Files: slop_hunter.rs, crucible/src/main.rs ✓
 
-Phase 2 (Short-term — 2 sprints):
+Phase 2 [COMPLETED — v8.2.0]:
   ├── Python AST walk upgrade (I, Tier 1)
-  │     Files: slop_hunter.rs, polyglot/src/lib.rs (python() already exists)
-  │     Gate: crucible exit 0
+  │     Files: slop_hunter.rs (find_python_slop_ast; test_ suppression; # noqa guard)
+  │     Gate: crucible exit 0 ✓
   └── Java AST walk upgrade (I, Tier 1)
-        Files: slop_hunter.rs (add QueryEngine::java_lang field)
+        Files: slop_hunter.rs (find_java_slop; QueryEngine::java_lang field added) ✓
 
 Phase 3 (Medium-term — 3 sprints):
   ├── C# AST walk upgrade (I, Tier 1)

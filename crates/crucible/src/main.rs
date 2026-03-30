@@ -550,6 +550,94 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Phase 2 R&D: Python Dangerous-Call AST Walk ───────────────────────────
+    Entry {
+        name: "Python/exec() code execution — INTERCEPT",
+        lang: "py",
+        source: b"exec(user_input)\n",
+        must_intercept: true,
+        desc_fragment: Some("code_execution"),
+    },
+    Entry {
+        name: "Python/eval() dynamic eval in production — INTERCEPT",
+        lang: "py",
+        source: b"result = eval(expression)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_eval"),
+    },
+    Entry {
+        name: "Python/eval() inside test_ function — SAFE (suppressed)",
+        lang: "py",
+        source: b"def test_eval_behavior():\n    result = eval('1 + 2')\n    assert result == 3\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Python/pickle.loads() unsafe deserialization — INTERCEPT",
+        lang: "py",
+        source: b"import pickle\nobj = pickle.loads(data)\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "Python/os.system() command injection — INTERCEPT",
+        lang: "py",
+        source: b"import os\nos.system(cmd)\n",
+        must_intercept: true,
+        desc_fragment: Some("os_command_injection"),
+    },
+    Entry {
+        name: "Python/__import__() dynamic import — INTERCEPT",
+        lang: "py",
+        source: b"mod = __import__(module_name)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_import"),
+    },
+    Entry {
+        name: "Python/ast.literal_eval safe alternative — SAFE",
+        lang: "py",
+        source: b"import ast\nresult = ast.literal_eval(user_input)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 2 R&D: Java Method-Invocation AST Walk ─────────────────────────
+    Entry {
+        name: "Java/ObjectInputStream.readObject() deserialization — INTERCEPT",
+        lang: "java",
+        source: b"ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());\nObject obj = ois.readObject();\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "Java/Runtime.getRuntime().exec() shell injection — INTERCEPT",
+        lang: "java",
+        source: b"Process p = Runtime.getRuntime().exec(userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("runtime_exec"),
+    },
+    Entry {
+        name: "Java/InitialContext.lookup() dynamic JNDI — INTERCEPT",
+        lang: "java",
+        source: b"InitialContext ctx = new InitialContext();\nObject obj = ctx.lookup(userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("jndi_injection"),
+    },
+    Entry {
+        name: "Java/InitialContext.lookup(\"static\") — SAFE (static string arg)",
+        lang: "java",
+        source: b"InitialContext ctx = new InitialContext();\nDataSource ds = (DataSource) ctx.lookup(\"java:comp/env/jdbc/mydb\");\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Java/clean JSON deserialization — SAFE",
+        lang: "java",
+        source: b"ObjectMapper mapper = new ObjectMapper();\nMyClass obj = mapper.readValue(json, MyClass.class);\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------
