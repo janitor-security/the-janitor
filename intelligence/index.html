@@ -415,9 +415,27 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#hashicorp-terraform" class="md-nav__link">
+    <span class="md-ellipsis">
+      HashiCorp Terraform
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#kubernetes" class="md-nav__link">
     <span class="md-ellipsis">
       Kubernetes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vercel-nextjs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Vercel Next.js
     </span>
   </a>
   
@@ -562,9 +580,27 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#hashicorp-terraform" class="md-nav__link">
+    <span class="md-ellipsis">
+      HashiCorp Terraform
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#kubernetes" class="md-nav__link">
     <span class="md-ellipsis">
       Kubernetes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vercel-nextjs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Vercel Next.js
     </span>
   </a>
   
@@ -607,13 +643,23 @@
 <tbody>
 <tr>
 <td>godotengine/godot</td>
-<td>2026-03-17</td>
+<td>2026-03-29</td>
 <td><a href="https://github.com/janitor-security/godot-audit-2026">godot-audit-2026</a></td>
 </tr>
 <tr>
+<td>hashicorp/terraform</td>
+<td>2026-03-29</td>
+<td><a href="https://github.com/janitor-security/terraform-audit-2026">terraform-audit-2026</a></td>
+</tr>
+<tr>
 <td>kubernetes/kubernetes</td>
-<td>2026-03-25</td>
+<td>2026-03-29</td>
 <td><a href="https://github.com/janitor-security/kubernetes-audit-2026">kubernetes-audit-2026</a></td>
+</tr>
+<tr>
+<td>vercel/next.js</td>
+<td>2026-03-29</td>
+<td><a href="https://github.com/janitor-security/next.js-audit-2026">next.js-audit-2026</a></td>
 </tr>
 </tbody>
 </table>
@@ -621,12 +667,16 @@
 <h2 id="audited-repositories">Audited Repositories</h2>
 <h3 id="godot-engine">Godot Engine</h3>
 <p><strong>Repository</strong>: <a href="https://github.com/godotengine/godot">github.com/godotengine/godot</a></p>
-<p>Polyglot C++ game engine. 3.5 million lines across C++, C#, Java, Objective-C, GLSL, and Python.</p>
-<p>Findings: 717 dead symbols (library mode), 8 antipatterns (raw <code>new</code> usage in C++ PRs), 69/98 PRs unlinked to issues. Peak RSS: 58 MB. Zero OOM events.</p>
+<p>Polyglot C++ game engine. 3.5 million lines across C++, C#, Java, Objective-C, GLSL, and Python. 265 PRs audited (1.18 GB source processed). 11 actionable intercepts, 6 critical threats, highest score 750. TEI: $1,000.</p>
+<h3 id="hashicorp-terraform">HashiCorp Terraform</h3>
+<p><strong>Repository</strong>: <a href="https://github.com/hashicorp/terraform">github.com/hashicorp/terraform</a></p>
+<p>Go infrastructure-as-code platform. 934 PRs audited (921 MB source processed). 242 actionable intercepts (25.9% rate), 5 critical threats (RSA private key leaks), 62 antipatterns, 9,868 dead symbols. TEI: $5,490.</p>
 <h3 id="kubernetes">Kubernetes</h3>
 <p><strong>Repository</strong>: <a href="https://github.com/kubernetes/kubernetes">github.com/kubernetes/kubernetes</a></p>
-<p>Go container orchestration platform. 166 MB peak RSS. 4 antipatterns (open CIDR ingress rules in HCL), 85/98 PRs unlinked.
-| vercel/next.js | 2026-03-28 | <a href="https://github.com/janitor-security/next.js-audit-2026">next.js-audit-2026</a> |</p>
+<p>Go container orchestration platform. 970 PRs audited (1.0 GB source processed). 129 actionable intercepts, 46 necrotic PRs, 79 antipatterns, 9.2h human time reclaimed. TEI: $2,580.</p>
+<h3 id="vercel-nextjs">Vercel Next.js</h3>
+<p><strong>Repository</strong>: <a href="https://github.com/vercel/next.js">github.com/vercel/next.js</a></p>
+<p>TypeScript/JavaScript full-stack React framework. 968 PRs audited (740 MB source processed). 72 actionable intercepts, 4 critical threats, 398 antipatterns, 105 zombie dependency PRs, highest score 990. TEI: $1,960.</p>
 
 
 
