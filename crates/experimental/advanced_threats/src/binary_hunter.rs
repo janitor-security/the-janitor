@@ -378,8 +378,7 @@ mod tests {
         assert!(!findings.is_empty(), "AKIA prefix must be detected");
         assert!(
             findings[0].description.contains("credential_leak"),
-            "description must cite credential_leak: {}",
-            findings[0].description
+            "description must cite credential_leak"
         );
         assert!(findings[0].description.contains("AWS"));
     }
@@ -391,8 +390,7 @@ mod tests {
         assert!(!findings.is_empty(), "RSA PEM header must be detected");
         assert!(
             findings[0].description.contains("RSA private key"),
-            "description must cite RSA private key: {}",
-            findings[0].description
+            "description must cite RSA private key"
         );
     }
 
@@ -410,8 +408,7 @@ mod tests {
         );
         assert!(
             findings[0].description.contains("Stripe"),
-            "description must cite Stripe: {}",
-            findings[0].description
+            "description must cite Stripe"
         );
     }
 
@@ -425,7 +422,7 @@ mod tests {
         let findings = scan(&bytes);
         assert!(
             findings.is_empty(),
-            "Stripe test-mode key must not be flagged: {findings:?}"
+            "Stripe test-mode key must not be flagged"
         );
     }
 
@@ -444,7 +441,7 @@ mod tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
-            "description must cite unpinned_asset: {findings:?}"
+            "description must cite unpinned_asset"
         );
     }
 
@@ -455,7 +452,7 @@ mod tests {
         let findings = scan(bytes);
         assert!(
             findings.is_empty(),
-            "relative script path must not be flagged: {findings:?}"
+            "relative script path must not be flagged"
         );
     }
 
@@ -472,7 +469,7 @@ mod tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
-            "must have unpinned_asset finding: {findings:?}"
+            "must have unpinned_asset finding"
         );
     }
 
@@ -481,10 +478,7 @@ mod tests {
         // github.com (not .github.io) is not flagged — different risk profile.
         let bytes = b"const REPO = \"https://github.com/org/repo\";";
         let findings = scan(bytes);
-        assert!(
-            findings.is_empty(),
-            "github.com URL must not be flagged: {findings:?}"
-        );
+        assert!(findings.is_empty(), "github.com URL must not be flagged");
     }
 
     #[test]
@@ -500,7 +494,7 @@ mod tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("obfuscated_build_script")),
-            "must have obfuscated_build_script finding: {findings:?}"
+            "must have obfuscated_build_script finding"
         );
     }
 
@@ -517,7 +511,7 @@ mod tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("obfuscated_build_script")),
-            "must have obfuscated_build_script finding: {findings:?}"
+            "must have obfuscated_build_script finding"
         );
     }
 
@@ -528,7 +522,7 @@ mod tests {
         let findings = scan(bytes);
         assert!(
             findings.is_empty(),
-            "base64 encode to file must not be flagged: {findings:?}"
+            "base64 encode to file must not be flagged"
         );
     }
 
@@ -539,7 +533,7 @@ mod tests {
         let findings = scan(bytes);
         assert!(
             findings.is_empty(),
-            "base64 decode to file must not be flagged: {findings:?}"
+            "base64 decode to file must not be flagged"
         );
     }
 }

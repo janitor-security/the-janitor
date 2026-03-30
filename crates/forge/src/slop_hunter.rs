@@ -2876,10 +2876,7 @@ mod tests {
     fn test_python_not_flagged() {
         let src = b"def process():\n    import requests\n    return 42\n";
         let findings = find_slop("py", src);
-        assert!(
-            findings.is_empty(),
-            "Python rules removed v7.6.0: {findings:?}"
-        );
+        assert!(findings.is_empty(), "Python rules removed v7.6.0");
     }
 
     #[test]
@@ -2888,7 +2885,7 @@ mod tests {
         let findings = find_slop("rs", src);
         assert!(
             findings.is_empty(),
-            "Rust vacuous-unsafe rule removed v7.6.0: {findings:?}"
+            "Rust vacuous-unsafe rule removed v7.6.0"
         );
     }
 
@@ -2896,20 +2893,14 @@ mod tests {
     fn test_js_eval_not_flagged() {
         let src = b"const result = eval(userInput);\n";
         let findings = find_slop("js", src);
-        assert!(
-            findings.is_empty(),
-            "JS eval() rule removed v7.6.0: {findings:?}"
-        );
+        assert!(findings.is_empty(), "JS eval() rule removed v7.6.0");
     }
 
     #[test]
     fn test_bash_unquoted_var_not_flagged() {
         let src = b"rm -rf $TARGET_DIR\n";
         let findings = find_slop("sh", src);
-        assert!(
-            findings.is_empty(),
-            "Bash unquoted-var rule removed v7.6.0: {findings:?}"
-        );
+        assert!(findings.is_empty(), "Bash unquoted-var rule removed v7.6.0");
     }
 
     // ── C++ regression guard (rule removed v7.1.11) ───────────────────────
@@ -2926,7 +2917,7 @@ void foo() {
         let findings = find_slop("cpp", src);
         assert!(
             findings.is_empty(),
-            "C++ raw new must NOT be flagged (rule removed v7.1.11): {findings:?}"
+            "C++ raw new must NOT be flagged (rule removed v7.1.11)"
         );
     }
 
@@ -2940,7 +2931,7 @@ void foo(int* p) {
         let findings = find_slop("cpp", src);
         assert!(
             findings.is_empty(),
-            "C++ raw delete must NOT be flagged (rule removed v7.1.11): {findings:?}"
+            "C++ raw delete must NOT be flagged (rule removed v7.1.11)"
         );
     }
 
@@ -2991,10 +2982,7 @@ spec:
     fn test_c_gets_detected() {
         let src = b"#include <stdio.h>\nint main() { char buf[64]; gets(buf); return 0; }\n";
         let findings = find_slop("c", src);
-        assert!(
-            !findings.is_empty(),
-            "gets() call in C must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "gets() call in C must be detected");
         assert!(findings[0].description.contains("gets()"));
     }
 
@@ -3003,10 +2991,7 @@ spec:
         let src =
             b"#include <stdio.h>\nint main() { char buf[64]; fgets(buf, sizeof(buf), stdin); return 0; }\n";
         let findings = find_slop("c", src);
-        assert!(
-            findings.is_empty(),
-            "fgets() is safe — must not be flagged: {findings:?}"
-        );
+        assert!(findings.is_empty(), "fgets() is safe — must not be flagged");
     }
 
     // ── HCL / Terraform tests ─────────────────────────────────────────────
@@ -3025,7 +3010,7 @@ resource \"aws_security_group_rule\" \"allow_all\" {
         let findings = find_slop("tf", src);
         assert!(
             !findings.is_empty(),
-            "wildcard CIDR in security group must be detected: {findings:?}"
+            "wildcard CIDR in security group must be detected"
         );
         assert!(findings[0].description.contains("0.0.0.0/0"));
     }
@@ -3042,10 +3027,7 @@ resource \"aws_security_group_rule\" \"office_only\" {
 }
 ";
         let findings = find_slop("tf", src);
-        assert!(
-            findings.is_empty(),
-            "restricted CIDR must not be flagged: {findings:?}"
-        );
+        assert!(findings.is_empty(), "restricted CIDR must not be flagged");
     }
 
     #[test]
@@ -3054,7 +3036,7 @@ resource \"aws_security_group_rule\" \"office_only\" {
         let findings = find_slop("tf", src);
         assert!(
             findings.is_empty(),
-            "wildcard CIDR without security context must not be flagged: {findings:?}"
+            "wildcard CIDR without security context must not be flagged"
         );
     }
 
@@ -3114,10 +3096,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let src =
             b"#include <string.h>\nvoid foo(char *dst, const char *src) { strcpy(dst, src); }\n";
         let findings = find_slop("c", src);
-        assert!(
-            !findings.is_empty(),
-            "strcpy() call in C must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "strcpy() call in C must be detected");
         assert!(findings[0].description.contains("strcpy()"));
     }
 
@@ -3125,10 +3104,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
     fn test_c_sprintf_detected() {
         let src = b"#include <stdio.h>\nvoid foo(char *buf, int n) { sprintf(buf, \"%d\", n); }\n";
         let findings = find_slop("c", src);
-        assert!(
-            !findings.is_empty(),
-            "sprintf() call in C must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "sprintf() call in C must be detected");
         assert!(findings[0].description.contains("sprintf()"));
     }
 
@@ -3136,10 +3112,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
     fn test_c_scanf_detected() {
         let src = b"#include <stdio.h>\nvoid foo() { int x; scanf(\"%d\", &x); }\n";
         let findings = find_slop("c", src);
-        assert!(
-            !findings.is_empty(),
-            "scanf() call in C must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "scanf() call in C must be detected");
         assert!(findings[0].description.contains("scanf()"));
     }
 
@@ -3150,7 +3123,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("cpp", src);
         assert!(
             !findings.is_empty(),
-            "strcpy() call in C++ must be detected: {findings:?}"
+            "strcpy() call in C++ must be detected"
         );
     }
 
@@ -3162,7 +3135,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("py", src);
         assert!(
             !findings.is_empty(),
-            "subprocess.run with shell=True must be detected: {findings:?}"
+            "subprocess.run with shell=True must be detected"
         );
         assert!(findings[0].description.contains("shell_injection"));
     }
@@ -3173,7 +3146,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("py", src);
         assert!(
             findings.is_empty(),
-            "subprocess.run without shell=True must not be flagged: {findings:?}"
+            "subprocess.run without shell=True must not be flagged"
         );
     }
 
@@ -3183,7 +3156,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("py", src);
         assert!(
             findings.is_empty(),
-            "shell=True without subprocess must not be flagged: {findings:?}"
+            "shell=True without subprocess must not be flagged"
         );
     }
 
@@ -3195,7 +3168,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("js", src);
         assert!(
             !findings.is_empty(),
-            "innerHTML assignment in JS must be detected: {findings:?}"
+            "innerHTML assignment in JS must be detected"
         );
         assert!(findings[0].description.contains("innerHTML"));
     }
@@ -3206,7 +3179,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("js", src);
         assert!(
             findings.is_empty(),
-            "textContent assignment must not be flagged: {findings:?}"
+            "textContent assignment must not be flagged"
         );
     }
 
@@ -3217,7 +3190,7 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         let findings = find_slop("ts", src);
         assert!(
             !findings.is_empty(),
-            "innerHTML assignment in TS must be detected: {findings:?}"
+            "innerHTML assignment in TS must be detected"
         );
     }
 
@@ -3232,10 +3205,7 @@ resource \"aws_s3_bucket_acl\" \"example\" {
 }
 ";
         let findings = find_slop("tf", src);
-        assert!(
-            !findings.is_empty(),
-            "S3 public-read ACL must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "S3 public-read ACL must be detected");
         assert!(findings[0].description.contains("s3_public_acl"));
     }
 
@@ -3273,8 +3243,7 @@ resource \"aws_s3_bucket_acl\" \"example\" {
         let f = result.unwrap();
         assert!(
             f.description.contains("recursive_boilerplate"),
-            "description must contain antipattern label: {}",
-            f.description
+            "description must contain antipattern label"
         );
         assert_eq!(
             f.severity,
@@ -3332,10 +3301,7 @@ resource \"aws_s3_bucket_acl\" \"example\" {
 }
 ";
         let findings = find_slop("tf", src);
-        assert!(
-            findings.is_empty(),
-            "S3 private ACL must not be flagged: {findings:?}"
-        );
+        assert!(findings.is_empty(), "S3 private ACL must not be flagged");
     }
 
     // ── YAML: remaining K8S_ROUTING_KINDS coverage ────────────────────────
@@ -3358,8 +3324,7 @@ spec:
         );
         assert!(
             findings[0].description.contains("Ingress"),
-            "description must name the resource kind: {}",
-            findings[0].description
+            "description must name the resource kind"
         );
     }
 
@@ -3381,8 +3346,7 @@ spec:
         );
         assert!(
             findings[0].description.contains("HTTPRoute"),
-            "description must name the resource kind: {}",
-            findings[0].description
+            "description must name the resource kind"
         );
     }
 
@@ -3404,8 +3368,7 @@ spec:
         );
         assert!(
             findings[0].description.contains("Gateway"),
-            "description must name the resource kind: {}",
-            findings[0].description
+            "description must name the resource kind"
         );
     }
 
@@ -3415,14 +3378,10 @@ spec:
     fn test_cpp_gets_detected() {
         let src = b"#include <cstdio>\nvoid f() { char buf[64]; gets(buf); }\n";
         let findings = find_slop("cpp", src);
-        assert!(
-            !findings.is_empty(),
-            "gets() in C++ must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "gets() in C++ must be detected");
         assert!(
             findings[0].description.contains("gets()"),
-            "description must cite gets(): {}",
-            findings[0].description
+            "description must cite gets()"
         );
     }
 
@@ -3431,14 +3390,10 @@ spec:
         let src =
             b"#include <cstdio>\nvoid f(char *buf, const char *in) { sprintf(buf, \"%s\", in); }\n";
         let findings = find_slop("cpp", src);
-        assert!(
-            !findings.is_empty(),
-            "sprintf() in C++ must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "sprintf() in C++ must be detected");
         assert!(
             findings[0].description.contains("sprintf()"),
-            "description must cite sprintf(): {}",
-            findings[0].description
+            "description must cite sprintf()"
         );
     }
 
@@ -3446,14 +3401,10 @@ spec:
     fn test_cpp_scanf_detected() {
         let src = b"#include <cstdio>\nvoid f() { char buf[64]; scanf(\"%s\", buf); }\n";
         let findings = find_slop("cpp", src);
-        assert!(
-            !findings.is_empty(),
-            "scanf() in C++ must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "scanf() in C++ must be detected");
         assert!(
             findings[0].description.contains("scanf()"),
-            "description must cite scanf(): {}",
-            findings[0].description
+            "description must cite scanf()"
         );
     }
 
@@ -3462,10 +3413,7 @@ spec:
         let src =
             b"#include <cstring>\nvoid f(char *d, size_t n, const char *s) { strncpy(d, s, n - 1); d[n-1] = '\\0'; }\n";
         let findings = find_slop("cpp", src);
-        assert!(
-            findings.is_empty(),
-            "strncpy() in C++ must not be flagged: {findings:?}"
-        );
+        assert!(findings.is_empty(), "strncpy() in C++ must not be flagged");
     }
 }
 
@@ -3510,12 +3458,11 @@ mod logic_regression_tests {
         ];
         let patch = make_patch(base, head);
         let result = check_logic_regression(&patch);
-        assert!(result.is_some(), "logic_erasure should fire: {patch}");
+        assert!(result.is_some(), "logic_erasure should fire");
         let f = result.unwrap();
         assert!(
             f.description.contains("logic_erasure"),
-            "description must contain 'logic_erasure': {}",
-            f.description
+            "description must contain 'logic_erasure'"
         );
     }
 
@@ -3579,14 +3526,10 @@ mod credential_tests {
     fn test_aws_key_prefix_detected_by_credential_slop() {
         let src = b"const KEY: &str = \"AKIAIOSFODNN7EXAMPLE\";";
         let findings = find_credential_slop(src);
-        assert!(
-            !findings.is_empty(),
-            "AKIA prefix must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "AKIA prefix must be detected");
         assert!(
             findings[0].description.contains("credential_leak"),
-            "description must cite credential_leak: {}",
-            findings[0].description
+            "description must cite credential_leak"
         );
         assert!(findings[0].description.contains("AWS"));
     }
@@ -3595,10 +3538,7 @@ mod credential_tests {
     fn test_rsa_private_key_header_detected() {
         let src = b"-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA";
         let findings = find_credential_slop(src);
-        assert!(
-            !findings.is_empty(),
-            "RSA PEM header must be detected: {findings:?}"
-        );
+        assert!(!findings.is_empty(), "RSA PEM header must be detected");
         assert!(findings[0].description.contains("RSA private key"));
     }
 
@@ -3612,7 +3552,7 @@ mod credential_tests {
         let findings = find_credential_slop(&src);
         assert!(
             !findings.is_empty(),
-            "Stripe live key prefix must be detected: {findings:?}"
+            "Stripe live key prefix must be detected"
         );
         assert!(findings[0].description.contains("Stripe"));
     }
@@ -3623,7 +3563,7 @@ mod credential_tests {
         let findings = find_credential_slop(src);
         assert!(
             findings.is_empty(),
-            "clean source must not trigger credential scanner: {findings:?}"
+            "clean source must not trigger credential scanner"
         );
     }
 
@@ -3635,7 +3575,7 @@ mod credential_tests {
         let findings = find_slop("rs", src);
         assert!(
             !findings.is_empty(),
-            "find_slop must forward credential findings for unknown lang: {findings:?}"
+            "find_slop must forward credential findings for unknown lang"
         );
     }
 
@@ -3672,7 +3612,7 @@ mod credential_tests {
         let findings = detect_secret_entropy(patch);
         assert!(
             !findings.is_empty(),
-            "high-entropy 33-char token must be detected: {findings:?}"
+            "high-entropy 33-char token must be detected"
         );
         assert!(findings[0].contains("credential_leak"));
     }
@@ -3684,7 +3624,7 @@ mod credential_tests {
         let findings = detect_secret_entropy(patch);
         assert!(
             findings.is_empty(),
-            "removed lines must not be flagged by entropy detector: {findings:?}"
+            "removed lines must not be flagged by entropy detector"
         );
     }
 
@@ -3695,7 +3635,7 @@ mod credential_tests {
         let findings = detect_secret_entropy(patch);
         assert!(
             findings.is_empty(),
-            "low-entropy repeated characters must not trigger entropy gate: {findings:?}"
+            "low-entropy repeated characters must not trigger entropy gate"
         );
     }
 
@@ -3706,7 +3646,7 @@ mod credential_tests {
         let findings = detect_secret_entropy(patch);
         assert!(
             findings.is_empty(),
-            "token ≤32 chars must not trigger entropy gate: {findings:?}"
+            "token ≤32 chars must not trigger entropy gate"
         );
     }
 
@@ -3722,8 +3662,7 @@ mod credential_tests {
         );
         assert!(
             findings[0].description.contains("unpinned_asset"),
-            "description must cite unpinned_asset: {}",
-            findings[0].description
+            "description must cite unpinned_asset"
         );
         assert_eq!(findings[0].severity, Severity::Critical);
     }
@@ -3734,7 +3673,7 @@ mod credential_tests {
         let findings = find_supply_chain_slop(src);
         assert!(
             findings.is_empty(),
-            "relative script path must not trigger supply-chain detector: {findings:?}"
+            "relative script path must not trigger supply-chain detector"
         );
     }
 
@@ -3750,7 +3689,7 @@ mod credential_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
-            "must have unpinned_asset finding: {findings:?}"
+            "must have unpinned_asset finding"
         );
     }
 
@@ -3760,7 +3699,7 @@ mod credential_tests {
         let findings = find_supply_chain_slop(src);
         assert!(
             findings.is_empty(),
-            "github.com URL must not be flagged by supply-chain detector: {findings:?}"
+            "github.com URL must not be flagged by supply-chain detector"
         );
     }
 
@@ -3773,7 +3712,7 @@ mod credential_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
-            "find_slop must forward supply-chain findings: {findings:?}"
+            "find_slop must forward supply-chain findings"
         );
     }
 }
@@ -3812,7 +3751,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("sqli_concatenation")),
-            "Python SQLi concat must fire: {findings:?}"
+            "Python SQLi concat must fire"
         );
     }
 
@@ -3824,7 +3763,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("sqli_concatenation")),
-            "parameterized Python query must not be flagged: {findings:?}"
+            "parameterized Python query must not be flagged"
         );
     }
 
@@ -3838,7 +3777,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("sqli_concatenation")),
-            "Go SQLi concat must fire: {findings:?}"
+            "Go SQLi concat must fire"
         );
     }
 
@@ -3850,7 +3789,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("sqli_concatenation")),
-            "parameterized Go query must not be flagged: {findings:?}"
+            "parameterized Go query must not be flagged"
         );
     }
 
@@ -3864,7 +3803,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("ssrf_dynamic_url")),
-            "Python SSRF dynamic URL must fire: {findings:?}"
+            "Python SSRF dynamic URL must fire"
         );
     }
 
@@ -3876,7 +3815,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("ssrf_dynamic_url")),
-            "Python SSRF static URL must not be flagged: {findings:?}"
+            "Python SSRF static URL must not be flagged"
         );
     }
 
@@ -3890,7 +3829,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("ssrf_dynamic_url")),
-            "JS SSRF dynamic fetch must fire: {findings:?}"
+            "JS SSRF dynamic fetch must fire"
         );
     }
 
@@ -3902,7 +3841,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("ssrf_dynamic_url")),
-            "JS SSRF static fetch must not be flagged: {findings:?}"
+            "JS SSRF static fetch must not be flagged"
         );
     }
 
@@ -3916,7 +3855,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("path_traversal_concatenation")),
-            "Python path traversal concat must fire: {findings:?}"
+            "Python path traversal concat must fire"
         );
     }
 
@@ -3929,7 +3868,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("path_traversal_concatenation")),
-            "os.path.join must not be flagged: {findings:?}"
+            "os.path.join must not be flagged"
         );
     }
 
@@ -3943,7 +3882,7 @@ mod kev_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("path_traversal_concatenation")),
-            "JS path traversal readFile concat must fire: {findings:?}"
+            "JS path traversal readFile concat must fire"
         );
     }
 
@@ -3955,7 +3894,7 @@ mod kev_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("path_traversal_concatenation")),
-            "path.join must not be flagged: {findings:?}"
+            "path.join must not be flagged"
         );
     }
 }
@@ -3986,13 +3925,11 @@ mod exhaustion_tests {
         let f = parser_exhaustion_finding("yaml");
         assert!(
             f.description.contains("parser_exhaustion_anomaly"),
-            "finding must cite parser_exhaustion_anomaly: {}",
-            f.description
+            "finding must cite parser_exhaustion_anomaly"
         );
         assert!(
             f.description.contains(".yaml"),
-            "finding must embed the lang hint: {}",
-            f.description
+            "finding must embed the lang hint"
         );
         assert_eq!(
             f.severity,
@@ -4009,7 +3946,7 @@ mod exhaustion_tests {
         let findings = find_slop("rs", src);
         assert!(
             findings.iter().all(|f| f.severity != Severity::Exhaustion),
-            "clean trivial source must not trigger exhaustion: {findings:?}"
+            "clean trivial source must not trigger exhaustion"
         );
     }
 }
@@ -4028,7 +3965,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "new ObjectInputStream( must fire unsafe_deserialization: {findings:?}"
+            "new ObjectInputStream( must fire unsafe_deserialization"
         );
     }
 
@@ -4040,7 +3977,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("runtime_exec")),
-            "Runtime.getRuntime().exec( must fire runtime_exec: {findings:?}"
+            "Runtime.getRuntime().exec( must fire runtime_exec"
         );
     }
 
@@ -4052,7 +3989,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("jndi_injection")),
-            "InitialContext().lookup( must fire jndi_injection: {findings:?}"
+            "InitialContext().lookup( must fire jndi_injection"
         );
     }
 
@@ -4063,7 +4000,7 @@ mod phase1_rd_tests {
         let findings = find_java_slop_fast(src);
         assert!(
             findings.is_empty(),
-            "clean Serializable class must not fire: {findings:?}"
+            "clean Serializable class must not fire"
         );
     }
 
@@ -4077,7 +4014,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "new BinaryFormatter() must fire unsafe_deserialization: {findings:?}"
+            "new BinaryFormatter() must fire unsafe_deserialization"
         );
     }
 
@@ -4089,7 +4026,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "TypeNameHandling.Auto must fire unsafe_deserialization: {findings:?}"
+            "TypeNameHandling.Auto must fire unsafe_deserialization"
         );
     }
 
@@ -4098,10 +4035,7 @@ mod phase1_rd_tests {
         // TypeNameHandling.None is the safe default — must NOT fire.
         let src = b"var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };\n";
         let findings = find_csharp_slop_fast(src);
-        assert!(
-            findings.is_empty(),
-            "TypeNameHandling.None must not fire: {findings:?}"
-        );
+        assert!(findings.is_empty(), "TypeNameHandling.None must not fire");
     }
 
     #[test]
@@ -4110,7 +4044,7 @@ mod phase1_rd_tests {
         let findings = find_csharp_slop_fast(src);
         assert!(
             findings.is_empty(),
-            "clean JsonSerializerSettings must not fire: {findings:?}"
+            "clean JsonSerializerSettings must not fire"
         );
     }
 
@@ -4124,7 +4058,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution")),
-            ".__proto__ must fire prototype_pollution: {findings:?}"
+            ".__proto__ must fire prototype_pollution"
         );
     }
 
@@ -4136,7 +4070,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution")),
-            "[\"__proto__\"] must fire prototype_pollution: {findings:?}"
+            "[\"__proto__\"] must fire prototype_pollution"
         );
     }
 
@@ -4148,7 +4082,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution")),
-            "[constructor][prototype] must fire prototype_pollution: {findings:?}"
+            "[constructor][prototype] must fire prototype_pollution"
         );
     }
 
@@ -4160,7 +4094,7 @@ mod phase1_rd_tests {
         let findings = find_prototype_pollution_slop(src);
         assert!(
             findings.is_empty(),
-            "bare __proto__ in comment without dot prefix must not fire: {findings:?}"
+            "bare __proto__ in comment without dot prefix must not fire"
         );
     }
 
@@ -4174,7 +4108,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "find_slop(java) must route to java danger patterns: {findings:?}"
+            "find_slop(java) must route to java danger patterns"
         );
     }
 
@@ -4186,7 +4120,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "find_slop(cs) must route to csharp danger patterns: {findings:?}"
+            "find_slop(cs) must route to csharp danger patterns"
         );
     }
 
@@ -4198,7 +4132,7 @@ mod phase1_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution")),
-            "find_slop(js) must route to prototype pollution patterns: {findings:?}"
+            "find_slop(js) must route to prototype pollution patterns"
         );
     }
 }
@@ -4221,7 +4155,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("code_execution")),
-            "exec() must fire code_execution: {findings:?}"
+            "exec() must fire code_execution"
         );
     }
 
@@ -4233,7 +4167,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("dynamic_eval")),
-            "eval() in production code must fire dynamic_eval: {findings:?}"
+            "eval() in production code must fire dynamic_eval"
         );
     }
 
@@ -4246,7 +4180,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("dynamic_eval")),
-            "eval() inside test_ function must be suppressed: {findings:?}"
+            "eval() inside test_ function must be suppressed"
         );
     }
 
@@ -4258,7 +4192,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("dynamic_eval")),
-            "eval() with # noqa must be suppressed: {findings:?}"
+            "eval() with # noqa must be suppressed"
         );
     }
 
@@ -4270,7 +4204,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "pickle.loads() must fire unsafe_deserialization: {findings:?}"
+            "pickle.loads() must fire unsafe_deserialization"
         );
     }
 
@@ -4282,7 +4216,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("os_command_injection")),
-            "os.system() must fire os_command_injection: {findings:?}"
+            "os.system() must fire os_command_injection"
         );
     }
 
@@ -4294,7 +4228,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("dynamic_import")),
-            "__import__() must fire dynamic_import: {findings:?}"
+            "__import__() must fire dynamic_import"
         );
     }
 
@@ -4307,7 +4241,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("dynamic_eval")),
-            "ast.literal_eval() must not fire: {findings:?}"
+            "ast.literal_eval() must not fire"
         );
     }
 
@@ -4322,7 +4256,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "ObjectInputStream.readObject() must fire unsafe_deserialization: {findings:?}"
+            "ObjectInputStream.readObject() must fire unsafe_deserialization"
         );
     }
 
@@ -4334,7 +4268,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("runtime_exec")),
-            "Runtime.getRuntime().exec() must fire runtime_exec: {findings:?}"
+            "Runtime.getRuntime().exec() must fire runtime_exec"
         );
     }
 
@@ -4347,7 +4281,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("jndi_injection")),
-            "ctx.lookup(dynamic) must fire jndi_injection: {findings:?}"
+            "ctx.lookup(dynamic) must fire jndi_injection"
         );
     }
 
@@ -4359,7 +4293,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("jndi_injection")),
-            "ctx.lookup(string_literal) must NOT fire: {findings:?}"
+            "ctx.lookup(string_literal) must NOT fire"
         );
     }
 
@@ -4371,7 +4305,7 @@ mod phase2_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("unsafe_deserialization")),
-            "ObjectMapper.readValue() must not fire: {findings:?}"
+            "ObjectMapper.readValue() must not fire"
         );
     }
 }
@@ -4395,7 +4329,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "TypeNameHandling.All must fire unsafe_deserialization via AST: {findings:?}"
+            "TypeNameHandling.All must fire unsafe_deserialization via AST"
         );
     }
 
@@ -4407,7 +4341,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "TypeNameHandling.Objects must fire unsafe_deserialization via AST: {findings:?}"
+            "TypeNameHandling.Objects must fire unsafe_deserialization via AST"
         );
     }
 
@@ -4420,7 +4354,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "new BinaryFormatter() must fire unsafe_deserialization via AST: {findings:?}"
+            "new BinaryFormatter() must fire unsafe_deserialization via AST"
         );
     }
 
@@ -4433,7 +4367,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("unsafe_deserialization")),
-            "TypeNameHandling.None must NOT fire via AST: {findings:?}"
+            "TypeNameHandling.None must NOT fire via AST"
         );
     }
 
@@ -4445,7 +4379,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("unsafe_deserialization")),
-            "System.Text.Json deserialization must NOT fire via AST: {findings:?}"
+            "System.Text.Json deserialization must NOT fire via AST"
         );
     }
 
@@ -4460,7 +4394,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution_merge_sink")),
-            "_.merge with inline JSON.parse arg must fire prototype_pollution_merge_sink: {findings:?}"
+            "_.merge with inline JSON.parse arg must fire prototype_pollution_merge_sink"
         );
     }
 
@@ -4472,7 +4406,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution_merge_sink")),
-            "Object.assign with req.body must fire prototype_pollution_merge_sink: {findings:?}"
+            "Object.assign with req.body must fire prototype_pollution_merge_sink"
         );
     }
 
@@ -4484,7 +4418,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution_merge_sink")),
-            "_.merge with query identifier must fire: {findings:?}"
+            "_.merge with query identifier must fire"
         );
     }
 
@@ -4499,7 +4433,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("prototype_pollution_merge_sink")),
-            "_.merge inside sanitize function must be suppressed: {findings:?}"
+            "_.merge inside sanitize function must be suppressed"
         );
     }
 
@@ -4512,7 +4446,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .all(|f| !f.description.contains("prototype_pollution_merge_sink")),
-            "_.merge with literal object must NOT fire: {findings:?}"
+            "_.merge with literal object must NOT fire"
         );
     }
 
@@ -4526,7 +4460,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("unsafe_deserialization")),
-            "find_slop(cs) must dispatch to csharp_slop AST walk: {findings:?}"
+            "find_slop(cs) must dispatch to csharp_slop AST walk"
         );
     }
 
@@ -4538,7 +4472,7 @@ mod phase3_rd_tests {
             findings
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution_merge_sink")),
-            "find_slop(js) must dispatch to merge sink AST walk: {findings:?}"
+            "find_slop(js) must dispatch to merge sink AST walk"
         );
     }
 }

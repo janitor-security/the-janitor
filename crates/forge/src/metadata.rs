@@ -967,7 +967,10 @@ diff --git a/src/lib.rs b/src/lib.rs
         ];
         for (kw, body) in &bodies {
             let finding = detect_hallucinated_fix(body, &non_code, "");
-            assert!(finding.is_some(), "should flag keyword '{kw}' in: {body}");
+            assert!(
+                finding.is_some(),
+                "hallucinated_fix keyword must be detected"
+            );
         }
     }
 
