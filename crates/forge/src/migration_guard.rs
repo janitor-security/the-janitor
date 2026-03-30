@@ -30,7 +30,7 @@
 //! that will fail to compile post-bump is equivalent in severity to a memory-
 //! unsafe C call or an open CIDR rule.
 
-use aho_corasick::AhoCorasick;
+use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
 
 // ---------------------------------------------------------------------------
 // DepMigrationRule
@@ -92,7 +92,10 @@ pub fn scan_migration_regressions(patch: &str) -> Vec<String> {
         // Build AhoCorasick automaton from this rule's forbidden patterns.
         // `expect` is safe: patterns are static string literals validated at
         // compile time — they are never empty and always valid.
-        let ac = AhoCorasick::new(rule.forbidden_patterns)
+        let ac = AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(rule.forbidden_patterns)
             .expect("migration guard: static patterns must compile");
 
         // Scan only added (+) lines inside Rust source sections.

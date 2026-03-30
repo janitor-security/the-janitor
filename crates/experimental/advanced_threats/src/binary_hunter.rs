@@ -30,7 +30,7 @@
 
 use std::sync::OnceLock;
 
-use aho_corasick::{AhoCorasick, MatchKind};
+use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
 
 // ---------------------------------------------------------------------------
 // Public surface
@@ -196,6 +196,7 @@ static PAYLOAD_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn automaton() -> &'static AhoCorasick {
     PAYLOAD_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(PATTERNS.iter().map(|(p, _)| p))
             .expect("binary_hunter: AhoCorasick build cannot fail on static patterns")

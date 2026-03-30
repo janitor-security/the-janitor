@@ -52,7 +52,7 @@ use std::ops::ControlFlow;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use aho_corasick::{AhoCorasick, MatchKind};
+use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
 use tree_sitter::{Language, Node};
 
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
@@ -1173,6 +1173,7 @@ static CREDENTIAL_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn credential_automaton() -> &'static AhoCorasick {
     CREDENTIAL_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(CREDENTIAL_PATTERNS.iter().map(|(p, _)| p))
             .expect("slop_hunter: credential AhoCorasick build cannot fail on static patterns")
@@ -1237,6 +1238,7 @@ static SUPPLY_CHAIN_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn supply_chain_automaton() -> &'static AhoCorasick {
     SUPPLY_CHAIN_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(SUPPLY_CHAIN_PATTERNS.iter().map(|(p, _)| p))
             .expect("slop_hunter: supply_chain AhoCorasick build cannot fail on static patterns")
@@ -2350,6 +2352,7 @@ static JAVA_DANGER_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn java_danger_automaton() -> &'static AhoCorasick {
     JAVA_DANGER_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(JAVA_DANGER_PATTERNS.iter().map(|(p, _)| p))
             .expect("slop_hunter: java_danger AhoCorasick build cannot fail on static patterns")
@@ -2439,6 +2442,7 @@ static CSHARP_DANGER_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn csharp_danger_automaton() -> &'static AhoCorasick {
     CSHARP_DANGER_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(CSHARP_DANGER_PATTERNS.iter().map(|(p, _)| p))
             .expect("slop_hunter: csharp_danger AhoCorasick build cannot fail on static patterns")
@@ -2966,6 +2970,7 @@ static PROTOTYPE_AC: OnceLock<AhoCorasick> = OnceLock::new();
 fn prototype_automaton() -> &'static AhoCorasick {
     PROTOTYPE_AC.get_or_init(|| {
         AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
             .match_kind(MatchKind::LeftmostFirst)
             .build(PROTOTYPE_PATTERNS.iter().map(|(p, _)| p))
             .expect("slop_hunter: prototype AhoCorasick build cannot fail on static patterns")
