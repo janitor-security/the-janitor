@@ -433,6 +433,84 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#enterprise-mcp-registry-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enterprise MCP Registry Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enterprise MCP Registry Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manifest-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest location
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manifest-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-azure-mcp-center" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: Azure MCP Center
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-langgraph-langchain" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: LangGraph / LangChain
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-custom-openai-claude-function-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: Custom OpenAI / Claude function registry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#available-tools-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Available tools (summary)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-model-for-autonomous-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security model for autonomous agents
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -545,6 +623,84 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#enterprise-mcp-registry-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enterprise MCP Registry Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enterprise MCP Registry Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manifest-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest location
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manifest-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifest structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-azure-mcp-center" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: Azure MCP Center
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-langgraph-langchain" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: LangGraph / LangChain
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-custom-openai-claude-function-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion: Custom OpenAI / Claude function registry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#available-tools-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Available tools (summary)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-model-for-autonomous-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security model for autonomous agents
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -629,6 +785,111 @@
 <p><strong>CBOM (Cryptography Bill of Materials)</strong> — A CycloneDX v1.5 document enumerating every cryptographic primitive present in a codebase or patch as <code>cryptoAsset</code> components; machine-ingestible by SBOM pipelines, SOC 2 auditors, and FedRAMP reviewers; emitted by <code>janitor report --format cbom</code>.</p>
 <p><strong>Ghost Protocol</strong> — The SafeDeleter's rollback mechanism: before any physical symbol deletion, the original byte range is archived to <code>.janitor/ghost/&lt;qualified_name&gt;.bak</code>; deletion is reversible at any point via <code>janitor restore</code>.</p>
 <p><strong>LotL (Living off the Land)</strong> — An attack technique in which a pull request embeds legitimate system binaries, base64-encoded payloads, or shell metacharacter chains to execute arbitrary code using tools already present on the host; detected by <code>lotl_hunter.rs</code> via AhoCorasick pattern matching over the diff bytes.</p>
+<hr />
+<h2 id="enterprise-mcp-registry-integration">Enterprise MCP Registry Integration</h2>
+<p><em>Keywords: MCP registry, Model Context Protocol, enterprise AI tooling, LangGraph, Azure MCP Center, internal AI agent, autonomous code governance.</em></p>
+<p>Janitor Sentinel ships a machine-readable <code>mcp-manifest.json</code> at the repository root. Platform engineers can ingest this manifest directly into any enterprise MCP registry — Azure MCP Center, a LangGraph tool router, a custom OpenAI function registry, or any orchestrator that speaks the Model Context Protocol — to grant internal AI agents autonomous access to the structural firewall.</p>
+<p><strong>Why this matters</strong>: once registered, any internal AI agent (Copilot Workspace, a LangGraph orchestrator, a Claude-powered code review bot) can call <code>janitor_bounce</code> before proposing a merge, <code>janitor_silo_audit</code> after updating dependencies, or <code>janitor_visualize_ledger</code> when generating an executive security report — without any human in the loop and without any code leaving the environment.</p>
+<h3 id="manifest-location">Manifest location</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json
+</code></pre></div>
+<p>Or clone the repository and reference the file at <code>./mcp-manifest.json</code>.</p>
+<h3 id="manifest-structure">Manifest structure</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;schema_version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Janitor Sentinel&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;stdio&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;janitor&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;serve&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--mcp&quot;</span><span class="p">],</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">&quot;tools&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">]</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
+</code></pre></div>
+<p>The <code>command</code> + <code>args</code> fields tell the registry how to spawn the MCP server process. The <code>transport: "stdio"</code> field declares the JSON-RPC 2.0 wire protocol (newline-delimited, stdin/stdout). No port, no daemon, no sidecar required.</p>
+<h3 id="ingestion-azure-mcp-center">Ingestion: Azure MCP Center</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Register via the Azure MCP CLI</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>mcp<span class="w"> </span>server<span class="w"> </span>register<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--name<span class="w"> </span>janitor-sentinel<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--manifest-url<span class="w"> </span>https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--scope<span class="w"> </span>organization
+</code></pre></div>
+<p>After registration, any Azure AI Foundry agent or Copilot Studio orchestrator in the organization can discover and invoke the nine Janitor tools by name.</p>
+<h3 id="ingestion-langgraph-langchain">Ingestion: LangGraph / LangChain</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">langchain_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPToolkit</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">toolkit</span> <span class="o">=</span> <span class="n">MCPToolkit</span><span class="o">.</span><span class="n">from_manifest</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;https://raw.githubusercontent.com/janitor-security/the-janitor/main/mcp-manifest.json&quot;</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">tools</span> <span class="o">=</span> <span class="n">toolkit</span><span class="o">.</span><span class="n">get_tools</span><span class="p">()</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># tools now contains janitor_bounce, janitor_silo_audit, janitor_scan, etc.</span>
+</code></pre></div>
+<h3 id="ingestion-custom-openai-claude-function-registry">Ingestion: Custom OpenAI / Claude function registry</h3>
+<p>The <code>inputSchema</code> and <code>outputSchema</code> fields in each tool entry are valid JSON Schema objects. Paste them directly into an OpenAI function definition or an Anthropic tool definition — no translation required.</p>
+<h3 id="available-tools-summary">Available tools (summary)</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Primary use</th>
+<th>When to call</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>janitor_bounce</code></td>
+<td>Score a PR diff for structural risk</td>
+<td>Before any merge — primary enforcement gate</td>
+</tr>
+<tr>
+<td><code>janitor_silo_audit</code></td>
+<td>Detect duplicate dependency versions</td>
+<td>After any <code>Cargo.toml</code> / <code>package.json</code> change</td>
+</tr>
+<tr>
+<td><code>janitor_scan</code></td>
+<td>Find dead symbols in a project</td>
+<td>Before a refactor or cleanup commit</td>
+</tr>
+<tr>
+<td><code>janitor_dedup</code></td>
+<td>Find structurally cloned symbols</td>
+<td>When reviewing AI-generated code at scale</td>
+</tr>
+<tr>
+<td><code>janitor_dep_check</code></td>
+<td>Find zombie (unused) dependencies</td>
+<td>During dependency audit or supply chain review</td>
+</tr>
+<tr>
+<td><code>janitor_provenance</code></td>
+<td>Verify zero-upload guarantee</td>
+<td>Compliance evidence generation</td>
+</tr>
+<tr>
+<td><code>janitor_visualize_ledger</code></td>
+<td>Executive ROI / intercept summary</td>
+<td>Board reporting, security review meetings</td>
+</tr>
+<tr>
+<td><code>janitor_wopr_snapshot</code></td>
+<td>Repository health vibe-check</td>
+<td>Quick status during on-call or sprint review</td>
+</tr>
+<tr>
+<td><code>janitor_clean</code></td>
+<td>Enumerate symbols safe to delete</td>
+<td>Before a dead-code removal commit (token required)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="security-model-for-autonomous-agents">Security model for autonomous agents</h3>
+<p>When an AI agent invokes <code>janitor_bounce</code> via the registry, the same zero-upload guarantee applies as in the GitHub Actions deployment:</p>
+<ul>
+<li>The <code>janitor serve --mcp</code> process runs inside the agent's execution environment.</li>
+<li>No source bytes are transmitted to <code>api.thejanitor.app</code> — only a signed <code>BounceResult</code> struct if the agent chooses to call the optional Governor reporting endpoint.</li>
+<li>The agent receives the full <code>BounceResult</code> (score, labels, collisions) and decides whether to block, flag, or approve the proposed change.</li>
+<li>Bearer token (<code>janitor_clean</code>) is the only tool that requires outbound network contact with <code>thejanitor.app</code>.</li>
+</ul>
+<p>Registry ingestion does not change the threat model. The structural firewall is still local. The registry is a discovery mechanism, not a data channel.</p>
 
 
 
