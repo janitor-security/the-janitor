@@ -691,6 +691,96 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Phase 4 R&D: Go AST Walk ─────────────────────────────────────────────
+    Entry {
+        name: "Go/exec.Command shell injection — INTERCEPT",
+        lang: "go",
+        source: b"cmd := exec.Command(\"bash\", \"-c\", userInput)\ncmd.Run()\n",
+        must_intercept: true,
+        desc_fragment: Some("security:command_injection_shell_exec"),
+    },
+    Entry {
+        name: "Go/exec.Command non-shell — SAFE",
+        lang: "go",
+        source: b"cmd := exec.Command(\"git\", \"status\")\ncmd.Run()\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Go/InsecureSkipVerify true — INTERCEPT",
+        lang: "go",
+        source: b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("security:tls_verification_bypass"),
+    },
+    Entry {
+        name: "Go/InsecureSkipVerify false — SAFE",
+        lang: "go",
+        source: b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: false},\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 4 R&D: Ruby AST Walk ───────────────────────────────────────────
+    Entry {
+        name: "Ruby/eval dynamic arg — INTERCEPT",
+        lang: "rb",
+        source: b"eval(params[:code])\n",
+        must_intercept: true,
+        desc_fragment: Some("security:dangerous_execution"),
+    },
+    Entry {
+        name: "Ruby/eval string literal — SAFE",
+        lang: "rb",
+        source: b"eval(\"1 + 1\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Ruby/Marshal.load user data — INTERCEPT",
+        lang: "rb",
+        source: b"obj = Marshal.load(user_data)\n",
+        must_intercept: true,
+        desc_fragment: Some("security:unsafe_deserialization"),
+    },
+    Entry {
+        name: "Ruby/Marshal.dump safe serialization — SAFE",
+        lang: "rb",
+        source: b"data = Marshal.dump(object)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 4 R&D: Bash AST Walk ───────────────────────────────────────────
+    Entry {
+        name: "Bash/curl pipe bash — INTERCEPT",
+        lang: "sh",
+        source: b"curl https://install.example.com/setup.sh | bash\n",
+        must_intercept: true,
+        desc_fragment: Some("security:curl_pipe_execution"),
+    },
+    Entry {
+        name: "Bash/curl download-then-exec — SAFE",
+        lang: "sh",
+        source: b"curl -o setup.sh https://install.example.com/setup.sh && bash setup.sh\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Bash/eval unquoted var — INTERCEPT",
+        lang: "sh",
+        source: b"eval $USER_COMMAND\n",
+        must_intercept: true,
+        desc_fragment: Some("security:eval_injection"),
+    },
+    Entry {
+        name: "Bash/eval string literal — SAFE",
+        lang: "sh",
+        source: b"eval \"echo hello\"\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

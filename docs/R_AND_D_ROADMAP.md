@@ -624,7 +624,7 @@ universal pipeline glue. Each has multiple critical CVE classes with no
 current AST gate.
 
 ```
-Phase 4 [PENDING]:
+Phase 4 [COMPLETED — v8.4.0]:
   ├── Go AST walk (Tier 1)
   │     Files: slop_hunter.rs (find_go_slop; QueryEngine::go_lang)
   │            crucible/src/main.rs (TP + TN × 2 gates)

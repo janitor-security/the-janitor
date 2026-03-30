@@ -225,6 +225,12 @@ struct QueryEngine {
     java_lang: Language,
     /// C# grammar — used for Phase 3 R&D TypeNameHandling/BinaryFormatter AST walk.
     csharp_lang: Language,
+    /// Go grammar — used for Phase 4 R&D exec.Command shell injection + TLS bypass.
+    go_lang: Language,
+    /// Ruby grammar — used for Phase 4 R&D dynamic eval/Marshal.load AST walk.
+    ruby_lang: Language,
+    /// Bash grammar — used for Phase 4 R&D curl|bash + eval injection AST walk.
+    bash_lang: Language,
 }
 
 impl QueryEngine {
@@ -235,6 +241,9 @@ impl QueryEngine {
         let python_lang: Language = tree_sitter_python::LANGUAGE.into();
         let java_lang: Language = tree_sitter_java::LANGUAGE.into();
         let csharp_lang: Language = tree_sitter_c_sharp::LANGUAGE.into();
+        let go_lang: Language = tree_sitter_go::LANGUAGE.into();
+        let ruby_lang: Language = tree_sitter_ruby::LANGUAGE.into();
+        let bash_lang: Language = tree_sitter_bash::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
@@ -242,6 +251,9 @@ impl QueryEngine {
             python_lang,
             java_lang,
             csharp_lang,
+            go_lang,
+            ruby_lang,
+            bash_lang,
         })
     }
 }
@@ -303,8 +315,12 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "go" => {
             let mut f = find_go_sqli_slop(source);
             f.extend(find_go_ssrf_slop(source));
+            // Phase 4 R&D: exec.Command shell injection + TLS bypass AST walk
+            f.extend(find_go_slop(eng, source));
             f
         }
+        "rb" => find_ruby_slop(eng, source),
+        "sh" | "bash" | "zsh" => find_bash_slop(eng, source),
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
@@ -2564,6 +2580,345 @@ fn find_csharp_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Sl
 }
 
 // ---------------------------------------------------------------------------
+// Phase 4 R&D: Go AST Walk — exec.Command shell injection (Go-1) +
+//              TLS certificate verification bypass (Go-2)
+// ---------------------------------------------------------------------------
+
+/// Shell interpreter names that turn exec.Command into a shell injection sink.
+const GO_SHELL_INTERPS: &[&str] = &["sh", "bash", "/bin/sh", "/bin/bash", "cmd", "cmd.exe"];
+
+fn find_go_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files containing neither dangerous pattern.
+    const GO_MARKERS: &[&[u8]] = &[b"exec.Command", b"InsecureSkipVerify"];
+    if !GO_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.go_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("go")];
+    };
+
+    let mut findings = Vec::new();
+    find_go_danger_nodes(tree.root_node(), source, false, &mut findings);
+    findings
+}
+
+fn find_go_danger_nodes(
+    node: Node<'_>,
+    source: &[u8],
+    inside_test: bool,
+    findings: &mut Vec<SlopFinding>,
+) {
+    // Propagate test-scope suppression for Go-1.  Go-2 (InsecureSkipVerify) is
+    // never suppressed — there is no safe production use of this field.
+    let in_test = if inside_test {
+        true
+    } else if node.kind() == "function_declaration" || node.kind() == "method_declaration" {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        name.contains("test") || name.contains("Test")
+    } else {
+        false
+    };
+
+    match node.kind() {
+        // Gate Go-1: exec.Command("sh"|"bash"|..., ...)
+        "call_expression" if !in_test => {
+            if let Some(func) = node.child_by_field_name("function") {
+                if func.kind() == "selector_expression" {
+                    let operand_text = func
+                        .child_by_field_name("operand")
+                        .and_then(|n| n.utf8_text(source).ok())
+                        .unwrap_or("");
+                    let field_text = func
+                        .child_by_field_name("field")
+                        .and_then(|n| n.utf8_text(source).ok())
+                        .unwrap_or("");
+                    if operand_text == "exec" && field_text == "Command" {
+                        if let Some(args) = node.child_by_field_name("arguments") {
+                            let first_arg = args.named_children(&mut args.walk()).next();
+                            if let Some(arg) = first_arg {
+                                let raw = arg.utf8_text(source).unwrap_or("");
+                                // Strip surrounding double-quotes from string literal.
+                                let stripped = raw.trim_matches('"');
+                                if GO_SHELL_INTERPS.contains(&stripped) {
+                                    findings.push(SlopFinding {
+                                        start_byte: node.start_byte(),
+                                        end_byte: node.end_byte(),
+                                        description: format!(
+                                            "security:command_injection_shell_exec — \
+                                             `exec.Command({raw}, ...)` spawns a shell \
+                                             interpreter; if subsequent arguments include \
+                                             user-controlled data this is a command injection \
+                                             primitive; use a specific binary path with \
+                                             discrete arguments instead of a shell wrapper"
+                                        ),
+                                        domain: DOMAIN_FIRST_PARTY,
+                                        severity: Severity::Critical,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Gate Go-2: InsecureSkipVerify: true — no suppression
+        "keyed_element" => {
+            let mut cursor = node.walk();
+            let children: Vec<Node<'_>> = node.named_children(&mut cursor).collect();
+            if children.len() >= 2 {
+                let key_text = children[0].utf8_text(source).unwrap_or("");
+                let val_text = children[1].utf8_text(source).unwrap_or("");
+                if key_text == "InsecureSkipVerify" && val_text == "true" {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: "security:tls_verification_bypass — \
+                                      `InsecureSkipVerify: true` disables TLS certificate \
+                                      verification entirely, enabling MitM attacks; \
+                                      see CVE-2022-27664, CVE-2023-29409; remove this field \
+                                      or set it to `false`"
+                            .to_string(),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_go_danger_nodes(child, source, in_test, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 R&D: Ruby AST Walk — dynamic eval/system/exec/spawn (Ruby-1) +
+//              Marshal.load deserialization (Ruby-2)
+// ---------------------------------------------------------------------------
+
+/// Ruby method names whose dynamic invocation constitutes a code execution sink.
+const RUBY_DANGEROUS_EXEC_METHODS: &[&str] = &["eval", "system", "exec", "spawn"];
+
+fn find_ruby_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files missing any dangerous keyword.
+    const RUBY_MARKERS: &[&[u8]] = &[b"eval", b"system", b"Marshal.load", b"Marshal.restore"];
+    if !RUBY_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.ruby_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("rb")];
+    };
+
+    let mut findings = Vec::new();
+    find_ruby_danger_nodes(tree.root_node(), source, false, &mut findings);
+    findings
+}
+
+fn find_ruby_danger_nodes(
+    node: Node<'_>,
+    source: &[u8],
+    inside_test: bool,
+    findings: &mut Vec<SlopFinding>,
+) {
+    // Track test/spec method scope for Ruby-1 suppression.
+    let in_test = if inside_test {
+        true
+    } else if node.kind() == "method" || node.kind() == "singleton_method" {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        name.contains("test") || name.contains("spec")
+    } else {
+        false
+    };
+
+    if node.kind() == "call" {
+        let receiver_text = node
+            .child_by_field_name("receiver")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        let method_text = node
+            .child_by_field_name("method")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+
+        // Gate Ruby-2: Marshal.load / Marshal.restore — no suppression.
+        if receiver_text == "Marshal" && (method_text == "load" || method_text == "restore") {
+            findings.push(SlopFinding {
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+                description: format!(
+                    "security:unsafe_deserialization — `Marshal.{method_text}` executes \
+                     arbitrary Ruby code embedded in the serialized stream; this is the \
+                     mechanism behind dozens of Rails RCEs including CVE-2013-0156; \
+                     use JSON.parse or a schema-validated deserializer instead"
+                ),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::Critical,
+            });
+        }
+
+        // Gate Ruby-1: eval/system/exec/spawn with dynamic (non-literal) argument.
+        if !in_test
+            && receiver_text.is_empty()
+            && RUBY_DANGEROUS_EXEC_METHODS.contains(&method_text)
+        {
+            // Fire only when the first argument is not a plain string literal.
+            let first_arg_is_literal = node
+                .child_by_field_name("arguments")
+                .and_then(|args| args.named_children(&mut args.walk()).next())
+                .map(|arg| arg.kind() == "string")
+                .unwrap_or(false);
+            if !first_arg_is_literal {
+                findings.push(SlopFinding {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    description: format!(
+                        "security:dangerous_execution — `{method_text}(...)` with a \
+                         dynamic argument is a code/command execution primitive; \
+                         if the argument includes user-controlled data this enables \
+                         arbitrary command injection or RCE; use a parameterised \
+                         subprocess API or whitelist the allowed commands"
+                    ),
+                    domain: DOMAIN_FIRST_PARTY,
+                    severity: Severity::Critical,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_ruby_danger_nodes(child, source, in_test, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 R&D: Bash AST Walk — curl|bash supply chain (Bash-1) +
+//              eval with unquoted variable expansion (Bash-2)
+// ---------------------------------------------------------------------------
+
+fn find_bash_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files missing both dangerous keywords.
+    const BASH_MARKERS: &[&[u8]] = &[b"eval", b"curl", b"wget"];
+    if !BASH_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.bash_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("sh")];
+    };
+
+    let mut findings = Vec::new();
+    find_bash_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_bash_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    match node.kind() {
+        // Gate Bash-1: pipeline where first command is curl/wget and last is bash/sh.
+        "pipeline" => {
+            let mut cursor = node.walk();
+            let cmds: Vec<Node<'_>> = node
+                .named_children(&mut cursor)
+                .filter(|c| c.kind() == "command")
+                .collect();
+            if cmds.len() >= 2 {
+                let first_name = cmds[0]
+                    .child_by_field_name("name")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("");
+                let last_name = cmds[cmds.len() - 1]
+                    .child_by_field_name("name")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("");
+                if (first_name == "curl" || first_name == "wget")
+                    && (last_name == "bash" || last_name == "sh")
+                {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:curl_pipe_execution — `{first_name} ... | {last_name}` \
+                             executes a remote script without integrity verification; \
+                             this is the canonical supply chain attack vector \
+                             (malware deployment, bootstrap hijack); \
+                             download the script, verify its checksum, then execute"
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+        }
+        // Gate Bash-2: eval command with an unquoted variable expansion argument.
+        "command" => {
+            let cmd_name = node
+                .child_by_field_name("name")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            if cmd_name == "eval" {
+                // Fire when any direct argument is a simple_expansion ($VAR) or
+                // expansion (${VAR}).  Suppress when all arguments are quoted strings.
+                let mut cursor = node.walk();
+                let has_unquoted_expansion = node
+                    .children(&mut cursor)
+                    .any(|child| child.kind() == "simple_expansion" || child.kind() == "expansion");
+                if has_unquoted_expansion {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: "security:eval_injection — `eval $VAR` or `eval ${VAR}` \
+                                      expands an unquoted variable into executable code; \
+                                      if the variable originates from user input, environment, \
+                                      or an untrusted source this is a code injection primitive; \
+                                      never eval unquoted variables"
+                            .to_string(),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_bash_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1 R&D: Prototype Pollution detection — Layer A AhoCorasick (JS/TS)
 //
 // Covers direct `__proto__` key access patterns.  Layer B (unsafe merge
@@ -4473,6 +4828,270 @@ mod phase3_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("prototype_pollution_merge_sink")),
             "find_slop(js) must dispatch to merge sink AST walk"
+        );
+    }
+}
+
+#[cfg(test)]
+mod phase4_rd_tests {
+    use super::*;
+
+    fn eng() -> &'static QueryEngine {
+        engine().expect("QueryEngine must initialise in tests")
+    }
+
+    // ── Go-1: exec.Command shell injection ───────────────────────────────────
+
+    #[test]
+    fn test_go_exec_command_bash_fires() {
+        let src = b"cmd := exec.Command(\"bash\", \"-c\", userInput)\ncmd.Run()\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection_shell_exec")),
+            "exec.Command(\"bash\", ...) must fire command_injection_shell_exec"
+        );
+    }
+
+    #[test]
+    fn test_go_exec_command_sh_fires() {
+        let src = b"cmd := exec.Command(\"sh\", \"-c\", input)\ncmd.Run()\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection_shell_exec")),
+            "exec.Command(\"sh\", ...) must fire command_injection_shell_exec"
+        );
+    }
+
+    #[test]
+    fn test_go_exec_command_non_shell_safe() {
+        let src = b"cmd := exec.Command(\"git\", \"status\")\ncmd.Run()\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("command_injection_shell_exec")),
+            "exec.Command(\"git\", ...) must not fire command_injection_shell_exec"
+        );
+    }
+
+    #[test]
+    fn test_go_exec_command_in_test_func_suppressed() {
+        // Call site inside a function named TestSomething — must be suppressed.
+        let src = b"func TestRunShell(t *testing.T) {\n    cmd := exec.Command(\"bash\", \"-c\", \"echo hi\")\n    cmd.Run()\n}\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("command_injection_shell_exec")),
+            "exec.Command in test function must be suppressed"
+        );
+    }
+
+    // ── Go-2: InsecureSkipVerify: true ───────────────────────────────────────
+
+    #[test]
+    fn test_go_insecure_skip_verify_true_fires() {
+        let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},\n}\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("tls_verification_bypass")),
+            "InsecureSkipVerify: true must fire tls_verification_bypass"
+        );
+    }
+
+    #[test]
+    fn test_go_insecure_skip_verify_false_safe() {
+        let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: false},\n}\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("tls_verification_bypass")),
+            "InsecureSkipVerify: false must not fire tls_verification_bypass"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_go_dispatches_phase4() {
+        let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},\n}\n";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("tls_verification_bypass")),
+            "find_slop(go) must dispatch to Phase 4 Go AST walk"
+        );
+    }
+
+    // ── Ruby-1: dynamic eval/system/exec/spawn ───────────────────────────────
+
+    #[test]
+    fn test_ruby_eval_dynamic_fires() {
+        let src = b"eval(params[:code])\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dangerous_execution")),
+            "eval(dynamic_arg) must fire dangerous_execution"
+        );
+    }
+
+    #[test]
+    fn test_ruby_eval_string_literal_safe() {
+        let src = b"eval(\"1 + 1\")\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dangerous_execution")),
+            "eval(string_literal) must not fire dangerous_execution"
+        );
+    }
+
+    #[test]
+    fn test_ruby_system_dynamic_fires() {
+        let src = b"system(user_command)\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dangerous_execution")),
+            "system(dynamic_arg) must fire dangerous_execution"
+        );
+    }
+
+    // ── Ruby-2: Marshal.load deserialization ─────────────────────────────────
+
+    #[test]
+    fn test_ruby_marshal_load_fires() {
+        let src = b"obj = Marshal.load(user_data)\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "Marshal.load must fire unsafe_deserialization"
+        );
+    }
+
+    #[test]
+    fn test_ruby_marshal_restore_fires() {
+        let src = b"obj = Marshal.restore(payload)\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "Marshal.restore must fire unsafe_deserialization"
+        );
+    }
+
+    #[test]
+    fn test_ruby_marshal_dump_safe() {
+        // Marshal.dump serializes — does not execute code.
+        let src = b"data = Marshal.dump(object)\n";
+        let findings = find_ruby_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unsafe_deserialization")),
+            "Marshal.dump must not fire unsafe_deserialization"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_rb_dispatches_phase4() {
+        let src = b"eval(params[:cmd])\n";
+        let findings = find_slop("rb", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dangerous_execution")),
+            "find_slop(rb) must dispatch to Phase 4 Ruby AST walk"
+        );
+    }
+
+    // ── Bash-1: curl|bash pipeline ───────────────────────────────────────────
+
+    #[test]
+    fn test_bash_curl_pipe_bash_fires() {
+        let src = b"curl https://install.example.com/setup.sh | bash\n";
+        let findings = find_bash_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("curl_pipe_execution")),
+            "curl ... | bash must fire curl_pipe_execution"
+        );
+    }
+
+    #[test]
+    fn test_bash_wget_pipe_sh_fires() {
+        let src = b"wget -qO- https://example.com/install.sh | sh\n";
+        let findings = find_bash_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("curl_pipe_execution")),
+            "wget ... | sh must fire curl_pipe_execution"
+        );
+    }
+
+    #[test]
+    fn test_bash_curl_download_then_exec_safe() {
+        // Download-then-verify pattern — not a pipeline to bash.
+        let src = b"curl -o setup.sh https://install.example.com/setup.sh && bash setup.sh\n";
+        let findings = find_bash_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("curl_pipe_execution")),
+            "curl -o ... && bash must not fire curl_pipe_execution"
+        );
+    }
+
+    // ── Bash-2: eval with unquoted variable expansion ────────────────────────
+
+    #[test]
+    fn test_bash_eval_unquoted_var_fires() {
+        let src = b"eval $USER_COMMAND\n";
+        let findings = find_bash_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("eval_injection")),
+            "eval $VAR must fire eval_injection"
+        );
+    }
+
+    #[test]
+    fn test_bash_eval_string_literal_safe() {
+        let src = b"eval \"echo hello\"\n";
+        let findings = find_bash_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("eval_injection")),
+            "eval \"string literal\" must not fire eval_injection"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_sh_dispatches_phase4() {
+        let src = b"curl https://install.example.com/setup.sh | bash\n";
+        let findings = find_slop("sh", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("curl_pipe_execution")),
+            "find_slop(sh) must dispatch to Phase 4 Bash AST walk"
         );
     }
 }
