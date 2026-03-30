@@ -236,16 +236,19 @@ pub fn cmd_hyper_drive(
 
     pool.install(|| {
         pr_entries.par_iter().for_each(|(pr_num, pr_sha)| {
-            // Physarum Eviction Gate — RAM backpressure.
-            // A sleeping thread holds its stack and TLS allocations; sleeping
-            // under memory pressure worsens the very condition it tries to
-            // avoid.  Evict immediately: skip this PR, free the thread's
-            // allocations, and let the OS reclaim the memory.
-            if let Pulse::Stop = heart.beat() {
-                eprintln!(
-                    "  [PHYSARUM] RAM >90%. Evicting PR #{pr_num} to prevent OOM deadlock..."
-                );
-                return;
+            // Physarum Viscosity Gate — elastic RAM backpressure.
+            //
+            // When RAM pressure exceeds 90% (Stop pulse) we park this thread
+            // for 500 ms rather than evicting the PR.  At this point in the
+            // control flow the thread holds NO heap allocations beyond its own
+            // stack — all bounce data lives inside `bounce_one` and will be
+            // dropped when that function returns.  Parking here lets sibling
+            // workers complete their bounces and the OS reclaim those pages
+            // during the sleep window.  We only proceed once pressure returns
+            // to Constrict or Flow, ensuring forward progress without OOM risk.
+            while let Pulse::Stop = heart.beat() {
+                eprintln!("  [PHYSARUM] RAM >90%. Pausing thread for 500ms to allow GC...");
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
 
             let entry = bounce_one(repo_path_arc, &base_sha, pr_sha, &registry, *pr_num, &slug);
@@ -596,6 +599,15 @@ fn bounce_one(
 
     let slop_score = score.score();
 
+    // Explicit memory flush — compute provenance bytes then drop the
+    // MergeSnapshot blob map before building BounceLogEntry.  `blobs` can hold
+    // up to 1 MiB of raw file data per PR; releasing it here ensures the OS
+    // can reclaim those pages immediately after scoring, which is particularly
+    // important during the 500ms Physarum sleep windows that park workers under
+    // RAM pressure.
+    let source_bytes_processed: u64 = blobs.values().map(|v| v.len() as u64).sum();
+    drop(blobs);
+
     // Minimal MinHash signature for cross-PR collision hints in reports.
     let sig = forge::pr_collider::PrDeltaSignature::from_bytes(pr_sha.as_bytes());
 
@@ -623,7 +635,7 @@ fn bounce_one(
         version_silos,
         agentic_pct: 0.0,
         provenance: crate::report::Provenance {
-            source_bytes_processed: blobs.values().map(|v| v.len() as u64).sum(),
+            source_bytes_processed,
             ..crate::report::Provenance::default()
         },
     })
