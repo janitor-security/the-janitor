@@ -67,27 +67,158 @@ impl PrDeltaSignature {
     ///
     /// Uses 64 independent hash seeds over byte 3-grams.  Falls back to
     /// single-byte shingles for inputs shorter than 3 bytes.
+    ///
+    /// Dispatches to the AVX-256 SIMD path on x86-64 when the `avx2` feature
+    /// is detected at runtime, otherwise falls back to the scalar path.
     pub fn from_bytes(data: &[u8]) -> Self {
-        let mut min_hashes = [u64::MAX; NUM_HASHES];
-
-        if data.is_empty() {
-            return Self { min_hashes };
-        }
-
-        // Use byte 3-grams as shingles; fall back to 1-grams for short input.
-        let window_size = if data.len() >= 3 { 3 } else { 1 };
-
-        for window in data.windows(window_size) {
-            for (i, &seed) in HASH_SEEDS.iter().enumerate() {
-                let h = hash_shingle(window, seed);
-                if h < min_hashes[i] {
-                    min_hashes[i] = h;
-                }
+        #[cfg(target_arch = "x86_64")]
+        {
+            if std::is_x86_feature_detected!("avx2") {
+                // SAFETY: avx2 feature confirmed present by is_x86_feature_detected!
+                return Self {
+                    min_hashes: unsafe { from_bytes_avx256(data) },
+                };
             }
         }
-
-        Self { min_hashes }
+        from_bytes_scalar(data)
     }
+}
+
+/// Scalar (non-SIMD) MinHash implementation.
+///
+/// Reference path used both as the universal fallback and as the correctness
+/// oracle in [`simd_matches_scalar`] tests.
+fn from_bytes_scalar(data: &[u8]) -> PrDeltaSignature {
+    let mut min_hashes = [u64::MAX; NUM_HASHES];
+
+    if data.is_empty() {
+        return PrDeltaSignature { min_hashes };
+    }
+
+    let window_size = if data.len() >= 3 { 3 } else { 1 };
+
+    for window in data.windows(window_size) {
+        for (i, &seed) in HASH_SEEDS.iter().enumerate() {
+            let h = hash_shingle(window, seed);
+            if h < min_hashes[i] {
+                min_hashes[i] = h;
+            }
+        }
+    }
+
+    PrDeltaSignature { min_hashes }
+}
+
+// ---------------------------------------------------------------------------
+// AVX-256 SIMD MinHash — x86-64 only
+// ---------------------------------------------------------------------------
+//
+// Processes 4 MinHash seeds in parallel per SIMD call using 256-bit YMM
+// registers (4 × u64 lanes).  Produces identical output to `from_bytes_scalar`
+// but reduces inner-loop instruction count by 4× on AVX-256 runners.
+//
+// 64-bit multiply is not natively available in pure AVX-256 (that requires
+// AVX-512VL `_mm256_mullo_epi64`).  We emulate it via two `_mm256_mul_epu32`
+// calls using the identity:
+//
+//   (a_lo + a_hi·2³²) × (b_lo + b_hi·2³²) mod 2⁶⁴
+//   = a_lo·b_lo + (a_lo·b_hi + a_hi·b_lo)·2³²
+//
+// Gate: `simd_matches_scalar` verifies bit-exact output for 100 random payloads.
+
+/// Emulate 64-bit wrapping multiply for 4 u64 lanes in an AVX-256 register.
+///
+/// Uses two `_mm256_mul_epu32` calls per cross-term: O(8 instructions) vs the
+/// single `_mm256_mullo_epi64` that would require AVX-512VL.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn mul64_avx2(
+    a: std::arch::x86_64::__m256i,
+    b: std::arch::x86_64::__m256i,
+) -> std::arch::x86_64::__m256i {
+    use std::arch::x86_64::*;
+    // a_lo * b_lo (64-bit result per lane, using lower 32 bits of each operand)
+    let lo_lo = _mm256_mul_epu32(a, b);
+    // a_lo * b_hi: shift b right 32 to put b_hi into the low 32-bit position
+    let b_hi = _mm256_srli_epi64(b, 32);
+    let lo_hi = _mm256_mul_epu32(a, b_hi);
+    // a_hi * b_lo: shift a right 32 to put a_hi into the low 32-bit position
+    let a_hi = _mm256_srli_epi64(a, 32);
+    let hi_lo = _mm256_mul_epu32(a_hi, b);
+    // Sum the two cross-products, then shift into the high 32 bits
+    let cross = _mm256_slli_epi64(_mm256_add_epi64(lo_hi, hi_lo), 32);
+    _mm256_add_epi64(lo_lo, cross)
+}
+
+/// Compute a MinHash sketch using AVX-256 SIMD (4 seeds per register).
+///
+/// Requires the `avx2` target feature; caller MUST check
+/// `is_x86_feature_detected!("avx2")` before calling.
+///
+/// Correctness invariant: `from_bytes_avx256(d).min_hashes == from_bytes_scalar(d).min_hashes`
+/// for every input `d` — verified by the `simd_matches_scalar` unit test.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn from_bytes_avx256(data: &[u8]) -> [u64; NUM_HASHES] {
+    use std::arch::x86_64::*;
+
+    const M1: i64 = 0x6c62272e07bb0142u64 as i64;
+    const M2: i64 = 0x94d049bb133111ebu64 as i64;
+    const LANES: usize = 4; // 256-bit / 64-bit = 4 lanes
+
+    let mut min_hashes = [u64::MAX; NUM_HASHES];
+
+    if data.is_empty() {
+        return min_hashes;
+    }
+
+    let window_size = if data.len() >= 3 { 3 } else { 1 };
+
+    let m1 = _mm256_set1_epi64x(M1);
+    let m2 = _mm256_set1_epi64x(M2);
+    // Bias for unsigned comparison: XOR with 0x8000_0000_0000_0000 to convert
+    // unsigned u64 ordering to signed i64 ordering so `_mm256_cmpgt_epi64` works.
+    let bias = _mm256_set1_epi64x(i64::MIN);
+
+    for window in data.windows(window_size) {
+        // Process all 64 seeds in groups of LANES=4.
+        let mut chunk_start = 0;
+        while chunk_start < NUM_HASHES {
+            // Load 4 seed values as the initial hash state for this window.
+            // SAFETY: HASH_SEEDS has exactly NUM_HASHES=64 u64s; chunk_start
+            // is a multiple of LANES=4 and chunk_start+LANES <= NUM_HASHES.
+            let seeds_ptr = HASH_SEEDS.as_ptr().add(chunk_start) as *const __m256i;
+            let mut lane = _mm256_loadu_si256(seeds_ptr);
+
+            // Apply the hash mixing round for each byte in the 3-gram window.
+            for &byte in window {
+                let b = _mm256_set1_epi64x(byte as i64);
+                lane = _mm256_xor_si256(lane, b);
+                lane = mul64_avx2(lane, m1);
+                lane = _mm256_xor_si256(lane, _mm256_srli_epi64(lane, 16));
+                lane = mul64_avx2(lane, m2);
+                lane = _mm256_xor_si256(lane, _mm256_srli_epi64(lane, 32));
+            }
+
+            // Lane-wise unsigned minimum: update min_hashes where lane < current.
+            // Emulate _mm256_min_epu64 (requires AVX-512) via biased signed cmpgt.
+            let min_ptr = min_hashes.as_ptr().add(chunk_start) as *const __m256i;
+            let current = _mm256_loadu_si256(min_ptr);
+            // Bias both operands: unsigned compare via signed comparison of (x XOR sign_bit)
+            let lane_b = _mm256_xor_si256(lane, bias);
+            let cur_b = _mm256_xor_si256(current, bias);
+            // mask[i] = 0xFF...FF where current[i] > lane[i] (unsigned)
+            let mask = _mm256_cmpgt_epi64(cur_b, lane_b);
+            // Select lane where mask is true (current > lane), else keep current
+            let new_min = _mm256_blendv_epi8(current, lane, mask);
+            let min_mut_ptr = min_hashes.as_mut_ptr().add(chunk_start) as *mut __m256i;
+            _mm256_storeu_si256(min_mut_ptr, new_min);
+
+            chunk_start += LANES;
+        }
+    }
+
+    min_hashes
 }
 
 /// Minimum number of byte 3-gram windows a patch must contain for its
@@ -352,5 +483,50 @@ mod tests {
         let results = index.query(&sig, 0.5);
         // Empty signatures may or may not match — just verify no panic.
         let _ = results;
+    }
+
+    /// Verify that `from_bytes_avx256` produces bit-exact output identical to
+    /// `from_bytes_scalar` for 100 deterministic random payloads.
+    ///
+    /// This test is the mathematical correctness gate for the SIMD path.  If it
+    /// fails, the 64-bit multiply emulation or hash mixing steps are wrong.
+    /// Skipped at runtime when AVX-256 is not available (e.g. QEMU, ARM CI).
+    #[test]
+    #[cfg(target_arch = "x86_64")]
+    fn simd_matches_scalar() {
+        if !std::is_x86_feature_detected!("avx2") {
+            // AVX-256 not available on this host — test is a no-op.
+            return;
+        }
+
+        /// Deterministic xorshift64 PRNG — no external deps.
+        fn xorshift64(mut x: u64) -> u64 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        }
+
+        let mut state: u64 = 0xdead_beef_cafe_1234;
+
+        for trial in 0..100usize {
+            // Generate a payload of random length [1, 2048] bytes.
+            state = xorshift64(state);
+            let len = ((state % 2048) + 1) as usize;
+            let mut payload = vec![0u8; len];
+            for byte in payload.iter_mut() {
+                state = xorshift64(state);
+                *byte = state as u8;
+            }
+
+            let scalar = from_bytes_scalar(&payload);
+            // SAFETY: avx2 confirmed present by is_x86_feature_detected! above.
+            let simd = unsafe { from_bytes_avx256(&payload) };
+
+            assert_eq!(
+                scalar.min_hashes, simd,
+                "SIMD/scalar mismatch on trial {trial} (payload length {len})"
+            );
+        }
     }
 }

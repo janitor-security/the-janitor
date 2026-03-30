@@ -15,11 +15,13 @@
 //! | HCL/Terraform | `public-read` S3 ACL | Public S3 bucket exposes data to the internet |
 //! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
 //! | JS/TS | `innerHTML` assignment | Direct DOM XSS vector — use `textContent` or sanitize input |
-//! | JS/TS | `.__proto__`, `["__proto__"]`, `[constructor][prototype]` | Prototype pollution via direct proto key access |
+//! | JS/TS | `.__proto__`, `["__proto__"]`, `[constructor][prototype]` | Prototype pollution via direct proto key access (Layer A AhoCorasick) |
+//! | JS/TS | `_.merge`, `Object.assign` etc. with `JSON.parse`/`body`/`query` arg | Prototype pollution merge sink (Layer B AST walk, Phase 3 Tier 1) |
 //! | Python | `exec`, `pickle.loads/load`, `os.system`, `__import__` | Dangerous call AST walk — Phase 2 (Tier 1); `eval` at Warning, suppressed in `test_*` scope |
 //! | Java | `ObjectInputStream.readObject`, `XMLDecoder.readObject`, `Runtime.getRuntime().exec`, `InitialContext.lookup` (dynamic only) | Deserialization gadget chains + JNDI — Phase 2 AST walk (Tier 1) |
 //! | Java | `new ObjectInputStream(`, `XStream().fromXML(`, `.readObject()`, `Runtime.getRuntime().exec(`, `InitialContext().lookup(` | Same patterns — Phase 1 AhoCorasick (Tier 2) backup |
-//! | C# | `new BinaryFormatter()`, `TypeNameHandling.Auto/All/Objects`, `LosFormatter`, `ObjectStateFormatter` | Unsafe deserialization — Newtonsoft.Json RCE class |
+//! | C# | `TypeNameHandling.Auto/All/Objects` in assignment, `new BinaryFormatter()` | Unsafe deserialization — Phase 3 AST walk (Tier 1); `TypeNameHandling.None` explicitly excluded |
+//! | C# | `new BinaryFormatter()`, `TypeNameHandling.Auto/All/Objects`, `LosFormatter`, `ObjectStateFormatter` | Same patterns — Phase 1 AhoCorasick (Tier 2) backup |
 //!
 //! ## Removed Rules (v7.6.0 — Linter Annihilation)
 //!
@@ -221,6 +223,8 @@ struct QueryEngine {
     python_lang: Language,
     /// Java grammar — used for Phase 2 R&D deserialization/JNDI AST walk.
     java_lang: Language,
+    /// C# grammar — used for Phase 3 R&D TypeNameHandling/BinaryFormatter AST walk.
+    csharp_lang: Language,
 }
 
 impl QueryEngine {
@@ -230,12 +234,14 @@ impl QueryEngine {
         let js_lang: Language = tree_sitter_javascript::LANGUAGE.into();
         let python_lang: Language = tree_sitter_python::LANGUAGE.into();
         let java_lang: Language = tree_sitter_java::LANGUAGE.into();
+        let csharp_lang: Language = tree_sitter_c_sharp::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
             js_lang,
             python_lang,
             java_lang,
+            csharp_lang,
         })
     }
 }
@@ -282,6 +288,8 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_js_path_traversal_slop(eng, source));
             // Phase 1 R&D: prototype pollution Layer A (AhoCorasick)
             f.extend(find_prototype_pollution_slop(source));
+            // Phase 3 R&D: prototype pollution Layer B — merge sink AST walk
+            f.extend(find_prototype_merge_sink_slop(eng, source));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -300,6 +308,8 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
+            // Phase 3 R&D: TypeNameHandling/BinaryFormatter AST walk (Tier 1)
+            f.extend(find_csharp_slop(eng, source));
             f
         }
         _ => Vec::new(),
@@ -2440,6 +2450,120 @@ pub fn find_csharp_slop_fast(source: &[u8]) -> Vec<SlopFinding> {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3 R&D: C# deserialization AST walk (Tier 1)
+//
+// Upgrades the Phase 1 AhoCorasick (Tier 2) byte scan to a full AST walk:
+// - `assignment_expression` where the right-hand side is `TypeNameHandling.Auto`,
+//   `TypeNameHandling.All`, or `TypeNameHandling.Objects` — exactly the three
+//   Newtonsoft.Json values that enable arbitrary type deserialization.
+//   `TypeNameHandling.None` is the safe default and is explicitly excluded.
+// - `object_creation_expression` where the type being constructed is `BinaryFormatter`.
+//
+// AST precision over AhoCorasick: avoids firing on commented-out code such as
+// `// TypeNameHandling.Auto was the old setting` which the Tier 2 pattern catches
+// as a false positive.
+// ---------------------------------------------------------------------------
+
+/// Dangerous TypeNameHandling values — all three enable `$type` deserialization RCE.
+/// `TypeNameHandling.None` is the safe default and MUST NOT appear in this list.
+const CSHARP_DANGEROUS_TNH: &[&str] = &[
+    "TypeNameHandling.Auto",
+    "TypeNameHandling.All",
+    "TypeNameHandling.Objects",
+];
+
+/// Scan C# source for `TypeNameHandling` dangerous assignment expressions and
+/// `BinaryFormatter` object creation via tree-sitter AST walk.
+///
+/// Phase 3 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 3).
+fn find_csharp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files with neither TypeNameHandling nor BinaryFormatter.
+    const CSHARP_MARKERS: &[&[u8]] = &[b"TypeNameHandling", b"BinaryFormatter"];
+    if !CSHARP_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.csharp_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("cs")];
+    };
+
+    let mut findings = Vec::new();
+    find_csharp_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_csharp_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    match node.kind() {
+        "assignment_expression" => {
+            // Flag when the right-hand side is a dangerous TypeNameHandling value.
+            if let Some(right) = node.child_by_field_name("right") {
+                if let Ok(rhs) = right.utf8_text(source) {
+                    for &dangerous in CSHARP_DANGEROUS_TNH {
+                        if rhs == dangerous {
+                            findings.push(SlopFinding {
+                                start_byte: node.start_byte(),
+                                end_byte: node.end_byte(),
+                                description: format!(
+                                    "security:unsafe_deserialization — \
+                                     `{rhs}` in Newtonsoft.Json enables arbitrary \
+                                     type deserialization; attacker-controlled JSON \
+                                     `$type` fields yield RCE on servers with \
+                                     gadget-bearing assemblies; set \
+                                     `TypeNameHandling.None` (the safe default)"
+                                ),
+                                domain: DOMAIN_FIRST_PARTY,
+                                severity: Severity::Critical,
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        "object_creation_expression" => {
+            // Flag `new BinaryFormatter()` — any use of BinaryFormatter in .NET 5+
+            // is deprecated (SYSLIB0011) and enables RCE via gadget chains.
+            // Try the "type" field first; fall back to the first named child.
+            let mut fallback_cursor = node.walk();
+            let type_text = match node.child_by_field_name("type") {
+                Some(t) => t.utf8_text(source).unwrap_or(""),
+                None => node
+                    .children(&mut fallback_cursor)
+                    .find(|ch| ch.is_named())
+                    .and_then(|ch| ch.utf8_text(source).ok())
+                    .unwrap_or(""),
+            };
+            if type_text == "BinaryFormatter" {
+                findings.push(SlopFinding {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    description: "security:unsafe_deserialization — `new BinaryFormatter()` \
+                                  is banned in .NET 5+ (SYSLIB0011); attacker-controlled \
+                                  bytes enable RCE via gadget chains; migrate to \
+                                  System.Text.Json or XmlSerializer with explicit type \
+                                  restrictions"
+                        .to_string(),
+                    domain: DOMAIN_FIRST_PARTY,
+                    severity: Severity::Critical,
+                });
+            }
+        }
+        _ => {}
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_csharp_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1 R&D: Prototype Pollution detection — Layer A AhoCorasick (JS/TS)
 //
 // Covers direct `__proto__` key access patterns.  Layer B (unsafe merge
@@ -2508,6 +2632,142 @@ pub fn find_prototype_pollution_slop(source: &[u8]) -> Vec<SlopFinding> {
             severity: Severity::Critical,
         })
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 R&D: Prototype Pollution — Layer B AST walk (JS/TS merge sinks)
+//
+// Detects `_.merge`, `lodash.merge`, `deepMerge`, `mergeDeep`, and
+// `Object.assign` call sites where any argument:
+//   (a) is the result of `JSON.parse(...)`, or
+//   (b) is an identifier or member-expression property matching a common
+//       HTTP request input name (`body`, `query`, `params`, `input`).
+//
+// Suppressed when the enclosing function name contains "sanitize" or "validate" —
+// those functions exist precisely to clean input before merging.
+// ---------------------------------------------------------------------------
+
+/// Merge utility callee names that are prototype-pollution-capable.
+const MERGE_CALL_TARGETS: &[&str] = &[
+    "_.merge",
+    "lodash.merge",
+    "deepMerge",
+    "mergeDeep",
+    "Object.assign",
+];
+
+/// Common HTTP request property names that carry user-controlled data.
+const USER_INPUT_NAMES: &[&str] = &["body", "query", "params", "input"];
+
+/// Return `true` if `arg` is a known taint source:
+/// - A `JSON.parse(...)` call expression, or
+/// - An `identifier` whose name is in [`USER_INPUT_NAMES`], or
+/// - A `member_expression` whose `property` is in [`USER_INPUT_NAMES`]
+///   (e.g. `req.body`, `request.query`).
+fn argument_is_tainted(arg: Node<'_>, source: &[u8]) -> bool {
+    match arg.kind() {
+        "call_expression" => arg
+            .child_by_field_name("function")
+            .and_then(|f| f.utf8_text(source).ok())
+            .is_some_and(|t| t == "JSON.parse"),
+        "identifier" => {
+            let name = arg.utf8_text(source).unwrap_or("");
+            USER_INPUT_NAMES.contains(&name)
+        }
+        "member_expression" => arg
+            .child_by_field_name("property")
+            .and_then(|p| p.utf8_text(source).ok())
+            .is_some_and(|t| USER_INPUT_NAMES.contains(&t)),
+        _ => false,
+    }
+}
+
+fn find_merge_sink_calls(
+    node: Node<'_>,
+    source: &[u8],
+    findings: &mut Vec<SlopFinding>,
+    in_safe_scope: bool,
+) {
+    // When entering a named function, check if it is a sanitize/validate function.
+    let next_in_safe_scope = if matches!(
+        node.kind(),
+        "function_declaration" | "method_definition" | "function_expression"
+    ) {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        in_safe_scope || name.contains("sanitize") || name.contains("validate")
+    } else {
+        in_safe_scope
+    };
+
+    if !next_in_safe_scope && node.kind() == "call_expression" {
+        if let (Some(func_node), Some(args_node)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let func_text = func_node.utf8_text(source).unwrap_or("");
+            if MERGE_CALL_TARGETS.contains(&func_text) {
+                let mut cursor = args_node.walk();
+                let tainted = args_node
+                    .children(&mut cursor)
+                    .filter(|c| c.is_named())
+                    .any(|arg| argument_is_tainted(arg, source));
+                if tainted {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:prototype_pollution_merge_sink — \
+                             `{func_text}()` called with a potentially \
+                             user-controlled argument (JSON.parse output or \
+                             HTTP request property); if the source object \
+                             contains `__proto__` or `constructor` keys this \
+                             enables prototype pollution and may achieve RCE \
+                             via Node.js gadget chains"
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::Critical,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_merge_sink_calls(child, source, findings, next_in_safe_scope);
+    }
+}
+
+/// Scan JS/TS source for prototype pollution merge sink patterns (Layer B).
+///
+/// Targets known merge utilities (`_.merge`, `Object.assign`, etc.) whose
+/// arguments include tainted inputs (`JSON.parse` output, `body`, `query`).
+/// Suppressed inside functions named `sanitize*` or `validate*`.
+///
+/// Phase 3 R&D per `docs/R_AND_D_ROADMAP.md` Section III (Tier 1 AST walk).
+fn find_prototype_merge_sink_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Fast pre-filter: skip files without any known merge utility
+    let has_merge = MERGE_CALL_TARGETS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == m.as_bytes()));
+    if !has_merge {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("js")];
+    };
+
+    let mut findings = Vec::new();
+    find_merge_sink_calls(tree.root_node(), source, &mut findings, false);
+    findings
 }
 
 // ---------------------------------------------------------------------------
@@ -4112,6 +4372,173 @@ mod phase2_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("unsafe_deserialization")),
             "ObjectMapper.readValue() must not fire: {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod phase3_rd_tests {
+    use super::*;
+
+    fn eng() -> &'static QueryEngine {
+        engine().expect("QueryEngine must initialise in tests")
+    }
+
+    // ── C# AST walk (TypeNameHandling + BinaryFormatter) ─────────────────────
+
+    #[test]
+    fn test_csharp_type_name_handling_all_fires_via_ast() {
+        let src =
+            b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };\n";
+        let findings = find_csharp_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "TypeNameHandling.All must fire unsafe_deserialization via AST: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_type_name_handling_objects_fires_via_ast() {
+        let src = b"settings.TypeNameHandling = TypeNameHandling.Objects;\n";
+        let findings = find_csharp_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "TypeNameHandling.Objects must fire unsafe_deserialization via AST: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_binary_formatter_fires_via_ast() {
+        let src =
+            b"BinaryFormatter formatter = new BinaryFormatter();\nformatter.Serialize(ms, obj);\n";
+        let findings = find_csharp_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "new BinaryFormatter() must fire unsafe_deserialization via AST: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_type_name_handling_none_safe_via_ast() {
+        let src =
+            b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };\n";
+        let findings = find_csharp_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unsafe_deserialization")),
+            "TypeNameHandling.None must NOT fire via AST: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_csharp_clean_stj_safe_via_ast() {
+        let src = b"var obj = System.Text.Json.JsonSerializer.Deserialize<MyType>(json);\n";
+        let findings = find_csharp_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unsafe_deserialization")),
+            "System.Text.Json deserialization must NOT fire via AST: {findings:?}"
+        );
+    }
+
+    // ── Prototype Pollution Layer B (merge sink AST walk) ─────────────────────
+
+    #[test]
+    fn test_pp_merge_sink_json_parse_arg_fires() {
+        // Inline JSON.parse as a direct argument is the canonical tainted pattern.
+        let src = b"_.merge(target, JSON.parse(userInput));\n";
+        let findings = find_prototype_merge_sink_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution_merge_sink")),
+            "_.merge with inline JSON.parse arg must fire prototype_pollution_merge_sink: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_pp_merge_sink_req_body_fires() {
+        let src = b"Object.assign(config, req.body);\n";
+        let findings = find_prototype_merge_sink_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution_merge_sink")),
+            "Object.assign with req.body must fire prototype_pollution_merge_sink: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_pp_merge_sink_query_identifier_fires() {
+        let src = b"_.merge(defaults, query);\n";
+        let findings = find_prototype_merge_sink_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution_merge_sink")),
+            "_.merge with query identifier must fire: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_pp_merge_sink_suppressed_in_sanitize_function() {
+        let src = b"function sanitizeAndMerge(target, source) {\n    _.merge(target, source);\n    return target;\n}\n";
+        // 'source' is not in USER_INPUT_NAMES so this wouldn't fire anyway,
+        // but we verify suppression logic by using a tainted name in a sanitize function.
+        let src2 = b"function sanitizeInput(target) {\n    _.merge(target, req.body);\n    return target;\n}\n";
+        let findings = find_prototype_merge_sink_slop(eng(), src2);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("prototype_pollution_merge_sink")),
+            "_.merge inside sanitize function must be suppressed: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_pp_merge_sink_clean_literal_arg_safe() {
+        // Merging a literal object — no user input, must not fire.
+        let src = b"_.merge(defaults, { theme: 'dark', locale: 'en' });\n";
+        let findings = find_prototype_merge_sink_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("prototype_pollution_merge_sink")),
+            "_.merge with literal object must NOT fire: {findings:?}"
+        );
+    }
+
+    // ── find_slop dispatch integration ───────────────────────────────────────
+
+    #[test]
+    fn test_find_slop_cs_csharp_slop_dispatched() {
+        let src = b"settings.TypeNameHandling = TypeNameHandling.Auto;\n";
+        let findings = find_slop("cs", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "find_slop(cs) must dispatch to csharp_slop AST walk: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_js_merge_sink_dispatched() {
+        let src = b"_.merge(config, JSON.parse(data));\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("prototype_pollution_merge_sink")),
+            "find_slop(js) must dispatch to merge sink AST walk: {findings:?}"
         );
     }
 }

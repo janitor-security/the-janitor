@@ -638,6 +638,59 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── Phase 3 R&D: C# AST Walk (TypeNameHandling + BinaryFormatter) ────────
+    Entry {
+        name: "C#/TypeNameHandling.Objects AST assignment — INTERCEPT",
+        lang: "cs",
+        source: b"settings.TypeNameHandling = TypeNameHandling.Objects;\nvar obj = JsonConvert.DeserializeObject(json, settings);\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "C#/TypeNameHandling.All AST assignment — INTERCEPT",
+        lang: "cs",
+        source: b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+    Entry {
+        name: "C#/TypeNameHandling.None only — SAFE (AST TN)",
+        lang: "cs",
+        source: b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None, NullValueHandling = NullValueHandling.Ignore };\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Phase 3 R&D: Prototype Pollution Layer B (JS merge sink AST walk) ─────
+    Entry {
+        name: "JS/_.merge with JSON.parse arg — INTERCEPT (PP Layer B)",
+        lang: "js",
+        source: b"_.merge(config, JSON.parse(req.rawBody));\n",
+        must_intercept: true,
+        desc_fragment: Some("prototype_pollution_merge_sink"),
+    },
+    Entry {
+        name: "JS/Object.assign with req.body — INTERCEPT (PP Layer B)",
+        lang: "js",
+        source: b"Object.assign(defaultSettings, req.body);\n",
+        must_intercept: true,
+        desc_fragment: Some("prototype_pollution_merge_sink"),
+    },
+    Entry {
+        name: "JS/_.merge inside sanitize function — SAFE (PP Layer B TN)",
+        lang: "js",
+        source: b"function sanitizeAndApply(target) {\n    _.merge(target, req.body);\n    return target;\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "JS/_.merge with literal object — SAFE (PP Layer B TN)",
+        lang: "js",
+        source: b"_.merge(defaults, { theme: 'dark', locale: 'en' });\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

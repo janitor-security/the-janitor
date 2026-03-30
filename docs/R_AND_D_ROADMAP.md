@@ -379,13 +379,18 @@ Phase 2 [COMPLETED — v8.2.0]:
   └── Java AST walk upgrade (I, Tier 1)
         Files: slop_hunter.rs (find_java_slop; QueryEngine::java_lang field added) ✓
 
-Phase 3 (Medium-term — 3 sprints):
+Phase 3 [COMPLETED — v8.3.0]:
   ├── C# AST walk upgrade (I, Tier 1)
-  │     Files: slop_hunter.rs (add QueryEngine::csharp_lang field)
+  │     Files: slop_hunter.rs (QueryEngine::csharp_lang; find_csharp_slop;
+  │            find_csharp_danger_nodes; CSHARP_DANGEROUS_TNH) ✓
   ├── Prototype Pollution AST Layer B (III, Tier 1)
-  └── SIMD MinHash (II)
-        Files: pr_collider.rs
-        Gate: simd_matches_scalar() test passes
+  │     Files: slop_hunter.rs (find_prototype_merge_sink_slop;
+  │            find_merge_sink_calls; argument_is_tainted;
+  │            MERGE_CALL_TARGETS; USER_INPUT_NAMES) ✓
+  └── SIMD MinHash AVX-256 (II)
+        Files: pr_collider.rs (from_bytes_avx256; mul64_avx2;
+               from_bytes_scalar; runtime dispatch in from_bytes) ✓
+        Gate: simd_matches_scalar() 100-trial correctness test ✓
 ```
 
 Every phase gate is: **Crucible exits 0** AND **`just audit` exits 0** AND at least
