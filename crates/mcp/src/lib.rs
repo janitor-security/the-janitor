@@ -1,14 +1,15 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes eight tools over the MCP stdio JSON-RPC protocol:
-//! - `janitor_scan`           — Run the 6-stage dead-symbol pipeline on a project path.
-//! - `janitor_dedup`          — Detect structurally-cloned symbols in a project.
-//! - `janitor_clean`          — Report dead symbols eligible for removal (dry-run).
-//! - `janitor_dep_check`      — Identify zombie dependencies (declared but never imported).
-//! - `janitor_bounce`         — Score a patch (or current git diff) for slop/antipatterns.
-//! - `janitor_silo_audit`     — Detect `architecture:version_silo` splits in the workspace lockfile.
-//! - `janitor_provenance`     — Return last analysis duration and source-vs-egress byte ratio.
-//! - `janitor_wopr_snapshot`  — ASCII health snapshot of the repository derived from the bounce log.
+//! Exposes nine tools over the MCP stdio JSON-RPC protocol:
+//! - `janitor_scan`              — Run the 6-stage dead-symbol pipeline on a project path.
+//! - `janitor_dedup`             — Detect structurally-cloned symbols in a project.
+//! - `janitor_clean`             — Report dead symbols eligible for removal (dry-run).
+//! - `janitor_dep_check`         — Identify zombie dependencies (declared but never imported).
+//! - `janitor_bounce`            — Score a patch (or current git diff) for slop/antipatterns.
+//! - `janitor_silo_audit`        — Detect `architecture:version_silo` splits in the workspace lockfile.
+//! - `janitor_provenance`        — Return last analysis duration and source-vs-egress byte ratio.
+//! - `janitor_wopr_snapshot`     — ASCII health snapshot of the repository derived from the bounce log.
+//! - `janitor_visualize_ledger`  — Mermaid pie chart + TEI markdown table from the actuarial ledger.
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -221,6 +222,20 @@ fn tool_list() -> serde_json::Value {
             {
                 "name": "janitor_wopr_snapshot",
                 "description": "Return an ASCII health snapshot of the repository derived from the bounce log. Shows total PRs audited, clean/flagged/critical counts, average slop score, and a health bar — giving the operator an instant 'vibe read' without opening the TUI.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to the repository root (reads `.janitor/bounce_log.ndjson`)."
+                        }
+                    },
+                    "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_visualize_ledger",
+                "description": "Render the actuarial intercept ledger as a Mermaid.js pie chart and a markdown TEI table. Classifies every bounced PR into Critical ($150), Necrotic ($20), StructuralSlop ($0), or Boilerplate ($0) and computes Total Economic Impact. Use this tool when asked for an executive summary, ROI report, or intercept breakdown.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -678,6 +693,158 @@ fn run_wopr_snapshot(path: &str) -> Result<serde_json::Value> {
     }))
 }
 
+/// Classify every PR in the bounce log into the four actuarial tiers and render
+/// a Mermaid.js pie chart plus a markdown TEI table.
+///
+/// # Tier definitions
+/// - **Critical** (`security:` antipattern OR non-empty `collided_pr_numbers`) — $150 / intercept
+/// - **Necrotic** (`necrotic_flag` present AND NOT Critical) — $20 / intercept
+/// - **StructuralSlop** (`slop_score > 0` AND NOT Critical AND NOT Necrotic) — $0 (structural waste)
+/// - **Boilerplate** (`slop_score == 0`) — $0 (noise-free)
+///
+/// Returns `mermaid` (raw Mermaid source), `tei_table` (markdown), and the raw
+/// per-tier counts and TEI totals as structured fields for programmatic use.
+fn run_visualize_ledger(path: &str) -> Result<serde_json::Value> {
+    let root = resolve_workspace_root(path, "path")?;
+    let log_path = root.join(".janitor").join("bounce_log.ndjson");
+
+    if !log_path.exists() {
+        return Ok(serde_json::json!({
+            "mermaid": "pie title Intercept Distribution\n    \"No Data\" : 1",
+            "tei_table": "No bounce log found. Run `janitor bounce` to populate.",
+            "total_prs": 0,
+            "tei_usd": 0,
+            "status": "no_data"
+        }));
+    }
+
+    let content = std::fs::read_to_string(&log_path)
+        .with_context(|| format!("failed to read {}", log_path.display()))?;
+
+    let entries: Vec<serde_json::Value> = content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+
+    if entries.is_empty() {
+        return Ok(serde_json::json!({
+            "mermaid": "pie title Intercept Distribution\n    \"No Data\" : 1",
+            "tei_table": "Bounce log is empty.",
+            "total_prs": 0,
+            "tei_usd": 0,
+            "status": "empty"
+        }));
+    }
+
+    let total = entries.len();
+    let mut critical = 0u64;
+    let mut necrotic = 0u64;
+    let mut structural_slop = 0u64;
+    let mut boilerplate = 0u64;
+
+    for e in &entries {
+        let has_security = e
+            .get("antipatterns")
+            .and_then(|a| a.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .any(|a| a.as_str().is_some_and(|s| s.contains("security:")))
+            })
+            .unwrap_or(false);
+        let has_collision = e
+            .get("collided_pr_numbers")
+            .and_then(|c| c.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        let is_critical = has_security || has_collision;
+
+        let is_necrotic = !is_critical
+            && e.get("necrotic_flag")
+                .map(|v| !v.is_null())
+                .unwrap_or(false);
+
+        let score = e.get("slop_score").and_then(|s| s.as_u64()).unwrap_or(0);
+        let is_structural_slop = !is_critical && !is_necrotic && score > 0;
+
+        if is_critical {
+            critical += 1;
+        } else if is_necrotic {
+            necrotic += 1;
+        } else if is_structural_slop {
+            structural_slop += 1;
+        } else {
+            boilerplate += 1;
+        }
+    }
+
+    let tei_critical = critical * 150;
+    let tei_necrotic = necrotic * 20;
+    let tei_total = tei_critical + tei_necrotic;
+
+    let critical_pct = critical as f64 / total as f64 * 100.0;
+    let necrotic_pct = necrotic as f64 / total as f64 * 100.0;
+    let slop_pct = structural_slop as f64 / total as f64 * 100.0;
+    let boilerplate_pct = boilerplate as f64 / total as f64 * 100.0;
+
+    // Mermaid pie requires at least one non-zero slice.
+    // Represent zero-count tiers with a placeholder value of 0 (Mermaid ignores 0-value slices),
+    // but guard against the degenerate all-zero case by using boilerplate as the floor.
+    let mermaid = format!(
+        "```mermaid\npie title Intercept Distribution — {total} PRs Audited\n\
+         {critical_slice}\
+         {necrotic_slice}\
+         {slop_slice}\
+         {boilerplate_slice}\
+         ```",
+        critical_slice = if critical > 0 {
+            format!("    \"Critical (${}/ea)\" : {critical}\n", 150)
+        } else {
+            String::new()
+        },
+        necrotic_slice = if necrotic > 0 {
+            format!("    \"Necrotic (${}/ea)\" : {necrotic}\n", 20)
+        } else {
+            String::new()
+        },
+        slop_slice = if structural_slop > 0 {
+            format!("    \"StructuralSlop\" : {structural_slop}\n")
+        } else {
+            String::new()
+        },
+        boilerplate_slice = if boilerplate > 0 {
+            format!("    \"Boilerplate\" : {boilerplate}\n")
+        } else {
+            String::new()
+        },
+    );
+
+    let tei_table = format!(
+        "## Actuarial Ledger — Total Economic Impact\n\n\
+         | Tier | Count | Rate | Unit TEI | Total TEI |\n\
+         |---|---|---|---|---|\n\
+         | Critical | {critical} | {critical_pct:.1}% | $150 | ${tei_critical} |\n\
+         | Necrotic | {necrotic} | {necrotic_pct:.1}% | $20 | ${tei_necrotic} |\n\
+         | StructuralSlop | {structural_slop} | {slop_pct:.1}% | $0 | $0 |\n\
+         | Boilerplate | {boilerplate} | {boilerplate_pct:.1}% | $0 | $0 |\n\
+         | **Total** | **{total}** | 100.0% | — | **${tei_total}** |\n"
+    );
+
+    Ok(serde_json::json!({
+        "mermaid": mermaid,
+        "tei_table": tei_table,
+        "total_prs": total,
+        "critical_prs": critical,
+        "necrotic_prs": necrotic,
+        "structural_slop_prs": structural_slop,
+        "boilerplate_prs": boilerplate,
+        "tei_critical_usd": tei_critical,
+        "tei_necrotic_usd": tei_necrotic,
+        "tei_total_usd": tei_total,
+        "status": if critical > 0 { "critical" } else if necrotic > 0 { "necrotic" } else { "clean" }
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Server entry point
 // ---------------------------------------------------------------------------
@@ -858,6 +1025,17 @@ fn dispatch(req: Request) -> Response {
                     }
                 }
 
+                "janitor_visualize_ledger" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    match run_visualize_ledger(&path) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
                 _ => Response::err(req.id, -32601, format!("unknown tool: {tool}")),
             }
         }
@@ -887,10 +1065,10 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_eight_tools() {
+    fn test_tools_list_contains_nine_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 8);
+        assert_eq!(tools.len(), 9);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
@@ -900,6 +1078,7 @@ mod tests {
         assert!(names.contains(&"janitor_silo_audit"));
         assert!(names.contains(&"janitor_provenance"));
         assert!(names.contains(&"janitor_wopr_snapshot"));
+        assert!(names.contains(&"janitor_visualize_ledger"));
     }
 
     #[test]
@@ -1123,5 +1302,99 @@ mod tests {
         let resp = dispatch(req);
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    // ── janitor_visualize_ledger tests ─────────────────────────────────────
+
+    #[test]
+    fn test_visualize_ledger_no_log_returns_no_data() {
+        // /tmp exists but has no .janitor/bounce_log.ndjson → clean no_data response.
+        let result = run_visualize_ledger("/tmp").unwrap();
+        assert_eq!(result["total_prs"], 0);
+        assert_eq!(result["status"], "no_data");
+        assert!(
+            result["mermaid"].as_str().unwrap().contains("No Data"),
+            "mermaid must contain No Data placeholder"
+        );
+    }
+
+    #[test]
+    fn test_visualize_ledger_missing_path_error() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(30),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_visualize_ledger",
+                "arguments": {}
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_visualize_ledger_classifies_tiers_correctly() {
+        use std::io::Write;
+
+        // Write a synthetic bounce log with one entry per tier:
+        // 1. Critical — has security: antipattern
+        // 2. Critical — has non-empty collided_pr_numbers
+        // 3. Necrotic — necrotic_flag set, no security
+        // 4. StructuralSlop — slop_score > 0, no critical/necrotic signals
+        // 5. Boilerplate — slop_score == 0, clean
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).unwrap();
+        let log_path = janitor_dir.join("bounce_log.ndjson");
+
+        let entries = [
+            r#"{"slop_score":150,"antipatterns":["security:sqli_concatenation"],"collided_pr_numbers":[],"necrotic_flag":null,"timestamp":"2026-01-01T00:00:00Z"}"#,
+            r#"{"slop_score":50,"antipatterns":[],"collided_pr_numbers":[42,43],"necrotic_flag":null,"timestamp":"2026-01-01T00:00:01Z"}"#,
+            r#"{"slop_score":20,"antipatterns":[],"collided_pr_numbers":[],"necrotic_flag":"gc_only","timestamp":"2026-01-01T00:00:02Z"}"#,
+            r#"{"slop_score":10,"antipatterns":[],"collided_pr_numbers":[],"necrotic_flag":null,"timestamp":"2026-01-01T00:00:03Z"}"#,
+            r#"{"slop_score":0,"antipatterns":[],"collided_pr_numbers":[],"necrotic_flag":null,"timestamp":"2026-01-01T00:00:04Z"}"#,
+        ];
+
+        let mut file = std::fs::File::create(&log_path).unwrap();
+        for entry in &entries {
+            writeln!(file, "{entry}").unwrap();
+        }
+
+        let result = run_visualize_ledger(dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(result["total_prs"], 5, "must count all 5 entries");
+        assert_eq!(result["critical_prs"], 2, "2 critical entries");
+        assert_eq!(result["necrotic_prs"], 1, "1 necrotic entry");
+        assert_eq!(result["structural_slop_prs"], 1, "1 structural slop entry");
+        assert_eq!(result["boilerplate_prs"], 1, "1 boilerplate entry");
+
+        // TEI: 2 critical × $150 + 1 necrotic × $20 = $320
+        assert_eq!(result["tei_critical_usd"], 300, "critical TEI = 2 × $150");
+        assert_eq!(result["tei_necrotic_usd"], 20, "necrotic TEI = 1 × $20");
+        assert_eq!(result["tei_total_usd"], 320, "total TEI = $320");
+
+        let mermaid = result["mermaid"].as_str().unwrap();
+        assert!(
+            mermaid.contains("Critical"),
+            "mermaid must show Critical slice"
+        );
+        assert!(
+            mermaid.contains("Necrotic"),
+            "mermaid must show Necrotic slice"
+        );
+        assert!(
+            mermaid.contains("StructuralSlop"),
+            "mermaid must show StructuralSlop slice"
+        );
+        assert!(
+            mermaid.contains("Boilerplate"),
+            "mermaid must show Boilerplate slice"
+        );
+
+        let tei_table = result["tei_table"].as_str().unwrap();
+        assert!(tei_table.contains("$320"), "TEI table must show total $320");
+        assert_eq!(result["status"], "critical", "status must be critical");
     }
 }
