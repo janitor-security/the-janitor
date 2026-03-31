@@ -77,6 +77,10 @@ No token flag. No manual step. The proof is issued by the SaaS on a clean merge 
 
 *Janitor Sentinel automatically downgrades vetoes when it detects safe patterns (e.g., Dependabot).*
 
+### Datacenter Sustainability
+
+By intercepting structural slop at the AST level, The Janitor prevents wasted CI/CD cycles, reclaiming kilowatt-hours of grid capacity from agentic churn. Every actionable intercept eliminates one CI run that would have consumed approximately **0.1 kWh** of datacenter energy (basis: 15-minute average CI run at 400 W). The cumulative energy ledger is tracked per-repository in the Workslop report under **CI Energy Reclaimed**.
+
 ---
 
 ## THE SHADOW AI CRISIS

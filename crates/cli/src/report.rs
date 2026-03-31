@@ -184,6 +184,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         policy_hash: "test".to_string(),
         version_silos: vec![],
         agentic_pct: 100.0,
+        ci_energy_saved_kwh: 0.1,
         provenance: Provenance::default(),
     };
 
@@ -449,6 +450,14 @@ pub struct BounceLogEntry {
     /// the March 2026 infrastructure update.
     #[serde(default)]
     pub agentic_pct: f64,
+
+    /// CI datacenter energy saved by blocking this PR, in kilowatt-hours.
+    ///
+    /// Basis: industry-average CI run = 15 minutes; a heavy CI server draws ~400 W;
+    /// therefore one blocked PR = 15 min × 400 W = **0.1 kWh** of avoided grid load.
+    /// Set to `0.1` when `slop_score > 0` (actionable intercept), `0.0` otherwise.
+    #[serde(default)]
+    pub ci_energy_saved_kwh: f64,
 
     /// Zero-upload proof ledger — bytes analysed vs. bytes transmitted.
     ///
@@ -1060,6 +1069,7 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
         // Categorical billing: Critical ($150) + Necrotic GC ($20) + Structural Slop ($20).
         let ci_compute_saved = critical * 150;
         let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
+        let energy_kwh = actionable as f64 * 0.1;
         out.push_str("## Workslop: Maintainer Impact\n\n");
         out.push_str(
             "*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax \
@@ -1086,9 +1096,13 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             "| **CI & Review Compute Saved** | **${ci_compute_saved}** |\n"
         ));
         out.push_str(&format!("| **Total Economic Impact** | **${tei}** |\n"));
+        out.push_str(&format!(
+            "| **CI Energy Reclaimed** | **{energy_kwh:.1} kWh** |\n"
+        ));
         out.push('\n');
         out.push_str(
             "> TEI = (Critical Threats × $150) + (Necrotic GC × $20) + (Structural Slop × $20). \
+             Energy = actionable intercepts × 0.1 kWh (15-min CI run at 400 W). \
              Critical Threats: `security:` antipatterns or Swarm collisions. \
              Necrotic: bot-closeable dead-code PRs. \
              Structural Slop: PRs with slop_score > 0 and no critical/necrotic signal. \
@@ -2604,7 +2618,18 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
     out.push_str(banner);
     out.push_str(" · Slop Score: `");
     out.push_str(&entry.slop_score.to_string());
-    out.push_str("`\n\n");
+    out.push_str("`\n");
+    let per_pr_tei: u32 = if is_critical {
+        150
+    } else if is_necrotic || is_structural {
+        20
+    } else {
+        0
+    };
+    out.push_str(&format!(
+        "**TEI: ${per_pr_tei} · Energy Reclaimed: {:.1} kWh**\n\n",
+        entry.ci_energy_saved_kwh
+    ));
 
     // ── Integrity Radar ────────────────────────────────────────────────────────
     out.push_str("### Integrity Radar\n\n");
@@ -2880,6 +2905,7 @@ mod tests {
             policy_hash: "def456".to_string(),
             version_silos: vec![],
             agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.0,
             provenance: Provenance {
                 analysis_duration_ms: 42,
                 source_bytes_processed: 1024,
@@ -2996,6 +3022,7 @@ mod webhook_tests {
             policy_hash: String::new(),
             version_silos: vec![],
             agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.0,
             provenance: Provenance::default(),
         }
     }

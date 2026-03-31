@@ -749,6 +749,7 @@ async fn main() -> anyhow::Result<()> {
                             policy_hash: String::new(),
                             version_silos: vec![],
                             agentic_pct: 0.0,
+                            ci_energy_saved_kwh: 0.0,
                             provenance: report::Provenance::default(),
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
@@ -3059,11 +3060,12 @@ probable AI context-collapse (hallucinated function reference)"
         .parse::<report::PrState>()
         .unwrap_or(report::PrState::Open);
     let is_bot = policy.is_automation_account(author.unwrap_or(""));
+    let slop_score_val = score.score();
     let mut log_entry = report::BounceLogEntry {
         pr_number,
         author: author.map(|s| s.to_owned()),
         timestamp: utc_now_iso8601(),
-        slop_score: score.score(),
+        slop_score: slop_score_val,
         dead_symbols_added: score.dead_symbols_added,
         logic_clones_found: score.logic_clones_found,
         zombie_symbols_added: score.zombie_symbols_added,
@@ -3113,6 +3115,7 @@ probable AI context-collapse (hallucinated function reference)"
         } else {
             0.0
         },
+        ci_energy_saved_kwh: if slop_score_val > 0 { 0.1 } else { 0.0 },
         provenance: report::Provenance {
             analysis_duration_ms: bounce_start.elapsed().as_millis() as u64,
             source_bytes_processed: source_bytes,

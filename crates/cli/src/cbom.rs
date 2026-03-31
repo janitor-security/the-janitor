@@ -142,6 +142,7 @@ mod tests {
             policy_hash: String::new(),
             version_silos: vec![],
             agentic_pct: 0.0,
+            ci_energy_saved_kwh: if score > 0 { 0.1 } else { 0.0 },
             provenance: crate::report::Provenance::default(),
         }
     }

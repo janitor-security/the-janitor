@@ -562,6 +562,7 @@ fn bounce_one(
             policy_hash: String::new(),
             version_silos: Vec::new(),
             agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.1,
             provenance: crate::report::Provenance::default(),
         });
     }
@@ -650,6 +651,7 @@ fn bounce_one(
         policy_hash: String::new(),
         version_silos,
         agentic_pct: 0.0,
+        ci_energy_saved_kwh: if slop_score > 0 { 0.1 } else { 0.0 },
         provenance: crate::report::Provenance {
             source_bytes_processed,
             ..crate::report::Provenance::default()
