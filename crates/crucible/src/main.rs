@@ -915,6 +915,122 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+    // ── Phase 6 R&D: Lua AST Walk ─────────────────────────────────────────────
+    Entry {
+        name: "Lua/loadstring() dynamic arg — INTERCEPT (Lua-1)",
+        lang: "lua",
+        source: b"local f = loadstring(userInput)\n",
+        must_intercept: true,
+        desc_fragment: Some("eval_injection"),
+    },
+    Entry {
+        name: "Lua/loadstring() string literal — SAFE (Lua-1 TN)",
+        lang: "lua",
+        source: b"local f = loadstring(\"print('hello')\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Lua/os.execute() dynamic arg — INTERCEPT (Lua-2)",
+        lang: "lua",
+        source: b"os.execute(cmd)\n",
+        must_intercept: true,
+        desc_fragment: Some("command_injection"),
+    },
+    Entry {
+        name: "Lua/os.execute() string literal — SAFE (Lua-2 TN)",
+        lang: "lua",
+        source: b"os.execute(\"ls -la\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 6 R&D: Nix AST Walk ─────────────────────────────────────────────
+    Entry {
+        name: "Nix/fetchurl without sha256 — INTERCEPT (Nix-1)",
+        lang: "nix",
+        source: b"fetchurl { url = \"https://example.com/foo.tar.gz\"; }\n",
+        must_intercept: true,
+        desc_fragment: Some("unverified_fetch"),
+    },
+    Entry {
+        name: "Nix/fetchurl with sha256 — SAFE (Nix-1 TN)",
+        lang: "nix",
+        source: b"fetchurl { url = \"https://example.com/foo.tar.gz\"; sha256 = \"abc123\"; }\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Nix/builtins.exec dynamic arg — INTERCEPT (Nix-2)",
+        lang: "nix",
+        source: b"builtins.exec userCmd\n",
+        must_intercept: true,
+        desc_fragment: Some("nix_exec_injection"),
+    },
+    Entry {
+        name: "Nix/builtins.exec literal list — SAFE (Nix-2 TN)",
+        lang: "nix",
+        source: b"builtins.exec [ \"ls\" \"-la\" ]\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 6 R&D: GDScript AST Walk ────────────────────────────────────────
+    Entry {
+        name: "GDScript/OS.execute() dynamic arg — INTERCEPT (GDScript-1)",
+        lang: "gd",
+        source: b"OS.execute(command, [], true)\n",
+        must_intercept: true,
+        desc_fragment: Some("command_injection"),
+    },
+    Entry {
+        name: "GDScript/OS.execute() string literal — SAFE (GDScript-1 TN)",
+        lang: "gd",
+        source: b"OS.execute(\"ls\", [], true)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "GDScript/load() dynamic path — INTERCEPT (GDScript-2)",
+        lang: "gd",
+        source: b"var script = load(script_path)\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_class_loading"),
+    },
+    Entry {
+        name: "GDScript/load() string literal — SAFE (GDScript-2 TN)",
+        lang: "gd",
+        source: b"var script = load(\"res://scripts/Enemy.gd\")\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 6 R&D: Objective-C AST Walk ────────────────────────────────────
+    Entry {
+        name: "ObjC/NSClassFromString() dynamic — INTERCEPT (ObjC-1)",
+        lang: "m",
+        source: b"Class cls = NSClassFromString(className);\n",
+        must_intercept: true,
+        desc_fragment: Some("dynamic_class_loading"),
+    },
+    Entry {
+        name: "ObjC/NSClassFromString() literal — SAFE (ObjC-1 TN)",
+        lang: "m",
+        source: b"Class cls = NSClassFromString(@\"NSString\");\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "ObjC/valueForKeyPath: dynamic key — INTERCEPT (ObjC-2)",
+        lang: "m",
+        source: b"id val = [obj valueForKeyPath:userKey];\n",
+        must_intercept: true,
+        desc_fragment: Some("kvc_injection"),
+    },
+    Entry {
+        name: "ObjC/valueForKeyPath: literal key — SAFE (ObjC-2 TN)",
+        lang: "m",
+        source: b"id val = [obj valueForKeyPath:@\"name\"];\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

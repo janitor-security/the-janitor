@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "advanced_threats"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -172,7 +172,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "backlog_pruner"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -360,7 +360,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "advanced_threats",
  "anatomist",
@@ -402,7 +402,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "common"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "bitflags 2.11.0",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "crucible"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "common",
  "forge",
@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "common",
  "crossterm",
@@ -935,7 +935,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "advanced_threats",
  "aho-corasick",
@@ -954,12 +954,14 @@ dependencies = [
  "tree-sitter-c",
  "tree-sitter-c-sharp",
  "tree-sitter-cpp",
+ "tree-sitter-gdscript",
  "tree-sitter-glsl",
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
  "tree-sitter-kotlin-ng",
  "tree-sitter-lua",
+ "tree-sitter-nix",
  "tree-sitter-objc",
  "tree-sitter-php",
  "tree-sitter-python",
@@ -983,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "common",
@@ -1226,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "include_deflator"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -1484,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "mcp"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -1545,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1720,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "rayon",
@@ -1886,7 +1888,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "polyglot"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -2149,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2420,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "junction",
@@ -3225,7 +3227,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3697,7 +3699,7 @@ checksum = "a90e88e4667264a994d34e6d1ab2d26d398dcdca8b7f52bec8668957517fc7d8"
 
 [[package]]
 name = "wisdom-bake"
-version = "8.5.0"
+version = "8.6.0"
 dependencies = [
  "anyhow",
  "common",

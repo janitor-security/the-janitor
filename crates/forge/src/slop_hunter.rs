@@ -239,6 +239,14 @@ struct QueryEngine {
     scala_lang: Language,
     /// Swift grammar — used for Phase 5 R&D dlopen + NSClassFromString AST walk.
     swift_lang: Language,
+    /// Lua grammar — used for Phase 6 R&D loadstring/load injection + os.execute AST walk.
+    lua_lang: Language,
+    /// Nix grammar — used for Phase 6 R&D unverified fetchurl + builtins.exec AST walk.
+    nix_lang: Language,
+    /// GDScript grammar — used for Phase 6 R&D OS.execute + dynamic load() AST walk.
+    gdscript_lang: Language,
+    /// Objective-C grammar — used for Phase 6 R&D NSClassFromString + KVC injection AST walk.
+    objc_lang: Language,
 }
 
 impl QueryEngine {
@@ -256,6 +264,10 @@ impl QueryEngine {
         let kotlin_lang: Language = tree_sitter_kotlin_ng::LANGUAGE.into();
         let scala_lang: Language = tree_sitter_scala::LANGUAGE.into();
         let swift_lang: Language = tree_sitter_swift::LANGUAGE.into();
+        let lua_lang: Language = tree_sitter_lua::LANGUAGE.into();
+        let nix_lang: Language = tree_sitter_nix::LANGUAGE.into();
+        let gdscript_lang: Language = tree_sitter_gdscript::LANGUAGE.into();
+        let objc_lang: Language = tree_sitter_objc::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
@@ -270,6 +282,10 @@ impl QueryEngine {
             kotlin_lang,
             scala_lang,
             swift_lang,
+            lua_lang,
+            nix_lang,
+            gdscript_lang,
+            objc_lang,
         })
     }
 }
@@ -342,6 +358,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "kt" | "kts" => find_kotlin_slop(eng, source),
         "scala" => find_scala_slop(eng, source),
         "swift" => find_swift_slop(eng, source),
+        // Phase 6 R&D: Lua, Nix, GDScript, Objective-C AST walks
+        "lua" => find_lua_slop(eng, source),
+        "nix" => find_nix_slop(eng, source),
+        "gd" => find_gdscript_slop(eng, source),
+        "m" | "mm" => find_objc_slop(eng, source),
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
@@ -3346,6 +3367,349 @@ fn find_swift_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Slo
 }
 
 // ---------------------------------------------------------------------------
+// Phase 6 R&D: Lua AST Walk
+//
+// Lua-1: loadstring/load with non-literal arg → eval injection (50 pts Critical)
+// Lua-2: os.execute with non-literal arg → command injection (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+fn find_lua_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const LUA_MARKERS: &[&[u8]] = &[b"loadstring", b"load(", b"os.execute"];
+    if !LUA_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.lua_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("lua")];
+    };
+    let mut findings = Vec::new();
+    find_lua_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_lua_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "function_call" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+
+        // Lua-1: loadstring(expr) or load(expr) with non-literal argument.
+        // Suppress only when argument is a string literal (starts with " or ').
+        for func in &["loadstring(", "load("] {
+            if let Some(pos) = call_text.find(func) {
+                let after = call_text[pos + func.len()..].trim_start();
+                if !after.starts_with('"') && !after.starts_with('\'') {
+                    findings.push(SlopFinding {
+                        description: "security:eval_injection — Lua loadstring/load() with \
+                            dynamic argument executes attacker-controlled code; prefer \
+                            sandboxed execution with a restricted environment table"
+                            .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_FIRST_PARTY,
+                    });
+                    break;
+                }
+            }
+        }
+
+        // Lua-2: os.execute(expr) with non-literal argument.
+        if let Some(pos) = call_text.find("os.execute(") {
+            let after = call_text[pos + 11..].trim_start();
+            if !after.starts_with('"') && !after.starts_with('\'') {
+                findings.push(SlopFinding {
+                    description: "security:command_injection — Lua os.execute() with dynamic \
+                        argument passes attacker-controlled string to the system shell"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_lua_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 R&D: Nix AST Walk
+//
+// Nix-1: builtins.fetchurl / fetchurl without sha256/hash → unverified fetch (50 pts Critical)
+// Nix-2: builtins.exec with non-literal arg list → exec injection (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+fn find_nix_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const NIX_MARKERS: &[&[u8]] = &[b"fetchurl", b"builtins.exec"];
+    if !NIX_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.nix_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("nix")];
+    };
+    let mut findings = Vec::new();
+    find_nix_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_nix_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "apply_expression" {
+        let node_text = node.utf8_text(source).unwrap_or("");
+
+        // Nix-1: fetchurl or builtins.fetchurl without sha256/hash in the attrset.
+        // The full apply_expression text includes both the function and the argument.
+        if (node_text.contains("builtins.fetchurl") || {
+            // match standalone `fetchurl` but not as part of another identifier
+            node_text
+                .find("fetchurl")
+                .map(|p| {
+                    !node_text[..p]
+                        .chars()
+                        .last()
+                        .map(|c| c.is_alphanumeric() || c == '_' || c == '.')
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false)
+        }) && !node_text.contains("sha256")
+            && !node_text.contains("hash")
+        {
+            findings.push(SlopFinding {
+                description: "security:unverified_fetch — Nix fetchurl without sha256/hash \
+                    attribute allows supply chain substitution; an attacker controlling the \
+                    URL can serve arbitrary content that passes silently"
+                    .to_string(),
+                severity: Severity::Critical,
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+                domain: DOMAIN_FIRST_PARTY,
+            });
+        }
+
+        // Nix-2: builtins.exec with a non-literal argument (not a list of string literals).
+        // builtins.exec evaluates a list as an OS command during nix evaluation.
+        if let Some(rest) = node_text.strip_prefix("builtins.exec") {
+            let after = rest.trim_start();
+            // A safe call is `builtins.exec [ "cmd" "arg" ]` — all-literal list.
+            // Flag if the argument is not a bracket-enclosed list of only string literals.
+            let is_literal_list = after.starts_with('[')
+                && after
+                    .trim_start_matches('[')
+                    .trim_start()
+                    .chars()
+                    .next()
+                    .map(|c| c == '"')
+                    .unwrap_or(false);
+            if !is_literal_list {
+                findings.push(SlopFinding {
+                    description: "security:nix_exec_injection — builtins.exec with dynamic \
+                        argument evaluates an OS command during nix expression evaluation; \
+                        attacker-controlled derivation inputs can achieve arbitrary execution"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_nix_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 R&D: GDScript AST Walk
+//
+// GDScript-1: OS.execute with non-literal first arg → command injection (50 pts Critical)
+// GDScript-2: load() with non-literal arg → dynamic class loading (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+fn find_gdscript_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const GD_MARKERS: &[&[u8]] = &[b"OS.execute", b"load("];
+    if !GD_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.gdscript_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("gd")];
+    };
+    let mut findings = Vec::new();
+    find_gdscript_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_gdscript_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    // GDScript grammar structure:
+    //   `OS.execute(...)` → attribute { OS, attribute_call { execute, arguments } }
+    //   `load(...)` → call { _primary_expression, arguments }
+    //
+    // The `attribute` node holds the full `OS.execute(...)` text.
+    // The `call` node holds `load(...)`.
+    let kind = node.kind();
+
+    if kind == "attribute" {
+        let node_text = node.utf8_text(source).unwrap_or("");
+
+        // GDScript-1: OS.execute(expr) with non-literal first arg.
+        if let Some(pos) = node_text.find("OS.execute(") {
+            let after = node_text[pos + 11..].trim_start();
+            if !after.starts_with('"') {
+                findings.push(SlopFinding {
+                    description: "security:command_injection — GDScript OS.execute() with \
+                        dynamic argument passes attacker-controlled path/args to the OS"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    if kind == "call" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+
+        // GDScript-2: load(expr) with non-literal arg enables dynamic script loading,
+        // allowing attacker-controlled resource paths to inject GDScript code.
+        if let Some(pos) = call_text.find("load(") {
+            // Only match bare `load(`, not `preload(` or `reload(`
+            let prefix_ok = pos == 0
+                || !call_text[..pos]
+                    .chars()
+                    .last()
+                    .map(|c| c.is_alphabetic())
+                    .unwrap_or(false);
+            if prefix_ok {
+                let after = call_text[pos + 5..].trim_start();
+                if !after.starts_with('"') {
+                    findings.push(SlopFinding {
+                        description: "security:dynamic_class_loading — GDScript load() with \
+                            dynamic path argument enables loading of attacker-controlled \
+                            scripts at runtime"
+                            .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_FIRST_PARTY,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_gdscript_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 R&D: Objective-C AST Walk
+//
+// ObjC-1: NSClassFromString(expr) with non-literal arg → dynamic class loading (50 pts Critical)
+// ObjC-2: [obj valueForKeyPath:expr] with non-literal key → KVC injection (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+fn find_objc_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const OBJC_MARKERS: &[&[u8]] = &[b"NSClassFromString", b"valueForKeyPath:"];
+    if !OBJC_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.objc_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("m")];
+    };
+    let mut findings = Vec::new();
+    find_objc_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_objc_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    let kind = node.kind();
+
+    // ObjC-1: NSClassFromString() is a C-style function call in ObjC.
+    if kind == "call_expression" {
+        let call_text = node.utf8_text(source).unwrap_or("");
+        if let Some(pos) = call_text.find("NSClassFromString(") {
+            let after = call_text[pos + 18..].trim_start();
+            // Safe only when argument is an ObjC string literal (@"...") or plain literal.
+            if !after.starts_with("@\"") && !after.starts_with('"') {
+                findings.push(SlopFinding {
+                    description: "security:dynamic_class_loading — NSClassFromString() with \
+                        dynamic argument enables loading of arbitrary Objective-C classes \
+                        by name; attacker-controlled class names bypass type-safe instantiation"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    // ObjC-2: [obj valueForKeyPath:expr] — message_expression where selector is
+    // valueForKeyPath: and the argument is not a string literal (@"...").
+    // CVE-2012-3524: KVC injection allows calling arbitrary class methods via
+    // NSArray.valueForKeyPath:"@unionOfObjects.description".
+    if kind == "message_expression" {
+        let msg_text = node.utf8_text(source).unwrap_or("");
+        if let Some(pos) = msg_text.find("valueForKeyPath:") {
+            let after = msg_text[pos + 16..].trim_start();
+            if !after.starts_with("@\"") && !after.starts_with('"') {
+                findings.push(SlopFinding {
+                    description: "security:kvc_injection — valueForKeyPath: with dynamic key \
+                        argument exploits Cocoa KVC to traverse the object graph arbitrarily; \
+                        CVE-2012-3524 demonstrates class-method invocation via @unionOfObjects"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_objc_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 1 R&D: Prototype Pollution detection — Layer A AhoCorasick (JS/TS)
 //
 // Covers direct `__proto__` key access patterns.  Layer B (unsafe merge
@@ -5813,6 +6177,256 @@ mod phase5_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("dynamic_symbol_resolution")),
             "find_slop(swift) must dispatch to Phase 5 Swift AST walk"
+        );
+    }
+
+    // ── Phase 6 R&D: Lua AST Walk ─────────────────────────────────────────────
+
+    #[test]
+    fn test_lua_loadstring_dynamic_fires() {
+        let src = b"local f = loadstring(userInput)\n";
+        let findings = find_lua_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("eval_injection")),
+            "Lua-1: loadstring with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_lua_loadstring_literal_clean() {
+        let src = b"local f = loadstring(\"print('ok')\")\n";
+        let findings = find_lua_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("eval_injection")),
+            "Lua-1: loadstring with string literal must not fire"
+        );
+    }
+
+    #[test]
+    fn test_lua_os_execute_dynamic_fires() {
+        let src = b"os.execute(cmd)\n";
+        let findings = find_lua_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "Lua-2: os.execute with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_lua_os_execute_literal_clean() {
+        let src = b"os.execute(\"ls -la\")\n";
+        let findings = find_lua_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("command_injection")),
+            "Lua-2: os.execute with string literal must not fire"
+        );
+    }
+
+    // ── Phase 6 R&D: Nix AST Walk ─────────────────────────────────────────────
+
+    #[test]
+    fn test_nix_fetchurl_no_hash_fires() {
+        let src = b"fetchurl { url = \"https://example.com/foo.tar.gz\"; }\n";
+        let findings = find_nix_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unverified_fetch")),
+            "Nix-1: fetchurl without sha256 must fire"
+        );
+    }
+
+    #[test]
+    fn test_nix_fetchurl_with_sha256_clean() {
+        let src = b"fetchurl { url = \"https://example.com/foo.tar.gz\"; sha256 = \"abc123\"; }\n";
+        let findings = find_nix_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unverified_fetch")),
+            "Nix-1: fetchurl with sha256 must not fire"
+        );
+    }
+
+    #[test]
+    fn test_nix_builtins_exec_dynamic_fires() {
+        let src = b"builtins.exec userCmd\n";
+        let findings = find_nix_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("nix_exec_injection")),
+            "Nix-2: builtins.exec with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_nix_builtins_exec_literal_list_clean() {
+        let src = b"builtins.exec [ \"ls\" \"-la\" ]\n";
+        let findings = find_nix_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("nix_exec_injection")),
+            "Nix-2: builtins.exec with literal list must not fire"
+        );
+    }
+
+    // ── Phase 6 R&D: GDScript AST Walk ────────────────────────────────────────
+
+    #[test]
+    fn test_gdscript_os_execute_dynamic_fires() {
+        let src = b"OS.execute(command, [], true)\n";
+        let findings = find_gdscript_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "GDScript-1: OS.execute with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_gdscript_os_execute_literal_clean() {
+        let src = b"OS.execute(\"ls\", [], true)\n";
+        let findings = find_gdscript_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("command_injection")),
+            "GDScript-1: OS.execute with string literal must not fire"
+        );
+    }
+
+    #[test]
+    fn test_gdscript_load_dynamic_fires() {
+        let src = b"var script = load(script_path)\n";
+        let findings = find_gdscript_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "GDScript-2: load() with dynamic path must fire"
+        );
+    }
+
+    #[test]
+    fn test_gdscript_load_literal_clean() {
+        let src = b"var script = load(\"res://scripts/Enemy.gd\")\n";
+        let findings = find_gdscript_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dynamic_class_loading")),
+            "GDScript-2: load() with string literal must not fire"
+        );
+    }
+
+    // ── Phase 6 R&D: Objective-C AST Walk ─────────────────────────────────────
+
+    #[test]
+    fn test_objc_ns_class_from_string_dynamic_fires() {
+        let src = b"Class cls = NSClassFromString(className);\n";
+        let findings = find_objc_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "ObjC-1: NSClassFromString with dynamic arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_objc_ns_class_from_string_literal_clean() {
+        let src = b"Class cls = NSClassFromString(@\"NSString\");\n";
+        let findings = find_objc_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dynamic_class_loading")),
+            "ObjC-1: NSClassFromString with ObjC literal must not fire"
+        );
+    }
+
+    #[test]
+    fn test_objc_kvc_injection_dynamic_fires() {
+        let src = b"id val = [obj valueForKeyPath:userKey];\n";
+        let findings = find_objc_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("kvc_injection")),
+            "ObjC-2: valueForKeyPath: with dynamic key must fire"
+        );
+    }
+
+    #[test]
+    fn test_objc_kvc_injection_literal_clean() {
+        let src = b"id val = [obj valueForKeyPath:@\"name\"];\n";
+        let findings = find_objc_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("kvc_injection")),
+            "ObjC-2: valueForKeyPath: with literal key must not fire"
+        );
+    }
+
+    // ── Phase 6: find_slop dispatch integration tests ─────────────────────────
+
+    #[test]
+    fn test_find_slop_dispatches_lua() {
+        let src = b"os.execute(cmd)\n";
+        let findings = find_slop("lua", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "find_slop(lua) must dispatch to Phase 6 Lua AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_nix() {
+        let src = b"fetchurl { url = \"https://example.com/foo.tar.gz\"; }\n";
+        let findings = find_slop("nix", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unverified_fetch")),
+            "find_slop(nix) must dispatch to Phase 6 Nix AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_gdscript() {
+        let src = b"OS.execute(command, [], true)\n";
+        let findings = find_slop("gd", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("command_injection")),
+            "find_slop(gd) must dispatch to Phase 6 GDScript AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_objc() {
+        let src = b"Class cls = NSClassFromString(className);\n";
+        let findings = find_slop("m", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dynamic_class_loading")),
+            "find_slop(m) must dispatch to Phase 6 ObjC AST walk"
         );
     }
 }

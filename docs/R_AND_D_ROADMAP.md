@@ -882,7 +882,7 @@ Apple code (Objective-C). Attack surfaces are narrower but structurally identica
 to higher-priority languages — the gates transfer directly.
 
 ```
-Phase 6 [PENDING]:
+Phase 6 [COMPLETED — v8.6.0]:
   ├── Lua AST walk (Tier 1)
   │     Gates: loadstring/load injection, os.execute injection
   ├── Nix AST walk (Tier 1)
