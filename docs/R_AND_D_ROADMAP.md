@@ -1,8 +1,8 @@
 # R&D Roadmap — 24-Month Supremacy Blueprint
 
 > **Classification**: Internal Engineering Reference
-> **Engine Baseline**: v8.7.0
-> **AST Coverage**: 18/23 grammars (78%)
+> **Engine Baseline**: v8.8.0
+> **AST Coverage**: 23/23 grammars (100%)
 > **Horizon**: 24-Month Ecosystem Permanence Initiative
 
 This document is the authoritative engineering blueprint. Every proposal names the exact
@@ -28,13 +28,15 @@ All phases in this section are gate-verified: `cargo run -p crucible` exits 0 an
 | Phase 6 | v8.6.0 | Lua/Nix/GDScript/ObjC AST walks (8 new rules across 4 grammars) | 16 |
 | Energy Ledger | v8.7.0 | `BounceLogEntry.ci_energy_saved_kwh`; Workslop energy row; `render_step_summary` TEI+energy banner | — |
 
-**Current state**: 18/23 grammars have active AST security rules. 123/123 Crucible entries SANCTUARY INTACT.
+**Current state (v8.7.0 baseline)**: 18/23 grammars had active AST security rules. 123/123 Crucible entries SANCTUARY INTACT.
+
+| Phase 7 | v8.8.0 | Rust-1/2 (unsafe transmute + raw ptr deref); GLSL-1 (dangerous extension); HCL-1/2 (data external + local-exec provisioner); TSX-1/JSX-1 (dangerouslySetInnerHTML) | 12 |
 
 ---
 
-## II. Grammar Capstone — Phase 7
+## II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]
 
-**Target version**: v8.8.x
+**Target version**: v8.8.0
 **Goal**: 23/23 grammar coverage (100%)
 **Rationale**: The structural firewall is weakened by every grammar loaded but not inspected.
 A grammar without rules is not neutral — it is a blind spot.
@@ -216,7 +218,7 @@ Phase 7 [Target: v8.8.x]:
                crucible/src/main.rs (TP + TN × 2 gates)
 ```
 
-**Acceptance criterion**: `cargo run -p crucible` exits 0 with 135/135 entries SANCTUARY INTACT.
+**Result**: `cargo run -p crucible` exits 0 with 135/135 entries SANCTUARY INTACT. `just audit` exits 0.
 
 ---
 
@@ -497,14 +499,14 @@ Month 22–24 [v9.3.x] — Hardening & Ecosystem Permanence:
 
 | Metric | Baseline (v8.7.0) | 12-Month Target | 24-Month Target |
 |--------|-------------------|-----------------|-----------------|
-| Grammar AST coverage | 18/23 (78%) | 23/23 (100%) | 23/23 maintained |
+| Grammar AST coverage | 23/23 (100%) ✅ v8.8.0 | 23/23 (100%) | 23/23 maintained |
 | Active threat rule classes | 42 | 50+ | 60+ |
 | IDE integration | None | VS Code + Neovim | VS Code, Neovim, Zed, JetBrains |
 | Cross-file taint depth | 0 hops | 3 hops | 5 hops |
 | Syndicate peer support | N/A | opt-in, HMAC-auth | opt-in, cert-auth |
 | MinHash throughput (10 KB patch, AVX-512) | AVX-256 baseline | 6× scalar | 8× scalar |
 | False-positive rate (gauntlet, 1000 PRs) | < 1% | < 1% (maintained) | < 0.5% |
-| Crucible gallery entries | 123 | 135+ (Phase 7) | 160+ |
+| Crucible gallery entries | 135 ✅ v8.8.0 | 135 (Phase 7 complete) | 160+ |
 | Bounce wall-clock (50K-line repo) | < 30 s | < 20 s (LSP: < 500 ms/file) | < 15 s |
 
 ---

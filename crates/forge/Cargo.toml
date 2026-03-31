@@ -32,6 +32,7 @@ tree-sitter-kotlin-ng.workspace = true
 tree-sitter-lua.workspace = true
 tree-sitter-nix.workspace = true
 tree-sitter-gdscript.workspace = true
+tree-sitter-hcl.workspace = true
 arc-swap.workspace = true
 git2.workspace = true
 rkyv.workspace = true

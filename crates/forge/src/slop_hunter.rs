@@ -247,6 +247,10 @@ struct QueryEngine {
     gdscript_lang: Language,
     /// Objective-C grammar — used for Phase 6 R&D NSClassFromString + KVC injection AST walk.
     objc_lang: Language,
+    /// Rust grammar — Phase 7 R&D unsafe transmute + raw pointer dereference AST walk.
+    rust_lang: Language,
+    /// HCL/Terraform grammar — Phase 7 AST upgrade: data "external" + local-exec provisioner.
+    hcl_lang: Language,
 }
 
 impl QueryEngine {
@@ -268,6 +272,8 @@ impl QueryEngine {
         let nix_lang: Language = tree_sitter_nix::LANGUAGE.into();
         let gdscript_lang: Language = tree_sitter_gdscript::LANGUAGE.into();
         let objc_lang: Language = tree_sitter_objc::LANGUAGE.into();
+        let rust_lang: Language = tree_sitter_rust::LANGUAGE.into();
+        let hcl_lang: Language = tree_sitter_hcl::LANGUAGE.into();
         Ok(Self {
             yaml_lang,
             c_lang,
@@ -286,6 +292,8 @@ impl QueryEngine {
             nix_lang,
             gdscript_lang,
             objc_lang,
+            rust_lang,
+            hcl_lang,
         })
     }
 }
@@ -313,7 +321,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
         "yaml" | "yml" => find_yaml_slop(eng, source),
         "c" | "h" => find_c_slop(eng, source),
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
-        "hcl" | "tf" => find_hcl_slop(source),
+        "hcl" | "tf" => find_hcl_slop_ast(eng, source),
+        // Phase 7 R&D: Rust unsafe transmute + raw pointer dereference AST walk
+        "rs" => find_rust_slop(eng, source),
+        // Phase 7 R&D: GLSL dangerous extension byte scan
+        "glsl" | "vert" | "frag" => find_glsl_slop(source),
         "py" => {
             let mut f = find_python_slop(source);
             // CISA KEV gates — AST-based (Python grammar)
@@ -334,6 +346,8 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_prototype_pollution_slop(source));
             // Phase 3 R&D: prototype pollution Layer B — merge sink AST walk
             f.extend(find_prototype_merge_sink_slop(eng, source));
+            // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
+            f.extend(find_jsx_dangerous_html_slop(eng, source));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -6427,6 +6441,600 @@ mod phase5_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("dynamic_class_loading")),
             "find_slop(m) must dispatch to Phase 6 ObjC AST walk"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 R&D: Rust AST Walk
+//
+// Rust-1: unsafe { mem::transmute(non_literal) } → unsafe_transmute (50 pts Critical)
+// Rust-2: unsafe { *ptr } in non-FFI context → raw_pointer_deref (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+/// Detect `unsafe` block misuse in Rust source.
+///
+/// Rust-1: `std::mem::transmute` with a non-numeric argument reinterprets memory without
+/// type-system guarantees — CVE-2020-36516 pattern class.
+/// Rust-2: Raw pointer dereference (`*ptr`) inside an `unsafe` block outside of named
+/// FFI/sys boundaries is a frequent AI-generated soundness violation.
+///
+/// Uses `QueryEngine::rust_lang` (tree-sitter-rust grammar).
+fn find_rust_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const RUST_MARKERS: &[&[u8]] = &[b"unsafe", b"transmute"];
+    if !RUST_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.rust_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("rs")];
+    };
+    let mut findings = Vec::new();
+    find_rust_danger_nodes(tree.root_node(), source, &mut findings, false, false);
+    findings
+}
+
+fn find_rust_danger_nodes(
+    node: Node<'_>,
+    source: &[u8],
+    findings: &mut Vec<SlopFinding>,
+    in_unsafe: bool,
+    suppressed: bool,
+) {
+    let kind = node.kind();
+
+    // Entering a function_item resets the unsafe scope and recalculates suppression.
+    let now_unsafe = if kind == "function_item" {
+        false
+    } else {
+        in_unsafe || kind == "unsafe_block"
+    };
+
+    // Suppression: function name contains test/bench (Rust-1) or ffi/raw/sys/extern (Rust-2).
+    let now_suppressed = if kind == "function_item" {
+        let fn_name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        suppressed
+            || fn_name.contains("test")
+            || fn_name.contains("bench")
+            || fn_name.contains("ffi")
+            || fn_name.contains("raw")
+            || fn_name.contains("sys")
+            || fn_name.contains("extern")
+    } else {
+        suppressed
+    };
+
+    if now_unsafe && !now_suppressed {
+        // Rust-1: call_expression whose function contains "transmute"
+        if kind == "call_expression" {
+            let fn_text = node
+                .child_by_field_name("function")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            if fn_text.contains("transmute") {
+                let args_text = node
+                    .child_by_field_name("arguments")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("()");
+                // Strip outer parens and leading/trailing whitespace.
+                let inner = args_text
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim();
+                // Suppress when the sole argument is a numeric literal (integer or float).
+                let is_numeric_literal = !inner.is_empty()
+                    && (inner.starts_with(|c: char| c.is_ascii_digit())
+                        || (inner.starts_with('-')
+                            && inner
+                                .chars()
+                                .nth(1)
+                                .map(|c| c.is_ascii_digit())
+                                .unwrap_or(false)));
+                if !inner.is_empty() && !is_numeric_literal {
+                    findings.push(SlopFinding {
+                        description:
+                            "security:unsafe_transmute — std::mem::transmute with non-literal \
+                            argument reinterprets memory layout without type-system safety; \
+                            CVE-2020-36516 pattern class — use safe conversion traits \
+                            (From/Into/TryFrom) or document the invariant"
+                                .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_FIRST_PARTY,
+                    });
+                }
+            }
+        }
+
+        // Rust-2: unary_expression starting with * is a raw pointer dereference.
+        if kind == "unary_expression" {
+            let text = node.utf8_text(source).unwrap_or("");
+            if text.starts_with('*') && text.len() > 1 {
+                findings.push(SlopFinding {
+                    description: "security:raw_pointer_deref — raw pointer dereference in non-FFI \
+                        unsafe block; AI-generated unsafe code frequently introduces soundness \
+                        violations here — prefer safe abstractions or document the safety \
+                        invariant with a SAFETY comment"
+                        .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                    domain: DOMAIN_FIRST_PARTY,
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_rust_danger_nodes(child, source, findings, now_unsafe, now_suppressed);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 R&D: GLSL Dangerous Extension Byte Scan
+//
+// GLSL-1: #extension <dangerous_ext> : require → glsl_dangerous_extension (50 pts Critical)
+// ---------------------------------------------------------------------------
+
+/// Byte-level scan for dangerous GLSL extension directives.
+///
+/// Extensions that enable GPU image load/store, bindless textures, or FP16 atomics
+/// can be abused for GPU cache timing attacks in WebGL contexts.  No tree-sitter
+/// parse required — the `#extension` directive is always on its own line.
+fn find_glsl_slop(source: &[u8]) -> Vec<SlopFinding> {
+    const EXTENSION_MARKER: &[u8] = b"#extension";
+    if !source
+        .windows(EXTENSION_MARKER.len())
+        .any(|w| w == EXTENSION_MARKER)
+    {
+        return Vec::new();
+    }
+
+    const DANGEROUS_EXTENSIONS: &[&[u8]] = &[
+        b"GL_EXT_shader_image_load_store",
+        b"GL_ARB_bindless_texture",
+        b"GL_NV_shader_atomic_fp16_vector",
+    ];
+
+    let mut findings = Vec::new();
+
+    // Iterate over every occurrence of "#extension" in the source.
+    for window_start in source
+        .windows(EXTENSION_MARKER.len())
+        .enumerate()
+        .filter_map(|(i, w)| if w == EXTENSION_MARKER { Some(i) } else { None })
+    {
+        // Find the end of this line.
+        let line_end = source[window_start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|p| window_start + p)
+            .unwrap_or(source.len());
+        let line = &source[window_start..line_end];
+
+        // Only fire when the behaviour qualifier is "require".
+        if !line.windows(b"require".len()).any(|w| w == b"require") {
+            continue;
+        }
+
+        // Check for any of the dangerous extension names on this line.
+        for ext in DANGEROUS_EXTENSIONS {
+            if line.windows(ext.len()).any(|w| w == *ext) {
+                findings.push(SlopFinding {
+                    description:
+                        "security:glsl_dangerous_extension — GL_EXT_shader_image_load_store, \
+                        GL_ARB_bindless_texture, or GL_NV_shader_atomic_fp16_vector enabled with \
+                        :require qualifier; enables GPU cache timing attacks in WebGL contexts — \
+                        use :disable or restrict to trusted offline rendering environments"
+                            .to_string(),
+                    severity: Severity::Critical,
+                    start_byte: window_start,
+                    end_byte: line_end,
+                    domain: DOMAIN_ALL,
+                });
+                break; // one finding per #extension line
+            }
+        }
+    }
+    findings
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 R&D: HCL/Terraform AST Walk (upgrade from byte-level Tier 2)
+//
+// HCL-1: data "external" { ... } → terraform_external_exec (50 pts Critical)
+// HCL-2: provisioner "local-exec" { command = <non-literal> } → provisioner_command_injection
+// ---------------------------------------------------------------------------
+
+/// Phase 7 AST-level HCL/Terraform detector.
+///
+/// Wraps the existing byte-level `find_hcl_slop` (CIDR + S3 ACL) and adds
+/// AST-walk gates for `data "external"` execution and `local-exec` provisioner
+/// command injection.
+fn find_hcl_slop_ast(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    // Retain existing byte-level findings (open CIDR + public S3 ACL).
+    let mut findings = find_hcl_slop(source);
+
+    // AST-walk pre-filter: only parse if data/provisioner blocks are present.
+    const HCL_AST_MARKERS: &[&[u8]] = &[b"external", b"local-exec"];
+    if !HCL_AST_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m))
+    {
+        return findings;
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.hcl_lang).is_err() {
+        return findings;
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        findings.push(parser_exhaustion_finding("hcl"));
+        return findings;
+    };
+    find_hcl_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_hcl_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "block" {
+        let text = node.utf8_text(source).unwrap_or("");
+
+        // HCL-1: data "external" block — arbitrary program execution during terraform plan.
+        if text.starts_with("data ") && text.contains("\"external\"") {
+            findings.push(SlopFinding {
+                description: "security:terraform_external_exec — data \"external\" block \
+                    executes an arbitrary program during terraform plan before any approval step; \
+                    the Terraform-native analogue of eval() — verify the program path is static \
+                    and restricted to trusted tooling"
+                    .to_string(),
+                severity: Severity::Critical,
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+                domain: DOMAIN_ALL,
+            });
+        }
+
+        // HCL-2: provisioner "local-exec" with a non-literal command value.
+        if text.starts_with("provisioner ") && text.contains("\"local-exec\"") {
+            if let Some(cmd_line) = text.lines().find(|l| l.trim().starts_with("command")) {
+                let after_eq = cmd_line.split_once('=').map(|x| x.1).unwrap_or("").trim();
+                // Suppress only when the command is a plain string literal.
+                if !after_eq.starts_with('"') && !after_eq.is_empty() {
+                    findings.push(SlopFinding {
+                        description:
+                            "security:provisioner_command_injection — local-exec provisioner \
+                            with non-literal command is vulnerable to command injection via \
+                            variable interpolation in CI/CD pipeline context"
+                                .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_ALL,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_hcl_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS Walk
+//
+// TSX-1/JSX-1: dangerouslySetInnerHTML={{ __html: non_literal }} → react_xss_dangerous_html
+// ---------------------------------------------------------------------------
+
+/// Detect React `dangerouslySetInnerHTML={{ __html: expr }}` XSS vectors.
+///
+/// The JSX attribute form is distinct from `element.innerHTML = expr` (which the
+/// existing `find_js_slop` catches as an `assignment_expression`).  This rule
+/// walks `jsx_attribute` nodes and fires when the `__html` value is not a string
+/// literal.  Appended to the `"js"|"jsx"|"ts"|"tsx"` branch of `find_slop`.
+///
+/// Reuses `eng.js_lang` — the JavaScript grammar parses JSX constructs.
+fn find_jsx_dangerous_html_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+    const MARKER: &[u8] = b"dangerouslySetInnerHTML";
+    if !source.windows(MARKER.len()).any(|w| w == MARKER) {
+        return Vec::new();
+    }
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.js_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("jsx")];
+    };
+    let mut findings = Vec::new();
+    find_jsx_danger_nodes(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_jsx_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "jsx_attribute" {
+        let text = node.utf8_text(source).unwrap_or("");
+        if text.contains("dangerouslySetInnerHTML") && text.contains("__html") {
+            // Locate the __html value assignment inside the attribute text.
+            if let Some(html_pos) = text.find("__html") {
+                let after_key = text[html_pos + 6..].trim_start_matches(':').trim_start();
+                // Suppress when the value is a string literal (static HTML is safe).
+                let is_literal = after_key.starts_with('"')
+                    || after_key.starts_with('\'')
+                    || after_key.starts_with('`');
+                if !is_literal {
+                    findings.push(SlopFinding {
+                        description:
+                            "security:react_xss_dangerous_html — dangerouslySetInnerHTML with \
+                            non-literal __html value allows XSS; sanitize with DOMPurify before \
+                            use; OWASP A03:2021 Injection — JSX prop bypass of React's \
+                            default escaping"
+                                .to_string(),
+                        severity: Severity::Critical,
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        domain: DOMAIN_FIRST_PARTY,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_jsx_danger_nodes(child, source, findings);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod phase7_rd_tests {
+    use super::*;
+
+    fn eng() -> &'static QueryEngine {
+        engine().expect("QueryEngine must initialise in tests")
+    }
+
+    // ── Rust-1: unsafe transmute ─────────────────────────────────────────────
+
+    #[test]
+    fn test_rust_transmute_non_literal_fires() {
+        let src = b"fn cast(ptr: *const u8) -> u64 {\n\
+            unsafe { std::mem::transmute::<*const u8, u64>(ptr) }\n\
+            }\n";
+        let findings = find_rust_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_transmute")),
+            "Rust-1: transmute with non-literal arg must fire"
+        );
+    }
+
+    #[test]
+    fn test_rust_transmute_numeric_literal_clean() {
+        let src = b"fn cast_int() -> i64 {\n\
+            unsafe { std::mem::transmute::<u64, i64>(42) }\n\
+            }\n";
+        let findings = find_rust_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unsafe_transmute")),
+            "Rust-1: transmute with numeric literal must not fire"
+        );
+    }
+
+    // ── Rust-2: raw pointer dereference ──────────────────────────────────────
+
+    #[test]
+    fn test_rust_raw_ptr_deref_fires() {
+        let src = b"fn cast_bytes(data: &[u8]) -> u8 {\n\
+            unsafe { *data.as_ptr() }\n\
+            }\n";
+        let findings = find_rust_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("raw_pointer_deref")),
+            "Rust-2: raw pointer deref in non-FFI unsafe block must fire"
+        );
+    }
+
+    #[test]
+    fn test_rust_raw_ptr_deref_sys_fn_clean() {
+        let src = b"fn sys_read_byte(ptr: *const u8) -> u8 {\n\
+            unsafe { *ptr }\n\
+            }\n";
+        let findings = find_rust_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("raw_pointer_deref")),
+            "Rust-2: raw pointer deref inside sys-named function must not fire"
+        );
+    }
+
+    // ── GLSL-1: dangerous extension ──────────────────────────────────────────
+
+    #[test]
+    fn test_glsl_dangerous_extension_require_fires() {
+        let src = b"#version 450\n\
+            #extension GL_EXT_shader_image_load_store : require\n\
+            void main() {}\n";
+        let findings = find_glsl_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("glsl_dangerous_extension")),
+            "GLSL-1: dangerous extension with :require must fire"
+        );
+    }
+
+    #[test]
+    fn test_glsl_dangerous_extension_enable_clean() {
+        let src = b"#version 450\n\
+            #extension GL_EXT_shader_image_load_store : enable\n\
+            void main() {}\n";
+        let findings = find_glsl_slop(src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("glsl_dangerous_extension")),
+            "GLSL-1: dangerous extension with :enable (not :require) must not fire"
+        );
+    }
+
+    // ── HCL-1: data external ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_hcl_data_external_fires() {
+        let src = b"data \"external\" \"my_source\" {\n\
+            program = [\"python3\", var.script]\n\
+            }\n";
+        let findings = find_hcl_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("terraform_external_exec")),
+            "HCL-1: data external block must fire"
+        );
+    }
+
+    #[test]
+    fn test_hcl_data_non_external_clean() {
+        let src = b"data \"aws_ami\" \"ubuntu\" {\n\
+            filter {\n  name = \"name\"\n  values = [\"ubuntu*\"]\n}\n\
+            }\n";
+        let findings = find_hcl_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("terraform_external_exec")),
+            "HCL-1: non-external data block must not fire"
+        );
+    }
+
+    // ── HCL-2: provisioner local-exec ────────────────────────────────────────
+
+    #[test]
+    fn test_hcl_provisioner_local_exec_var_fires() {
+        let src = b"provisioner \"local-exec\" {\n\
+            command = var.deploy_script\n\
+            }\n";
+        let findings = find_hcl_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("provisioner_command_injection")),
+            "HCL-2: local-exec with non-literal command must fire"
+        );
+    }
+
+    #[test]
+    fn test_hcl_provisioner_local_exec_literal_clean() {
+        let src = b"provisioner \"local-exec\" {\n\
+            command = \"echo done\"\n\
+            }\n";
+        let findings = find_hcl_slop_ast(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("provisioner_command_injection")),
+            "HCL-2: local-exec with string literal command must not fire"
+        );
+    }
+
+    // ── TSX-1/JSX-1: dangerouslySetInnerHTML ─────────────────────────────────
+
+    #[test]
+    fn test_jsx_dangerous_set_inner_html_dynamic_fires() {
+        let src = b"const el = <div dangerouslySetInnerHTML={{ __html: userInput }} />;\n";
+        let findings = find_jsx_dangerous_html_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("react_xss_dangerous_html")),
+            "TSX-1: dangerouslySetInnerHTML with dynamic value must fire"
+        );
+    }
+
+    #[test]
+    fn test_jsx_dangerous_set_inner_html_literal_clean() {
+        let src = b"const el = <div dangerouslySetInnerHTML={{ __html: \"<b>static</b>\" }} />;\n";
+        let findings = find_jsx_dangerous_html_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("react_xss_dangerous_html")),
+            "TSX-1: dangerouslySetInnerHTML with string literal must not fire"
+        );
+    }
+
+    // ── find_slop dispatch integration ───────────────────────────────────────
+
+    #[test]
+    fn test_find_slop_dispatches_rust() {
+        let src = b"fn f(p: *const u8) { unsafe { std::mem::transmute::<*const u8, u64>(p) } }\n";
+        let findings = find_slop("rs", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_transmute")),
+            "find_slop(rs) must dispatch to Phase 7 Rust AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_glsl() {
+        let src = b"#extension GL_EXT_shader_image_load_store : require\nvoid main() {}\n";
+        let findings = find_slop("glsl", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("glsl_dangerous_extension")),
+            "find_slop(glsl) must dispatch to Phase 7 GLSL byte scan"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_hcl_ast() {
+        let src = b"data \"external\" \"src\" {\n  program = [\"python3\", var.s]\n}\n";
+        let findings = find_slop("tf", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("terraform_external_exec")),
+            "find_slop(tf) must dispatch to Phase 7 HCL AST walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_jsx_dangerous_html() {
+        let src = b"const el = <div dangerouslySetInnerHTML={{ __html: userInput }} />;\n";
+        let findings = find_slop("jsx", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("react_xss_dangerous_html")),
+            "find_slop(jsx) must dispatch to Phase 7 JSX dangerous HTML walk"
         );
     }
 }

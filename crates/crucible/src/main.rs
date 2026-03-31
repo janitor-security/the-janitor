@@ -1031,6 +1031,94 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+    // ── Phase 7 R&D: Rust unsafe AST Walk ─────────────────────────────────────
+    Entry {
+        name: "Rust/unsafe transmute non-literal — INTERCEPT (Rust-1)",
+        lang: "rs",
+        source: b"fn cast(p: *const u8) -> u64 {\n    unsafe { std::mem::transmute::<*const u8, u64>(p) }\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_transmute"),
+    },
+    Entry {
+        name: "Rust/unsafe transmute numeric literal — SAFE (Rust-1 TN)",
+        lang: "rs",
+        source: b"fn cast_int() -> i64 {\n    unsafe { std::mem::transmute::<u64, i64>(42) }\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Rust/raw pointer deref non-FFI — INTERCEPT (Rust-2)",
+        lang: "rs",
+        source: b"fn read_val(data: &[u8]) -> u8 {\n    unsafe { *data.as_ptr() }\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("raw_pointer_deref"),
+    },
+    Entry {
+        name: "Rust/raw pointer deref sys fn — SAFE (Rust-2 TN)",
+        lang: "rs",
+        source: b"fn sys_read_byte(ptr: *const u8) -> u8 {\n    unsafe { *ptr }\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 7 R&D: GLSL Byte Scan ───────────────────────────────────────────
+    Entry {
+        name: "GLSL/dangerous extension require — INTERCEPT (GLSL-1)",
+        lang: "glsl",
+        source: b"#version 450\n#extension GL_EXT_shader_image_load_store : require\nvoid main() {}\n",
+        must_intercept: true,
+        desc_fragment: Some("glsl_dangerous_extension"),
+    },
+    Entry {
+        name: "GLSL/dangerous extension enable — SAFE (GLSL-1 TN)",
+        lang: "glsl",
+        source: b"#version 450\n#extension GL_EXT_shader_image_load_store : enable\nvoid main() {}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 7 R&D: HCL AST Walk ─────────────────────────────────────────────
+    Entry {
+        name: "HCL/data external block — INTERCEPT (HCL-1)",
+        lang: "tf",
+        source: b"data \"external\" \"my_source\" {\n  program = [\"python3\", var.script]\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("terraform_external_exec"),
+    },
+    Entry {
+        name: "HCL/data non-external block — SAFE (HCL-1 TN)",
+        lang: "tf",
+        source: b"data \"aws_ami\" \"ubuntu\" {\n  filter {\n    name   = \"name\"\n    values = [\"ubuntu*\"]\n  }\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "HCL/provisioner local-exec var command — INTERCEPT (HCL-2)",
+        lang: "tf",
+        source: b"provisioner \"local-exec\" {\n  command = var.deploy_script\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("provisioner_command_injection"),
+    },
+    Entry {
+        name: "HCL/provisioner local-exec literal command — SAFE (HCL-2 TN)",
+        lang: "tf",
+        source: b"provisioner \"local-exec\" {\n  command = \"echo done\"\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    // ── Phase 7 R&D: JSX dangerouslySetInnerHTML Walk ─────────────────────────
+    Entry {
+        name: "JSX/dangerouslySetInnerHTML dynamic — INTERCEPT (TSX-1)",
+        lang: "jsx",
+        source: b"const el = <div dangerouslySetInnerHTML={{ __html: userInput }} />;\n",
+        must_intercept: true,
+        desc_fragment: Some("react_xss_dangerous_html"),
+    },
+    Entry {
+        name: "JSX/dangerouslySetInnerHTML string literal — SAFE (TSX-1 TN)",
+        lang: "jsx",
+        source: b"const el = <div dangerouslySetInnerHTML={{ __html: \"<b>static</b>\" }} />;\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

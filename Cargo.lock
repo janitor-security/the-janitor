@@ -957,6 +957,7 @@ dependencies = [
  "tree-sitter-gdscript",
  "tree-sitter-glsl",
  "tree-sitter-go",
+ "tree-sitter-hcl",
  "tree-sitter-java",
  "tree-sitter-javascript",
  "tree-sitter-kotlin-ng",

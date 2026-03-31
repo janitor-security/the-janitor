@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v8.7.0 — Deterministic Structural Firewall. 18/23 grammar AST coverage. Attosecond-grade integrity for the AI-assisted development economy.**
+**v8.8.0 — Deterministic Structural Firewall. 23/23 grammar AST coverage (100%). Attosecond-grade integrity for the AI-assisted development economy.**
 
 ---
 
