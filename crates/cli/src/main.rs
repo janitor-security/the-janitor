@@ -3115,7 +3115,11 @@ probable AI context-collapse (hallucinated function reference)"
         } else {
             0.0
         },
-        ci_energy_saved_kwh: if slop_score_val > 0 { 0.1 } else { 0.0 },
+        ci_energy_saved_kwh: if slop_score_val > 0 {
+            policy.billing.ci_kwh_per_run
+        } else {
+            0.0
+        },
         provenance: report::Provenance {
             analysis_duration_ms: bounce_start.elapsed().as_millis() as u64,
             source_bytes_processed: source_bytes,

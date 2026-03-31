@@ -64,6 +64,19 @@ pub struct BillingConfig {
     /// Billing rate for Necrotic GC (bot-automatable dead-code).
     #[serde(default = "BillingConfig::default_necrotic_usd")]
     pub necrotic_usd: f64,
+
+    /// kWh of CI datacenter energy conserved per actionable intercept.
+    ///
+    /// Basis: a 15-minute CI run at 400 W consumes 0.1 kWh.  Configure to
+    /// your organisation's measured CI runtime and power consumption to make
+    /// the energy-conservation claim in the actuarial ledger defensible.
+    ///
+    /// **Set this in `janitor.toml` `[billing]` and cite your own cloud
+    /// provider's energy metrics — do not rely on the default.**
+    ///
+    /// Default: **0.1** kWh.
+    #[serde(default = "BillingConfig::default_ci_kwh_per_run")]
+    pub ci_kwh_per_run: f64,
 }
 
 impl Default for BillingConfig {
@@ -72,6 +85,7 @@ impl Default for BillingConfig {
             triage_minutes_per_finding: Self::default_triage_minutes(),
             critical_threat_usd: Self::default_critical_usd(),
             necrotic_usd: Self::default_necrotic_usd(),
+            ci_kwh_per_run: Self::default_ci_kwh_per_run(),
         }
     }
 }
@@ -85,6 +99,9 @@ impl BillingConfig {
     }
     fn default_necrotic_usd() -> f64 {
         20.0
+    }
+    fn default_ci_kwh_per_run() -> f64 {
+        0.1
     }
 }
 

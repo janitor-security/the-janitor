@@ -57,7 +57,7 @@ _synthesize_case_study() {
     # ── Extract fields from gauntlet_report.json (global aggregate) ──────────
     local total_prs antipatterns_found zombie_dep_prs highest_score
     local actionable_intercepts critical_threats necrotic_count structural_slop_count
-    local reclaimed_hours tei_usd
+    local reclaimed_hours tei_usd ci_energy_kwh
     local prov_source_bytes prov_egress_bytes prov_exfil_pct
     total_prs="$(jq '.total_prs' "${global_json}")"
     # Filtered commits: refs fetched minus PRs that passed sanitization.
@@ -75,6 +75,7 @@ _synthesize_case_study() {
     structural_slop_count="$(jq '.workslop.structural_slop_count // 0' "${global_json}")"
     reclaimed_hours="$(jq '.workslop.total_reclaimed_hours' "${global_json}")"
     tei_usd="$(jq '.workslop.total_economic_impact_usd' "${global_json}")"
+    ci_energy_kwh="$(jq '.workslop.total_ci_energy_saved_kwh // 0' "${global_json}")"
     prov_source_bytes="$(jq '.provenance.total_source_bytes_processed // 0' "${global_json}")"
     prov_egress_bytes="$(jq '.provenance.total_egress_bytes_sent // 0' "${global_json}")"
     prov_exfil_pct="$(jq '.provenance.exfiltration_ratio_pct // 0' "${global_json}")"
@@ -112,6 +113,7 @@ Human review at AI velocity is a mathematical impossibility. The Janitor is the 
 - **${intercept_pct}%** of PRs intercepted upstream of human review (${actionable_intercepts} of ${total_prs})
 - **${reclaimed_hours} hours** of senior-engineer triage time redirected to productive work
 - **\$${tei_usd}** Total Economic Impact across audit window
+- **${ci_energy_kwh} kWh** of CI datacenter energy conserved
 
 ## Threat Intelligence Summary
 

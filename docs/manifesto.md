@@ -87,7 +87,7 @@ The Janitor doesn't just find vulnerabilities — it generates a financial ledge
 
 **Total Economic Impact** = `(critical_threats × $150) + (necrotic_gc × $20) + (structural_slop × $20)`
 
-The ledger is machine-generated, per-PR, and written to `.janitor/bounce_log.ndjson` atomically on every bounce event. `janitor report --format json` emits `critical_threats_count`, `ci_compute_saved_usd`, and `total_economic_impact_usd` for downstream dashboards and executive briefings. `janitor export` produces a 16-column CSV (including `Commit_SHA` and `Policy_Hash` audit trail columns) with `Operational_Savings_USD` per row — load directly into Excel or pandas.
+The ledger is machine-generated, per-PR, and written to `.janitor/bounce_log.ndjson` atomically on every bounce event. `janitor report --format json` emits `critical_threats_count`, `critical_threat_bounty_usd`, `total_economic_impact_usd`, and `total_ci_energy_saved_kwh` for downstream dashboards and executive briefings. `janitor export` produces a 16-column CSV (including `Commit_SHA` and `Policy_Hash` audit trail columns) with `Operational_Savings_USD` per row — load directly into Excel or pandas.
 
 Audited **33,000 PRs across 22 enterprise repositories on an 8 GB laptop.**
 

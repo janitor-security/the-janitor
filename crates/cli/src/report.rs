@@ -1067,9 +1067,9 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             .saturating_sub(structural_slop);
         let hours = data.total_reclaimed_minutes / 60.0;
         // Categorical billing: Critical ($150) + Necrotic GC ($20) + Structural Slop ($20).
-        let ci_compute_saved = critical * 150;
+        let critical_threat_bounty = critical * 150;
         let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
-        let energy_kwh = actionable as f64 * 0.1;
+        let energy_kwh: f64 = data.entries.iter().map(|e| e.ci_energy_saved_kwh).sum();
         out.push_str("## Workslop: Maintainer Impact\n\n");
         out.push_str(
             "*[Workslop](https://builtin.com/articles/what-is-workslop): the triage tax \
@@ -1093,7 +1093,7 @@ pub fn render_markdown(data: &ReportData, repo_name: &str) -> String {
             "| **Total engineering time reclaimed** | **{hours:.1} hours** |\n"
         ));
         out.push_str(&format!(
-            "| **CI & Review Compute Saved** | **${ci_compute_saved}** |\n"
+            "| **Critical Threat Intercepts ($150)** | **${critical_threat_bounty}** |\n"
         ));
         out.push_str(&format!("| **Total Economic Impact** | **${tei}** |\n"));
         out.push_str(&format!(
@@ -1532,8 +1532,9 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
         .total_actionable_intercepts
         .saturating_sub(critical)
         .saturating_sub(structural_slop);
-    let ci_compute_saved = critical * 150;
+    let critical_threat_bounty = critical * 150;
     let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
+    let total_ci_energy_kwh: f64 = data.entries.iter().map(|e| e.ci_energy_saved_kwh).sum();
     serde_json::json!({
         "schema_version": env!("CARGO_PKG_VERSION"),
         "repository": repo_name,
@@ -1545,8 +1546,9 @@ pub fn render_json(data: &ReportData, repo_name: &str) -> serde_json::Value {
             "structural_slop_count": structural_slop,
             "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
             "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
-            "ci_compute_saved_usd": ci_compute_saved,
+            "critical_threat_bounty_usd": critical_threat_bounty,
             "total_economic_impact_usd": tei,
+            "total_ci_energy_saved_kwh": (total_ci_energy_kwh * 10.0).round() / 10.0,
         },
         "slop_top": data.slop_top_indices.iter().enumerate().map(|(rank, &i)| {
             let e = &data.entries[i];
@@ -1787,6 +1789,10 @@ pub struct RepoStats {
     pub critical_threats_count: u64,
     /// Count of Structural Slop PRs (slop_score > 0, not critical, not necrotic).
     pub structural_slop_count: u64,
+    /// Total CI datacenter energy conserved across all entries in this repo (kWh).
+    ///
+    /// Sum of `ci_energy_saved_kwh` from all bounce log entries.
+    pub total_ci_energy_saved_kwh: f64,
     /// Top 10 sloppiest PRs: `(pr_number, score, state, author, threat_class)`.
     pub top_sloppiest: Vec<(u64, u32, String, String, String)>,
     /// Top 10 cleanest contributors: `(author, clean_pr_count)`.
@@ -1815,6 +1821,10 @@ pub struct GlobalReportData {
     pub total_source_bytes: u64,
     /// Total egress bytes sent to the Governor across all bounces (provenance ledger).
     pub total_egress_bytes: u64,
+    /// Total CI datacenter energy conserved across all repos (kWh).
+    ///
+    /// Sum of `ci_energy_saved_kwh` from every bounce log entry across every repo.
+    pub total_ci_energy_saved_kwh: f64,
 }
 
 /// Discover all bounce logs one directory level beneath `gauntlet_root`.
@@ -1921,6 +1931,8 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                 .count() as u64;
             let total_actionable_intercepts =
                 critical_threats_count + gc_only_count + structural_slop_count;
+            let total_ci_energy_saved_kwh: f64 =
+                entries.iter().map(|e| e.ci_energy_saved_kwh).sum();
 
             // Top 10 sloppiest PRs (descending score).
             let mut sorted_by_score: Vec<&BounceLogEntry> = entries.iter().collect();
@@ -1971,6 +1983,7 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
                 total_actionable_intercepts,
                 critical_threats_count,
                 structural_slop_count,
+                total_ci_energy_saved_kwh,
                 top_sloppiest,
                 top_clean_authors: clean_vec,
             }
@@ -1986,6 +1999,8 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
     let total_reclaimed_minutes: f64 = repo_stats.iter().map(|r| r.reclaimed_minutes).sum();
     let total_actionable_intercepts: u64 = repos_for_actionable;
     let critical_threats_count: u64 = global_critical_threats;
+    let total_ci_energy_saved_kwh: f64 =
+        repo_stats.iter().map(|r| r.total_ci_energy_saved_kwh).sum();
 
     GlobalReportData {
         repos: repo_stats,
@@ -2000,6 +2015,7 @@ pub fn aggregate_global(repos: Vec<(String, Vec<BounceLogEntry>)>) -> GlobalRepo
         // before repos was consumed; use pre-computed globals.
         total_source_bytes: global_source_bytes,
         total_egress_bytes: global_egress_bytes,
+        total_ci_energy_saved_kwh,
     }
 }
 
@@ -2215,7 +2231,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
             .total_actionable_intercepts
             .saturating_sub(repo.critical_threats_count)
             .saturating_sub(repo.structural_slop_count);
-        let repo_ci_saved_page = repo.critical_threats_count * 150;
+        let repo_ci_bounty_page = repo.critical_threats_count * 150;
         let repo_tei_page = repo.critical_threats_count * 150
             + repo_gc_only_page * 20
             + repo.structural_slop_count * 20;
@@ -2228,7 +2244,7 @@ pub fn render_global_markdown(data: &GlobalReportData, gauntlet_root: &str) -> S
         ));
         out.push_str(&format!("| Time Reclaimed | {repo_hours:.1} hours |\n"));
         out.push_str(&format!(
-            "| CI & Review Compute Saved | ${repo_ci_saved_page} |\n"
+            "| Critical Threat Intercepts ($150) | ${repo_ci_bounty_page} |\n"
         ));
         out.push_str(&format!("| Total Economic Impact | ${repo_tei_page} |\n"));
         out.push_str(&format!("| Antipatterns | {} |\n", repo.antipatterns_found));
@@ -2339,7 +2355,7 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
         .total_actionable_intercepts
         .saturating_sub(critical)
         .saturating_sub(structural_slop);
-    let ci_compute_saved = critical * 150;
+    let critical_threat_bounty = critical * 150;
     let tei = critical * 150 + gc_only * 20 + structural_slop * 20;
     serde_json::json!({
         "schema_version": env!("CARGO_PKG_VERSION"),
@@ -2355,8 +2371,9 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
             "structural_slop_count": structural_slop,
             "total_reclaimed_minutes": (data.total_reclaimed_minutes * 10.0).round() / 10.0,
             "total_reclaimed_hours": (hours * 10.0).round() / 10.0,
-            "ci_compute_saved_usd": ci_compute_saved,
+            "critical_threat_bounty_usd": critical_threat_bounty,
             "total_economic_impact_usd": tei,
+            "total_ci_energy_saved_kwh": (data.total_ci_energy_saved_kwh * 10.0).round() / 10.0,
         },
         "provenance": global_prov_json,
         "repositories": data.repos.iter().map(|r| {
@@ -2364,7 +2381,7 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
             let r_gc_only = r.total_actionable_intercepts
                 .saturating_sub(r.critical_threats_count)
                 .saturating_sub(r.structural_slop_count);
-            let r_ci_saved = r.critical_threats_count * 150;
+            let r_ci_bounty = r.critical_threats_count * 150;
             let r_tei = r.critical_threats_count * 150
                 + r_gc_only * 20
                 + r.structural_slop_count * 20;
@@ -2382,8 +2399,9 @@ pub fn render_global_json(data: &GlobalReportData, gauntlet_root: &str) -> serde
                 "total_actionable_intercepts": r.total_actionable_intercepts,
                 "critical_threats_count": r.critical_threats_count,
                 "structural_slop_count": r.structural_slop_count,
-                "ci_compute_saved_usd": r_ci_saved,
+                "critical_threat_bounty_usd": r_ci_bounty,
                 "total_economic_impact_usd": r_tei,
+                "total_ci_energy_saved_kwh": (r.total_ci_energy_saved_kwh * 10.0).round() / 10.0,
             })
         }).collect::<Vec<_>>(),
     })

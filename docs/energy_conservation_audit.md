@@ -91,17 +91,28 @@ Per-PR TEI brackets: Critical = $150, Necrotic/Structural = $20, Clean = $0.
 
 ## 3. Known Limitations
 
-### 3.1 Fixed Coefficient
+### 3.1 Fixed Coefficient — RESOLVED (v8.8.1)
 
-The `0.1 kWh` coefficient is a scalar constant, not configurable. Organisations with longer CI pipelines, GPU compute, or high-PUE facilities may wish to override this. A future `[billing] ci_kwh_per_run` key in `janitor.toml` would address this without breaking the default.
+`[billing] ci_kwh_per_run` added to `JanitorPolicy` (`BillingConfig`) with default `0.1`.
+`cmd_bounce` uses `policy.billing.ci_kwh_per_run` instead of the hardcoded literal.
+Organisations with longer CI pipelines or high-PUE facilities can now override this in `janitor.toml`.
 
-### 3.2 `ci_compute_saved` Naming Collision
+### 3.2 `ci_compute_saved` Naming Collision — RESOLVED (v8.8.1)
 
-The existing variable `ci_compute_saved` in `render_markdown` (line ~1061) is misleadingly named — it equals `critical * 150`, which is the **dollar TEI for critical threats only**, not actual compute energy savings. It feeds the `| CI & Review Compute Saved | $X |` row in the Workslop table. This naming predates the energy field and creates a potential confusion between energy (kWh) and cost ($) metrics. The variable is not renamed in this release to avoid churn, but future maintainers should note the distinction.
+The variable and its JSON key have been renamed:
+- JSON key: `ci_compute_saved_usd` → `critical_threat_bounty_usd`
+- Markdown/PDF table row: `CI & Review Compute Saved` → `Critical Threat Intercepts ($150)`
 
-### 3.3 No Per-Entry Aggregation in JSON Export
+The dollar amount (critical threats × $150) and the energy amount (kWh) are now unambiguously separate fields.
 
-The JSON export (`render_json`, `render_json_global`) does not yet surface `ci_energy_saved_kwh` as a top-level aggregate key. It is present in every serialised `BounceLogEntry` (via `serde`) but not summed at the report level. This is a gap for programmatic consumers.
+### 3.3 No Per-Entry Aggregation in JSON Export — RESOLVED (v8.8.1)
+
+`total_ci_energy_saved_kwh` is now a first-class field in:
+- `workslop` block of `render_json` (per-repo JSON)
+- `workslop` block of `render_json_global` (global gauntlet JSON)
+- Per-repository entries in the `repositories[]` array
+- `RepoStats` and `GlobalReportData` structs
+- `generate_client_package.sh` case-study Circuit Breaker Impact section
 
 ---
 

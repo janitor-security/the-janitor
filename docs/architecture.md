@@ -270,10 +270,11 @@ gc_only_count             = entries where necrotic_flag.is_some() AND NOT is_cri
 structural_slop_count     = entries where slop_score > 0 AND NOT critical AND NOT necrotic
 total_actionable_intercepts = critical_threats_count + gc_only_count + structural_slop_count
 
-ci_compute_saved_usd    = critical_threats_count × $150
-gc_value_usd            = gc_only_count × $20
-structural_slop_usd     = structural_slop_count × $20
-total_economic_impact   = ci_compute_saved_usd + gc_value_usd + structural_slop_usd
+critical_threat_bounty_usd = critical_threats_count × $150
+gc_value_usd               = gc_only_count × $20
+structural_slop_usd        = structural_slop_count × $20
+total_economic_impact      = critical_threat_bounty_usd + gc_value_usd + structural_slop_usd
+total_ci_energy_saved_kwh  = sum(ci_energy_saved_kwh per entry)   # configurable via [billing] ci_kwh_per_run
 ```
 
 ### CSV Column Schema (16 columns, exact order)
