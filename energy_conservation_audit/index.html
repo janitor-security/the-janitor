@@ -569,27 +569,27 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#31-fixed-coefficient" class="md-nav__link">
+  <a href="#31-fixed-coefficient-resolved-v881" class="md-nav__link">
     <span class="md-ellipsis">
-      3.1 Fixed Coefficient
+      3.1 Fixed Coefficient — RESOLVED (v8.8.1)
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#32-ci_compute_saved-naming-collision" class="md-nav__link">
+  <a href="#32-ci_compute_saved-naming-collision-resolved-v881" class="md-nav__link">
     <span class="md-ellipsis">
-      3.2 ci_compute_saved Naming Collision
+      3.2 ci_compute_saved Naming Collision — RESOLVED (v8.8.1)
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#33-no-per-entry-aggregation-in-json-export" class="md-nav__link">
+  <a href="#33-no-per-entry-aggregation-in-json-export-resolved-v881" class="md-nav__link">
     <span class="md-ellipsis">
-      3.3 No Per-Entry Aggregation in JSON Export
+      3.3 No Per-Entry Aggregation in JSON Export — RESOLVED (v8.8.1)
     </span>
   </a>
   
@@ -753,12 +753,22 @@
 <p>Per-PR TEI brackets: Critical = $150, Necrotic/Structural = $20, Clean = $0.</p>
 <hr />
 <h2 id="3-known-limitations">3. Known Limitations</h2>
-<h3 id="31-fixed-coefficient">3.1 Fixed Coefficient</h3>
-<p>The <code>0.1 kWh</code> coefficient is a scalar constant, not configurable. Organisations with longer CI pipelines, GPU compute, or high-PUE facilities may wish to override this. A future <code>[billing] ci_kwh_per_run</code> key in <code>janitor.toml</code> would address this without breaking the default.</p>
-<h3 id="32-ci_compute_saved-naming-collision">3.2 <code>ci_compute_saved</code> Naming Collision</h3>
-<p>The existing variable <code>ci_compute_saved</code> in <code>render_markdown</code> (line ~1061) is misleadingly named — it equals <code>critical * 150</code>, which is the <strong>dollar TEI for critical threats only</strong>, not actual compute energy savings. It feeds the <code>| CI &amp; Review Compute Saved | $X |</code> row in the Workslop table. This naming predates the energy field and creates a potential confusion between energy (kWh) and cost ($) metrics. The variable is not renamed in this release to avoid churn, but future maintainers should note the distinction.</p>
-<h3 id="33-no-per-entry-aggregation-in-json-export">3.3 No Per-Entry Aggregation in JSON Export</h3>
-<p>The JSON export (<code>render_json</code>, <code>render_json_global</code>) does not yet surface <code>ci_energy_saved_kwh</code> as a top-level aggregate key. It is present in every serialised <code>BounceLogEntry</code> (via <code>serde</code>) but not summed at the report level. This is a gap for programmatic consumers.</p>
+<h3 id="31-fixed-coefficient-resolved-v881">3.1 Fixed Coefficient — RESOLVED (v8.8.1)</h3>
+<p><code>[billing] ci_kwh_per_run</code> added to <code>JanitorPolicy</code> (<code>BillingConfig</code>) with default <code>0.1</code>.
+<code>cmd_bounce</code> uses <code>policy.billing.ci_kwh_per_run</code> instead of the hardcoded literal.
+Organisations with longer CI pipelines or high-PUE facilities can now override this in <code>janitor.toml</code>.</p>
+<h3 id="32-ci_compute_saved-naming-collision-resolved-v881">3.2 <code>ci_compute_saved</code> Naming Collision — RESOLVED (v8.8.1)</h3>
+<p>The variable and its JSON key have been renamed:
+- JSON key: <code>ci_compute_saved_usd</code> → <code>critical_threat_bounty_usd</code>
+- Markdown/PDF table row: <code>CI &amp; Review Compute Saved</code> → <code>Critical Threat Intercepts ($150)</code></p>
+<p>The dollar amount (critical threats × $150) and the energy amount (kWh) are now unambiguously separate fields.</p>
+<h3 id="33-no-per-entry-aggregation-in-json-export-resolved-v881">3.3 No Per-Entry Aggregation in JSON Export — RESOLVED (v8.8.1)</h3>
+<p><code>total_ci_energy_saved_kwh</code> is now a first-class field in:
+- <code>workslop</code> block of <code>render_json</code> (per-repo JSON)
+- <code>workslop</code> block of <code>render_json_global</code> (global gauntlet JSON)
+- Per-repository entries in the <code>repositories[]</code> array
+- <code>RepoStats</code> and <code>GlobalReportData</code> structs
+- <code>generate_client_package.sh</code> case-study Circuit Breaker Impact section</p>
 <hr />
 <h2 id="4-conclusion">4. Conclusion</h2>
 <p>The implementation is technically sound, backward-compatible, and methodologically conservative. The energy basis (15 min, 400 W, single run) represents a defensible lower bound. The claim "reclaiming kilowatt-hours of grid capacity from agentic churn" is mathematically valid for any repository where The Janitor intercepts more than 10 PRs.</p>

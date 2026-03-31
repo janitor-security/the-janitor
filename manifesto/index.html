@@ -982,7 +982,7 @@
 </tbody>
 </table>
 <p><strong>Total Economic Impact</strong> = <code>(critical_threats × $150) + (necrotic_gc × $20) + (structural_slop × $20)</code></p>
-<p>The ledger is machine-generated, per-PR, and written to <code>.janitor/bounce_log.ndjson</code> atomically on every bounce event. <code>janitor report --format json</code> emits <code>critical_threats_count</code>, <code>ci_compute_saved_usd</code>, and <code>total_economic_impact_usd</code> for downstream dashboards and executive briefings. <code>janitor export</code> produces a 16-column CSV (including <code>Commit_SHA</code> and <code>Policy_Hash</code> audit trail columns) with <code>Operational_Savings_USD</code> per row — load directly into Excel or pandas.</p>
+<p>The ledger is machine-generated, per-PR, and written to <code>.janitor/bounce_log.ndjson</code> atomically on every bounce event. <code>janitor report --format json</code> emits <code>critical_threats_count</code>, <code>critical_threat_bounty_usd</code>, <code>total_economic_impact_usd</code>, and <code>total_ci_energy_saved_kwh</code> for downstream dashboards and executive briefings. <code>janitor export</code> produces a 16-column CSV (including <code>Commit_SHA</code> and <code>Policy_Hash</code> audit trail columns) with <code>Operational_Savings_USD</code> per row — load directly into Excel or pandas.</p>
 <p>Audited <strong>33,000 PRs across 22 enterprise repositories on an 8 GB laptop.</strong></p>
 <hr />
 <h2 id="the-integrity-dashboard-wopr">THE INTEGRITY DASHBOARD (WOPR)</h2>
