@@ -1779,10 +1779,11 @@ derive from code, not prior documentation. Supersedes all predecessor files.</p>
 </tbody>
 </table>
 <p><strong>23 grammars total.</strong> Each grammar is a <code>OnceLock&lt;Language&gt;</code> static — loaded once on first use, zero per-call allocation thereafter.</p>
-<p><strong>Active AST security rules</strong>: 18/23 grammars (78%) have dedicated <code>find_&lt;lang&gt;_slop</code> or
-<code>find_&lt;lang&gt;_danger_nodes</code> AST walks in <code>crates/forge/src/slop_hunter.rs</code> (v8.7.0).
-Remaining 5 (Rust, GLSL, HCL AST-level, TSX/JSX JSX-specific) are targeted by Phase 7
-(see <code>docs/R_AND_D_ROADMAP.md</code> Section II).</p>
+<p><strong>Active AST security rules</strong>: 23/23 grammars (100%) have dedicated <code>find_&lt;lang&gt;_slop</code> or
+<code>find_&lt;lang&gt;_danger_nodes</code> AST walks in <code>crates/forge/src/slop_hunter.rs</code> (v8.8.0).
+Phase 7 completed full grammar coverage: Rust (unsafe transmute + raw ptr deref), GLSL
+(dangerous extension byte scan), HCL/Terraform (data external + local-exec provisioner
+AST walk), and TSX/JSX (dangerouslySetInnerHTML attribute walk).</p>
 <p>Grammar library: <code>tree-sitter 0.26</code> (workspace pinned).</p>
 <h3 id="foundational-crates-mathematical-models">Foundational Crates &amp; Mathematical Models</h3>
 <table>

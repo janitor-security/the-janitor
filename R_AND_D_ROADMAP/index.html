@@ -483,13 +483,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ii-grammar-capstone-phase-7" class="md-nav__link">
+  <a href="#ii-grammar-capstone-phase-7-completed-v880" class="md-nav__link">
     <span class="md-ellipsis">
-      II. Grammar Capstone — Phase 7
+      II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="II. Grammar Capstone — Phase 7">
+    <nav class="md-nav" aria-label="II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -910,13 +910,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ii-grammar-capstone-phase-7" class="md-nav__link">
+  <a href="#ii-grammar-capstone-phase-7-completed-v880" class="md-nav__link">
     <span class="md-ellipsis">
-      II. Grammar Capstone — Phase 7
+      II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="II. Grammar Capstone — Phase 7">
+    <nav class="md-nav" aria-label="II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1314,8 +1314,8 @@
 <h1 id="rd-roadmap-24-month-supremacy-blueprint">R&amp;D Roadmap — 24-Month Supremacy Blueprint</h1>
 <blockquote>
 <p><strong>Classification</strong>: Internal Engineering Reference
-<strong>Engine Baseline</strong>: v8.7.0
-<strong>AST Coverage</strong>: 18/23 grammars (78%)
+<strong>Engine Baseline</strong>: v8.8.0
+<strong>AST Coverage</strong>: 23/23 grammars (100%)
 <strong>Horizon</strong>: 24-Month Ecosystem Permanence Initiative</p>
 </blockquote>
 <p>This document is the authoritative engineering blueprint. Every proposal names the exact
@@ -1391,10 +1391,11 @@ prose — each is a mechanical specification ready for implementation.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Current state</strong>: 18/23 grammars have active AST security rules. 123/123 Crucible entries SANCTUARY INTACT.</p>
+<p><strong>Current state (v8.7.0 baseline)</strong>: 18/23 grammars had active AST security rules. 123/123 Crucible entries SANCTUARY INTACT.</p>
+<p>| Phase 7 | v8.8.0 | Rust-1/2 (unsafe transmute + raw ptr deref); GLSL-1 (dangerous extension); HCL-1/2 (data external + local-exec provisioner); TSX-1/JSX-1 (dangerouslySetInnerHTML) | 12 |</p>
 <hr />
-<h2 id="ii-grammar-capstone-phase-7">II. Grammar Capstone — Phase 7</h2>
-<p><strong>Target version</strong>: v8.8.x
+<h2 id="ii-grammar-capstone-phase-7-completed-v880">II. Grammar Capstone — Phase 7 [COMPLETED — v8.8.0]</h2>
+<p><strong>Target version</strong>: v8.8.0
 <strong>Goal</strong>: 23/23 grammar coverage (100%)
 <strong>Rationale</strong>: The structural firewall is weakened by every grammar loaded but not inspected.
 A grammar without rules is not neutral — it is a blind spot.</p>
@@ -1562,7 +1563,7 @@ result vec returned by <code>find_js_slop</code>. No new <code>QueryEngine</code
 <a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>        Files: slop_hunter.rs (find_jsx_dangerous_html_slop; called from js/jsx/ts/tsx branch)
 <a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>               crucible/src/main.rs (TP + TN × 2 gates)
 </code></pre></div>
-<p><strong>Acceptance criterion</strong>: <code>cargo run -p crucible</code> exits 0 with 135/135 entries SANCTUARY INTACT.</p>
+<p><strong>Result</strong>: <code>cargo run -p crucible</code> exits 0 with 135/135 entries SANCTUARY INTACT. <code>just audit</code> exits 0.</p>
 <hr />
 <h2 id="iii-pillar-i-the-janitor-lsp">III. Pillar I — The Janitor LSP</h2>
 <p><strong>Target version</strong>: v9.0.0
@@ -1856,7 +1857,7 @@ threat intelligence, not a background service that activates silently.</p>
 <tbody>
 <tr>
 <td>Grammar AST coverage</td>
-<td>18/23 (78%)</td>
+<td>23/23 (100%) ✅ v8.8.0</td>
 <td>23/23 (100%)</td>
 <td>23/23 maintained</td>
 </tr>
@@ -1898,8 +1899,8 @@ threat intelligence, not a background service that activates silently.</p>
 </tr>
 <tr>
 <td>Crucible gallery entries</td>
-<td>123</td>
-<td>135+ (Phase 7)</td>
+<td>135 ✅ v8.8.0</td>
+<td>135 (Phase 7 complete)</td>
 <td>160+</td>
 </tr>
 <tr>
