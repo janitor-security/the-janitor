@@ -2,7 +2,7 @@
 
 Published forensic audits by The Janitor — structural PR analysis across open-source repositories.
 
-Each audit package includes: PDF intelligence report, 16-column CSV audit trail, CycloneDX CBOM, and Swarm clone-pair data.
+Each audit package includes: PDF intelligence report, 17-column CSV audit trail, CycloneDX CBOM, and Swarm clone-pair data.
 
 | Repository | Audit Date | Package |
 |---|---|---|

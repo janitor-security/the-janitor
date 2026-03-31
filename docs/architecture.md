@@ -36,6 +36,11 @@
 
 **23 grammars total.** Each grammar is a `OnceLock<Language>` static — loaded once on first use, zero per-call allocation thereafter.
 
+**Active AST security rules**: 18/23 grammars (78%) have dedicated `find_<lang>_slop` or
+`find_<lang>_danger_nodes` AST walks in `crates/forge/src/slop_hunter.rs` (v8.7.0).
+Remaining 5 (Rust, GLSL, HCL AST-level, TSX/JSX JSX-specific) are targeted by Phase 7
+(see `docs/R_AND_D_ROADMAP.md` Section II).
+
 Grammar library: `tree-sitter 0.26` (workspace pinned).
 
 ### Foundational Crates & Mathematical Models
