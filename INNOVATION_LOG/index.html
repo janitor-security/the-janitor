@@ -546,9 +546,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#grammar-depth-java-3-new-ast-level-rules-promoting-byte-level" class="md-nav__link">
+  <a href="#grammar-depth-java-3-new-ast-level-rules-completed-v912" class="md-nav__link">
     <span class="md-ellipsis">
-      Grammar Depth: Java — 3 New AST-Level Rules (Promoting Byte-Level)
+      Grammar Depth: Java — 3 New AST-Level Rules [COMPLETED — v9.1.2]
     </span>
   </a>
   
@@ -720,6 +720,39 @@
   <a href="#ct-008-cc-grammars-have-zero-ast-level-detectors" class="md-nav__link">
     <span class="md-ellipsis">
       CT-008: C/C++ grammars have zero AST-level detectors
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-wisdom-java-consolidation-v912" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom &amp; Java Consolidation v9.1.2)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom & Java Consolidation v9.1.2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-001-utc_now_iso8601-is-file-local-not-accessible-across-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-001: utc_now_iso8601() is file-local — not accessible across modules
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-002-wisdom_manifestjson-is-not-committed-to-the-repo-as-a-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-002: wisdom_manifest.json is not committed to the repo as a baseline
     </span>
   </a>
   
@@ -822,9 +855,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#grammar-depth-java-3-new-ast-level-rules-promoting-byte-level" class="md-nav__link">
+  <a href="#grammar-depth-java-3-new-ast-level-rules-completed-v912" class="md-nav__link">
     <span class="md-ellipsis">
-      Grammar Depth: Java — 3 New AST-Level Rules (Promoting Byte-Level)
+      Grammar Depth: Java — 3 New AST-Level Rules [COMPLETED — v9.1.2]
     </span>
   </a>
   
@@ -1006,6 +1039,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-wisdom-java-consolidation-v912" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom &amp; Java Consolidation v9.1.2)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom & Java Consolidation v9.1.2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-001-utc_now_iso8601-is-file-local-not-accessible-across-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-001: utc_now_iso8601() is file-local — not accessible across modules
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-002-wisdom_manifestjson-is-not-committed-to-the-repo-as-a-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-002: wisdom_manifest.json is not committed to the repo as a baseline
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1095,36 +1161,13 @@ shell interpreter, <code>InsecureSkipVerify</code>)</p>
 - <strong>File:</strong> <code>crates/forge/src/slop_hunter.rs::find_rust_slop()</code>
 - <strong>CVE class:</strong> CWE-78 (OS command injection)</p>
 <hr />
-<h3 id="grammar-depth-java-3-new-ast-level-rules-promoting-byte-level">Grammar Depth: Java — 3 New AST-Level Rules (Promoting Byte-Level)</h3>
-<p><strong>Java current AST coverage:</strong> 0 rules. All detection is byte-level in
-<code>slop_hunter.rs</code> string patterns. Tree-sitter-java grammar is fully loaded.
-This is the highest-priority grammar gap in the workspace.</p>
-<p><strong>Java-1 — <code>security:java_deserialization_gadget</code> (KevCritical, 150 pts)</strong>
-- <strong>Trigger:</strong> <code>method_invocation</code> matching <code>readObject()</code> where the receiver
-  is an <code>ObjectInputStream</code> or a subclass.
-- <strong>Suppress if:</strong> inside a function named <code>test*</code> or <code>*Test</code>.
-- <strong>AST node:</strong> <code>method_invocation{readObject} → primary{ObjectInputStream.*}</code>
-- <strong>File:</strong> <code>crates/forge/src/slop_hunter.rs::find_java_slop()</code> (new function)
-- <strong>CVE class:</strong> CVE-2015-4852, CVE-2016-4463, hundreds of Java deser RCEs.
-  This is the most exploited class in the Java ecosystem.</p>
-<p><strong>Java-2 — <code>security:runtime_exec_injection</code> (KevCritical, 150 pts)</strong>
-- <strong>Trigger:</strong> <code>method_invocation</code> matching <code>.exec(expr)</code> on a receiver that
-  is <code>Runtime.getRuntime()</code>, OR <code>object_creation_expression{ProcessBuilder}</code>
-  where the constructor argument is not a <code>string_literal</code>.
-- <strong>Suppress if:</strong> inside a function named <code>test*</code> or <code>*Test</code>.
-- <strong>AST node:</strong> <code>method_invocation{exec} → primary{Runtime.getRuntime()}</code>
-  or <code>object_creation_expression{ProcessBuilder}</code>
-- <strong>File:</strong> <code>crates/forge/src/slop_hunter.rs::find_java_slop()</code>
-- <strong>CVE class:</strong> CWE-78; Oracle JDK, Spring, Struts exploit chains</p>
-<p><strong>Java-3 — <code>security:xxe_documentbuilder</code> (Critical, 50 pts)</strong>
-- <strong>Trigger:</strong> <code>method_invocation{newInstance}</code> on <code>DocumentBuilderFactory</code>
-  where no <code>setFeature("…disallow-doctype-decl…", true)</code> call follows in
-  the same method body.
-- <strong>Suppress if:</strong> <code>setFeature</code> with <code>FEATURE_SECURE_PROCESSING</code> is present.
-- <strong>AST node:</strong> <code>method_invocation{newInstance}</code> on <code>DocumentBuilderFactory</code>
-  receiver without subsequent <code>setFeature</code> hardening call.
-- <strong>File:</strong> <code>crates/forge/src/slop_hunter.rs::find_java_slop()</code>
-- <strong>CVE class:</strong> CWE-611 (XXE); Spring, Android, Apache Commons</p>
+<h3 id="grammar-depth-java-3-new-ast-level-rules-completed-v912">Grammar Depth: Java — 3 New AST-Level Rules <code>[COMPLETED — v9.1.2]</code></h3>
+<p><strong>Java-1 <code>[COMPLETED — v9.1.2]</code></strong> — <code>readObject()</code> upgraded to <code>KevCritical</code>;
+test-method suppression added; existing <code>find_java_slop</code> extended.</p>
+<p><strong>Java-2 <code>[COMPLETED — v9.1.2]</code></strong> — <code>Runtime.getRuntime().exec()</code> upgraded to
+<code>KevCritical</code>; <code>new ProcessBuilder(expr)</code> non-literal detection added.</p>
+<p><strong>Java-3 <code>[COMPLETED — v9.1.2]</code></strong> — <code>DocumentBuilderFactory.newInstance()</code>
+without XXE hardening fires <code>security:xxe_documentbuilder</code> at <code>Critical</code>.</p>
 <hr />
 <h3 id="grammar-depth-python-3-new-detection-rules">Grammar Depth: Python — 3 New Detection Rules</h3>
 <p><strong>Python current AST coverage:</strong> SQLi concatenation, SSRF dynamic URL, path
@@ -1455,6 +1498,29 @@ functions in <code>slop_hunter.rs</code>. All C/C++ detection is byte-level
 the four patterns above. C/C++ is the language most represented in CVE
 exploits; having only byte-level detection is a credibility gap in enterprise
 security conversations.</p>
+<hr />
+<h2 id="continuous-telemetry-2026-04-03-epoch-2-wisdom-java-consolidation-v912">Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom &amp; Java Consolidation v9.1.2)</h2>
+<p><em>CT counter reset to CT-001 per Logic 5 CISO Pulse epoch boundary.</em></p>
+<h3 id="ct-001-utc_now_iso8601-is-file-local-not-accessible-across-modules">CT-001: <code>utc_now_iso8601()</code> is file-local — not accessible across modules</h3>
+<p><strong>Found during:</strong> Wisdom &amp; Java Consolidation (v9.1.2)
+<strong>Location:</strong> <code>crates/cli/src/main.rs</code>
+<strong>Issue:</strong> <code>utc_now_iso8601()</code> is defined in <code>main.rs</code> as a private function.
+The <code>--ci-mode</code> path in <code>cmd_update_wisdom</code> calls it directly, coupling the
+timestamp implementation to a single file.  If the function is ever needed
+in a library crate (e.g., <code>crates/common</code>), this will require a refactor.
+<strong>Suggested fix:</strong> Move <code>utc_now_iso8601()</code> to <code>crates/common/src/</code> as a
+<code>pub</code> utility, or introduce a thin <code>janitor_timestamp()</code> wrapper in a
+shared utilities module.</p>
+<h3 id="ct-002-wisdom_manifestjson-is-not-committed-to-the-repo-as-a-baseline">CT-002: <code>wisdom_manifest.json</code> is not committed to the repo as a baseline</h3>
+<p><strong>Found during:</strong> Wisdom &amp; Java Consolidation (v9.1.2)
+<strong>Location:</strong> <code>.github/workflows/cisa-kev-sync.yml</code>
+<strong>Issue:</strong> The <code>cisa_kev_ids.txt</code> snapshot is committed as part of the first
+workflow run.  Until that first run executes, the diff step has no baseline
+and will always output "No prior snapshot — writing baseline."  This means
+the first Monday after deployment produces no PR — a confusing no-op.
+<strong>Suggested fix:</strong> Commit an initial <code>.janitor/cisa_kev_ids.txt</code> (populated
+from the current CISA KEV catalog) as part of this session, so the first
+automated run produces a meaningful diff rather than a silent baseline write.</p>
 
 
 

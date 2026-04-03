@@ -599,6 +599,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-wisdom-java-consolidation-v912" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Wisdom &amp; Java Consolidation (v9.1.2)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -699,6 +708,15 @@
   <a href="#2026-04-03-ciso-pulse-autonomous-clock-v911" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — CISO Pulse &amp; Autonomous Clock (v9.1.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-03-wisdom-java-consolidation-v912" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Wisdom &amp; Java Consolidation (v9.1.2)
     </span>
   </a>
   
@@ -836,6 +854,35 @@ the first CISO Pulse Audit — re-tier <code>INNOVATION_LOG.md</code> into P0/P1
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.1.1</code></p>
 <p><strong>Purged sections:</strong> CT-005 (<code>[COMPLETED — v9.1.0]</code>) merged into the CISO
 Pulse log restructure. VULN-02 section was already purged in v9.1.0.</p>
+<p><strong>Commit:</strong> <code>5056576</code></p>
+<hr />
+<h2 id="2026-04-03-wisdom-java-consolidation-v912">2026-04-03 — Wisdom &amp; Java Consolidation (v9.1.2)</h2>
+<p><strong>Directive:</strong> Harden CISO Pulse with CT counter reset rule; fix CT-007 by
+adding <code>--ci-mode</code> to <code>update-wisdom</code>; update CISA KEV sync workflow to use
+the janitor binary as sole arbiter; execute P0 Java AST depth — implement
+Java-1 (readObject KevCritical + test suppression), Java-2 (ProcessBuilder
+injection), and Java-3 (XXE DocumentBuilderFactory); add Crucible fixtures.</p>
+<p><strong>Files modified:</strong>
+- <code>.claude/skills/evolution-tracker/SKILL.md</code> <em>(modified)</em> — Logic 5 step 8
+  added: CT counter resets to CT-001 after every CISO Pulse Audit (epoch reset)
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>--ci-mode</code> flag added to
+  <code>UpdateWisdom</code> subcommand; <code>cmd_update_wisdom</code> fetches CISA KEV JSON and
+  emits <code>.janitor/wisdom_manifest.json</code> when <code>ci_mode = true</code>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>find_java_danger_invocations</code>
+  gains <code>inside_test: bool</code> param + <code>@Test</code> annotation suppression;
+  <code>readObject</code>/<code>exec</code>/<code>lookup</code> upgraded from <code>Critical</code> to <code>KevCritical</code>;
+  <code>new ProcessBuilder(expr)</code> (Java-2b) and
+  <code>DocumentBuilderFactory.newInstance()</code> XXE (Java-3) detection added;
+  <code>java_has_test_annotation()</code> helper added; 5 new unit tests
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — 4 new fixtures: ProcessBuilder
+  TP/TN and DocumentBuilder XXE TP/TN
+- <code>.github/workflows/cisa-kev-sync.yml</code> <em>(modified)</em> — switched from raw <code>curl</code>
+  to <code>janitor update-wisdom --ci-mode</code>; workflow downloads janitor binary from
+  GH releases before running
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — Java-1/2/3 grammar depth section
+  marked <code>[COMPLETED — v9.1.2]</code>; CT epoch reset to Epoch 2 (CT-001, CT-002)
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.1.2</code></p>
 <p><strong>Commit:</strong> <em>(pending)</em></p>
 
 
