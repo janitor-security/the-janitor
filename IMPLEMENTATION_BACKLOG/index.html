@@ -573,6 +573,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-03-signature-sovereignty-v910" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Signature Sovereignty (v9.1.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-03-forward-looking-telemetry-v902" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Forward-Looking Telemetry (v9.0.2)
@@ -654,6 +663,15 @@
   <a href="#2026-04-03-governance-optimization-v901" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Governance Optimization (v9.0.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-03-signature-sovereignty-v910" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Signature Sovereignty (v9.1.0)
     </span>
   </a>
   
@@ -746,6 +764,22 @@ law to the Evolution Tracker; confirm single-source version ownership; fix stale
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-003 filed (telemetry)</p>
 <p><strong>Commit:</strong> <code>4527fbb</code></p>
 <hr />
+<h2 id="2026-04-03-signature-sovereignty-v910">2026-04-03 — Signature Sovereignty (v9.1.0)</h2>
+<p><strong>Directive:</strong> Hard-fix GPG tag signing in justfile (CT-005); implement BYOK Local
+Attestation (VULN-02) — <code>--pqc-key</code> flag on <code>janitor bounce</code>, <code>janitor verify-cbom</code>
+command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — <code>git tag v{{version}}</code> changed to <code>git tag -s v{{version}} -m "release v{{version}}"</code> in both <code>release</code> and <code>fast-release</code> recipes (CT-005 resolved)
+- <code>Cargo.toml</code> <em>(modified)</em> — <code>fips204 = "0.4"</code> and <code>base64 = "0.22"</code> added to workspace dependencies; version bumped to <code>9.1.0</code>
+- <code>crates/cli/Cargo.toml</code> <em>(modified)</em> — <code>fips204.workspace = true</code> and <code>base64.workspace = true</code> added
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>pqc_sig: Option&lt;String&gt;</code> field added to <code>BounceLogEntry</code>; all struct literals updated
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — <code>specVersion</code> upgraded <code>"1.5"</code> → <code>"1.6"</code>; <code>render_cbom_for_entry()</code> added (deterministic, no UUID/timestamp, used for PQC signing)
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>--pqc-key</code> flag added to <code>Bounce</code> subcommand; <code>VerifyCbom</code> subcommand added; <code>cmd_bounce</code> BYOK signing block; <code>cmd_verify_cbom()</code> function; 4 tests in <code>pqc_signing_tests</code> module
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — <code>pqc_sig: None</code> added to struct literal
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — <code>pqc_sig: None</code> added to 2 struct literals
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — VULN-02 section purged (all findings <code>[COMPLETED — v9.1.0]</code>); roadmap table updated</p>
+<p><strong>Commit:</strong> <em>(pending)</em></p>
+<hr />
 <h2 id="2026-04-03-forward-looking-telemetry-v902">2026-04-03 — Forward-Looking Telemetry (v9.0.2)</h2>
 <p><strong>Directive:</strong> Add <code>just fast-release</code> recipe (audit-free release path); harden
 Evolution Tracker with Forward-Looking Mandate and Architectural Radar Mandate;
@@ -761,7 +795,7 @@ purge completed-work entry CT-003 from Innovation Log.</p>
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-003 purged (completed work,
   belongs in Backlog); CT-004 and CT-005 filed as forward-looking proposals
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.0.2</code></p>
-<p><strong>Commit:</strong> <code>pending</code></p>
+<p><strong>Commit:</strong> <code>ff42274</code></p>
 
 
 

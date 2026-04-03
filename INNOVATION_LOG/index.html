@@ -561,39 +561,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#vuln-02-key-custody-compliance-theater" class="md-nav__link">
-    <span class="md-ellipsis">
-      VULN-02 — Key Custody &amp; Compliance Theater
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="VULN-02 — Key Custody & Compliance Theater">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#finding_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Finding
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#solution-byok-local-attestation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solution — BYOK Local Attestation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#vuln-03-scm-lock-in" class="md-nav__link">
     <span class="md-ellipsis">
       VULN-03 — SCM Lock-in
@@ -604,7 +571,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finding_2" class="md-nav__link">
+  <a href="#finding_1" class="md-nav__link">
     <span class="md-ellipsis">
       Finding
     </span>
@@ -637,7 +604,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finding_3" class="md-nav__link">
+  <a href="#finding_2" class="md-nav__link">
     <span class="md-ellipsis">
       Finding
     </span>
@@ -822,6 +789,30 @@
   <a href="#ct-005-git-tag-vversion-in-fast-release-still-triggers-gpg-failure" class="md-nav__link">
     <span class="md-ellipsis">
       CT-005: git tag v{{version}} in fast-release still triggers GPG failure
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-signature-sovereignty-v910" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-006-hsm-kms-integration-for-pqc-key-is-still-file-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-006: HSM / KMS integration for --pqc-key is still file-only
     </span>
   </a>
   
@@ -939,39 +930,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#vuln-02-key-custody-compliance-theater" class="md-nav__link">
-    <span class="md-ellipsis">
-      VULN-02 — Key Custody &amp; Compliance Theater
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="VULN-02 — Key Custody & Compliance Theater">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#finding_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Finding
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#solution-byok-local-attestation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solution — BYOK Local Attestation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#vuln-03-scm-lock-in" class="md-nav__link">
     <span class="md-ellipsis">
       VULN-03 — SCM Lock-in
@@ -982,7 +940,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finding_2" class="md-nav__link">
+  <a href="#finding_1" class="md-nav__link">
     <span class="md-ellipsis">
       Finding
     </span>
@@ -1015,7 +973,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#finding_3" class="md-nav__link">
+  <a href="#finding_2" class="md-nav__link">
     <span class="md-ellipsis">
       Finding
     </span>
@@ -1210,6 +1168,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-signature-sovereignty-v910" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-006-hsm-kms-integration-for-pqc-key-is-still-file-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-006: HSM / KMS integration for --pqc-key is still file-only
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1266,39 +1248,10 @@ deployments.</p>
 - <code>--soft-fail</code> wired into <code>cmd_bounce</code>; degraded attestation logged to NDJSON
 - Integration test: Governor endpoint returns 500 → soft-fail path exercises</p>
 <hr />
-<h3 id="vuln-02-key-custody-compliance-theater">VULN-02 — Key Custody &amp; Compliance Theater</h3>
-<p><strong>Severity:</strong> Critical<br />
-<strong>Class:</strong> Cryptography / Compliance</p>
-<h4 id="finding_1">Finding</h4>
-<p>The current architecture implies vendor-held ML-DSA-65 (FIPS 204) signing keys
-on the Fly.io Governor. Enterprises operating under FedRAMP, SOC 2 Type II, or
-DISA STIG cannot delegate key custody to a SaaS vendor. Claiming post-quantum
-attestation while the vendor controls the signing key is compliance theater —
-the customer cannot independently verify the chain of custody.</p>
-<h4 id="solution-byok-local-attestation">Solution — BYOK Local Attestation</h4>
-<p><strong>v9.0.x — <code>--pqc-key</code> CLI argument:</strong><br />
-Add <code>--pqc-key &lt;path&gt;</code> to <code>janitor bounce</code>. When present, the CLI signs the
-<code>BounceResult</code> CBOM directly on the runner using the customer's locally-stored
-ML-DSA-65 private key, bypassing the Governor signing path entirely. The
-signature is embedded in the bounce log entry (<code>"pqc_sig": "&lt;base64&gt;"</code>) and
-verifiable offline via <code>janitor verify-cbom --key &lt;pub.pem&gt; &lt;log.ndjson&gt;</code>.</p>
-<p><strong>v9.1.x — HSM / KMS integration:</strong><br />
-Extend <code>--pqc-key</code> to accept a PKCS#11 URI (<code>pkcs11:token=...</code>) or AWS KMS
-ARN (<code>arn:aws:kms:...</code>). The signing operation is delegated to the HSM/KMS;
-no private key material ever touches the runner filesystem.</p>
-<p><strong>Key invariant (never violate):</strong><br />
-The Fly.io Governor's verifying key (<code>VERIFYING_KEY_BYTES</code>) remains a
-public-only embed. The private key is never shipped in any binary — local or
-cloud. <code>--pqc-key</code> loads from a path external to the binary at runtime.</p>
-<p><strong>Definition of Done:</strong>
-- <code>janitor bounce --pqc-key ./mlksa.key</code> signs CBOM locally; Governor not contacted
-- <code>janitor verify-cbom</code> verifies detached signature offline
-- <code>cargo test</code> covers: sign + verify round-trip, missing key error, invalid key error</p>
-<hr />
 <h3 id="vuln-03-scm-lock-in">VULN-03 — SCM Lock-in</h3>
 <p><strong>Severity:</strong> High<br />
 <strong>Class:</strong> Portability / Ecosystem</p>
-<h4 id="finding_2">Finding</h4>
+<h4 id="finding_1">Finding</h4>
 <p>All environment variable resolution, webhook handling, and Check Run APIs are
 coupled to GitHub's specific contract: <code>GITHUB_SHA</code>, <code>GITHUB_REF</code>,
 <code>GITHUB_REPOSITORY</code>, <code>GITHUB_TOKEN</code>, GitHub App installation IDs, and the
@@ -1345,7 +1298,7 @@ API; Azure DevOps uses Pull Request Thread API.</p>
 <h3 id="vuln-04-hot-path-blind-spots">VULN-04 — Hot-Path Blind Spots</h3>
 <p><strong>Severity:</strong> High<br />
 <strong>Class:</strong> Detection Coverage / Evasion</p>
-<h4 id="finding_3">Finding</h4>
+<h4 id="finding_2">Finding</h4>
 <p>Two deterministic circuit breakers create exploitable blind spots:</p>
 <ol>
 <li><strong>1 MiB patch skip</strong> (<code>crates/forge/src/slop_hunter.rs</code>): Files exceeding
@@ -1399,7 +1352,7 @@ even in deep-scan mode — RAM pressure can still abort a file.</p>
 <tr>
 <td>VULN-02</td>
 <td><code>--pqc-key</code> BYOK local attestation</td>
-<td>v9.0.x</td>
+<td><code>[COMPLETED — v9.1.0]</code></td>
 <td>P0</td>
 </tr>
 <tr>
@@ -1755,16 +1708,23 @@ that <code>.janitor/audit_stamp</code> matches <code>HEAD</code> before proceedi
 actionable error if not.</p>
 <h3 id="ct-005-git-tag-vversion-in-fast-release-still-triggers-gpg-failure">CT-005: <code>git tag v{{version}}</code> in <code>fast-release</code> still triggers GPG failure</h3>
 <p><strong>Found during:</strong> Forward-Looking Telemetry<br />
-<strong>Location:</strong> <code>justfile</code> — <code>fast-release</code> recipe (line 4: <code>git tag v{{version}}</code>)<br />
-<strong>Issue:</strong> The new <code>fast-release</code> recipe inherits the same unguarded lightweight
-tag command as the original <code>release</code> recipe. With <code>tag.gpgSign = true</code> in the
-global git config, this line fails with <code>fatal: no tag message?</code> — the same
-failure mode that caused the manual GPG fallback in v9.0.0 and v9.0.1. The
-recipe will always fail on this machine until the recipe itself is corrected.<br />
-<strong>Suggested fix:</strong> Replace <code>git tag v{{version}}</code> with
-<code>git tag -s v{{version}} -m "v{{version}}"</code> in both <code>release</code> and
-<code>fast-release</code>. A signed tag with a minimal message satisfies GPG and is
-semantically equivalent.</p>
+<strong>Status:</strong> <code>[COMPLETED — v9.1.0]</code><br />
+<strong>Location:</strong> <code>justfile</code> — <code>release</code> and <code>fast-release</code> recipes<br />
+<strong>Resolution:</strong> Both recipes now use <code>git tag -s v{{version}} -m "release v{{version}}"</code>.
+The <code>tag.gpgSign = true</code> fallback issue is eliminated for all future releases.</p>
+<hr />
+<h2 id="continuous-telemetry-2026-04-03-signature-sovereignty-v910">Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)</h2>
+<h3 id="ct-006-hsm-kms-integration-for-pqc-key-is-still-file-only">CT-006: HSM / KMS integration for <code>--pqc-key</code> is still file-only</h3>
+<p><strong>Found during:</strong> Signature Sovereignty (VULN-02 implementation)<br />
+<strong>Location:</strong> <code>crates/cli/src/main.rs</code> — <code>cmd_bounce</code> BYOK signing block<br />
+<strong>Issue:</strong> The <code>--pqc-key</code> flag accepts only a path to raw private key bytes on
+disk (4032 bytes, ML-DSA-65). Enterprise FedRAMP and DISA STIG deployments
+require that private key material NEVER touch the runner filesystem — signing
+operations must be delegated to an HSM (PKCS#11) or cloud KMS (AWS KMS ARN,
+Azure Key Vault). The current file-only path cannot satisfy this requirement.<br />
+<strong>Suggested fix (v9.2.x):</strong> Extend <code>--pqc-key</code> to accept a PKCS#11 URI
+(<code>pkcs11:token=janitor;object=mlksa-key</code>) and AWS/GCP KMS resource identifiers.
+The file path remains the default for air-gapped and local deployments.</p>
 
 
 
