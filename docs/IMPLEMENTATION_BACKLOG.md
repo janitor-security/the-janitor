@@ -77,4 +77,4 @@ law to the Evolution Tracker; confirm single-source version ownership; fix stale
 - `Cargo.toml` *(modified)* — version bumped to `9.0.1`
 - `docs/INNOVATION_LOG.md` *(modified)* — CT-003 filed (telemetry)
 
-**Commit:** `pending`
+**Commit:** `4527fbb`
