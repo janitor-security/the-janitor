@@ -36,6 +36,36 @@ A committed doc change that is not deployed leaves the GitHub Pages site
 out of sync with the repository.  Users reading the live site see stale
 content.  This is equivalent to a broken release.
 
+### Law IV — Documentation Staleness is a Compliance Breach
+
+Every time a feature is added, modified, or removed, you **MUST** run a global
+documentation audit to ensure no obsolete claims remain in marketing or
+technical docs.
+
+**Protocol — mandatory after every feature change:**
+
+```bash
+rg <old_feature_name> docs/
+rg <old_api_field> docs/
+rg <old_flag_name> docs/
+```
+
+If any match is found, update or retract the stale claim **in the same commit**
+as the feature change. A committed feature with contradicted documentation is
+equivalent to a broken release — users reading the live site will act on false
+information.
+
+**Scope:**
+- Any new or removed CLI flag → search `docs/` for the old flag name
+- Any renamed struct field or JSON key → search `docs/` for the old name
+- Any changed API route or endpoint → search `docs/` for the old path
+- Any version claim update → search `docs/` for superseded version strings
+
+**Hard rule:** Do not commit a feature change and a separate doc-fix in
+different commits. The feature commit and its doc update are a single atomic
+unit. Split commits for doc-only changes are permitted; split commits that
+leave docs temporarily wrong are not.
+
 ## Enforcement checklist
 
 Before ending any session, verify:
@@ -43,6 +73,7 @@ Before ending any session, verify:
 - [ ] Did any commit in this session bump `Cargo.toml` version? → `/release` proposed
 - [ ] Did any commit touch Governor API contracts? → `/deploy-gov` queued
 - [ ] Did any commit modify `docs/*.md`? → `/deploy-docs` executed
+- [ ] Did any commit add/modify/remove a feature? → `rg <feature_name> docs/` run, stale claims resolved
 
 ## Cross-reference
 
