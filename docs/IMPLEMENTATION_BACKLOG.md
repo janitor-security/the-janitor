@@ -211,5 +211,5 @@ env var; broadcast zero-upload proof to enterprise SIEM dashboards; harden
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 - `Cargo.toml` *(modified)* — version bumped to `9.1.3`
 
-**Commit:** *(pending)*
+**Commit:** `b6da4e0`
 
