@@ -3851,8 +3851,7 @@ fn cmd_self_test() -> anyhow::Result<()> {
     println!("Janitor Self-Test: Sovereign Integrity Audit");
     println!("---");
 
-    let mut passed: u32 = 0;
-    let mut failed: u32 = 0;
+    let mut all_passed = true;
 
     // ── Ghost Attack A: Cryptominer Intercept ──────────────────────────────
     {
@@ -3870,25 +3869,15 @@ fn cmd_self_test() -> anyhow::Result<()> {
         );
 
         let registry = SymbolRegistry::default();
-        match PatchBouncer.bounce(synthetic_diff, &registry) {
-            Ok(score) if score.score() > 0 => {
-                println!(
-                    "[PASS] Ghost Attack A — Cryptominer Intercept: score={}",
-                    score.score()
-                );
-                passed += 1;
-            }
-            Ok(score) => {
-                println!(
-                    "[FAIL] Ghost Attack A — Cryptominer Intercept: score={} (expected > 0)",
-                    score.score()
-                );
-                failed += 1;
-            }
-            Err(e) => {
-                println!("[FAIL] Ghost Attack A — Cryptominer Intercept: bounce error: {e}");
-                failed += 1;
-            }
+        let ghost_a_passed = match PatchBouncer.bounce(synthetic_diff, &registry) {
+            Ok(score) => score.score() > 0,
+            Err(_) => false,
+        };
+        if ghost_a_passed {
+            println!("[PASS] Ghost Attack A — Cryptominer Intercept");
+        } else {
+            println!("[FAIL] Ghost Attack A — Cryptominer Intercept");
+            all_passed = false;
         }
     }
 
@@ -3907,25 +3896,22 @@ fn cmd_self_test() -> anyhow::Result<()> {
         );
 
         let silos = find_version_silos_in_blobs(&blobs);
-        if silos.iter().any(|s| s == "serde") {
-            println!("[PASS] Ghost Attack B — Version Silo Intercept: serde silo detected");
-            passed += 1;
+        let ghost_b_passed = silos.iter().any(|s| s == "serde");
+        if ghost_b_passed {
+            println!("[PASS] Ghost Attack B — Version Silo Intercept");
         } else {
-            println!(
-                "[FAIL] Ghost Attack B — Version Silo Intercept: serde silo not detected (found: {silos:?})"
-            );
-            failed += 1;
+            println!("[FAIL] Ghost Attack B — Version Silo Intercept");
+            all_passed = false;
         }
     }
 
     println!("---");
-    println!("{passed} passed, {failed} failed");
-    if failed == 0 {
+    if all_passed {
         println!("SANCTUARY INTACT");
         Ok(())
     } else {
         eprintln!("INTEGRITY BREACH: RECALIBRATION REQUIRED");
-        anyhow::bail!("self-test: {failed} check(s) failed — engine integrity compromised")
+        anyhow::bail!("self-test failed — engine integrity compromised")
     }
 }
 

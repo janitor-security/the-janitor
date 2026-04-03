@@ -38,3 +38,7 @@ Go container orchestration platform. 970 PRs audited (1.0 GB source processed). 
 **Repository**: [github.com/vercel/next.js](https://github.com/vercel/next.js)
 
 TypeScript/JavaScript full-stack React framework. 968 PRs audited (740 MB source processed). 72 actionable intercepts, 4 critical threats, 398 antipatterns, 105 zombie dependency PRs, highest score 990. TEI: $1,960.
+| kubernetes/Kubernetes | 2026-03-31 | [Kubernetes-audit-2026](https://github.com/janitor-security/Kubernetes-audit-2026) |
+| godotengine/godot | 2026-03-31 | [godot-audit-2026](https://github.com/janitor-security/godot-audit-2026) |
+| hashicorp/terraform | 2026-03-31 | [terraform-audit-2026](https://github.com/janitor-security/terraform-audit-2026) |
+| NixOS/nixpkgs | 2026-03-31 | [nixpkgs-audit-2026](https://github.com/janitor-security/nixpkgs-audit-2026) |
