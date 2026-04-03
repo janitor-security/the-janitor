@@ -554,6 +554,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-vuln-01-remediation-soft-fail-mode-v900" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — VULN-01 Remediation: Soft-Fail Mode (v9.0.0)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -614,6 +623,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-vuln-01-remediation-soft-fail-mode-v900" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — VULN-01 Remediation: Soft-Fail Mode (v9.0.0)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -659,6 +677,22 @@ innovation log; harden CLAUDE.md with Continuous Evolution law.</p>
 - <code>.claude/skills/evolution-tracker/SKILL.md</code> <em>(created)</em> — skill governing
   backlog and innovation log maintenance
 - <code>CLAUDE.md</code> <em>(modified, local/gitignored)</em> — Law X: Continuous Evolution</p>
+<p><strong>Commit:</strong> e01a3b5</p>
+<hr />
+<h2 id="2026-04-03-vuln-01-remediation-soft-fail-mode-v900">2026-04-03 — VULN-01 Remediation: Soft-Fail Mode (v9.0.0)</h2>
+<p><strong>Directive:</strong> Implement <code>--soft-fail</code> flag and <code>soft_fail</code> toml key so the
+pipeline can proceed without Governor attestation when the network endpoint
+is unreachable; mark bounce log entries with <code>governor_status: "degraded"</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>soft_fail: bool</code> field added to <code>JanitorPolicy</code>
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>governor_status: Option&lt;String&gt;</code> field added to <code>BounceLogEntry</code>; 3 <code>soft_fail_tests</code> added
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>--soft-fail</code> CLI flag; <code>cmd_bounce</code> wired; POST+log restructured for degraded path
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — <code>governor_status: None</code> added to struct literal
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — <code>governor_status: None</code> added to two struct literals
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — <code>governor_status: None</code> added to test struct literal
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — VULN-01 short-term solution marked <code>[COMPLETED — v9.0.0]</code>
+- <code>RUNBOOK.md</code> <em>(modified)</em> — <code>--soft-fail</code> flag documented
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.0.0</code></p>
 <p><strong>Commit:</strong> pending</p>
 
 

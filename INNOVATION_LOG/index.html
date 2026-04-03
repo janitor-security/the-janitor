@@ -766,6 +766,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-001-bouncelogentry-struct-literals-are-not-default-derivable" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-001: BounceLogEntry struct literals are not Default-derivable
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-002-degraded-attestation-has-no-siem-visibility-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-002: Degraded attestation has no SIEM visibility path
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1078,6 +1111,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-001-bouncelogentry-struct-literals-are-not-default-derivable" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-001: BounceLogEntry struct literals are not Default-derivable
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-002-degraded-attestation-has-no-siem-visibility-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-002: Degraded attestation has no SIEM visibility path
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1115,12 +1181,12 @@ CI/CD pipeline that depends on <code>janitor bounce</code>. For an enterprise de
 the Janitor as a hard gate on PR merges, this is an unacceptable Single Point
 of Failure.</p>
 <h4 id="solution-soft-fail-mode-sovereign-governor">Solution — Soft-Fail Mode + Sovereign Governor</h4>
-<p><strong>Short-term (v9.0.x) — Soft-Fail Mode:</strong><br />
-Add a <code>--soft-fail</code> flag to <code>janitor bounce</code> (and a <code>soft_fail = true</code> option
-in <code>janitor.toml</code>). When the Governor is unreachable and <code>soft_fail</code> is active,
-the CLI logs a structured warning (<code>"governor_status": "unreachable"</code>) to the
-bounce log, emits exit code <code>0</code>, and allows the pipeline to proceed. The bounce
-result is marked <code>"attestation": "degraded"</code> in the audit trail.</p>
+<p><strong>Short-term — Soft-Fail Mode:</strong> <code>[COMPLETED — v9.0.0]</code><br />
+<code>--soft-fail</code> flag added to <code>janitor bounce</code>; <code>soft_fail = true</code> supported in
+<code>janitor.toml</code>. When the Governor is unreachable and soft-fail is active, the
+CLI logs a <code>[JANITOR DEGRADED]</code> warning to stderr, marks the bounce log entry
+with <code>governor_status: "degraded"</code>, and exits <code>0</code>. The slop score remains
+authoritative in the local <code>.janitor/bounce_log.ndjson</code> audit trail.</p>
 <p><strong>Long-term (v9.1.x) — Sovereign Governor binary:</strong><br />
 Package the Governor as a self-contained binary (<code>janitor-gov</code>) that the
 customer deploys inside their own VPC (EKS, GKE, or bare-metal). The SaaS
@@ -1578,6 +1644,34 @@ Feed the fuzzer corpus into an LLM-guided mutator that generates <em>semanticall
 valid</em> source (not random bytes) to probe higher-level ambiguities in the
 grammar (e.g., deeply nested closures in Kotlin, recursive HCL modules).
 This shifts the threat model from syntactic to semantic exhaustion attacks.</p>
+<hr />
+<h2 id="continuous-telemetry-2026-04-03">Continuous Telemetry — 2026-04-03</h2>
+<p><strong>Found during:</strong> VULN-01 Remediation (Soft-Fail Mode, v9.0.0)</p>
+<h3 id="ct-001-bouncelogentry-struct-literals-are-not-default-derivable">CT-001: <code>BounceLogEntry</code> struct literals are not <code>Default</code>-derivable</h3>
+<p><strong>Found during:</strong> VULN-01 Remediation<br />
+<strong>Location:</strong> <code>crates/cli/src/report.rs:321</code><br />
+<strong>Issue:</strong> <code>BounceLogEntry</code> does not derive <code>Default</code>, forcing every callsite
+to enumerate all fields in full struct literals.  Adding a new field (as done
+in this directive with <code>governor_status</code>) requires updating every literal
+across <code>main.rs</code>, <code>daemon.rs</code>, <code>git_drive.rs</code>, <code>cbom.rs</code>, and test helpers.
+The spread of callsites creates a maintenance burden and a regression surface
+on each schema evolution.<br />
+<strong>Suggested fix:</strong> Derive <code>Default</code> on <code>BounceLogEntry</code> (all fields have
+sensible zero/empty/None defaults) and switch existing struct literals to
+<code>BounceLogEntry { field: value, ..Default::default() }</code>.  This also enables
+cleaner test fixtures with minimal initialisation boilerplate.</p>
+<h3 id="ct-002-degraded-attestation-has-no-siem-visibility-path">CT-002: Degraded attestation has no SIEM visibility path</h3>
+<p><strong>Found during:</strong> VULN-01 Remediation<br />
+<strong>Location:</strong> <code>crates/cli/src/main.rs</code> (soft_fail match arm)<br />
+<strong>Issue:</strong> When <code>governor_status: "degraded"</code> is written to the local NDJSON
+log, there is no mechanism to forward the degraded event to the configured
+webhook endpoint.  An operator running soft-fail mode will see the warning on
+<code>stderr</code> but the outbound webhook (Slack, SIEM, Teams) will not receive a
+<code>degraded_attestation</code> event.  A governance auditor reviewing the webhook feed
+would have no signal that some CI runs proceeded without attestation.<br />
+<strong>Suggested fix:</strong> Add a <code>"degraded_attestation"</code> event class to
+<code>WebhookConfig::events</code> filter and fire <code>fire_webhook_if_configured</code> in the
+soft-fail match arm, passing a synthetic <code>governor_status: "degraded"</code> entry.</p>
 
 
 
