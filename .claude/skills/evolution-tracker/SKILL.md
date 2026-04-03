@@ -168,6 +168,54 @@ embedded within it.
 
 ---
 
+---
+
+## Logic 5 — CISO Pulse Audit (CT-10 Rule)
+
+**Trigger:** Either of these conditions is true:
+1. The Continuous Telemetry (CT) counter reaches a **multiple of 10** (e.g.,
+   CT-010, CT-020, CT-030).
+2. `docs/INNOVATION_LOG.md` has **0 active items** after an Auto-Purge sweep.
+
+**Action:** Halt standard execution. Perform a full CISO Pulse Audit before
+proceeding with any other work.
+
+### CISO Pulse Audit Protocol
+
+1. **Read `docs/INNOVATION_LOG.md` in full.**
+2. **Re-tier every entry** into one of three priority buckets:
+   - **P0 — Enterprise Security Depth**: grammar rules, KEV gates, threat
+     detection expansion, CVSS ≥ 9.0 blast radius. These are the entries
+     that would close a CISO's critical-risk register.
+   - **P1 — Compliance / Zero-Upload**: SCM portability, regulatory
+     certification paths (FedRAMP, DISA STIG), local-only processing
+     guarantees. These are the entries that unlock regulated-market deals.
+   - **P2 — Operational / CLI Ergonomics**: developer-experience improvements,
+     performance wins, internal tooling. These have value but are never the
+     reason an enterprise selects a security product.
+3. **Merge redundant ideas.** If two entries describe variations of the same
+   change (e.g., "add Java SQLi AST gate" and "promote Java byte-level SQLi
+   to AST"), merge them into a single entry with the stronger proposal.
+4. **Drop low-value noise.** If an entry describes a cosmetic cleanup, a
+   note about an internal script, or a speculative idea with no concrete
+   security impact, delete it. The log is a CISO-facing signal board, not
+   a scratch pad.
+5. **Add Grammar Depth entries for any language with fewer than 3 AST-level
+   detection rules.** Grammar depth is always P0. Name the rule, the AST
+   node, the CVE class, and the file to modify.
+6. **Rewrite `docs/INNOVATION_LOG.md`** in the new P0/P1/P2 structure.
+7. **Append a `## Continuous Telemetry` section** for the current session.
+8. **Commit the rewritten log** and continue with the original directive.
+
+### Enforcement
+
+A CISO Pulse Audit overrides the append-only rule for this specific
+rewrite operation. Merged, dropped, and reorganized entries do not
+require individual `[COMPLETED]` markers — the commit history is the audit
+trail. Record the rewrite in the Backlog entry for the session.
+
+---
+
 ## Enforcement
 
 Both logs must be current before any `/release` is executed.

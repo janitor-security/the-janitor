@@ -1,0 +1,150 @@
+name: CISA KEV Weekly Sync
+
+# Fetches the CISA Known Exploited Vulnerabilities (KEV) catalog every Monday,
+# diffs against the last committed snapshot, and opens a PR containing:
+#   - Updated .janitor/cisa_kev_ids.txt  (full sorted CVE-ID list)
+#   - .janitor/kev_checklist.md          (new entries + AST gate checklist)
+#
+# The operator implements the AST gates manually after reviewing the PR.
+# This workflow is read-only except for the PR-creation step.
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # Every Monday at 00:00 UTC
+  workflow_dispatch:        # Manual trigger for ad-hoc syncs
+
+permissions: read-all
+
+jobs:
+  kev-sync:
+    name: CISA KEV Sync & Gate Checklist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create branch with updated snapshot
+      pull-requests: write   # open the PR
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            www.cisa.gov:443
+            objects.githubusercontent.com:443
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch CISA KEV catalog
+        run: |
+          set -euo pipefail
+          mkdir -p .janitor
+          curl -fsSL \
+            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" \
+            -o .janitor/kev_raw.json
+          echo "Fetched $(jq '.vulnerabilities | length' .janitor/kev_raw.json) entries"
+
+      - name: Diff against known snapshot
+        id: diff
+        run: |
+          set -euo pipefail
+          # Extract sorted CVE-ID list from the fetched catalog.
+          jq -r '.vulnerabilities[].cveID' .janitor/kev_raw.json | sort > .janitor/kev_ids_new.txt
+
+          # If no prior snapshot exists, create baseline and skip PR.
+          if [[ ! -f .janitor/cisa_kev_ids.txt ]]; then
+            echo "No prior snapshot — writing baseline. No PR will be opened."
+            cp .janitor/kev_ids_new.txt .janitor/cisa_kev_ids.txt
+            echo "new_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Compute additions (lines in new but not in known).
+          comm -23 .janitor/kev_ids_new.txt .janitor/cisa_kev_ids.txt \
+            > .janitor/kev_added.txt || true
+          NEW_COUNT=$(wc -l < .janitor/kev_added.txt | tr -d ' ')
+          echo "new_count=${NEW_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "${NEW_COUNT} new KEV entries detected"
+
+      - name: Generate AST gate checklist
+        if: steps.diff.outputs.new_count != '0'
+        run: |
+          set -euo pipefail
+          TODAY=$(date +%Y-%m-%d)
+          CHECKLIST=".janitor/kev_checklist_${TODAY}.md"
+
+          {
+            echo "# CISA KEV Sync — ${TODAY}"
+            echo ""
+            echo "$(wc -l < .janitor/kev_added.txt | tr -d ' ') new entries in the CISA KEV catalog since last sync."
+            echo ""
+            echo "## New Entries"
+            echo ""
+            echo "| CVE ID | Vendor | Product | Vulnerability | Date Added |"
+            echo "|--------|--------|---------|---------------|------------|"
+
+            # For each new CVE ID, extract metadata from the raw JSON.
+            while IFS= read -r cve_id; do
+              ROW=$(jq -r --arg id "$cve_id" '
+                .vulnerabilities[] | select(.cveID == $id) |
+                "| \(.cveID) | \(.vendorProject) | \(.product) | \(.vulnerabilityName) | \(.dateAdded) |"
+              ' .janitor/kev_raw.json)
+              echo "${ROW}"
+            done < .janitor/kev_added.txt
+
+            echo ""
+            echo "## AST Gate Checklist"
+            echo ""
+            echo "Review each entry above. For each entry whose language / framework is"
+            echo "covered by a Janitor grammar, check whether an AST gate exists in"
+            echo "\`crates/forge/src/slop_hunter.rs\`. If not, file an IDEA entry in"
+            echo "\`docs/INNOVATION_LOG.md\` under **P0 — Enterprise Security Depth**."
+            echo ""
+            echo "### Languages covered by the Janitor (23 grammars)"
+            echo "Rust · Python · TypeScript · JavaScript · Go · Java · C# · C++ · C"
+            echo "Ruby · PHP · Swift · Kotlin · Scala · Lua · HCL/Terraform · Nix"
+            echo "GDScript · GLSL · Objective-C · Bash · YAML"
+            echo ""
+            echo "### Checklist"
+            echo ""
+
+            while IFS= read -r cve_id; do
+              PRODUCT=$(jq -r --arg id "$cve_id" \
+                '.vulnerabilities[] | select(.cveID == $id) | .product' \
+                .janitor/kev_raw.json)
+              echo "- [ ] **${cve_id}** (${PRODUCT}) — confirm AST gate exists or file IDEA entry"
+            done < .janitor/kev_added.txt
+
+          } > "${CHECKLIST}"
+
+          echo "Checklist written to ${CHECKLIST}"
+          # Promote the new snapshot.
+          cp .janitor/kev_ids_new.txt .janitor/cisa_kev_ids.txt
+
+      - name: Open PR with updated snapshot and checklist
+        if: steps.diff.outputs.new_count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TODAY=$(date +%Y-%m-%d)
+          BRANCH="chore/cisa-kev-sync-${TODAY}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "${BRANCH}"
+          git add .janitor/cisa_kev_ids.txt ".janitor/kev_checklist_${TODAY}.md"
+          git commit -m "chore: CISA KEV sync ${TODAY} — $(cat .janitor/kev_added.txt | wc -l | tr -d ' ') new entries"
+          git push origin "${BRANCH}"
+
+          gh pr create \
+            --title "chore: CISA KEV sync ${TODAY}" \
+            --body "$(cat ".janitor/kev_checklist_${TODAY}.md")" \
+            --base main \
+            --head "${BRANCH}" \
+            --label "security,intelligence"
