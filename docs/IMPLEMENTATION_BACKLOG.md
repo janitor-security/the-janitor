@@ -78,3 +78,25 @@ law to the Evolution Tracker; confirm single-source version ownership; fix stale
 - `docs/INNOVATION_LOG.md` *(modified)* — CT-003 filed (telemetry)
 
 **Commit:** `4527fbb`
+
+---
+
+## 2026-04-03 — Forward-Looking Telemetry (v9.0.2)
+
+**Directive:** Add `just fast-release` recipe (audit-free release path); harden
+Evolution Tracker with Forward-Looking Mandate and Architectural Radar Mandate;
+purge completed-work entry CT-003 from Innovation Log.
+
+**Files modified:**
+- `justfile` *(modified)* — `fast-release version` recipe added; identical to
+  `release` but without the `audit` prerequisite
+- `.claude/commands/release.md` *(modified)* — Step 4 updated from `just release`
+  to `just fast-release`
+- `.claude/skills/evolution-tracker/SKILL.md` *(modified)* — Forward-Looking
+  Mandate added (no completed work in Innovation Log); Architectural Radar
+  Mandate added (4 scanning categories for future R&D proposals)
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-003 purged (completed work,
+  belongs in Backlog); CT-004 and CT-005 filed as forward-looking proposals
+- `Cargo.toml` *(modified)* — version bumped to `9.0.2`
+
+**Commit:** `pending`

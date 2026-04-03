@@ -65,7 +65,42 @@ Entry structure:
 - Do not implement ideas from this log without an explicit operator directive.
   The log is a proposal registry, not a work queue.
 
----
+### Forward-Looking Mandate (non-negotiable)
+
+**You MUST NOT log completed work, bug fixes, or recently implemented features
+in `docs/INNOVATION_LOG.md`.** Completed work belongs exclusively in
+`docs/IMPLEMENTATION_BACKLOG.md`.
+
+If a finding is resolved in the same session it is identified, record it in
+the Backlog entry for that session — not in the Innovation Log. The Innovation
+Log is a forward-looking proposal registry. An entry that describes something
+already done is noise, not signal.
+
+### Architectural Radar Mandate
+
+`docs/INNOVATION_LOG.md` is strictly for **future R&D**. As you scan the
+codebase during a session, you must actively search for the following classes
+of forward-looking proposals and append them as actionable, technical entries:
+
+a) **Unhandled edge cases in the AST parsers** — language constructs that
+   exist in the grammar but have no detector; inputs that could cause a parser
+   to silently succeed with a wrong parse tree.
+
+b) **Missing security patterns from modern threat landscapes** — exploit
+   classes documented in recent CVEs, CISA KEV updates, or public post-mortems
+   that have no corresponding gate in `slop_hunter.rs`, `binary_hunter.rs`, or
+   the manifest scanners.
+
+c) **Inefficiencies in the Rust implementation** — redundant heap allocations
+   in hot paths, missed SIMD opportunities, lock contention in the daemon,
+   O(n²) algorithms where a faster bound is achievable.
+
+d) **Flaws or missing safeguards in `.claude/` rules** — governance gaps,
+   ambiguous mandates, rules that conflict with each other, or missing
+   enforcement checklists for known failure modes.
+
+Each proposal must be concrete and technical: name the file, the function, the
+threat class, and the proposed fix. Vague observations are not entries.
 
 ---
 

@@ -39,12 +39,16 @@ tree must be clean from this step forward.
 
 ### Step 4 — Release
 ```bash
-just release <v>
+just fast-release <v>
 ```
-The recipe: commits staged changes → tags `v<v>` + floating `v<major>` →
+The recipe skips the audit dependency (audit was already run in Step 3) and
+performs: commits staged changes → tags `v<v>` + floating `v<major>` →
 pushes `HEAD:main` + tags → creates GitHub Release → runs `just deploy-docs`.
 
-### GPG fallback (if `just release` fails with `fatal: no tag message?`)
+Do **not** use `just release` — it re-runs `just audit` as a prerequisite,
+producing a redundant second audit pass.
+
+### GPG fallback (if `just fast-release` fails with `fatal: no tag message?`)
 
 The global git config `tag.gpgSign = true` requires an explicit message on all
 tags. If `just release` aborts at the `git tag v<v>` step, run manually:

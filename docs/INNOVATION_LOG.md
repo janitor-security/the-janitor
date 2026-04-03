@@ -432,16 +432,31 @@ soft-fail match arm, passing a synthetic `governor_status: "degraded"` entry.
 
 ---
 
-## Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)
+## Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)
 
-### CT-003: CLAUDE.md engine version was a manual duplication of Cargo.toml
-**Found during:** Governance Optimization  
-**Location:** `CLAUDE.md` line 11 (gitignored)  
-**Issue:** `CLAUDE.md` contained a hardcoded `**Engine Version**: v8.0.14` line
-that was never updated during subsequent releases (v8.3.0 through v9.0.0). This
-created a persistent stale-version claim in the AI's active constitution, causing
-potential confusion about the current version. The line is redundant — Cargo.toml
-is already declared as the canonical source on the same line.  
-**Suggested fix (applied this session):** Updated to `v9.0.1`; added a note
-that this field must not be edited manually and is maintained exclusively as
-part of the release sequence (Step 1 of `.claude/commands/release.md`).
+### CT-004: `just fast-release` has no guard confirming prior audit completion
+**Found during:** Forward-Looking Telemetry  
+**Location:** `justfile` — `fast-release` recipe  
+**Issue:** `fast-release` skips the `audit` prerequisite on the honour-system
+assumption that the caller ran `just audit` first. There is no machine-checkable
+invariant enforcing this. An operator who invokes `just fast-release` directly
+(outside the AI-guided sequence) will ship a binary that has never been audited.
+A `JANITOR_AUDIT_STAMP` file written by `just audit` and verified by
+`just fast-release` would close this gap without re-running tests.  
+**Suggested fix:** In `just audit`, write a `.janitor/audit_stamp` file
+containing the current `git rev-parse HEAD`. In `just fast-release`, verify
+that `.janitor/audit_stamp` matches `HEAD` before proceeding; abort with an
+actionable error if not.
+
+### CT-005: `git tag v{{version}}` in `fast-release` still triggers GPG failure
+**Found during:** Forward-Looking Telemetry  
+**Location:** `justfile` — `fast-release` recipe (line 4: `git tag v{{version}}`)  
+**Issue:** The new `fast-release` recipe inherits the same unguarded lightweight
+tag command as the original `release` recipe. With `tag.gpgSign = true` in the
+global git config, this line fails with `fatal: no tag message?` — the same
+failure mode that caused the manual GPG fallback in v9.0.0 and v9.0.1. The
+recipe will always fail on this machine until the recipe itself is corrected.  
+**Suggested fix:** Replace `git tag v{{version}}` with
+`git tag -s v{{version}} -m "v{{version}}"` in both `release` and
+`fast-release`. A signed tag with a minimal message satisfies GPG and is
+semantically equivalent.

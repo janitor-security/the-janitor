@@ -93,6 +93,32 @@ release version: audit
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 	echo "💀 Release v{{version}} deployed."
 
+# 4b. FAST RELEASE — identical to `release` but skips the audit prerequisite.
+#
+# Use this when `just audit` has already been run explicitly in the same session.
+# The AI release sequence (`.claude/commands/release.md`) calls `just audit` once
+# as Step 3, then calls `just fast-release` as Step 4 to avoid a redundant re-audit.
+#
+fast-release version:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "🚀 Initiating Fast Release Sequence v{{version}}..."
+	cargo build --release --workspace
+	strip target/release/janitor
+	git add .
+	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
+	git tag v{{version}}
+	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
+	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
+	git push origin HEAD:main "v{{version}}"
+	git push origin "v${MAJOR}" --force
+	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
+		--title "v{{version}} - The Industrial Pivot" \
+		--notes-file README.md \
+		--latest
+	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
+	echo "💀 Release v{{version}} deployed."
+
 # 5. MULTI-REPO GAUNTLET
 # Deterministic Rust orchestrator replacing ultimate_gauntlet.sh.
 # Reads gauntlet_targets.txt (one owner/repo per line), bounces PRs in parallel
