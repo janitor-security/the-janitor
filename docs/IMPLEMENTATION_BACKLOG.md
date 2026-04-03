@@ -183,5 +183,5 @@ injection), and Java-3 (XXE DocumentBuilderFactory); add Crucible fixtures.
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 - `Cargo.toml` *(modified)* — version bumped to `9.1.2`
 
-**Commit:** *(pending)*
+**Commit:** `da591d6`
 
