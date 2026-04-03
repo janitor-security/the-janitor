@@ -800,19 +800,28 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#continuous-telemetry-2026-04-03-governance-optimization-v901" class="md-nav__link">
+  <a href="#continuous-telemetry-2026-04-03-forward-looking-telemetry-v902" class="md-nav__link">
     <span class="md-ellipsis">
-      Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)
+      Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)">
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#ct-003-claudemd-engine-version-was-a-manual-duplication-of-cargotoml" class="md-nav__link">
+  <a href="#ct-004-just-fast-release-has-no-guard-confirming-prior-audit-completion" class="md-nav__link">
     <span class="md-ellipsis">
-      CT-003: CLAUDE.md engine version was a manual duplication of Cargo.toml
+      CT-004: just fast-release has no guard confirming prior audit completion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-005-git-tag-vversion-in-fast-release-still-triggers-gpg-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-005: git tag v{{version}} in fast-release still triggers GPG failure
     </span>
   </a>
   
@@ -1169,19 +1178,28 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#continuous-telemetry-2026-04-03-governance-optimization-v901" class="md-nav__link">
+  <a href="#continuous-telemetry-2026-04-03-forward-looking-telemetry-v902" class="md-nav__link">
     <span class="md-ellipsis">
-      Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)
+      Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)">
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#ct-003-claudemd-engine-version-was-a-manual-duplication-of-cargotoml" class="md-nav__link">
+  <a href="#ct-004-just-fast-release-has-no-guard-confirming-prior-audit-completion" class="md-nav__link">
     <span class="md-ellipsis">
-      CT-003: CLAUDE.md engine version was a manual duplication of Cargo.toml
+      CT-004: just fast-release has no guard confirming prior audit completion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-005-git-tag-vversion-in-fast-release-still-triggers-gpg-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-005: git tag v{{version}} in fast-release still triggers GPG failure
     </span>
   </a>
   
@@ -1721,18 +1739,32 @@ would have no signal that some CI runs proceeded without attestation.<br />
 <code>WebhookConfig::events</code> filter and fire <code>fire_webhook_if_configured</code> in the
 soft-fail match arm, passing a synthetic <code>governor_status: "degraded"</code> entry.</p>
 <hr />
-<h2 id="continuous-telemetry-2026-04-03-governance-optimization-v901">Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)</h2>
-<h3 id="ct-003-claudemd-engine-version-was-a-manual-duplication-of-cargotoml">CT-003: CLAUDE.md engine version was a manual duplication of Cargo.toml</h3>
-<p><strong>Found during:</strong> Governance Optimization<br />
-<strong>Location:</strong> <code>CLAUDE.md</code> line 11 (gitignored)<br />
-<strong>Issue:</strong> <code>CLAUDE.md</code> contained a hardcoded <code>**Engine Version**: v8.0.14</code> line
-that was never updated during subsequent releases (v8.3.0 through v9.0.0). This
-created a persistent stale-version claim in the AI's active constitution, causing
-potential confusion about the current version. The line is redundant — Cargo.toml
-is already declared as the canonical source on the same line.<br />
-<strong>Suggested fix (applied this session):</strong> Updated to <code>v9.0.1</code>; added a note
-that this field must not be edited manually and is maintained exclusively as
-part of the release sequence (Step 1 of <code>.claude/commands/release.md</code>).</p>
+<h2 id="continuous-telemetry-2026-04-03-forward-looking-telemetry-v902">Continuous Telemetry — 2026-04-03 (Forward-Looking Telemetry, v9.0.2)</h2>
+<h3 id="ct-004-just-fast-release-has-no-guard-confirming-prior-audit-completion">CT-004: <code>just fast-release</code> has no guard confirming prior audit completion</h3>
+<p><strong>Found during:</strong> Forward-Looking Telemetry<br />
+<strong>Location:</strong> <code>justfile</code> — <code>fast-release</code> recipe<br />
+<strong>Issue:</strong> <code>fast-release</code> skips the <code>audit</code> prerequisite on the honour-system
+assumption that the caller ran <code>just audit</code> first. There is no machine-checkable
+invariant enforcing this. An operator who invokes <code>just fast-release</code> directly
+(outside the AI-guided sequence) will ship a binary that has never been audited.
+A <code>JANITOR_AUDIT_STAMP</code> file written by <code>just audit</code> and verified by
+<code>just fast-release</code> would close this gap without re-running tests.<br />
+<strong>Suggested fix:</strong> In <code>just audit</code>, write a <code>.janitor/audit_stamp</code> file
+containing the current <code>git rev-parse HEAD</code>. In <code>just fast-release</code>, verify
+that <code>.janitor/audit_stamp</code> matches <code>HEAD</code> before proceeding; abort with an
+actionable error if not.</p>
+<h3 id="ct-005-git-tag-vversion-in-fast-release-still-triggers-gpg-failure">CT-005: <code>git tag v{{version}}</code> in <code>fast-release</code> still triggers GPG failure</h3>
+<p><strong>Found during:</strong> Forward-Looking Telemetry<br />
+<strong>Location:</strong> <code>justfile</code> — <code>fast-release</code> recipe (line 4: <code>git tag v{{version}}</code>)<br />
+<strong>Issue:</strong> The new <code>fast-release</code> recipe inherits the same unguarded lightweight
+tag command as the original <code>release</code> recipe. With <code>tag.gpgSign = true</code> in the
+global git config, this line fails with <code>fatal: no tag message?</code> — the same
+failure mode that caused the manual GPG fallback in v9.0.0 and v9.0.1. The
+recipe will always fail on this machine until the recipe itself is corrected.<br />
+<strong>Suggested fix:</strong> Replace <code>git tag v{{version}}</code> with
+<code>git tag -s v{{version}} -m "v{{version}}"</code> in both <code>release</code> and
+<code>fast-release</code>. A signed tag with a minimal message satisfies GPG and is
+semantically equivalent.</p>
 
 
 
