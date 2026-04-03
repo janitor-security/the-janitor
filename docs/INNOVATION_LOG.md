@@ -24,14 +24,12 @@ the Janitor over byte-pattern scanners.*
 shell interpreter, `InsecureSkipVerify`)
 
 **Go-3 — `security:sql_injection_concatenation` (KevCritical, 150 pts)**
-- **Trigger:** `call_expression` where the selector matches
-  `db.Query|db.Exec|db.QueryRow|db.QueryContext|db.ExecContext` and the
-  first argument is a `binary_expression` with `+` operator.
-- **Suppress if:** the `+` operand is a `interpreted_string_literal` on
-  both sides (constant concatenation).
-- **AST node:** `call_expression → selector_expression{db.*} → binary_expression{+}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_go_slop()`
-- **CVE class:** CWE-89, countless DB-driver CVEs
+`[COMPLETED — v9.1.4]`
+- Implemented in `find_go_danger_nodes()` — AST walk on `call_expression` with
+  `selector_expression` field in `{Query,Exec,QueryRow,QueryContext,ExecContext}`;
+  fires when first arg is `binary_expression{+}` with at least one non-literal operand.
+- Crucible: TP (`db.Query("..." + userID)`) + TN (parameterized `db.Query("?", id)`)
+- 3 unit tests: dynamic fires, literal-concat safe, parameterized safe
 
 **Go-4 — `security:unsafe_pointer_cast` (Critical, 50 pts)**
 - **Trigger:** `call_expression` matching `unsafe.Pointer(expr)` inside
@@ -502,18 +500,6 @@ automated run produces a meaningful diff rather than a silent baseline write.
 
 ---
 
-## Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration & Autonomous Signing v9.1.3)
+## Continuous Telemetry — 2026-04-03 (Epoch 2, Go SQLi Interceptor v9.1.4)
 
-### CT-003: `gpg-preset-passphrase` path is hardcoded to Debian/Ubuntu location
-
-**Found during:** SIEM Integration & Autonomous Signing (v9.1.3)
-**Location:** `justfile` — `release` and `fast-release` recipes
-**Issue:** The `JANITOR_GPG_PASSPHRASE` env var path pipes to
-`/usr/lib/gnupg/gpg-preset-passphrase` — a path that only exists on
-Debian/Ubuntu (`gnupg2` package).  On Fedora (`/usr/libexec/gpg-preset-passphrase`),
-Arch, and macOS (Homebrew GPG), the binary lives elsewhere.  If the path does
-not exist, the `if` block fails silently under `set -euo pipefail` with a
-"not found" exit — which aborts the recipe before `git tag -s`.
-**Suggested fix:** Replace the hardcoded path with
-`$(command -v gpg-preset-passphrase 2>/dev/null || echo /usr/lib/gnupg/gpg-preset-passphrase)`
-to use the system PATH first and fall back to the Debian location.
+<!-- no new telemetry findings this session beyond CT-003 resolution -->

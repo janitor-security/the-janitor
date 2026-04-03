@@ -754,6 +754,22 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         desc_fragment: None,
     },
 
+    // ── Go-3: SQL injection concatenation ────────────────────────────────────
+    Entry {
+        name: "Go/db.Query dynamic concat — INTERCEPT (Go-3)",
+        lang: "go",
+        source: b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n",
+        must_intercept: true,
+        desc_fragment: Some("security:sql_injection_concatenation"),
+    },
+    Entry {
+        name: "Go/db.Query parameterized — SAFE (Go-3 TN)",
+        lang: "go",
+        source: b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = ?\", userID)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
     // ── Phase 4 R&D: Ruby AST Walk ───────────────────────────────────────────
     Entry {
         name: "Ruby/eval dynamic arg — INTERCEPT",

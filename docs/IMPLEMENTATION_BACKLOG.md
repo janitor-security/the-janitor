@@ -213,3 +213,28 @@ env var; broadcast zero-upload proof to enterprise SIEM dashboards; harden
 
 **Commit:** `b6da4e0`
 
+---
+
+## 2026-04-03 — Go SQLi Interceptor & Portability Fix (v9.1.4)
+
+**Directive:** Execute P0 Go-3 SQL injection AST gate; add Crucible TP/TN
+fixtures; resolve CT-003 by making `gpg-preset-passphrase` path portable.
+
+**Files modified:**
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `GO_MARKERS` pre-filter
+  extended with 5 DB method patterns; `find_go_danger_nodes` gains Go-3 gate:
+  `call_expression` with field in `{Query,Exec,QueryRow,QueryContext,ExecContext}`
+  fires `security:sql_injection_concatenation` (KevCritical) when first arg is
+  `binary_expression{+}` with at least one non-literal operand; 3 unit tests added
+- `crates/crucible/src/main.rs` *(modified)* — 2 Go-3 fixtures: TP (dynamic
+  concat in `db.Query`) + TN (parameterized `db.Query`); Crucible 141/141 → 143/143
+- `justfile` *(modified)* — CT-003 resolved: `gpg-preset-passphrase` path now
+  resolved via `command -v` + `find` fallback across Debian/Fedora/Arch/macOS;
+  no-op if binary not found anywhere (falls back to `gpg-unlock` cache)
+- `docs/INNOVATION_LOG.md` *(modified)* — Go-3 marked `[COMPLETED — v9.1.4]`;
+  CT-003 section purged (auto-purge: all findings completed)
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.1.4`
+
+**Commit:** *(pending)*
+

@@ -83,8 +83,12 @@ release version: audit
 	# without a TTY.  Export JANITOR_GPG_PASSPHRASE before running the recipe.
 	# If not set, falls back to the cached passphrase from `gpg-unlock`.
 	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
-	    printf '%s' "${JANITOR_GPG_PASSPHRASE}" | \
-	        /usr/lib/gnupg/gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
+	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \
+	               -name gpg-preset-passphrase -print -quit 2>/dev/null || true)"
+	    if [[ -n "${PRESET_BIN}" ]]; then
+	        printf '%s' "${JANITOR_GPG_PASSPHRASE}" | "${PRESET_BIN}" --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	    fi
 	fi
 	git tag -s v{{version}} -m "release v{{version}}"
 	# Floating major-version tag — lets users pin to a major and always receive
@@ -115,8 +119,12 @@ fast-release version:
 	git add .
 	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
 	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
-	    printf '%s' "${JANITOR_GPG_PASSPHRASE}" | \
-	        /usr/lib/gnupg/gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
+	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \
+	               -name gpg-preset-passphrase -print -quit 2>/dev/null || true)"
+	    if [[ -n "${PRESET_BIN}" ]]; then
+	        printf '%s' "${JANITOR_GPG_PASSPHRASE}" | "${PRESET_BIN}" --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	    fi
 	fi
 	git tag -s v{{version}} -m "release v{{version}}"
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"

@@ -2750,8 +2750,16 @@ fn find_csharp_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Sl
 const GO_SHELL_INTERPS: &[&str] = &["sh", "bash", "/bin/sh", "/bin/bash", "cmd", "cmd.exe"];
 
 fn find_go_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
-    // Fast pre-filter: skip files containing neither dangerous pattern.
-    const GO_MARKERS: &[&[u8]] = &[b"exec.Command", b"InsecureSkipVerify"];
+    // Fast pre-filter: skip files containing none of the dangerous patterns.
+    const GO_MARKERS: &[&[u8]] = &[
+        b"exec.Command",
+        b"InsecureSkipVerify",
+        b".Query(",
+        b".Exec(",
+        b".QueryRow(",
+        b"QueryContext(",
+        b"ExecContext(",
+    ];
     if !GO_MARKERS
         .iter()
         .any(|m| source.windows(m.len()).any(|w| w == *m))
@@ -2827,6 +2835,61 @@ fn find_go_danger_nodes(
                                         domain: DOMAIN_FIRST_PARTY,
                                         severity: Severity::Critical,
                                     });
+                                }
+                            }
+                        }
+                    }
+                    // Gate Go-3: SQL injection via string concatenation in database/sql calls.
+                    // Fires when the first argument to a DB query method is a binary_expression
+                    // using `+`.  Suppressed only when BOTH operands are string literals
+                    // (constant concatenation — safe).
+                    const GO_SQL_METHODS: &[&str] =
+                        &["Query", "Exec", "QueryRow", "QueryContext", "ExecContext"];
+                    if GO_SQL_METHODS.contains(&field_text) {
+                        if let Some(args) = node.child_by_field_name("arguments") {
+                            if let Some(first_arg) = args.named_children(&mut args.walk()).next() {
+                                if first_arg.kind() == "binary_expression" {
+                                    // Operator is an unnamed token — find `+` among children.
+                                    let has_plus =
+                                        first_arg.children(&mut first_arg.walk()).any(|c| {
+                                            !c.is_named()
+                                                && c.utf8_text(source)
+                                                    .map(|t| t == "+")
+                                                    .unwrap_or(false)
+                                        });
+                                    if has_plus {
+                                        let left_kind = first_arg
+                                            .child_by_field_name("left")
+                                            .map(|n| n.kind())
+                                            .unwrap_or("");
+                                        let right_kind = first_arg
+                                            .child_by_field_name("right")
+                                            .map(|n| n.kind())
+                                            .unwrap_or("");
+                                        let all_literal = matches!(
+                                            left_kind,
+                                            "interpreted_string_literal" | "raw_string_literal"
+                                        ) && matches!(
+                                            right_kind,
+                                            "interpreted_string_literal" | "raw_string_literal"
+                                        );
+                                        if !all_literal {
+                                            findings.push(SlopFinding {
+                                                start_byte: node.start_byte(),
+                                                end_byte: node.end_byte(),
+                                                description:
+                                                    "security:sql_injection_concatenation \
+                                                              — SQL query assembled via string \
+                                                              concatenation in a Go database/sql \
+                                                              call; use `$1/$2` placeholders with \
+                                                              `db.Query(sql, args...)` to prevent \
+                                                              SQL injection — CISA KEV class"
+                                                        .to_string(),
+                                                domain: DOMAIN_FIRST_PARTY,
+                                                severity: Severity::KevCritical,
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -5890,6 +5953,44 @@ mod phase4_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("tls_verification_bypass")),
             "InsecureSkipVerify: false must not fire tls_verification_bypass"
+        );
+    }
+
+    // ── Go-3: SQL injection concatenation ────────────────────────────────────
+
+    #[test]
+    fn test_go_sqli_concat_dynamic_fires() {
+        let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("sql_injection_concatenation")),
+            "db.Query with dynamic concat must fire sql_injection_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_go_sqli_concat_literal_safe() {
+        let src = b"rows, _ := db.Query(\"SELECT * FROM \" + \"users\")\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sql_injection_concatenation")),
+            "db.Query with literal-only concat must not fire sql_injection_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_go_sqli_parameterized_safe() {
+        let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = ?\", userID)\n";
+        let findings = find_go_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sql_injection_concatenation")),
+            "parameterized db.Query must not fire sql_injection_concatenation"
         );
     }
 
