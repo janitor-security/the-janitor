@@ -499,3 +499,21 @@ the first Monday after deployment produces no PR — a confusing no-op.
 **Suggested fix:** Commit an initial `.janitor/cisa_kev_ids.txt` (populated
 from the current CISA KEV catalog) as part of this session, so the first
 automated run produces a meaningful diff rather than a silent baseline write.
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration & Autonomous Signing v9.1.3)
+
+### CT-003: `gpg-preset-passphrase` path is hardcoded to Debian/Ubuntu location
+
+**Found during:** SIEM Integration & Autonomous Signing (v9.1.3)
+**Location:** `justfile` — `release` and `fast-release` recipes
+**Issue:** The `JANITOR_GPG_PASSPHRASE` env var path pipes to
+`/usr/lib/gnupg/gpg-preset-passphrase` — a path that only exists on
+Debian/Ubuntu (`gnupg2` package).  On Fedora (`/usr/libexec/gpg-preset-passphrase`),
+Arch, and macOS (Homebrew GPG), the binary lives elsewhere.  If the path does
+not exist, the `if` block fails silently under `set -euo pipefail` with a
+"not found" exit — which aborts the recipe before `git tag -s`.
+**Suggested fix:** Replace the hardcoded path with
+`$(command -v gpg-preset-passphrase 2>/dev/null || echo /usr/lib/gnupg/gpg-preset-passphrase)`
+to use the system PATH first and fall back to the Debian location.

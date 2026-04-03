@@ -185,3 +185,31 @@ injection), and Java-3 (XXE DocumentBuilderFactory); add Crucible fixtures.
 
 **Commit:** `da591d6`
 
+---
+
+## 2026-04-03 — SIEM Integration & Autonomous Signing Update (v9.1.3)
+
+**Directive:** Eliminate manual GPG intervention via `JANITOR_GPG_PASSPHRASE`
+env var; broadcast zero-upload proof to enterprise SIEM dashboards; harden
+`[NEXT RECOMMENDED ACTION]` against recency bias.
+
+**Files modified:**
+- `justfile` *(modified)* — both `release` and `fast-release` recipes gain
+  `JANITOR_GPG_PASSPHRASE` env var block: if set, pipes to
+  `gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E`
+  before `git tag -s`; falls back to existing cache if unset
+- `crates/cli/src/report.rs` *(modified)* — `fire_webhook_if_configured` doc
+  comment gains explicit provenance call-out: `provenance.source_bytes_processed`
+  and `provenance.egress_bytes_sent` always present in JSON payload for SIEM
+  zero-upload dashboards (Datadog/Splunk)
+- `.claude/rules/response-format.md` *(modified)* — Anti-Recency-Bias Law added
+  to `[NEXT RECOMMENDED ACTION]`: must scan entire Innovation Log P0/P1/P2;
+  select highest commercial TEI or critical compliance upgrade; recency is not
+  a selection criterion
+- `RUNBOOK.md` *(modified)* — Section 3 RELEASE: `JANITOR_GPG_PASSPHRASE`
+  export documented with key fingerprint, keygrip, and fallback to `gpg-unlock`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.1.3`
+
+**Commit:** *(pending)*
+

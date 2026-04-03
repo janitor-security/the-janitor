@@ -41,3 +41,19 @@ the exact command to begin. No vague "consider" language — name the action.
   NOT exempt. The format is non-negotiable.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
   `docs/INNOVATION_LOG.md` — it is not a free-form opinion.
+
+## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
+
+You MUST scan the **entire** `docs/INNOVATION_LOG.md` — P0, P1, and P2 — before
+selecting the next action.  Do NOT default to the section you just edited or the
+last file you touched.
+
+**Selection criterion:** the single entry with the highest commercial Total
+Economic Impact (TEI) or the most critical enterprise compliance upgrade.
+TEI is assessed as: (detection severity × addressable language market share ×
+number of open CVEs in class).  A KevCritical rule in Go or Python outranks a
+P2 ergonomics fix in every scenario.
+
+**Hard rule:** if the current session touched a P1 or P2 item, the next action
+MUST still be the highest-value P0 entry unless all P0 entries are marked
+`[COMPLETED]`.  Recency is not a selection criterion.

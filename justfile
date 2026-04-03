@@ -79,6 +79,13 @@ release version: audit
 	strip target/release/janitor
 	git add .
 	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
+	# Pre-cache GPG passphrase from env if set — allows unattended signing
+	# without a TTY.  Export JANITOR_GPG_PASSPHRASE before running the recipe.
+	# If not set, falls back to the cached passphrase from `gpg-unlock`.
+	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
+	    printf '%s' "${JANITOR_GPG_PASSPHRASE}" | \
+	        /usr/lib/gnupg/gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	fi
 	git tag -s v{{version}} -m "release v{{version}}"
 	# Floating major-version tag — lets users pin to a major and always receive
 	# the latest stable patch without editing their workflows.
@@ -107,6 +114,10 @@ fast-release version:
 	strip target/release/janitor
 	git add .
 	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
+	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
+	    printf '%s' "${JANITOR_GPG_PASSPHRASE}" | \
+	        /usr/lib/gnupg/gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
+	fi
 	git tag -s v{{version}} -m "release v{{version}}"
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"

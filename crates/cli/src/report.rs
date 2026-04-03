@@ -52,6 +52,9 @@ pub fn is_critical_threat(e: &BounceLogEntry) -> bool {
 /// - Filters events by `webhook.events` before sending.
 /// - Best-effort: logs a warning on failure, never panics, never blocks the bounce result.
 /// - Non-blocking: spawns a thread for the HTTP POST so the CLI exits promptly.
+/// - Payload is the full `BounceLogEntry` JSON — `provenance.source_bytes_processed`
+///   and `provenance.egress_bytes_sent` are always present, enabling SIEM dashboards
+///   (Datadog / Splunk) to compute the zero-upload ratio: `egress / source ≈ 0%`.
 pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::policy::JanitorPolicy) {
     let cfg = &policy.webhook;
     let is_critical = is_critical_threat(entry);
