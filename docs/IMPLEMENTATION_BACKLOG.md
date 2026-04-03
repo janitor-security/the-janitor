@@ -99,4 +99,4 @@ purge completed-work entry CT-003 from Innovation Log.
   belongs in Backlog); CT-004 and CT-005 filed as forward-looking proposals
 - `Cargo.toml` *(modified)* — version bumped to `9.0.2`
 
-**Commit:** `pending`
+**Commit:** `ff42274`
