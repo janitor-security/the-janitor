@@ -81,6 +81,27 @@ law to the Evolution Tracker; confirm single-source version ownership; fix stale
 
 ---
 
+## 2026-04-03 — Signature Sovereignty (v9.1.0)
+
+**Directive:** Hard-fix GPG tag signing in justfile (CT-005); implement BYOK Local
+Attestation (VULN-02) — `--pqc-key` flag on `janitor bounce`, `janitor verify-cbom`
+command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.
+
+**Files modified:**
+- `justfile` *(modified)* — `git tag v{{version}}` changed to `git tag -s v{{version}} -m "release v{{version}}"` in both `release` and `fast-release` recipes (CT-005 resolved)
+- `Cargo.toml` *(modified)* — `fips204 = "0.4"` and `base64 = "0.22"` added to workspace dependencies; version bumped to `9.1.0`
+- `crates/cli/Cargo.toml` *(modified)* — `fips204.workspace = true` and `base64.workspace = true` added
+- `crates/cli/src/report.rs` *(modified)* — `pqc_sig: Option<String>` field added to `BounceLogEntry`; all struct literals updated
+- `crates/cli/src/cbom.rs` *(modified)* — `specVersion` upgraded `"1.5"` → `"1.6"`; `render_cbom_for_entry()` added (deterministic, no UUID/timestamp, used for PQC signing)
+- `crates/cli/src/main.rs` *(modified)* — `--pqc-key` flag added to `Bounce` subcommand; `VerifyCbom` subcommand added; `cmd_bounce` BYOK signing block; `cmd_verify_cbom()` function; 4 tests in `pqc_signing_tests` module
+- `crates/cli/src/daemon.rs` *(modified)* — `pqc_sig: None` added to struct literal
+- `crates/cli/src/git_drive.rs` *(modified)* — `pqc_sig: None` added to 2 struct literals
+- `docs/INNOVATION_LOG.md` *(modified)* — VULN-02 section purged (all findings `[COMPLETED — v9.1.0]`); roadmap table updated
+
+**Commit:** *(pending)*
+
+---
+
 ## 2026-04-03 — Forward-Looking Telemetry (v9.0.2)
 
 **Directive:** Add `just fast-release` recipe (audit-free release path); harden

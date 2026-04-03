@@ -79,7 +79,7 @@ release version: audit
 	strip target/release/janitor
 	git add .
 	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
-	git tag v{{version}}
+	git tag -s v{{version}} -m "release v{{version}}"
 	# Floating major-version tag — lets users pin to a major and always receive
 	# the latest stable patch without editing their workflows.
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
@@ -107,7 +107,7 @@ fast-release version:
 	strip target/release/janitor
 	git add .
 	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
-	git tag v{{version}}
+	git tag -s v{{version}} -m "release v{{version}}"
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
 	git push origin HEAD:main "v{{version}}"

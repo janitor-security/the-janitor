@@ -409,6 +409,7 @@ pub mod unix {
                             ci_energy_saved_kwh: if slop_score > 0 { 0.1 } else { 0.0 },
                             provenance: crate::report::Provenance::default(),
                             governor_status: None,
+                            pqc_sig: None,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

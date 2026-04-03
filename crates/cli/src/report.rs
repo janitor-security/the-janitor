@@ -187,6 +187,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         ci_energy_saved_kwh: 0.1,
         provenance: Provenance::default(),
         governor_status: None,
+        pqc_sig: None,
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -476,6 +477,18 @@ pub struct BounceLogEntry {
     /// - `None` (field absent) — Governor not configured (`--report-url` absent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub governor_status: Option<String>,
+
+    /// ML-DSA-65 (FIPS 204) signature over the CycloneDX v1.6 CBOM for this entry,
+    /// base64-encoded (STANDARD alphabet).
+    ///
+    /// Present only when `janitor bounce --pqc-key <path>` was used and signing
+    /// succeeded.  Verifiable offline via:
+    ///   `janitor verify-cbom --key <pub.key> <log.ndjson>`
+    ///
+    /// When present, Governor attestation was skipped — local BYOK signing is
+    /// the chain-of-custody mechanism for this entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pqc_sig: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2940,6 +2953,7 @@ mod tests {
                 egress_bytes_sent: 0,
             },
             governor_status: None,
+            pqc_sig: None,
         }
     }
 
@@ -3054,6 +3068,7 @@ mod webhook_tests {
             ci_energy_saved_kwh: 0.0,
             provenance: Provenance::default(),
             governor_status: None,
+            pqc_sig: None,
         }
     }
 
@@ -3120,6 +3135,7 @@ mod soft_fail_tests {
             ci_energy_saved_kwh: 0.0,
             provenance: Provenance::default(),
             governor_status: None,
+            pqc_sig: None,
         }
     }
 

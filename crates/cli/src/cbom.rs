@@ -1,13 +1,13 @@
-//! CycloneDX v1.5 CBOM (Cryptography Bill of Materials) renderer.
+//! CycloneDX v1.6 CBOM (Cryptography Bill of Materials) renderer.
 //!
-//! Converts a slice of [`BounceLogEntry`] records into a valid CycloneDX v1.5 JSON
+//! Converts a slice of [`BounceLogEntry`] records into a valid CycloneDX v1.6 JSON
 //! document, suitable for supply-chain tooling and CI compliance pipelines.
 //!
 //! ## Output formats
 //! - `markdown` (default)
 //! - `json`
 //! - `pdf`
-//! - `cbom` — CycloneDX v1.5 JSON (this module)
+//! - `cbom` — CycloneDX v1.6 JSON (this module)
 //! - `sarif` — SARIF 2.1.0 JSON (see [`crate::report`])
 //!
 //! ## Schema overview
@@ -78,7 +78,7 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
 
     let doc = json!({
         "bomFormat": "CycloneDX",
-        "specVersion": "1.5",
+        "specVersion": "1.6",
         "serialNumber": format!("urn:uuid:{serial}"),
         "version": 1,
         "metadata": {
@@ -100,6 +100,63 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
     });
 
     serde_json::to_string_pretty(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Render a **single** [`BounceLogEntry`] as a deterministic CycloneDX v1.6 CBOM
+/// JSON string suitable for ML-DSA-65 signing and offline verification.
+///
+/// **Determinism contract (never violate):**
+/// - No `serialNumber` (UUID) — non-deterministic across invocations.
+/// - No `metadata.timestamp` — would differ between sign and verify.
+/// - Uses `serde_json::to_string` (compact, not pretty) for byte-stable output.
+///
+/// The verifier (`janitor verify-cbom`) re-derives the exact same bytes by
+/// calling this function with the stored [`BounceLogEntry`] and repo slug,
+/// then checking the ML-DSA-65 signature stored in [`BounceLogEntry::pqc_sig`].
+pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String {
+    let pr_num = entry.pr_number.unwrap_or(0);
+    let severity = severity_for_entry(entry);
+    let description = if entry.antipatterns.is_empty() {
+        String::new()
+    } else {
+        entry.antipatterns.join("|")
+    };
+    let affects_ref = format!("urn:cdx:{repo_slug}:pr/{pr_num}");
+
+    let doc = serde_json::json!({
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "tools": [{
+                "vendor": "The Janitor",
+                "name": "janitor",
+                "version": env!("CARGO_PKG_VERSION")
+            }],
+            "component": {
+                "type": "application",
+                "name": repo_slug
+            }
+        },
+        "components": [],
+        "vulnerabilities": [{
+            "id": format!("JANITOR-{pr_num}"),
+            "source": {
+                "name": "The Janitor",
+                "url": "https://thejanitor.app"
+            },
+            "ratings": [{
+                "source": { "name": "The Janitor" },
+                "severity": severity,
+                "method": "other"
+            }],
+            "description": description,
+            "affects": [{ "ref": affects_ref }]
+        }]
+    });
+
+    // compact (not pretty) for byte-stable signing surface
+    serde_json::to_string(&doc).unwrap_or_else(|_| "{}".to_string())
 }
 
 /// Map a bounce log entry to a CycloneDX severity string.
@@ -145,6 +202,7 @@ mod tests {
             ci_energy_saved_kwh: if score > 0 { 0.1 } else { 0.0 },
             provenance: crate::report::Provenance::default(),
             governor_status: None,
+            pqc_sig: None,
         }
     }
 
@@ -158,7 +216,7 @@ mod tests {
         let parsed: serde_json::Value =
             serde_json::from_str(&out).expect("CBOM output must be valid JSON");
         assert_eq!(parsed["bomFormat"], "CycloneDX");
-        assert_eq!(parsed["specVersion"], "1.5");
+        assert_eq!(parsed["specVersion"], "1.6");
         // Only 1 vulnerability (boilerplate skipped)
         assert_eq!(parsed["vulnerabilities"].as_array().unwrap().len(), 1);
         assert_eq!(parsed["vulnerabilities"][0]["id"], "JANITOR-1");

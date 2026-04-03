@@ -50,45 +50,6 @@ deployments.
 
 ---
 
-### VULN-02 — Key Custody & Compliance Theater
-
-**Severity:** Critical  
-**Class:** Cryptography / Compliance
-
-#### Finding
-
-The current architecture implies vendor-held ML-DSA-65 (FIPS 204) signing keys
-on the Fly.io Governor. Enterprises operating under FedRAMP, SOC 2 Type II, or
-DISA STIG cannot delegate key custody to a SaaS vendor. Claiming post-quantum
-attestation while the vendor controls the signing key is compliance theater —
-the customer cannot independently verify the chain of custody.
-
-#### Solution — BYOK Local Attestation
-
-**v9.0.x — `--pqc-key` CLI argument:**  
-Add `--pqc-key <path>` to `janitor bounce`. When present, the CLI signs the
-`BounceResult` CBOM directly on the runner using the customer's locally-stored
-ML-DSA-65 private key, bypassing the Governor signing path entirely. The
-signature is embedded in the bounce log entry (`"pqc_sig": "<base64>"`) and
-verifiable offline via `janitor verify-cbom --key <pub.pem> <log.ndjson>`.
-
-**v9.1.x — HSM / KMS integration:**  
-Extend `--pqc-key` to accept a PKCS#11 URI (`pkcs11:token=...`) or AWS KMS
-ARN (`arn:aws:kms:...`). The signing operation is delegated to the HSM/KMS;
-no private key material ever touches the runner filesystem.
-
-**Key invariant (never violate):**  
-The Fly.io Governor's verifying key (`VERIFYING_KEY_BYTES`) remains a
-public-only embed. The private key is never shipped in any binary — local or
-cloud. `--pqc-key` loads from a path external to the binary at runtime.
-
-**Definition of Done:**
-- `janitor bounce --pqc-key ./mlksa.key` signs CBOM locally; Governor not contacted
-- `janitor verify-cbom` verifies detached signature offline
-- `cargo test` covers: sign + verify round-trip, missing key error, invalid key error
-
----
-
 ### VULN-03 — SCM Lock-in
 
 **Severity:** High  
@@ -200,7 +161,7 @@ even in deep-scan mode — RAM pressure can still abort a file.
 | VULN | Solution | Target | Priority |
 |---|---|---|---|
 | VULN-01 | `--soft-fail` + Sovereign Governor binary | v9.0.x / v9.1.x | P0 |
-| VULN-02 | `--pqc-key` BYOK local attestation | v9.0.x | P0 |
+| VULN-02 | `--pqc-key` BYOK local attestation | `[COMPLETED — v9.1.0]` | P0 |
 | VULN-03 | `ScmContext` auto-detect abstraction | v9.0.x / v9.1.x | P1 |
 | VULN-04 | `--deep-scan` flag, 32 MiB / 30 s limits | v9.0.x | P1 |
 
@@ -450,13 +411,24 @@ actionable error if not.
 
 ### CT-005: `git tag v{{version}}` in `fast-release` still triggers GPG failure
 **Found during:** Forward-Looking Telemetry  
-**Location:** `justfile` — `fast-release` recipe (line 4: `git tag v{{version}}`)  
-**Issue:** The new `fast-release` recipe inherits the same unguarded lightweight
-tag command as the original `release` recipe. With `tag.gpgSign = true` in the
-global git config, this line fails with `fatal: no tag message?` — the same
-failure mode that caused the manual GPG fallback in v9.0.0 and v9.0.1. The
-recipe will always fail on this machine until the recipe itself is corrected.  
-**Suggested fix:** Replace `git tag v{{version}}` with
-`git tag -s v{{version}} -m "v{{version}}"` in both `release` and
-`fast-release`. A signed tag with a minimal message satisfies GPG and is
-semantically equivalent.
+**Status:** `[COMPLETED — v9.1.0]`  
+**Location:** `justfile` — `release` and `fast-release` recipes  
+**Resolution:** Both recipes now use `git tag -s v{{version}} -m "release v{{version}}"`.
+The `tag.gpgSign = true` fallback issue is eliminated for all future releases.
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Signature Sovereignty, v9.1.0)
+
+### CT-006: HSM / KMS integration for `--pqc-key` is still file-only
+
+**Found during:** Signature Sovereignty (VULN-02 implementation)  
+**Location:** `crates/cli/src/main.rs` — `cmd_bounce` BYOK signing block  
+**Issue:** The `--pqc-key` flag accepts only a path to raw private key bytes on
+disk (4032 bytes, ML-DSA-65). Enterprise FedRAMP and DISA STIG deployments
+require that private key material NEVER touch the runner filesystem — signing
+operations must be delegated to an HSM (PKCS#11) or cloud KMS (AWS KMS ARN,
+Azure Key Vault). The current file-only path cannot satisfy this requirement.  
+**Suggested fix (v9.2.x):** Extend `--pqc-key` to accept a PKCS#11 URI
+(`pkcs11:token=janitor;object=mlksa-key`) and AWS/GCP KMS resource identifiers.
+The file path remains the default for air-gapped and local deployments.

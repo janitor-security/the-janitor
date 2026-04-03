@@ -254,6 +254,19 @@ enum Commands {
         /// Can also be set via `soft_fail = true` in `janitor.toml`.
         #[arg(long)]
         soft_fail: bool,
+        /// Path to an ML-DSA-65 private key file (4032 raw bytes) for BYOK
+        /// local attestation (FIPS 204 — Signature Sovereignty mode).
+        ///
+        /// When provided, the CLI signs the CycloneDX v1.6 CBOM for this bounce
+        /// result using the customer's locally-stored ML-DSA-65 private key.
+        /// The signature is embedded in the bounce log entry as `pqc_sig`
+        /// (base64-encoded, STANDARD alphabet) and is verifiable offline:
+        ///   `janitor verify-cbom --key <pub.key> <log.ndjson>`
+        ///
+        /// Governor attestation is skipped when this flag is set — local PQC
+        /// signing is the chain-of-custody mechanism for the entry.
+        #[arg(long)]
+        pqc_key: Option<PathBuf>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -520,6 +533,23 @@ enum Commands {
         /// Repository root (reads `.janitor/bounce_log.ndjson`).
         path: PathBuf,
     },
+
+    /// Verify ML-DSA-65 (FIPS 204) signatures in a bounce log or CBOM file.
+    ///
+    /// Reads the file at `<path>` as newline-delimited JSON bounce log entries
+    /// (`.janitor/bounce_log.ndjson`).  For each entry carrying a `pqc_sig`
+    /// field, regenerates the deterministic CycloneDX v1.6 CBOM and verifies
+    /// the signature against the supplied ML-DSA-65 public key.
+    ///
+    /// Exits 0 when all signed entries verify successfully.
+    /// Exits non-zero when any signature fails or the key is malformed.
+    VerifyCbom {
+        /// Path to the ML-DSA-65 public key file (1952 raw bytes, FIPS 204 ML-DSA-65).
+        #[arg(long)]
+        key: PathBuf,
+        /// Path to a bounce log NDJSON file (e.g. `.janitor/bounce_log.ndjson`).
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -668,6 +698,7 @@ async fn main() -> anyhow::Result<()> {
             head_sha,
             timeout_secs,
             soft_fail,
+            pqc_key,
         } => {
             // Clone owned values for spawn_blocking (required for 'static bound).
             let path = path.clone();
@@ -687,6 +718,7 @@ async fn main() -> anyhow::Result<()> {
             let head_sha = head_sha.clone();
             let timeout_secs = *timeout_secs;
             let soft_fail = *soft_fail;
+            let pqc_key = pqc_key.clone();
 
             // Capture fields needed for the timeout failure payload before the
             // move into spawn_blocking.
@@ -721,6 +753,7 @@ async fn main() -> anyhow::Result<()> {
                     analysis_token.as_deref(),
                     head_sha.as_deref(),
                     soft_fail,
+                    pqc_key.as_deref(),
                 )
             });
 
@@ -768,6 +801,7 @@ async fn main() -> anyhow::Result<()> {
                             ci_energy_saved_kwh: 0.0,
                             provenance: report::Provenance::default(),
                             governor_status: None,
+                            pqc_sig: None,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -890,6 +924,10 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::StepSummary { path } => {
             cmd_step_summary(path)?;
+        }
+
+        Commands::VerifyCbom { key, path } => {
+            cmd_verify_cbom(key, path)?;
         }
     }
 
@@ -2591,6 +2629,7 @@ fn cmd_bounce(
     analysis_token: Option<&str>,
     head_sha: Option<&str>,
     soft_fail_flag: bool,
+    pqc_key: Option<&Path>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -3149,7 +3188,46 @@ probable AI context-collapse (hallucinated function reference)"
         },
         // governor_status set after POST attempt below.
         governor_status: None,
+        // pqc_sig set by --pqc-key signing block below (if key path provided).
+        pqc_sig: None,
     };
+
+    // ── BYOK Local PQC Attestation (--pqc-key) ───────────────────────────────
+    //
+    // When the operator supplies an ML-DSA-65 private key, sign the deterministic
+    // CycloneDX v1.6 CBOM for this entry directly on the runner.  The signature is
+    // embedded in the log entry (`pqc_sig`).  Governor POST is skipped — local BYOK
+    // signing is the chain-of-custody mechanism when Signature Sovereignty mode is
+    // active.
+    if let Some(key_path) = pqc_key {
+        use base64::Engine as _;
+        use fips204::ml_dsa_65;
+        use fips204::traits::{SerDes, Signer};
+
+        let sk_bytes = std::fs::read(key_path)
+            .with_context(|| format!("reading PQC private key: {}", key_path.display()))?;
+        // ML-DSA-65 private key is exactly 4032 bytes per FIPS 204.
+        let sk_array: [u8; 4032] = sk_bytes
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("ML-DSA-65 private key must be exactly 4032 bytes"))?;
+        let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk_array)
+            .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 private key: {e}"))?;
+
+        let cbom_json = cbom::render_cbom_for_entry(&log_entry, &log_entry.repo_slug.clone());
+        let sig = sk
+            .try_sign(cbom_json.as_bytes(), b"janitor-cbom")
+            .map_err(|e| anyhow::anyhow!("ML-DSA-65 signing failed: {e}"))?;
+
+        log_entry.pqc_sig = Some(base64::engine::general_purpose::STANDARD.encode(sig.as_ref()));
+        log_entry.governor_status = Some("local_pqc".to_string());
+
+        // Skip the Governor POST when BYOK signing is active.
+        report::append_bounce_log(&janitor_dir, &log_entry);
+        report::write_badge(&janitor_dir, log_entry.slop_score);
+        report::fire_webhook_if_configured(&log_entry, &policy);
+        report::send_heartbeat_if_due(&janitor_dir);
+        return Ok(());
+    }
 
     // ── Architecture Inversion: POST result to Governor ───────────────────────
     //
@@ -3244,6 +3322,95 @@ fn cmd_pardon(symbol: &str, repo: &Path) -> anyhow::Result<()> {
         }
     );
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// verify-cbom
+// ---------------------------------------------------------------------------
+
+/// Verify ML-DSA-65 (FIPS 204) signatures stored in a bounce log NDJSON file.
+///
+/// Reads `log_path` as newline-delimited JSON [`report::BounceLogEntry`] records.
+/// For each entry whose `pqc_sig` field is present, this function:
+///
+/// 1. Re-derives the exact deterministic CycloneDX v1.6 CBOM bytes that were
+///    signed at bounce time (via [`cbom::render_cbom_for_entry`]).
+/// 2. Base64-decodes `pqc_sig`.
+/// 3. Verifies the ML-DSA-65 signature using the public key loaded from `pub_key_path`.
+///
+/// Exits `Ok(())` iff every signed entry verifies successfully.
+/// Returns `Err` if any signature is invalid or the key is malformed.
+fn cmd_verify_cbom(pub_key_path: &Path, log_path: &Path) -> anyhow::Result<()> {
+    use base64::Engine as _;
+    use fips204::ml_dsa_65;
+    use fips204::traits::{SerDes, Verifier};
+
+    // Load ML-DSA-65 public key (1952 bytes per FIPS 204).
+    let pk_bytes_vec = std::fs::read(pub_key_path)
+        .with_context(|| format!("reading PQC public key: {}", pub_key_path.display()))?;
+    let pk_array: [u8; 1952] = pk_bytes_vec
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("ML-DSA-65 public key must be exactly 1952 bytes"))?;
+    let pk = ml_dsa_65::PublicKey::try_from_bytes(pk_array)
+        .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 public key: {e}"))?;
+
+    let content = std::fs::read_to_string(log_path)
+        .with_context(|| format!("reading log file: {}", log_path.display()))?;
+
+    let mut verified: u32 = 0;
+    let mut failed: u32 = 0;
+    let mut skipped: u32 = 0;
+
+    for (line_no, line) in content.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<report::BounceLogEntry>(line) {
+            Ok(entry) => {
+                if let Some(ref sig_b64) = entry.pqc_sig {
+                    let sig_bytes = base64::engine::general_purpose::STANDARD
+                        .decode(sig_b64)
+                        .with_context(|| {
+                            format!("line {}: base64 decode of pqc_sig failed", line_no + 1)
+                        })?;
+                    let sig_array: [u8; ml_dsa_65::SIG_LEN] =
+                        sig_bytes.try_into().map_err(|_| {
+                            anyhow::anyhow!(
+                                "line {}: pqc_sig must decode to exactly {} bytes",
+                                line_no + 1,
+                                ml_dsa_65::SIG_LEN
+                            )
+                        })?;
+
+                    let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
+                    let valid = pk.verify(cbom_json.as_bytes(), &sig_array, b"janitor-cbom");
+
+                    let pr = entry.pr_number.unwrap_or(0);
+                    if valid {
+                        println!("PR #{pr}: SIGNATURE VALID");
+                        verified += 1;
+                    } else {
+                        println!("PR #{pr}: SIGNATURE INVALID");
+                        failed += 1;
+                    }
+                } else {
+                    skipped += 1;
+                }
+            }
+            Err(_) => {
+                skipped += 1;
+            }
+        }
+    }
+
+    println!(
+        "Verification complete — valid: {verified}, invalid: {failed}, unsigned/skipped: {skipped}"
+    );
+    if failed > 0 {
+        anyhow::bail!("{failed} entry/entries failed ML-DSA-65 signature verification");
+    }
     Ok(())
 }
 
@@ -3980,5 +4147,141 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
             "pytest exited with code {}",
             s.code().unwrap_or(-1)
         )),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PQC signing unit tests (VULN-02 — Signature Sovereignty)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod pqc_signing_tests {
+    use super::cbom;
+    use crate::report::{BounceLogEntry, PrState, Provenance};
+    use base64::Engine as _;
+    use fips204::ml_dsa_65;
+    use fips204::traits::{KeyGen, Signer, Verifier};
+
+    /// Construct a minimal BounceLogEntry for signing fixture use.
+    fn make_pqc_entry(score: u32) -> BounceLogEntry {
+        BounceLogEntry {
+            pr_number: Some(42),
+            author: Some("security-team".to_string()),
+            timestamp: "2026-04-03T00:00:00Z".to_string(),
+            slop_score: score,
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            unlinked_pr: 0,
+            antipatterns: if score > 0 {
+                vec!["security:unsafe_gets".to_string()]
+            } else {
+                vec![]
+            },
+            comment_violations: vec![],
+            min_hashes: vec![],
+            zombie_deps: vec![],
+            state: PrState::Open,
+            is_bot: false,
+            repo_slug: "test-org/test-repo".to_string(),
+            suppressed_by_domain: 0,
+            collided_pr_numbers: vec![],
+            necrotic_flag: None,
+            commit_sha: "abc123".to_string(),
+            policy_hash: String::new(),
+            version_silos: vec![],
+            agentic_pct: 0.0,
+            ci_energy_saved_kwh: if score > 0 { 0.1 } else { 0.0 },
+            provenance: Provenance::default(),
+            governor_status: None,
+            pqc_sig: None,
+        }
+    }
+
+    /// End-to-end: generate keypair → sign CBOM → verify signature round-trip.
+    #[test]
+    fn sign_and_verify_roundtrip() {
+        let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("keygen must succeed");
+        let entry = make_pqc_entry(50);
+        let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
+
+        let sig = sk
+            .try_sign(cbom_json.as_bytes(), b"janitor-cbom")
+            .expect("signing must succeed");
+        let sig_b64 = base64::engine::general_purpose::STANDARD.encode(sig.as_ref());
+
+        // Round-trip: decode base64 and verify.
+        let sig_decoded = base64::engine::general_purpose::STANDARD
+            .decode(&sig_b64)
+            .expect("base64 decode must succeed");
+        let sig_array: [u8; ml_dsa_65::SIG_LEN] = sig_decoded
+            .try_into()
+            .expect("signature must be SIG_LEN bytes");
+
+        // Re-derive CBOM bytes identically.
+        let cbom_json2 = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
+        assert_eq!(
+            cbom_json, cbom_json2,
+            "CBOM derivation must be deterministic"
+        );
+
+        let valid = pk.verify(cbom_json2.as_bytes(), &sig_array, b"janitor-cbom");
+        assert!(
+            valid,
+            "signature must verify against the original CBOM bytes"
+        );
+    }
+
+    /// A tampered signature must not verify.
+    #[test]
+    fn tampered_signature_fails_verification() {
+        let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("keygen must succeed");
+        let entry = make_pqc_entry(150);
+        let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
+
+        let mut sig = sk
+            .try_sign(cbom_json.as_bytes(), b"janitor-cbom")
+            .expect("signing must succeed");
+        // Flip the first byte to corrupt the signature.
+        sig[0] ^= 0xFF;
+
+        let valid = pk.verify(cbom_json.as_bytes(), &sig, b"janitor-cbom");
+        assert!(!valid, "tampered signature must not verify");
+    }
+
+    /// CBOM derivation is deterministic across calls for the same entry.
+    #[test]
+    fn cbom_derivation_is_deterministic() {
+        let entry = make_pqc_entry(0);
+        let a = cbom::render_cbom_for_entry(&entry, "owner/repo");
+        let b = cbom::render_cbom_for_entry(&entry, "owner/repo");
+        assert_eq!(a, b, "render_cbom_for_entry must be deterministic");
+        // Deterministic output must NOT contain a UUID or dynamic timestamp.
+        assert!(
+            !a.contains("serialNumber"),
+            "signed CBOM must not include serialNumber"
+        );
+        assert!(
+            !a.contains("timestamp"),
+            "signed CBOM must not include timestamp"
+        );
+    }
+
+    /// Wrong-length key bytes must fail the array conversion before reaching try_from_bytes.
+    #[test]
+    fn wrong_length_key_bytes_fail_conversion() {
+        let too_short: Vec<u8> = vec![0u8; 100];
+        let result: Result<[u8; 4032], _> = too_short.try_into();
+        assert!(
+            result.is_err(),
+            "wrong-length private key bytes must fail conversion"
+        );
+
+        let too_short_pk: Vec<u8> = vec![0u8; 100];
+        let result_pk: Result<[u8; 1952], _> = too_short_pk.try_into();
+        assert!(
+            result_pk.is_err(),
+            "wrong-length public key bytes must fail conversion"
+        );
     }
 }
