@@ -205,7 +205,12 @@ proceeding with any other work.
    node, the CVE class, and the file to modify.
 6. **Rewrite `docs/INNOVATION_LOG.md`** in the new P0/P1/P2 structure.
 7. **Append a `## Continuous Telemetry` section** for the current session.
-8. **Commit the rewritten log** and continue with the original directive.
+8. **Reset the CT counter.** After a CISO Pulse Audit, CT numbering restarts
+   at `CT-001` for the new epoch. Do NOT carry over old CT numbers from the
+   previous epoch. The very next CT entry filed after the Pulse MUST be
+   `CT-001`. Label the new Continuous Telemetry section to make the epoch
+   boundary explicit (e.g., `## Continuous Telemetry — YYYY-MM-DD (Epoch 2)`).
+9. **Commit the rewritten log** and continue with the original directive.
 
 ### Enforcement
 

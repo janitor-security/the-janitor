@@ -385,9 +385,23 @@ enum Commands {
     ///
     /// Downloads the latest `wisdom.rkyv` from `https://api.thejanitor.app/v1/wisdom.rkyv`
     /// and overwrites `.janitor/wisdom.rkyv` in the project root.
+    ///
+    /// When `--ci-mode` is active, additionally fetches the CISA Known Exploited
+    /// Vulnerabilities (KEV) catalog and writes a human-readable, diff-friendly
+    /// `.janitor/wisdom_manifest.json` alongside the binary registry.  This JSON
+    /// file is used by `.github/workflows/cisa-kev-sync.yml` to detect new
+    /// entries without forking out to `curl`.
     UpdateWisdom {
-        /// Project root (writes .janitor/wisdom.rkyv).
+        /// Project root (writes .janitor/wisdom.rkyv and, with --ci-mode,
+        /// .janitor/wisdom_manifest.json).
         path: PathBuf,
+        /// Emit a diffable `.janitor/wisdom_manifest.json` alongside wisdom.rkyv.
+        ///
+        /// Fetches the CISA KEV JSON catalog and writes a sorted, compact JSON
+        /// manifest of all entries.  Intended for CI pipelines that need to diff
+        /// the KEV catalog across runs without parsing binary rkyv data.
+        #[arg(long, default_value_t = false)]
+        ci_mode: bool,
     },
     /// Export bounce log as a CSV file for spreadsheet or notebook analysis.
     ///
@@ -841,7 +855,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|| path.join(".janitor").join("symbols.rkyv"));
             daemon::unix::serve(std::path::Path::new(socket), &registry_path).await?;
         }
-        Commands::UpdateWisdom { path } => cmd_update_wisdom(path)?,
+        Commands::UpdateWisdom { path, ci_mode } => cmd_update_wisdom(path, *ci_mode)?,
         Commands::Export {
             repo,
             out,
@@ -3804,10 +3818,16 @@ fn cmd_report(
 /// Downloads the latest Wisdom Registry from Janitor Sentinel and writes it to
 /// `<project_root>/.janitor/wisdom.rkyv`.
 ///
+/// When `ci_mode` is `true`, additionally fetches the CISA KEV catalog and
+/// writes `.janitor/wisdom_manifest.json` — a sorted, diff-friendly JSON file
+/// listing every CVE entry by ID, vendor, product, and date.
+///
 /// On any network or I/O failure the function returns an error — no partial
-/// write is left on disk (the download is buffered before overwriting).
-fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
+/// write is left on disk (downloads are buffered before overwriting).
+fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
     const WISDOM_URL: &str = "https://api.thejanitor.app/v1/wisdom.rkyv";
+    const CISA_KEV_URL: &str =
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 
     let mut response = ureq::get(WISDOM_URL)
         .call()
@@ -3827,6 +3847,63 @@ fn cmd_update_wisdom(project_root: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("writing {}", wisdom_path.display()))?;
 
     println!("\u{1f9e0} Wisdom Registry synchronized with Janitor Sentinel.");
+
+    if ci_mode {
+        let mut kev_resp = ureq::get(CISA_KEV_URL).call().map_err(|e| {
+            anyhow::anyhow!("update-wisdom --ci-mode: GET {CISA_KEV_URL} failed: {e}")
+        })?;
+
+        let kev_bytes = kev_resp.body_mut().read_to_vec().map_err(|e| {
+            anyhow::anyhow!("update-wisdom --ci-mode: reading KEV response failed: {e}")
+        })?;
+
+        let kev_json: serde_json::Value = serde_json::from_slice(&kev_bytes).map_err(|e| {
+            anyhow::anyhow!("update-wisdom --ci-mode: parsing KEV JSON failed: {e}")
+        })?;
+
+        let empty_vec = vec![];
+        let vulns = kev_json["vulnerabilities"].as_array().unwrap_or(&empty_vec);
+
+        let mut entries: Vec<serde_json::Value> = vulns
+            .iter()
+            .map(|v| {
+                serde_json::json!({
+                    "cve_id":     v["cveID"].as_str().unwrap_or(""),
+                    "vendor":     v["vendorProject"].as_str().unwrap_or(""),
+                    "product":    v["product"].as_str().unwrap_or(""),
+                    "name":       v["vulnerabilityName"].as_str().unwrap_or(""),
+                    "date_added": v["dateAdded"].as_str().unwrap_or(""),
+                })
+            })
+            .collect();
+        entries.sort_by(|a, b| {
+            a["cve_id"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["cve_id"].as_str().unwrap_or(""))
+        });
+
+        let manifest = serde_json::json!({
+            "source":       "CISA Known Exploited Vulnerabilities Catalog",
+            "generated_at": utc_now_iso8601(),
+            "entry_count":  entries.len(),
+            "entries":      entries,
+        });
+
+        let manifest_path = janitor_dir.join("wisdom_manifest.json");
+        let manifest_str = serde_json::to_string_pretty(&manifest).map_err(|e| {
+            anyhow::anyhow!("update-wisdom --ci-mode: serializing manifest failed: {e}")
+        })?;
+        std::fs::write(&manifest_path, manifest_str.as_bytes())
+            .with_context(|| format!("writing {}", manifest_path.display()))?;
+
+        println!(
+            "\u{1f4cb} KEV manifest written: {} entries \u{2192} {}",
+            manifest["entry_count"],
+            manifest_path.display()
+        );
+    }
+
     Ok(())
 }
 

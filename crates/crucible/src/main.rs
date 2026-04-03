@@ -639,6 +639,38 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         desc_fragment: None,
     },
 
+    // ── Java-2b: ProcessBuilder command injection (AST walk) ─────────────────
+    Entry {
+        name: "Java/ProcessBuilder dynamic arg — INTERCEPT (Java-2b)",
+        lang: "java",
+        source: b"ProcessBuilder pb = new ProcessBuilder(userCommand);\npb.start();\n",
+        must_intercept: true,
+        desc_fragment: Some("process_builder_injection"),
+    },
+    Entry {
+        name: "Java/ProcessBuilder literal args — SAFE (Java-2b TN)",
+        lang: "java",
+        source: b"ProcessBuilder pb = new ProcessBuilder(\"git\", \"status\");\npb.start();\n",
+        must_intercept: false,
+        desc_fragment: Some("process_builder_injection"),
+    },
+
+    // ── Java-3: XXE DocumentBuilderFactory (hybrid AST + byte check) ─────────
+    Entry {
+        name: "Java/DocumentBuilderFactory without XXE hardening — INTERCEPT (Java-3)",
+        lang: "java",
+        source: b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nDocumentBuilder builder = factory.newDocumentBuilder();\nDocument doc = builder.parse(inputStream);\n",
+        must_intercept: true,
+        desc_fragment: Some("xxe_documentbuilder"),
+    },
+    Entry {
+        name: "Java/DocumentBuilderFactory with disallow-doctype-decl — SAFE (Java-3 TN)",
+        lang: "java",
+        source: b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nfactory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\nDocumentBuilder builder = factory.newDocumentBuilder();\n",
+        must_intercept: false,
+        desc_fragment: Some("xxe_documentbuilder"),
+    },
+
     // ── Phase 3 R&D: C# AST Walk (TypeNameHandling + BinaryFormatter) ────────
     Entry {
         name: "C#/TypeNameHandling.Objects AST assignment — INTERCEPT",

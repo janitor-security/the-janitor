@@ -1,12 +1,16 @@
 name: CISA KEV Weekly Sync
 
-# Fetches the CISA Known Exploited Vulnerabilities (KEV) catalog every Monday,
-# diffs against the last committed snapshot, and opens a PR containing:
-#   - Updated .janitor/cisa_kev_ids.txt  (full sorted CVE-ID list)
+# Fetches the CISA Known Exploited Vulnerabilities (KEV) catalog every Monday
+# via `janitor update-wisdom --ci-mode`, which writes:
+#   - .janitor/wisdom.rkyv           (binary Wisdom Registry)
+#   - .janitor/wisdom_manifest.json  (diffable JSON manifest of all CVE entries)
+#
+# The workflow diffs the manifest against the last committed snapshot and opens
+# a PR containing:
+#   - Updated .janitor/cisa_kev_ids.txt  (sorted CVE-ID list for future diffs)
 #   - .janitor/kev_checklist.md          (new entries + AST gate checklist)
 #
-# The operator implements the AST gates manually after reviewing the PR.
-# This workflow is read-only except for the PR-creation step.
+# The engine is the sole arbiter of threat intelligence — no raw curl to CISA.
 
 on:
   schedule:
@@ -31,29 +35,42 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             github.com:443
-            www.cisa.gov:443
             objects.githubusercontent.com:443
+            api.thejanitor.app:443
+            www.cisa.gov:443
 
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fetch CISA KEV catalog
+      - name: Download latest janitor binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p .janitor
-          curl -fsSL \
-            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" \
-            -o .janitor/kev_raw.json
-          echo "Fetched $(jq '.vulnerabilities | length' .janitor/kev_raw.json) entries"
+          mkdir -p /tmp/janitor-bin
+          gh release download --repo janitor-security/the-janitor \
+            --pattern "janitor" \
+            --dir /tmp/janitor-bin \
+            --clobber
+          chmod +x /tmp/janitor-bin/janitor
+          /tmp/janitor-bin/janitor --version
+
+      - name: Run update-wisdom --ci-mode
+        run: |
+          set -euo pipefail
+          /tmp/janitor-bin/janitor update-wisdom . --ci-mode
+          echo "Manifest written:"
+          wc -l .janitor/wisdom_manifest.json
 
       - name: Diff against known snapshot
         id: diff
         run: |
           set -euo pipefail
-          # Extract sorted CVE-ID list from the fetched catalog.
-          jq -r '.vulnerabilities[].cveID' .janitor/kev_raw.json | sort > .janitor/kev_ids_new.txt
+          # Extract sorted CVE-ID list from the freshly-written manifest.
+          jq -r '.entries[].cve_id' .janitor/wisdom_manifest.json | sort \
+            > .janitor/kev_ids_new.txt
 
           # If no prior snapshot exists, create baseline and skip PR.
           if [[ ! -f .janitor/cisa_kev_ids.txt ]]; then
@@ -75,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
           TODAY=$(date +%Y-%m-%d)
-          CHECKLIST=".janitor/kev_checklist_${TODAY}.md"
+          CHECKLIST=".janitor/kev_checklist.md"
 
           {
             echo "# CISA KEV Sync — ${TODAY}"
@@ -87,12 +104,11 @@ jobs:
             echo "| CVE ID | Vendor | Product | Vulnerability | Date Added |"
             echo "|--------|--------|---------|---------------|------------|"
 
-            # For each new CVE ID, extract metadata from the raw JSON.
             while IFS= read -r cve_id; do
               ROW=$(jq -r --arg id "$cve_id" '
-                .vulnerabilities[] | select(.cveID == $id) |
-                "| \(.cveID) | \(.vendorProject) | \(.product) | \(.vulnerabilityName) | \(.dateAdded) |"
-              ' .janitor/kev_raw.json)
+                .entries[] | select(.cve_id == $id) |
+                "| \(.cve_id) | \(.vendor) | \(.product) | \(.name) | \(.date_added) |"
+              ' .janitor/wisdom_manifest.json)
               echo "${ROW}"
             done < .janitor/kev_added.txt
 
@@ -101,7 +117,7 @@ jobs:
             echo ""
             echo "Review each entry above. For each entry whose language / framework is"
             echo "covered by a Janitor grammar, check whether an AST gate exists in"
-            echo "\`crates/forge/src/slop_hunter.rs\`. If not, file an IDEA entry in"
+            echo "\`crates/forge/src/slop_hunter.rs\`. If not, file a P0 IDEA entry in"
             echo "\`docs/INNOVATION_LOG.md\` under **P0 — Enterprise Security Depth**."
             echo ""
             echo "### Languages covered by the Janitor (23 grammars)"
@@ -114,8 +130,8 @@ jobs:
 
             while IFS= read -r cve_id; do
               PRODUCT=$(jq -r --arg id "$cve_id" \
-                '.vulnerabilities[] | select(.cveID == $id) | .product' \
-                .janitor/kev_raw.json)
+                '.entries[] | select(.cve_id == $id) | .product' \
+                .janitor/wisdom_manifest.json)
               echo "- [ ] **${cve_id}** (${PRODUCT}) — confirm AST gate exists or file IDEA entry"
             done < .janitor/kev_added.txt
 
@@ -138,13 +154,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git checkout -b "${BRANCH}"
-          git add .janitor/cisa_kev_ids.txt ".janitor/kev_checklist_${TODAY}.md"
-          git commit -m "chore: CISA KEV sync ${TODAY} — $(cat .janitor/kev_added.txt | wc -l | tr -d ' ') new entries"
+          git add .janitor/cisa_kev_ids.txt .janitor/kev_checklist.md
+          git commit -m "chore: CISA KEV sync ${TODAY} — $(wc -l < .janitor/kev_added.txt | tr -d ' ') new entries"
           git push origin "${BRANCH}"
 
           gh pr create \
             --title "chore: CISA KEV sync ${TODAY}" \
-            --body "$(cat ".janitor/kev_checklist_${TODAY}.md")" \
+            --body "$(cat .janitor/kev_checklist.md)" \
             --base main \
             --head "${BRANCH}" \
             --label "security,intelligence"

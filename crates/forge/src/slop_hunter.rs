@@ -1807,6 +1807,8 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         b"getRuntime",
         b"InitialContext",
         b"lookup",
+        b"ProcessBuilder",
+        b"DocumentBuilderFactory",
     ];
     if !JAVA_MARKERS
         .iter()
@@ -1837,6 +1839,7 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         source,
         &deser_var_names,
         &ctx_var_names,
+        false,
         &mut findings,
     );
     findings
@@ -1901,9 +1904,27 @@ fn find_java_danger_invocations(
     source: &[u8],
     deser_var_names: &[String],
     ctx_var_names: &[String],
+    inside_test: bool,
     findings: &mut Vec<SlopFinding>,
 ) {
-    if node.kind() == "method_invocation" {
+    // Propagate test-scope suppression.  Java test methods are identified by:
+    //   (a) method name starting with "test" (JUnit 3 convention), or
+    //   (b) presence of an @Test annotation (JUnit 4/5 / TestNG convention).
+    let in_test = if inside_test {
+        true
+    } else if node.kind() == "method_declaration" {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        name.starts_with("test")
+            || name.starts_with("Test")
+            || java_has_test_annotation(node, source)
+    } else {
+        false
+    };
+
+    if node.kind() == "method_invocation" && !in_test {
         let name_text = node
             .child_by_field_name("name")
             .and_then(|n| n.utf8_text(source).ok())
@@ -1934,7 +1955,7 @@ fn find_java_danger_invocations(
                              `ObjectInputFilter` allow-list or migrate to a safe format"
                         ),
                         domain: DOMAIN_FIRST_PARTY,
-                        severity: Severity::Critical,
+                        severity: Severity::KevCritical,
                     });
                 }
             }
@@ -1946,13 +1967,13 @@ fn find_java_danger_invocations(
                         start_byte: node.start_byte(),
                         end_byte: node.end_byte(),
                         description: format!(
-                            "security:runtime_exec — `{object_text}.exec()` executes an OS \
-                             command; if the command string contains user input this is a \
-                             command injection vector; use ProcessBuilder with an explicit \
-                             argument array instead"
+                            "security:runtime_exec_injection — `{object_text}.exec()` executes \
+                             an OS command; if the command string contains user input this is a \
+                             command injection vector (CWE-78); use ProcessBuilder with an \
+                             explicit argument array instead"
                         ),
                         domain: DOMAIN_FIRST_PARTY,
-                        severity: Severity::Critical,
+                        severity: Severity::KevCritical,
                     });
                 }
             }
@@ -1977,9 +1998,41 @@ fn find_java_danger_invocations(
                                      static config strings and disable remote JNDI class loading"
                                 ),
                                 domain: DOMAIN_FIRST_PARTY,
-                                severity: Severity::Critical,
+                                severity: Severity::KevCritical,
                             });
                         }
+                    }
+                }
+            }
+            "newInstance" => {
+                // Java-3: DocumentBuilderFactory.newInstance() without XXE hardening.
+                // Fire when the file contains DocumentBuilderFactory but lacks the
+                // DOCTYPE-disable feature flag — a file-level hybrid check that avoids
+                // false positives on hardened code.
+                if object_text.contains("DocumentBuilderFactory") {
+                    const DOCTYPE_DISABLE: &[u8] = b"disallow-doctype-decl";
+                    const SECURE_PROCESSING: &[u8] = b"FEATURE_SECURE_PROCESSING";
+                    let is_hardened = source
+                        .windows(DOCTYPE_DISABLE.len())
+                        .any(|w| w == DOCTYPE_DISABLE)
+                        || source
+                            .windows(SECURE_PROCESSING.len())
+                            .any(|w| w == SECURE_PROCESSING);
+                    if !is_hardened {
+                        findings.push(SlopFinding {
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                            description: format!(
+                                "security:xxe_documentbuilder — \
+                                 `{object_text}.newInstance()` creates a DocumentBuilder \
+                                 without XXE hardening; add \
+                                 `setFeature(\"http://apache.org/xml/features/\
+                                 disallow-doctype-decl\", true)` to prevent XML External \
+                                 Entity injection (CWE-611)"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::Critical,
+                        });
                     }
                 }
             }
@@ -1987,10 +2040,59 @@ fn find_java_danger_invocations(
         }
     }
 
+    // Java-2b: ProcessBuilder with a non-literal first argument — OS command injection.
+    // Detects `new ProcessBuilder(expr)` where the first argument is not a string
+    // literal.  Suppressed in test methods.
+    if node.kind() == "object_creation_expression" && !in_test {
+        let type_text = node
+            .child_by_field_name("type")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        if type_text == "ProcessBuilder" {
+            if let Some(args) = node.child_by_field_name("arguments") {
+                let first_arg = args.named_children(&mut args.walk()).next();
+                if first_arg.is_some_and(|a| a.kind() != "string_literal") {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description:
+                            "security:process_builder_injection — `new ProcessBuilder(expr)` \
+                             with a non-literal argument passes user input to the OS; \
+                             use an explicit hard-coded argument array (e.g. \
+                             `new ProcessBuilder(\"git\", \"status\")`) instead of a \
+                             variable command source (CWE-78)"
+                                .to_owned(),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::KevCritical,
+                    });
+                }
+            }
+        }
+    }
+
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_java_danger_invocations(child, source, deser_var_names, ctx_var_names, findings);
+        find_java_danger_invocations(
+            child,
+            source,
+            deser_var_names,
+            ctx_var_names,
+            in_test,
+            findings,
+        );
     }
+}
+
+/// Return `true` if the given `method_declaration` node has an `@Test` annotation
+/// in its `modifiers` child (JUnit 4/5 and TestNG convention).
+fn java_has_test_annotation(method_decl: Node<'_>, source: &[u8]) -> bool {
+    let mut cursor = method_decl.walk();
+    for child in method_decl.children(&mut cursor) {
+        if child.kind() == "modifiers" {
+            return child.utf8_text(source).is_ok_and(|t| t.contains("@Test"));
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -5467,6 +5569,74 @@ mod phase2_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("unsafe_deserialization")),
             "ObjectMapper.readValue() must not fire"
+        );
+    }
+
+    // ── Java-2b: ProcessBuilder injection ────────────────────────────────────
+
+    #[test]
+    fn test_java_process_builder_dynamic_fires() {
+        let src = b"ProcessBuilder pb = new ProcessBuilder(userCommand);\npb.start();\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("process_builder_injection")),
+            "new ProcessBuilder(variable) must fire process_builder_injection"
+        );
+    }
+
+    #[test]
+    fn test_java_process_builder_literal_safe() {
+        let src = b"ProcessBuilder pb = new ProcessBuilder(\"git\", \"status\");\npb.start();\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("process_builder_injection")),
+            "new ProcessBuilder with string literal args must NOT fire"
+        );
+    }
+
+    // ── Java-3: XXE DocumentBuilderFactory ───────────────────────────────────
+
+    #[test]
+    fn test_java_documentbuilder_xxe_fires() {
+        let src = b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nDocumentBuilder builder = factory.newDocumentBuilder();\nDocument doc = builder.parse(inputStream);\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("xxe_documentbuilder")),
+            "DocumentBuilderFactory.newInstance() without XXE hardening must fire"
+        );
+    }
+
+    #[test]
+    fn test_java_documentbuilder_hardened_safe() {
+        let src = b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nfactory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\nDocumentBuilder builder = factory.newDocumentBuilder();\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("xxe_documentbuilder")),
+            "DocumentBuilderFactory with disallow-doctype-decl must NOT fire"
+        );
+    }
+
+    // ── Test method suppression ───────────────────────────────────────────────
+
+    #[test]
+    fn test_java_test_annotation_suppresses_findings() {
+        // @Test-annotated methods must not produce findings for any of the
+        // three Java danger categories.
+        let src = b"@Test\npublic void testXmlParsing() {\nDocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nDocumentBuilder builder = factory.newDocumentBuilder();\n}\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("xxe_documentbuilder")),
+            "@Test method body must not fire xxe_documentbuilder"
         );
     }
 }

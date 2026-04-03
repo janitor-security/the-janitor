@@ -149,5 +149,39 @@ the first CISO Pulse Audit — re-tier `INNOVATION_LOG.md` into P0/P1/P2 with
 **Purged sections:** CT-005 (`[COMPLETED — v9.1.0]`) merged into the CISO
 Pulse log restructure. VULN-02 section was already purged in v9.1.0.
 
+**Commit:** `5056576`
+
+---
+
+## 2026-04-03 — Wisdom & Java Consolidation (v9.1.2)
+
+**Directive:** Harden CISO Pulse with CT counter reset rule; fix CT-007 by
+adding `--ci-mode` to `update-wisdom`; update CISA KEV sync workflow to use
+the janitor binary as sole arbiter; execute P0 Java AST depth — implement
+Java-1 (readObject KevCritical + test suppression), Java-2 (ProcessBuilder
+injection), and Java-3 (XXE DocumentBuilderFactory); add Crucible fixtures.
+
+**Files modified:**
+- `.claude/skills/evolution-tracker/SKILL.md` *(modified)* — Logic 5 step 8
+  added: CT counter resets to CT-001 after every CISO Pulse Audit (epoch reset)
+- `crates/cli/src/main.rs` *(modified)* — `--ci-mode` flag added to
+  `UpdateWisdom` subcommand; `cmd_update_wisdom` fetches CISA KEV JSON and
+  emits `.janitor/wisdom_manifest.json` when `ci_mode = true`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `find_java_danger_invocations`
+  gains `inside_test: bool` param + `@Test` annotation suppression;
+  `readObject`/`exec`/`lookup` upgraded from `Critical` to `KevCritical`;
+  `new ProcessBuilder(expr)` (Java-2b) and
+  `DocumentBuilderFactory.newInstance()` XXE (Java-3) detection added;
+  `java_has_test_annotation()` helper added; 5 new unit tests
+- `crates/crucible/src/main.rs` *(modified)* — 4 new fixtures: ProcessBuilder
+  TP/TN and DocumentBuilder XXE TP/TN
+- `.github/workflows/cisa-kev-sync.yml` *(modified)* — switched from raw `curl`
+  to `janitor update-wisdom --ci-mode`; workflow downloads janitor binary from
+  GH releases before running
+- `docs/INNOVATION_LOG.md` *(modified)* — Java-1/2/3 grammar depth section
+  marked `[COMPLETED — v9.1.2]`; CT epoch reset to Epoch 2 (CT-001, CT-002)
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.1.2`
+
 **Commit:** *(pending)*
 

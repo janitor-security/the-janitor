@@ -88,40 +88,16 @@ shell interpreter, `InsecureSkipVerify`)
 
 ---
 
-### Grammar Depth: Java — 3 New AST-Level Rules (Promoting Byte-Level)
+### Grammar Depth: Java — 3 New AST-Level Rules `[COMPLETED — v9.1.2]`
 
-**Java current AST coverage:** 0 rules. All detection is byte-level in
-`slop_hunter.rs` string patterns. Tree-sitter-java grammar is fully loaded.
-This is the highest-priority grammar gap in the workspace.
+**Java-1 `[COMPLETED — v9.1.2]`** — `readObject()` upgraded to `KevCritical`;
+test-method suppression added; existing `find_java_slop` extended.
 
-**Java-1 — `security:java_deserialization_gadget` (KevCritical, 150 pts)**
-- **Trigger:** `method_invocation` matching `readObject()` where the receiver
-  is an `ObjectInputStream` or a subclass.
-- **Suppress if:** inside a function named `test*` or `*Test`.
-- **AST node:** `method_invocation{readObject} → primary{ObjectInputStream.*}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_java_slop()` (new function)
-- **CVE class:** CVE-2015-4852, CVE-2016-4463, hundreds of Java deser RCEs.
-  This is the most exploited class in the Java ecosystem.
+**Java-2 `[COMPLETED — v9.1.2]`** — `Runtime.getRuntime().exec()` upgraded to
+`KevCritical`; `new ProcessBuilder(expr)` non-literal detection added.
 
-**Java-2 — `security:runtime_exec_injection` (KevCritical, 150 pts)**
-- **Trigger:** `method_invocation` matching `.exec(expr)` on a receiver that
-  is `Runtime.getRuntime()`, OR `object_creation_expression{ProcessBuilder}`
-  where the constructor argument is not a `string_literal`.
-- **Suppress if:** inside a function named `test*` or `*Test`.
-- **AST node:** `method_invocation{exec} → primary{Runtime.getRuntime()}`
-  or `object_creation_expression{ProcessBuilder}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_java_slop()`
-- **CVE class:** CWE-78; Oracle JDK, Spring, Struts exploit chains
-
-**Java-3 — `security:xxe_documentbuilder` (Critical, 50 pts)**
-- **Trigger:** `method_invocation{newInstance}` on `DocumentBuilderFactory`
-  where no `setFeature("…disallow-doctype-decl…", true)` call follows in
-  the same method body.
-- **Suppress if:** `setFeature` with `FEATURE_SECURE_PROCESSING` is present.
-- **AST node:** `method_invocation{newInstance}` on `DocumentBuilderFactory`
-  receiver without subsequent `setFeature` hardening call.
-- **File:** `crates/forge/src/slop_hunter.rs::find_java_slop()`
-- **CVE class:** CWE-611 (XXE); Spring, Android, Apache Commons
+**Java-3 `[COMPLETED — v9.1.2]`** — `DocumentBuilderFactory.newInstance()`
+without XXE hardening fires `security:xxe_documentbuilder` at `Critical`.
 
 ---
 
@@ -493,3 +469,33 @@ functions in `slop_hunter.rs`. All C/C++ detection is byte-level
 the four patterns above. C/C++ is the language most represented in CVE
 exploits; having only byte-level detection is a credibility gap in enterprise
 security conversations.
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom & Java Consolidation v9.1.2)
+
+*CT counter reset to CT-001 per Logic 5 CISO Pulse epoch boundary.*
+
+### CT-001: `utc_now_iso8601()` is file-local — not accessible across modules
+
+**Found during:** Wisdom & Java Consolidation (v9.1.2)
+**Location:** `crates/cli/src/main.rs`
+**Issue:** `utc_now_iso8601()` is defined in `main.rs` as a private function.
+The `--ci-mode` path in `cmd_update_wisdom` calls it directly, coupling the
+timestamp implementation to a single file.  If the function is ever needed
+in a library crate (e.g., `crates/common`), this will require a refactor.
+**Suggested fix:** Move `utc_now_iso8601()` to `crates/common/src/` as a
+`pub` utility, or introduce a thin `janitor_timestamp()` wrapper in a
+shared utilities module.
+
+### CT-002: `wisdom_manifest.json` is not committed to the repo as a baseline
+
+**Found during:** Wisdom & Java Consolidation (v9.1.2)
+**Location:** `.github/workflows/cisa-kev-sync.yml`
+**Issue:** The `cisa_kev_ids.txt` snapshot is committed as part of the first
+workflow run.  Until that first run executes, the diff step has no baseline
+and will always output "No prior snapshot — writing baseline."  This means
+the first Monday after deployment produces no PR — a confusing no-op.
+**Suggested fix:** Commit an initial `.janitor/cisa_kev_ids.txt` (populated
+from the current CISA KEV catalog) as part of this session, so the first
+automated run produces a meaningful diff rather than a silent baseline write.
