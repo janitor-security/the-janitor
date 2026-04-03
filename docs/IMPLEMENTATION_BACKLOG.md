@@ -57,4 +57,4 @@ is unreachable; mark bounce log entries with `governor_status: "degraded"`.
 - `RUNBOOK.md` *(modified)* — `--soft-fail` flag documented
 - `Cargo.toml` *(modified)* — version bumped to `9.0.0`
 
-**Commit:** pending
+**Commit:** `dbfe549`
