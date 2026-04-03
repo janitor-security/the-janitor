@@ -241,6 +241,19 @@ enum Commands {
         /// to complete before the runner is killed.
         #[arg(long, default_value = "1140")]
         timeout_secs: u64,
+        /// Proceed without Governor attestation when the network endpoint is unreachable.
+        ///
+        /// When set and the Governor POST fails (timeout, 5xx, or any network
+        /// error), the CLI emits a `[JANITOR DEGRADED]` warning to stderr, marks
+        /// the bounce log entry with `governor_status: "degraded"`, and exits `0`
+        /// so downstream CI steps are not blocked.
+        ///
+        /// Without this flag the CLI exits `1` on any Governor transport failure
+        /// (fail-closed — the Governor firewall cannot be silently bypassed).
+        ///
+        /// Can also be set via `soft_fail = true` in `janitor.toml`.
+        #[arg(long)]
+        soft_fail: bool,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -654,6 +667,7 @@ async fn main() -> anyhow::Result<()> {
             analysis_token,
             head_sha,
             timeout_secs,
+            soft_fail,
         } => {
             // Clone owned values for spawn_blocking (required for 'static bound).
             let path = path.clone();
@@ -672,6 +686,7 @@ async fn main() -> anyhow::Result<()> {
             let analysis_token = analysis_token.clone();
             let head_sha = head_sha.clone();
             let timeout_secs = *timeout_secs;
+            let soft_fail = *soft_fail;
 
             // Capture fields needed for the timeout failure payload before the
             // move into spawn_blocking.
@@ -705,6 +720,7 @@ async fn main() -> anyhow::Result<()> {
                     report_url.as_deref(),
                     analysis_token.as_deref(),
                     head_sha.as_deref(),
+                    soft_fail,
                 )
             });
 
@@ -751,6 +767,7 @@ async fn main() -> anyhow::Result<()> {
                             agentic_pct: 0.0,
                             ci_energy_saved_kwh: 0.0,
                             provenance: report::Provenance::default(),
+                            governor_status: None,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -2573,6 +2590,7 @@ fn cmd_bounce(
     report_url: Option<&str>,
     analysis_token: Option<&str>,
     head_sha: Option<&str>,
+    soft_fail_flag: bool,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -2583,6 +2601,9 @@ fn cmd_bounce(
 
     // Load governance manifest — fallback to defaults if absent or malformed.
     let policy = JanitorPolicy::load(project_root);
+
+    // Effective soft-fail: CLI flag takes precedence, then janitor.toml.
+    let soft_fail = soft_fail_flag || policy.soft_fail;
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
     // `registry_loaded` tracks whether the rkyv file was actually present on disk.
@@ -3126,6 +3147,8 @@ probable AI context-collapse (hallucinated function reference)"
             // egress_bytes_sent computed below — depends on whether we POST.
             egress_bytes_sent: 0,
         },
+        // governor_status set after POST attempt below.
+        governor_status: None,
     };
 
     // ── Architecture Inversion: POST result to Governor ───────────────────────
@@ -3147,15 +3170,27 @@ probable AI context-collapse (hallucinated function reference)"
         }
     }
 
-    report::append_bounce_log(&janitor_dir, &log_entry);
-    // Write color-coded SVG badge to .janitor/janitor_badge.svg for CI/PR comment use.
-    report::write_badge(&janitor_dir, log_entry.slop_score);
-    report::fire_webhook_if_configured(&log_entry, &policy);
-
+    // Attempt Governor POST — record attestation status before writing the log
+    // entry so the local NDJSON audit trail reflects the outcome.
     if let (Some(url), Some(token)) = (report_url, analysis_token) {
         let is_critical = report::is_critical_threat(&log_entry);
-        match report::post_bounce_result(url, token, &log_entry) {
-            Ok(()) => {}
+        let post_result = report::post_bounce_result(url, token, &log_entry);
+        match post_result {
+            Ok(()) => {
+                log_entry.governor_status = Some("ok".to_string());
+            }
+            Err(e) if soft_fail => {
+                eprintln!(
+                    "[JANITOR DEGRADED] Governor unreachable. \
+                     Soft-fail active: proceeding without attestation."
+                );
+                report::append_diag_log(
+                    &janitor_dir,
+                    &format!("WARN soft-fail: post_bounce_result failed: {e}"),
+                );
+                log_entry.governor_status = Some("degraded".to_string());
+                // Fall through — append degraded entry and exit 0.
+            }
             Err(e) if !is_critical => {
                 report::append_diag_log(
                     &janitor_dir,
@@ -3165,6 +3200,11 @@ probable AI context-collapse (hallucinated function reference)"
             Err(e) => return Err(e),
         }
     }
+
+    report::append_bounce_log(&janitor_dir, &log_entry);
+    // Write color-coded SVG badge to .janitor/janitor_badge.svg for CI/PR comment use.
+    report::write_badge(&janitor_dir, log_entry.slop_score);
+    report::fire_webhook_if_configured(&log_entry, &policy);
 
     // ── Weekly heartbeat ───────────────────────────────────────────────────────
     // Best-effort, silent.  Fires at most once per 7 days; result goes to

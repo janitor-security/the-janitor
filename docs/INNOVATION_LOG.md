@@ -27,12 +27,12 @@ of Failure.
 
 #### Solution — Soft-Fail Mode + Sovereign Governor
 
-**Short-term (v9.0.x) — Soft-Fail Mode:**  
-Add a `--soft-fail` flag to `janitor bounce` (and a `soft_fail = true` option
-in `janitor.toml`). When the Governor is unreachable and `soft_fail` is active,
-the CLI logs a structured warning (`"governor_status": "unreachable"`) to the
-bounce log, emits exit code `0`, and allows the pipeline to proceed. The bounce
-result is marked `"attestation": "degraded"` in the audit trail.
+**Short-term — Soft-Fail Mode:** `[COMPLETED — v9.0.0]`  
+`--soft-fail` flag added to `janitor bounce`; `soft_fail = true` supported in
+`janitor.toml`. When the Governor is unreachable and soft-fail is active, the
+CLI logs a `[JANITOR DEGRADED]` warning to stderr, marks the bounce log entry
+with `governor_status: "degraded"`, and exits `0`. The slop score remains
+authoritative in the local `.janitor/bounce_log.ndjson` audit trail.
 
 **Long-term (v9.1.x) — Sovereign Governor binary:**  
 Package the Governor as a self-contained binary (`janitor-gov`) that the
@@ -395,3 +395,36 @@ Feed the fuzzer corpus into an LLM-guided mutator that generates *semantically
 valid* source (not random bytes) to probe higher-level ambiguities in the
 grammar (e.g., deeply nested closures in Kotlin, recursive HCL modules).
 This shifts the threat model from syntactic to semantic exhaustion attacks.
+
+---
+
+## Continuous Telemetry — 2026-04-03
+
+**Found during:** VULN-01 Remediation (Soft-Fail Mode, v9.0.0)
+
+### CT-001: `BounceLogEntry` struct literals are not `Default`-derivable
+**Found during:** VULN-01 Remediation  
+**Location:** `crates/cli/src/report.rs:321`  
+**Issue:** `BounceLogEntry` does not derive `Default`, forcing every callsite
+to enumerate all fields in full struct literals.  Adding a new field (as done
+in this directive with `governor_status`) requires updating every literal
+across `main.rs`, `daemon.rs`, `git_drive.rs`, `cbom.rs`, and test helpers.
+The spread of callsites creates a maintenance burden and a regression surface
+on each schema evolution.  
+**Suggested fix:** Derive `Default` on `BounceLogEntry` (all fields have
+sensible zero/empty/None defaults) and switch existing struct literals to
+`BounceLogEntry { field: value, ..Default::default() }`.  This also enables
+cleaner test fixtures with minimal initialisation boilerplate.
+
+### CT-002: Degraded attestation has no SIEM visibility path
+**Found during:** VULN-01 Remediation  
+**Location:** `crates/cli/src/main.rs` (soft_fail match arm)  
+**Issue:** When `governor_status: "degraded"` is written to the local NDJSON
+log, there is no mechanism to forward the degraded event to the configured
+webhook endpoint.  An operator running soft-fail mode will see the warning on
+`stderr` but the outbound webhook (Slack, SIEM, Teams) will not receive a
+`degraded_attestation` event.  A governance auditor reviewing the webhook feed
+would have no signal that some CI runs proceeded without attestation.  
+**Suggested fix:** Add a `"degraded_attestation"` event class to
+`WebhookConfig::events` filter and fire `fire_webhook_if_configured` in the
+soft-fail match arm, passing a synthetic `governor_status: "degraded"` entry.

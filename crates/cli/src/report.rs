@@ -186,6 +186,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         agentic_pct: 100.0,
         ci_energy_saved_kwh: 0.1,
         provenance: Provenance::default(),
+        governor_status: None,
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -466,6 +467,15 @@ pub struct BounceLogEntry {
     /// only, not source code, crosses the network boundary.
     #[serde(default)]
     pub provenance: Provenance,
+
+    /// Governor attestation status for this bounce result.
+    ///
+    /// - `"ok"` — bounce result successfully POSTed to the Governor.
+    /// - `"degraded"` — POST failed and `--soft-fail` was active; pipeline
+    ///   proceeded without attestation.  The slop score is still authoritative.
+    /// - `None` (field absent) — Governor not configured (`--report-url` absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governor_status: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2929,6 +2939,7 @@ mod tests {
                 source_bytes_processed: 1024,
                 egress_bytes_sent: 0,
             },
+            governor_status: None,
         }
     }
 
@@ -3042,6 +3053,7 @@ mod webhook_tests {
             agentic_pct: 0.0,
             ci_energy_saved_kwh: 0.0,
             provenance: Provenance::default(),
+            governor_status: None,
         }
     }
 
@@ -3074,5 +3086,85 @@ mod webhook_tests {
             events: vec!["critical_threat".to_string()],
         };
         assert!(policy_cfg.should_fire(true, false));
+    }
+}
+
+#[cfg(test)]
+mod soft_fail_tests {
+    use super::*;
+
+    fn make_test_entry() -> BounceLogEntry {
+        BounceLogEntry {
+            pr_number: None,
+            author: None,
+            timestamp: "2026-04-03T00:00:00Z".to_string(),
+            slop_score: 0,
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            unlinked_pr: 0,
+            antipatterns: vec![],
+            comment_violations: vec![],
+            min_hashes: vec![],
+            zombie_deps: vec![],
+            state: PrState::Open,
+            is_bot: false,
+            repo_slug: String::new(),
+            suppressed_by_domain: 0,
+            collided_pr_numbers: vec![],
+            necrotic_flag: None,
+            commit_sha: String::new(),
+            policy_hash: String::new(),
+            version_silos: vec![],
+            agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.0,
+            provenance: Provenance::default(),
+            governor_status: None,
+        }
+    }
+
+    /// Verify that `post_bounce_result` returns `Err` when the Governor is
+    /// unreachable.  This is the precondition that the soft-fail path handles.
+    #[test]
+    fn post_bounce_result_fails_for_unreachable_endpoint() {
+        let entry = make_test_entry();
+        // Port 1 is always connection-refused; never has a listener.
+        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        assert!(result.is_err(), "unreachable endpoint must return Err");
+    }
+
+    /// With soft_fail = true the caller must suppress the Governor error and
+    /// return Ok — simulating the `Err(e) if soft_fail` match arm in cmd_bounce.
+    #[test]
+    fn soft_fail_suppresses_governor_error() {
+        let entry = make_test_entry();
+        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        let soft_fail = true;
+        let handled: anyhow::Result<()> = match result {
+            Ok(()) => Ok(()),
+            Err(_) if soft_fail => Ok(()), // soft-fail: degrade, do not propagate
+            Err(e) => Err(e),
+        };
+        assert!(
+            handled.is_ok(),
+            "soft_fail path must return Ok when governor unreachable"
+        );
+    }
+
+    /// Without soft_fail the Governor error must propagate (CLI exits 1).
+    #[test]
+    fn hard_fail_propagates_governor_error() {
+        let entry = make_test_entry();
+        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        let soft_fail = false;
+        let handled: anyhow::Result<()> = match result {
+            Ok(()) => Ok(()),
+            Err(_) if soft_fail => Ok(()),
+            Err(e) => Err(e),
+        };
+        assert!(
+            handled.is_err(),
+            "hard-fail path must propagate Err when governor unreachable"
+        );
     }
 }

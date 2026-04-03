@@ -36,4 +36,25 @@ innovation log; harden CLAUDE.md with Continuous Evolution law.
   backlog and innovation log maintenance
 - `CLAUDE.md` *(modified, local/gitignored)* — Law X: Continuous Evolution
 
+**Commit:** e01a3b5
+
+---
+
+## 2026-04-03 — VULN-01 Remediation: Soft-Fail Mode (v9.0.0)
+
+**Directive:** Implement `--soft-fail` flag and `soft_fail` toml key so the
+pipeline can proceed without Governor attestation when the network endpoint
+is unreachable; mark bounce log entries with `governor_status: "degraded"`.
+
+**Files modified:**
+- `crates/common/src/policy.rs` *(modified)* — `soft_fail: bool` field added to `JanitorPolicy`
+- `crates/cli/src/report.rs` *(modified)* — `governor_status: Option<String>` field added to `BounceLogEntry`; 3 `soft_fail_tests` added
+- `crates/cli/src/main.rs` *(modified)* — `--soft-fail` CLI flag; `cmd_bounce` wired; POST+log restructured for degraded path
+- `crates/cli/src/daemon.rs` *(modified)* — `governor_status: None` added to struct literal
+- `crates/cli/src/git_drive.rs` *(modified)* — `governor_status: None` added to two struct literals
+- `crates/cli/src/cbom.rs` *(modified)* — `governor_status: None` added to test struct literal
+- `docs/INNOVATION_LOG.md` *(modified)* — VULN-01 short-term solution marked `[COMPLETED — v9.0.0]`
+- `RUNBOOK.md` *(modified)* — `--soft-fail` flag documented
+- `Cargo.toml` *(modified)* — version bumped to `9.0.0`
+
 **Commit:** pending

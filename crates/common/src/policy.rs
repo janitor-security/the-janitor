@@ -312,6 +312,21 @@ pub struct JanitorPolicy {
     /// Configure in `[billing]` TOML table.  See [`BillingConfig`].
     #[serde(default)]
     pub billing: BillingConfig,
+
+    /// Allow the pipeline to proceed when the Governor endpoint is unreachable.
+    ///
+    /// When `true` and a Governor POST fails (timeout, 5xx, network error),
+    /// `janitor bounce` emits a `[JANITOR DEGRADED]` warning to stderr, marks
+    /// the bounce log entry with `governor_status: "degraded"`, and exits `0`.
+    ///
+    /// Without this flag (default `false`) the CLI exits `1` on any Governor
+    /// transport failure — fail-closed behaviour that prevents silent bypass.
+    ///
+    /// Can also be set via `--soft-fail` on the CLI (CLI flag takes precedence).
+    ///
+    /// Default: `false`.
+    #[serde(default)]
+    pub soft_fail: bool,
 }
 
 impl Default for JanitorPolicy {
@@ -327,6 +342,7 @@ impl Default for JanitorPolicy {
             forge: ForgeConfig::default(),
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
+            soft_fail: false,
         }
     }
 }
@@ -604,6 +620,7 @@ mod tests {
             forge: ForgeConfig::default(),
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
+            soft_fail: false,
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();

@@ -564,6 +564,7 @@ fn bounce_one(
             agentic_pct: 0.0,
             ci_energy_saved_kwh: 0.1,
             provenance: crate::report::Provenance::default(),
+            governor_status: None,
         });
     }
 
@@ -656,6 +657,7 @@ fn bounce_one(
             source_bytes_processed,
             ..crate::report::Provenance::default()
         },
+        governor_status: None,
     })
 }
 
