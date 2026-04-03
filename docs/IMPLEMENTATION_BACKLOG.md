@@ -236,5 +236,5 @@ fixtures; resolve CT-003 by making `gpg-preset-passphrase` path portable.
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 - `Cargo.toml` *(modified)* — version bumped to `9.1.4`
 
-**Commit:** *(pending)*
+**Commit:** `fc9c11f`
 
