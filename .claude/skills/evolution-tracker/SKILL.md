@@ -67,6 +67,41 @@ Entry structure:
 
 ---
 
+---
+
+## Logic 3 — Continuous Telemetry (Mandatory on Every Prompt)
+
+**On EVERY prompt received**, as you read the codebase to formulate a
+solution, you MUST actively scan for:
+
+- Undocumented technical debt (hacks, workarounds, deferred fixes)
+- Missing test coverage (detection paths with zero `#[test]` blocks)
+- Architectural bottlenecks (O(n²) algorithms, unbounded allocations, lock
+  contention in hot paths)
+- Security blind spots introduced or exposed by the current change
+
+If any finding is identified, append it to `docs/INNOVATION_LOG.md` under a
+`## Continuous Telemetry` section **before concluding the session**.
+
+Entry format:
+
+```markdown
+## Continuous Telemetry — YYYY-MM-DD
+
+### CT-NNN: <Short title>
+**Found during:** <directive name>
+**Location:** `crates/foo/src/bar.rs:LL`
+**Issue:** <description>
+**Suggested fix:** <concrete remediation>
+```
+
+**Absolute mandate:** This scan is not optional and is not waived by
+directive scope. Even a one-line fix can surface a CT entry. If nothing is
+found, explicitly note `<!-- no telemetry findings this session -->` in the
+INNOVATION_LOG so the absence of findings is recorded, not silently skipped.
+
+---
+
 ## Enforcement
 
 Both logs must be current before any `/release` is executed.

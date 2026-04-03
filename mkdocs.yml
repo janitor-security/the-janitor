@@ -30,7 +30,9 @@ nav:
   - Discovery: discovery.md
   - Terms: terms.md
   - Privacy: privacy.md
-  - R&D Roadmap: R_AND_D_ROADMAP.md
+  - R&D and Telemetry:
+    - Innovation Log: INNOVATION_LOG.md
+    - Implementation Backlog: IMPLEMENTATION_BACKLOG.md
 
 markdown_extensions:
   - admonition
