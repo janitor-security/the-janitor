@@ -563,6 +563,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-governance-optimization-v901" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Governance Optimization (v9.0.1)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -632,6 +641,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-governance-optimization-v901" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Governance Optimization (v9.0.1)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -693,7 +711,22 @@ is unreachable; mark bounce log entries with <code>governor_status: "degraded"</
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — VULN-01 short-term solution marked <code>[COMPLETED — v9.0.0]</code>
 - <code>RUNBOOK.md</code> <em>(modified)</em> — <code>--soft-fail</code> flag documented
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.0.0</code></p>
-<p><strong>Commit:</strong> pending</p>
+<p><strong>Commit:</strong> <code>dbfe549</code></p>
+<hr />
+<h2 id="2026-04-03-governance-optimization-v901">2026-04-03 — Governance Optimization (v9.0.1)</h2>
+<p><strong>Directive:</strong> Linearize the release skill to prevent re-auditing; add Auto-Purge
+law to the Evolution Tracker; confirm single-source version ownership; fix stale
+<code>v8.0.14</code> engine version in <code>CLAUDE.md</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>.claude/commands/release.md</code> <em>(modified)</em> — 5-step linear AI-guided release
+  sequence; GPG fallback procedure documented; version single-source law enforced
+- <code>.claude/skills/evolution-tracker/SKILL.md</code> <em>(modified)</em> — Logic 4 added:
+  Auto-Purge of fully-completed H2/H3 sections from <code>docs/INNOVATION_LOG.md</code>
+- <code>CLAUDE.md</code> <em>(modified, gitignored)</em> — stale <code>v8.0.14</code> corrected to <code>v9.0.1</code>;
+  note added that version is managed exclusively by the release sequence
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.0.1</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-003 filed (telemetry)</p>
+<p><strong>Commit:</strong> <code>pending</code></p>
 
 
 
