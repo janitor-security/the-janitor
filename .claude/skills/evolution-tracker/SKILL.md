@@ -102,6 +102,37 @@ INNOVATION_LOG so the absence of findings is recorded, not silently skipped.
 
 ---
 
+---
+
+## Logic 4 — Auto-Purge (Completed Sections)
+
+**Trigger:** After marking any finding `[COMPLETED — vX.Y.Z]` in
+`docs/INNOVATION_LOG.md`, immediately scan its parent H2/H3 section.
+
+**Rule:** If **ALL** named findings within the parent section are marked
+`[COMPLETED — ...]`, **DELETE the entire parent section** — H2/H3 header and
+all content down to (but not including) the next H2/H3 boundary. The Innovation
+Log must contain only active or partially-active debt. Completed sections are
+dead weight and will accumulate into noise if not purged.
+
+**Scope:** H2 and H3 sections with named findings (VULN-NNN, IDEA-NNN, CT-NNN).
+Structural sections such as the preamble, summary tables, and the `Roadmap
+Summary` table are exempt from purging.
+
+**Protocol:**
+1. Count the total named findings under the parent section.
+2. Count the findings marked `[COMPLETED — ...]`.
+3. If count matches: delete the section from `docs/INNOVATION_LOG.md`.
+4. Record the deletion in the current session's Backlog entry under a
+   `**Purged sections:**` sub-item.
+
+**Example:** If `## Enterprise Compliance Gaps` contains VULN-01 through
+VULN-04 and all four are `[COMPLETED]`, delete the entire
+`## Enterprise Compliance Gaps` block including the roadmap summary table
+embedded within it.
+
+---
+
 ## Enforcement
 
 Both logs must be current before any `/release` is executed.

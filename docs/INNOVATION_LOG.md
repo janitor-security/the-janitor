@@ -417,6 +417,7 @@ sensible zero/empty/None defaults) and switch existing struct literals to
 cleaner test fixtures with minimal initialisation boilerplate.
 
 ### CT-002: Degraded attestation has no SIEM visibility path
+
 **Found during:** VULN-01 Remediation  
 **Location:** `crates/cli/src/main.rs` (soft_fail match arm)  
 **Issue:** When `governor_status: "degraded"` is written to the local NDJSON
@@ -428,3 +429,19 @@ would have no signal that some CI runs proceeded without attestation.
 **Suggested fix:** Add a `"degraded_attestation"` event class to
 `WebhookConfig::events` filter and fire `fire_webhook_if_configured` in the
 soft-fail match arm, passing a synthetic `governor_status: "degraded"` entry.
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Governance Optimization, v9.0.1)
+
+### CT-003: CLAUDE.md engine version was a manual duplication of Cargo.toml
+**Found during:** Governance Optimization  
+**Location:** `CLAUDE.md` line 11 (gitignored)  
+**Issue:** `CLAUDE.md` contained a hardcoded `**Engine Version**: v8.0.14` line
+that was never updated during subsequent releases (v8.3.0 through v9.0.0). This
+created a persistent stale-version claim in the AI's active constitution, causing
+potential confusion about the current version. The line is redundant — Cargo.toml
+is already declared as the canonical source on the same line.  
+**Suggested fix (applied this session):** Updated to `v9.0.1`; added a note
+that this field must not be edited manually and is maintained exclusively as
+part of the release sequence (Step 1 of `.claude/commands/release.md`).

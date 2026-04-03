@@ -58,3 +58,23 @@ is unreachable; mark bounce log entries with `governor_status: "degraded"`.
 - `Cargo.toml` *(modified)* — version bumped to `9.0.0`
 
 **Commit:** `dbfe549`
+
+---
+
+## 2026-04-03 — Governance Optimization (v9.0.1)
+
+**Directive:** Linearize the release skill to prevent re-auditing; add Auto-Purge
+law to the Evolution Tracker; confirm single-source version ownership; fix stale
+`v8.0.14` engine version in `CLAUDE.md`.
+
+**Files modified:**
+- `.claude/commands/release.md` *(modified)* — 5-step linear AI-guided release
+  sequence; GPG fallback procedure documented; version single-source law enforced
+- `.claude/skills/evolution-tracker/SKILL.md` *(modified)* — Logic 4 added:
+  Auto-Purge of fully-completed H2/H3 sections from `docs/INNOVATION_LOG.md`
+- `CLAUDE.md` *(modified, gitignored)* — stale `v8.0.14` corrected to `v9.0.1`;
+  note added that version is managed exclusively by the release sequence
+- `Cargo.toml` *(modified)* — version bumped to `9.0.1`
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-003 filed (telemetry)
+
+**Commit:** `pending`
