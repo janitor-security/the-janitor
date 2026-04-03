@@ -608,6 +608,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-siem-integration-autonomous-signing-update-v913" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — SIEM Integration &amp; Autonomous Signing Update (v9.1.3)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -717,6 +726,15 @@
   <a href="#2026-04-03-wisdom-java-consolidation-v912" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Wisdom &amp; Java Consolidation (v9.1.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-03-siem-integration-autonomous-signing-update-v913" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — SIEM Integration &amp; Autonomous Signing Update (v9.1.3)
     </span>
   </a>
   
@@ -883,6 +901,29 @@ injection), and Java-3 (XXE DocumentBuilderFactory); add Crucible fixtures.</p>
   marked <code>[COMPLETED — v9.1.2]</code>; CT epoch reset to Epoch 2 (CT-001, CT-002)
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.1.2</code></p>
+<p><strong>Commit:</strong> <code>da591d6</code></p>
+<hr />
+<h2 id="2026-04-03-siem-integration-autonomous-signing-update-v913">2026-04-03 — SIEM Integration &amp; Autonomous Signing Update (v9.1.3)</h2>
+<p><strong>Directive:</strong> Eliminate manual GPG intervention via <code>JANITOR_GPG_PASSPHRASE</code>
+env var; broadcast zero-upload proof to enterprise SIEM dashboards; harden
+<code>[NEXT RECOMMENDED ACTION]</code> against recency bias.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — both <code>release</code> and <code>fast-release</code> recipes gain
+  <code>JANITOR_GPG_PASSPHRASE</code> env var block: if set, pipes to
+  <code>gpg-preset-passphrase --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E</code>
+  before <code>git tag -s</code>; falls back to existing cache if unset
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>fire_webhook_if_configured</code> doc
+  comment gains explicit provenance call-out: <code>provenance.source_bytes_processed</code>
+  and <code>provenance.egress_bytes_sent</code> always present in JSON payload for SIEM
+  zero-upload dashboards (Datadog/Splunk)
+- <code>.claude/rules/response-format.md</code> <em>(modified)</em> — Anti-Recency-Bias Law added
+  to <code>[NEXT RECOMMENDED ACTION]</code>: must scan entire Innovation Log P0/P1/P2;
+  select highest commercial TEI or critical compliance upgrade; recency is not
+  a selection criterion
+- <code>RUNBOOK.md</code> <em>(modified)</em> — Section 3 RELEASE: <code>JANITOR_GPG_PASSPHRASE</code>
+  export documented with key fingerprint, keygrip, and fallback to <code>gpg-unlock</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.1.3</code></p>
 <p><strong>Commit:</strong> <em>(pending)</em></p>
 
 

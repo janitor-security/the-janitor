@@ -763,6 +763,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-siem-integration-autonomous-signing-v913" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration &amp; Autonomous Signing v9.1.3)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration & Autonomous Signing v9.1.3)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-003-gpg-preset-passphrase-path-is-hardcoded-to-debianubuntu-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-003: gpg-preset-passphrase path is hardcoded to Debian/Ubuntu location
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1062,6 +1086,30 @@
   <a href="#ct-002-wisdom_manifestjson-is-not-committed-to-the-repo-as-a-baseline" class="md-nav__link">
     <span class="md-ellipsis">
       CT-002: wisdom_manifest.json is not committed to the repo as a baseline
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-siem-integration-autonomous-signing-v913" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration &amp; Autonomous Signing v9.1.3)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration & Autonomous Signing v9.1.3)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-003-gpg-preset-passphrase-path-is-hardcoded-to-debianubuntu-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-003: gpg-preset-passphrase path is hardcoded to Debian/Ubuntu location
     </span>
   </a>
   
@@ -1521,6 +1569,20 @@ the first Monday after deployment produces no PR — a confusing no-op.
 <strong>Suggested fix:</strong> Commit an initial <code>.janitor/cisa_kev_ids.txt</code> (populated
 from the current CISA KEV catalog) as part of this session, so the first
 automated run produces a meaningful diff rather than a silent baseline write.</p>
+<hr />
+<h2 id="continuous-telemetry-2026-04-03-epoch-2-siem-integration-autonomous-signing-v913">Continuous Telemetry — 2026-04-03 (Epoch 2, SIEM Integration &amp; Autonomous Signing v9.1.3)</h2>
+<h3 id="ct-003-gpg-preset-passphrase-path-is-hardcoded-to-debianubuntu-location">CT-003: <code>gpg-preset-passphrase</code> path is hardcoded to Debian/Ubuntu location</h3>
+<p><strong>Found during:</strong> SIEM Integration &amp; Autonomous Signing (v9.1.3)
+<strong>Location:</strong> <code>justfile</code> — <code>release</code> and <code>fast-release</code> recipes
+<strong>Issue:</strong> The <code>JANITOR_GPG_PASSPHRASE</code> env var path pipes to
+<code>/usr/lib/gnupg/gpg-preset-passphrase</code> — a path that only exists on
+Debian/Ubuntu (<code>gnupg2</code> package).  On Fedora (<code>/usr/libexec/gpg-preset-passphrase</code>),
+Arch, and macOS (Homebrew GPG), the binary lives elsewhere.  If the path does
+not exist, the <code>if</code> block fails silently under <code>set -euo pipefail</code> with a
+"not found" exit — which aborts the recipe before <code>git tag -s</code>.
+<strong>Suggested fix:</strong> Replace the hardcoded path with
+<code>$(command -v gpg-preset-passphrase 2&gt;/dev/null || echo /usr/lib/gnupg/gpg-preset-passphrase)</code>
+to use the system PATH first and fall back to the Debian location.</p>
 
 
 
