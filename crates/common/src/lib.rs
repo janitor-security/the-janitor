@@ -3,6 +3,7 @@ pub mod physarum;
 pub mod policy;
 pub mod registry;
 pub mod slop;
+pub mod taint;
 pub mod wisdom;
 
 use rkyv::bytecheck::CheckBytes;

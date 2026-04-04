@@ -462,3 +462,20 @@ Surrender Index to quantify AI-introduced structural rot density.
 - `Cargo.toml` *(modified)* — version bumped to `9.6.0`
 
 **Status:** P1-3 COMPLETED. Crucible 156/156 + 3/3. `just audit` ✅.
+
+---
+
+## 2026-04-04 — v9.6.2: Git Exclusion Override & Taint Spine Initialization (P0-1)
+
+**Directive:** Git Hygiene Fix + P0-1 Taint Spine Foundation
+
+**Changes:**
+- `.gitignore` *(modified)* — `!docs/v1/wisdom.rkyv` exception punched below `*.rkyv` rule; `git add -f` staged the artifact
+- `crates/common/src/taint.rs` *(created)* — `TaintKind` enum (7 variants, stable `repr(u8)` for rkyv persistence), `TaintedParam` struct, `TaintExportRecord` struct; all derive `Archive + Serialize + Deserialize` (rkyv + serde); 3 unit tests
+- `crates/common/src/lib.rs` *(modified)* — `pub mod taint` registered
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `ParsedUnit<'src>` struct exported: holds `source: &[u8]`, `tree: Option<Tree>`, `language: Option<Language>`; `new()` and `unparsed()` constructors; no `find_slop` refactor yet (foundational type only)
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-009 appended
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.6.2`
+
+**Status:** P0-1 foundation COMPLETE. `just audit` ✅.

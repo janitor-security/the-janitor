@@ -191,6 +191,64 @@ pub(crate) fn parse_with_timeout_budget(
     )
 }
 
+// ---------------------------------------------------------------------------
+// ParsedUnit — shared parse context (P0-1 Parse-Forest Reuse)
+// ---------------------------------------------------------------------------
+
+/// A shared parse context for a single source file.
+///
+/// Holds the raw bytes alongside the (lazily populated) tree-sitter parse tree
+/// and the resolved grammar language so that multiple detector phases can share
+/// a single `parser.parse()` call instead of repeating it.
+///
+/// **v9.6.2 baseline**: `ParsedUnit` is defined here as the foundational type
+/// for the P0-1 Taint Spine.  The current `find_slop` dispatch still performs
+/// per-language parsing inline; a future release will refactor the hot path to
+/// accept `&ParsedUnit` and reuse the tree across detectors.
+pub struct ParsedUnit<'src> {
+    /// Raw source bytes of the file.
+    pub source: &'src [u8],
+    /// Parsed CST produced by tree-sitter, if parsing succeeded within budget.
+    ///
+    /// `None` when the grammar is unsupported, the file exceeded the 1 MiB
+    /// circuit-breaker, or the parse timed out.
+    pub tree: Option<tree_sitter::Tree>,
+    /// The tree-sitter `Language` used to produce `tree`.
+    ///
+    /// `None` when `tree` is `None`.
+    pub language: Option<tree_sitter::Language>,
+}
+
+impl<'src> ParsedUnit<'src> {
+    /// Construct a `ParsedUnit` with a pre-computed tree and language.
+    pub fn new(
+        source: &'src [u8],
+        tree: Option<tree_sitter::Tree>,
+        language: Option<tree_sitter::Language>,
+    ) -> Self {
+        Self {
+            source,
+            tree,
+            language,
+        }
+    }
+
+    /// Construct a bare `ParsedUnit` with no tree (unsupported language or
+    /// parse failure).  Detector phases that only need byte-level access can
+    /// still operate on [`Self::source`].
+    pub fn unparsed(source: &'src [u8]) -> Self {
+        Self {
+            source,
+            tree: None,
+            language: None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SlopFinding
+// ---------------------------------------------------------------------------
+
 /// A single antipattern finding within a source file.
 #[derive(Debug, Clone)]
 pub struct SlopFinding {

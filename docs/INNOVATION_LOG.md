@@ -216,3 +216,4 @@ classification helpers; replace `extract_patch_ext()` string returns with a
   a bootstrap-empty `wisdom_manifest.json` when the CDN or KEV source is
   unreachable, preventing first-run cron failure while the static registry is
   propagating.
+- CT-009: P0-1 Foundation Laid — `TaintKind`, `TaintedParam`, `TaintExportRecord` in `crates/common/src/taint.rs`; `ParsedUnit<'src>` in `crates/forge/src/slop_hunter.rs`; foundational types for 3-hop cross-file taint propagation (v9.6.2)
