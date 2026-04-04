@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-autonomous-expansion-release-hygiene-v951" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-air-gap-update-v950" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Air-Gap Update (v9.5.0)
@@ -732,6 +741,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-autonomous-expansion-release-hygiene-v951" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-air-gap-update-v950" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Air-Gap Update (v9.5.0)
@@ -905,6 +923,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-autonomous-expansion-release-hygiene-v951">2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)</h2>
+<p><strong>Directive:</strong> Repair the fast-release staging gap that dropped new crates from
+the prior tag, autonomously execute <code>P0-1</code> by expanding the executable-surface
+detectors across six high-risk file types, prove them in Crucible, and record
+new architecture debt discovered during implementation.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — fast-release now stages <code>crates/ tools/ docs/ Cargo.toml Cargo.lock justfile action.yml</code> before the signed release commit, preventing new crates from being omitted while still ignoring root-level agent garbage
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.5.1</code>
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — filename-aware pseudo-language extraction added for <code>Dockerfile</code>, <code>CMakeLists.txt</code>, and Bazel root files so extensionless security surfaces reach the detector layer
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — new detectors added for Dockerfile remote <code>ADD</code>, XML XXE, protobuf <code>google.protobuf.Any</code>, Bazel/Starlark <code>http_archive</code> without <code>sha256</code>, CMake <code>execute_process(COMMAND ${VAR})</code>, and dynamic <code>system()</code> in C/C++; unit tests added
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — true-positive and true-negative fixtures added for all six new executable-surface detectors
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — implemented <code>P0-1</code> removed; new <code>P2-5</code> added for filename-aware surface routing
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-air-gap-update-v950">2026-04-04 — Air-Gap Update (v9.5.0)</h2>
 <p><strong>Directive:</strong> Execute the Sovereign Governor extraction, decouple CLI
