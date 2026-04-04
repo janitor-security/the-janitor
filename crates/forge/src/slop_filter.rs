@@ -427,6 +427,16 @@ fn extract_patch_ext(patch: &str) -> &str {
         {
             // Strip query strings or trailing whitespace that some diff tools add.
             let path = path.trim();
+            let file_name = path.rsplit('/').next().unwrap_or(path);
+            match file_name {
+                "Dockerfile" => return "dockerfile",
+                "CMakeLists.txt" => return "cmake",
+                "BUILD" | "WORKSPACE" | "MODULE.bazel" => return "starlark",
+                _ => {}
+            }
+            if file_name.starts_with("BUILD.") {
+                return "starlark";
+            }
             if let Some(dot_pos) = path.rfind('.') {
                 return &path[dot_pos + 1..];
             }

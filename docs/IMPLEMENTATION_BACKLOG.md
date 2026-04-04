@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Autonomous Expansion & Release Hygiene (v9.5.1)
+
+**Directive:** Repair the fast-release staging gap that dropped new crates from
+the prior tag, autonomously execute `P0-1` by expanding the executable-surface
+detectors across six high-risk file types, prove them in Crucible, and record
+new architecture debt discovered during implementation.
+
+**Files modified:**
+- `justfile` *(modified)* — fast-release now stages `crates/ tools/ docs/ Cargo.toml Cargo.lock justfile action.yml` before the signed release commit, preventing new crates from being omitted while still ignoring root-level agent garbage
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.5.1`
+- `crates/forge/src/slop_filter.rs` *(modified)* — filename-aware pseudo-language extraction added for `Dockerfile`, `CMakeLists.txt`, and Bazel root files so extensionless security surfaces reach the detector layer
+- `crates/forge/src/slop_hunter.rs` *(modified)* — new detectors added for Dockerfile remote `ADD`, XML XXE, protobuf `google.protobuf.Any`, Bazel/Starlark `http_archive` without `sha256`, CMake `execute_process(COMMAND ${VAR})`, and dynamic `system()` in C/C++; unit tests added
+- `crates/crucible/src/main.rs` *(modified)* — true-positive and true-negative fixtures added for all six new executable-surface detectors
+- `docs/INNOVATION_LOG.md` *(modified)* — implemented `P0-1` removed; new `P2-5` added for filename-aware surface routing
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Air-Gap Update (v9.5.0)
 
 **Directive:** Execute the Sovereign Governor extraction, decouple CLI

@@ -88,7 +88,7 @@ fast-release version:
 	echo "🚀 Initiating Fast Release Sequence v{{version}}..."
 	cargo build --release --workspace
 	strip target/release/janitor
-	git diff --quiet || git commit -a -S -m "chore: release v{{version}}"
+	git diff --quiet || { git add crates/ tools/ docs/ Cargo.toml Cargo.lock justfile action.yml && git commit -S -m "chore: release v{{version}}"; }
 	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
 	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
 	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \

