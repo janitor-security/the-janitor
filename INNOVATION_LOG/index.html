@@ -569,15 +569,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p1-3-mcp-structured-findings-envelope" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3: MCP Structured Findings Envelope
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -640,6 +631,15 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
   
 </li>
       
@@ -758,15 +758,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p1-3-mcp-structured-findings-envelope" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3: MCP Structured Findings Envelope
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -829,6 +820,15 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
   
 </li>
       
@@ -904,21 +904,6 @@ attestation model per CI platform.</p>
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/scm.rs</code>, teach CLI entrypoints to consume it, and add
 fixture-based env tests for each provider.</p>
-<h3 id="p1-3-mcp-structured-findings-envelope">P1-3: MCP Structured Findings Envelope</h3>
-<p><strong>Class:</strong> Agent Protocol / Integration
-<strong>Inspired by:</strong> <code>crates/mcp/src/lib.rs</code></p>
-<p><strong>Observation:</strong>
-The MCP server still returns flattened prose lists for bounce and dependency
-findings, discarding severity, byte ranges, domains, and deep-scan provenance.</p>
-<p><strong>Proposal:</strong>
-Emit structured finding envelopes and analysis profiles from MCP tools,
-including deep-scan budget metadata and retry traces.</p>
-<p><strong>Security impact:</strong>
-Lets agents consume firewall verdicts deterministically without regex-parsing
-human strings, improving pre-commit remediation and audit accuracy.</p>
-<p><strong>Implementation path:</strong>
-Define shared finding DTOs in <code>common</code>, upgrade <code>run_bounce()</code> and
-<code>run_dep_check()</code>, and bump the MCP schema version compatibly.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
 <p><strong>Class:</strong> Core Engine Enhancement
@@ -1022,6 +1007,8 @@ Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> plus
 classification helpers; replace <code>extract_patch_ext()</code> string returns with a
 <code>SurfaceKind</code> return path; teach <code>slop_hunter::find_slop()</code> to dispatch on
 <code>SurfaceKind</code>; update report/MCP serialization to include the resolved surface.</p>
+<h2 id="continuous-telemetry-2026-04-04">Continuous Telemetry — 2026-04-04</h2>
+<!-- no telemetry findings this session — structural work only (P1-3 implementation) -->
 
 
 

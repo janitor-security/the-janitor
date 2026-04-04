@@ -707,6 +707,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v960-omni-purge-mcp-structured-findings-p1-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.0: Omni-Purge &amp; MCP Structured Findings (P1-3)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -915,6 +924,15 @@
   <a href="#2026-04-03-universal-agent-protocol-rce-hardening-v920" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Universal Agent Protocol &amp; RCE Hardening (v9.2.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v960-omni-purge-mcp-structured-findings-p1-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.0: Omni-Purge &amp; MCP Structured Findings (P1-3)
     </span>
   </a>
   
@@ -1269,6 +1287,17 @@ Surrender Index to quantify AI-introduced structural rot density.</p>
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.2.0</code></p>
 <p><strong>Commit:</strong> <code>89d742f</code></p>
+<hr />
+<h2 id="2026-04-04-v960-omni-purge-mcp-structured-findings-p1-3">2026-04-04 — v9.6.0: Omni-Purge &amp; MCP Structured Findings (P1-3)</h2>
+<p><strong>Directive:</strong> Omni-Purge + MCP Structured Findings Envelope (P1-3)</p>
+<p><strong>Changes:</strong>
+- <code>crates/common/src/slop.rs</code> <em>(created)</em> — <code>StructuredFinding</code> DTO: <code>{ id: String, file: Option&lt;String&gt;, line: Option&lt;u32&gt; }</code>; registered in <code>common::lib.rs</code>
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>SlopScore</code> gains <code>structured_findings: Vec&lt;StructuredFinding&gt;</code>; <code>bounce()</code> populates findings from accepted antipatterns with line numbers; <code>bounce_git()</code> injects file context per blob; redundant <code>let mut</code> rebinding removed
+- <code>crates/mcp/src/lib.rs</code> <em>(modified)</em> — <code>run_bounce()</code> emits <code>"findings"</code> structured array alongside <code>"antipattern_details"</code>; <code>run_scan()</code> emits dead-symbol findings as <code>{ id: "dead_symbol", file, line, name }</code>
+- <code>SOVEREIGN_BRIEFING.md</code> <em>(modified)</em> — <code>StructuredFinding</code> DTO row in primitives table; Stage 17 in bounce pipeline
+- <code>/tmp/omni_mapper*</code>, <code>/tmp/the-janitor*</code> <em>(purged)</em> — orphaned clone cleanup
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.0</code></p>
+<p><strong>Status:</strong> P1-3 COMPLETED. Crucible 156/156 + 3/3. <code>just audit</code> ✅.</p>
 
 
 
