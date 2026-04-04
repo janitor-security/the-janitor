@@ -98,7 +98,7 @@ command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.
 - `crates/cli/src/git_drive.rs` *(modified)* — `pqc_sig: None` added to 2 struct literals
 - `docs/INNOVATION_LOG.md` *(modified)* — VULN-02 section purged (all findings `[COMPLETED — v9.1.0]`); roadmap table updated
 
-**Commit:** *(pending)*
+**Commit:** `89d742f`
 
 ---
 
@@ -271,4 +271,4 @@ Surrender Index to quantify AI-introduced structural rot density.
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 - `Cargo.toml` *(modified)* — version bumped to `9.2.0`
 
-**Commit:** *(pending)*
+**Commit:** `89d742f`
