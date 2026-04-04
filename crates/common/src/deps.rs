@@ -12,10 +12,26 @@
 
 use rkyv::bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Package ecosystem / manifest type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Archive, Deserialize, Serialize, CheckBytes)]
-#[rkyv(derive(Debug))]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Archive,
+    Deserialize,
+    Serialize,
+    SerdeSerialize,
+    SerdeDeserialize,
+    CheckBytes,
+)]
+#[rkyv(derive(Debug, PartialEq, Eq, PartialOrd, Ord))]
 #[repr(u8)]
 pub enum DependencyEcosystem {
     /// Node.js / npm / yarn / pnpm (`package.json`).

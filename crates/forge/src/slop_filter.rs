@@ -43,7 +43,7 @@
 //! (equivalent to ~3 KevCritical findings) to prevent runaway score inflation.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use tree_sitter::{Language, Query, StreamingIterator};
@@ -525,8 +525,64 @@ pub fn split_patch_by_file(patch: &str) -> Vec<&str> {
 ///    registry — likely re-introductions of known symbols.
 /// 5. **`logic_clones_found`**: for each hash group with N > 1 members,
 ///    contribute N − 1 to the clone count.
-#[derive(Debug, Default)]
-pub struct PatchBouncer;
+#[derive(Debug, Clone, Default)]
+pub struct PatchBouncer {
+    repo_root: Option<PathBuf>,
+    wisdom_path: Option<PathBuf>,
+}
+
+impl PatchBouncer {
+    pub fn for_workspace(root: &Path) -> Self {
+        Self {
+            repo_root: Some(root.to_path_buf()),
+            wisdom_path: Some(root.join(".janitor").join("wisdom.rkyv")),
+        }
+    }
+
+    fn apply_kev_findings(&self, score: &mut SlopScore, patch_blobs: &HashMap<PathBuf, Vec<u8>>) {
+        let Some(wisdom_path) = self.wisdom_path.as_deref() else {
+            return;
+        };
+
+        let lockfile_in_diff = patch_blobs
+            .keys()
+            .any(|p| p.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock"));
+        if !lockfile_in_diff {
+            return;
+        }
+
+        let lock_bytes = self
+            .repo_root
+            .as_deref()
+            .and_then(|root| std::fs::read(root.join("Cargo.lock")).ok())
+            .or_else(|| {
+                patch_blobs.iter().find_map(|(path, bytes)| {
+                    (path.file_name().and_then(|n| n.to_str()) == Some("Cargo.lock"))
+                        .then(|| bytes.clone())
+                })
+            });
+
+        let Some(lock_bytes) = lock_bytes else {
+            return;
+        };
+
+        let hits = common::wisdom::find_kev_dependency_hits(&lock_bytes, wisdom_path);
+        for hit in hits {
+            score.antipatterns_found += 1;
+            score.antipattern_score = score
+                .antipattern_score
+                .saturating_add(crate::slop_hunter::Severity::KevCritical.points());
+            let mut description = format!(
+                "supply_chain:kev_dependency — dependency `{}` resolved at v{} matches KEV {}",
+                hit.package_name, hit.version, hit.cve_id
+            );
+            if !hit.summary.trim().is_empty() {
+                description.push_str(&format!(" — {}", hit.summary.trim()));
+            }
+            score.antipattern_details.push(description);
+        }
+    }
+}
 
 impl PRBouncer for PatchBouncer {
     fn bounce(&self, patch: &str, registry: &SymbolRegistry) -> Result<SlopScore> {
@@ -594,6 +650,11 @@ impl PRBouncer for PatchBouncer {
             total.antipatterns_found += mig_count;
             total.antipattern_score += mig_count * 50;
             total.antipattern_details.extend(mig);
+            // ── KEV Dependency Correlation ───────────────────────────────────
+            // Runs on the reconstructed lockfile state when the patch touches
+            // Cargo.lock and a workspace wisdom archive is available.
+            let patch_blobs = extract_patch_blobs(patch);
+            self.apply_kev_findings(&mut total, &patch_blobs);
             // ── Secret Entropy Gate ───────────────────────────────────────────
             // Runs at the multi-file aggregate level so it sees the full unified
             // diff context including added lines across all file types.
@@ -754,14 +815,20 @@ impl PRBouncer for PatchBouncer {
                     // binary_hunter scan must still surface any payload findings.
                     if !pre_lang_payload_findings.is_empty() {
                         let count = pre_lang_payload_findings.len() as u32;
-                        return Ok(SlopScore {
+                        let mut score = SlopScore {
                             antipatterns_found: count,
                             antipattern_score: count * 50, // Critical tier
                             antipattern_details: pre_lang_payload_findings,
                             ..SlopScore::default()
-                        });
+                        };
+                        let patch_blobs = extract_patch_blobs(patch);
+                        self.apply_kev_findings(&mut score, &patch_blobs);
+                        return Ok(score);
                     }
-                    return Ok(SlopScore::default());
+                    let mut score = SlopScore::default();
+                    let patch_blobs = extract_patch_blobs(patch);
+                    self.apply_kev_findings(&mut score, &patch_blobs);
+                    return Ok(score);
                 }
 
                 // Binary asset bypass: known binary formats always trigger the
@@ -1266,8 +1333,7 @@ impl PRBouncer for PatchBouncer {
         antipattern_details.extend(payload_findings);
         antipattern_details.extend(boilerplate_details);
         antipattern_details.extend(regression_details);
-
-        Ok(SlopScore {
+        let mut final_score = SlopScore {
             dead_symbols_added,
             logic_clones_found,
             zombie_symbols_added,
@@ -1277,7 +1343,11 @@ impl PRBouncer for PatchBouncer {
             suppressed_by_domain,
             necrotic_flag,
             ..SlopScore::default()
-        })
+        };
+        let patch_blobs = extract_patch_blobs(patch);
+        self.apply_kev_findings(&mut final_score, &patch_blobs);
+
+        Ok(final_score)
     }
 }
 
@@ -1634,7 +1704,7 @@ pub fn bounce_git(
             }
         }
 
-        if let Ok(mut score) = PatchBouncer.bounce(patch, registry) {
+        if let Ok(mut score) = PatchBouncer::for_workspace(repo_path).bounce(patch, registry) {
             total.dead_symbols_added += score.dead_symbols_added;
             total.logic_clones_found += score.logic_clones_found;
             total.zombie_symbols_added += score.zombie_symbols_added;
@@ -1695,7 +1765,7 @@ mod tests {
 
     #[test]
     fn test_empty_patch_is_clean() {
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce("", &empty_registry()).unwrap();
         assert!(score.is_clean());
         assert_eq!(score.score(), 0);
@@ -1704,7 +1774,7 @@ mod tests {
     #[test]
     fn test_unknown_language_is_clean() {
         let patch = make_patch("foo.unknown", "some code here\n");
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert!(score.is_clean(), "unknown ext must produce zero score");
     }
@@ -1712,7 +1782,7 @@ mod tests {
     #[test]
     fn test_new_python_symbol_clean_registry() {
         let patch = make_patch("utils.py", "def brand_new():\n    return 42\n");
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(score.dead_symbols_added, 0);
         assert_eq!(score.logic_clones_found, 0);
@@ -1722,7 +1792,7 @@ mod tests {
     fn test_dead_symbol_detected_python() {
         let patch = make_patch("utils.py", "def old_helper():\n    return 1\n");
         let registry = registry_with(&["old_helper"]);
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &registry).unwrap();
         assert_eq!(score.dead_symbols_added, 1);
         // dead_symbols_added no longer contributes to score (Necrotic Pruning Matrix handles dead-code).
@@ -1735,7 +1805,7 @@ mod tests {
             "utils.py",
             "def add(a, b):\n    return a + b\ndef plus(x, y):\n    return x + y\n",
         );
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(score.logic_clones_found, 1);
         assert_eq!(score.score(), 5);
@@ -1748,7 +1818,7 @@ mod tests {
             "math.cpp",
             "int add(int a, int b) { return a + b; }\nint sum(int x, int y) { return x + y; }\n",
         );
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(
             score.logic_clones_found, 1,
@@ -1763,7 +1833,7 @@ mod tests {
             "Service.cs",
             "class A { int Add(int a, int b) { return a + b; } int Sum(int x, int y) { return x + y; } }",
         );
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(
             score.logic_clones_found, 1,
@@ -1779,7 +1849,9 @@ mod tests {
     fn test_vendored_cpp_raw_new_not_flagged() {
         let src = "void* p = new MyClass();\n";
         let patch = make_patch("vendor/somelib/src/alloc.cpp", src);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert_eq!(
             score.antipatterns_found, 0,
             "C++ raw new must not fire (rule removed v7.1.11)"
@@ -1791,7 +1863,9 @@ mod tests {
     fn test_first_party_cpp_raw_new_not_flagged() {
         let src = "void* p = new MyClass();\n";
         let patch = make_patch("src/engine/alloc.cpp", src);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert_eq!(
             score.antipatterns_found, 0,
             "C++ raw new must not fire in first-party code either (rule removed v7.1.11)"
@@ -1911,7 +1985,7 @@ mod tests {
         });
 
         let patch = make_patch("utils.py", fn_src);
-        let score = PatchBouncer.bounce(&patch, &registry).unwrap();
+        let score = PatchBouncer::default().bounce(&patch, &registry).unwrap();
         assert_eq!(
             score.zombie_symbols_added, 1,
             "zombie reintroduction must be detected"
@@ -1967,7 +2041,7 @@ mod tests {
         });
 
         let patch = make_patch("utils.py", fn_src);
-        let score = PatchBouncer.bounce(&patch, &registry).unwrap();
+        let score = PatchBouncer::default().bounce(&patch, &registry).unwrap();
         assert_eq!(
             score.zombie_symbols_added, 0,
             "protected entry must NOT be a zombie"
@@ -2069,7 +2143,9 @@ mod tests {
         // the Compiled Payload Shield at the PatchBouncer level.
         let src = "const POOL: &str = \"stratum+tcp://pool.example.com:3333\";\n";
         let patch = make_patch("config.rs", src);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert!(
             score.antipatterns_found >= 1,
             "stratum+tcp:// must trigger payload shield: {:?}",
@@ -2093,7 +2169,9 @@ mod tests {
         // Ordinary Rust source code must not trigger the payload shield.
         let src = "fn compute(a: i32, b: i32) -> i32 { a + b }\n";
         let patch = make_patch("math.rs", src);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         // NCD and payload shields must both be silent on trivial clean source.
         let payload_flags: Vec<&String> = score
             .antipattern_details
@@ -2132,7 +2210,7 @@ mod tests {
             "lib.rs",
             "fn add(a: i32, b: i32) -> i32 { a + b }\nfn sum(x: i32, y: i32) -> i32 { x + y }\n",
         );
-        let bouncer = PatchBouncer;
+        let bouncer = PatchBouncer::default();
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(
             score.logic_clones_found, 1,
@@ -2170,7 +2248,9 @@ mod tests {
             "backend/api.rs",
             "infra/main.tf",
         ]);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert!(
             score
                 .antipattern_details
@@ -2195,7 +2275,9 @@ mod tests {
             "frontend/app.js",
             "backend/api.rs",
         ]);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert!(
             !score
                 .antipattern_details
@@ -2216,7 +2298,9 @@ mod tests {
             "backend/api.rs",
             "Cargo.lock",
         ]);
-        let score = PatchBouncer.bounce(&patch, &empty_registry()).unwrap();
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
         assert!(
             !score
                 .antipattern_details

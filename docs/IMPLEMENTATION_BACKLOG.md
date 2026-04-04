@@ -5,6 +5,33 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Communication Bifurcation & KEV Correlation Strike (v9.3.0)
+
+**Directive:** Relax intermediate execution messaging while preserving the
+final response law, implement KEV-aware dependency correlation across the
+lockfile/bounce/MCP paths, add Crucible regression coverage, and cut `v9.3.0`.
+
+**Files modified:**
+- `.agent_governance/rules/response-format.md` *(modified)* — intermediate execution updates now explicitly permit concise natural language; 4-part response format reserved for the final post-release summary only
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.3.0`; `semver` promoted to a workspace dependency for KEV range matching
+- `crates/common/Cargo.toml` *(modified)* — `semver.workspace = true` added for shared KEV matching logic
+- `crates/common/src/deps.rs` *(modified)* — archived `DependencyEcosystem` gains ordering/equality derives required by KEV rule archival
+- `crates/common/src/wisdom.rs` *(modified)* — KEV dependency rule schema, archive compatibility loader, and shared `find_kev_dependency_hits()` matcher added
+- `crates/anatomist/Cargo.toml` *(modified)* — `semver.workspace = true` added
+- `crates/anatomist/src/manifest.rs` *(modified)* — `check_kev_deps(lockfile, wisdom_db)` implemented as the SlopFinding adapter over shared KEV hit correlation; regression tests added
+- `crates/forge/src/slop_filter.rs` *(modified)* — `PatchBouncer` made workspace-aware, KEV findings injected into both aggregate and lockfile-source-text fast paths
+- `crates/mcp/src/lib.rs` *(modified)* — `janitor_dep_check` now surfaces `kev_count` and `kev_findings`; `run_bounce` uses workspace-aware `PatchBouncer`
+- `crates/cli/src/main.rs` *(modified)* — patch-mode bounce path switched to workspace-aware `PatchBouncer`
+- `crates/cli/src/daemon.rs` *(modified)* — daemon bounce path switched to workspace-aware `PatchBouncer`
+- `crates/crucible/Cargo.toml` *(modified)* — test dependencies added for synthetic wisdom archive fixtures
+- `crates/crucible/src/main.rs` *(modified)* — synthetic `Cargo.lock` KEV fixture added; 150-point intercept enforced
+- `docs/INNOVATION_LOG.md` *(modified)* — `IDEA-002` removed as implemented
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-02 — Enterprise Supremacy Ingestion
 
 **Directive:** Encode Fortune 500 CISO teardown into architectural ledger and

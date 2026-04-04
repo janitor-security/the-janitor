@@ -360,7 +360,13 @@ pub mod unix {
                 let guard = state.registry.load();
                 let registry: &SymbolRegistry = &guard;
 
-                match PatchBouncer.bounce(&patch, registry) {
+                let bouncer = repo_path
+                    .as_deref()
+                    .map(std::path::Path::new)
+                    .map(PatchBouncer::for_workspace)
+                    .unwrap_or_default();
+
+                match bouncer.bounce(&patch, registry) {
                     Ok(mut score) => {
                         // Cross-PR collision detection via LSH MinHash index.
                         let sig =

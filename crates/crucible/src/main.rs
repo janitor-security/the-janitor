@@ -1338,7 +1338,7 @@ const BOUNCE_GALLERY: &[BounceEntry] = &[
 pub fn run_bounce_gallery() -> bool {
     use common::registry::SymbolRegistry;
     let registry = SymbolRegistry::default();
-    let bouncer = PatchBouncer;
+    let bouncer = PatchBouncer::default();
 
     let mut passed: usize = 0;
     let mut failed: usize = 0;
@@ -1412,6 +1412,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::deps::DependencyEcosystem;
+    use common::wisdom::{KevDependencyRule, WisdomSet};
+    use std::fs;
 
     /// Full gallery must pass — any detector regression here blocks `just audit`.
     #[test]
@@ -1429,6 +1432,64 @@ mod tests {
         assert!(
             run_bounce_gallery(),
             "Crucible: Blast Radius Gallery breach — PatchBouncer gate failed"
+        );
+    }
+
+    #[test]
+    fn kev_dependency_lockfile_fixture_intercepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let lockfile = r#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.150"
+"#;
+        fs::write(dir.path().join("Cargo.lock"), lockfile.as_bytes()).unwrap();
+
+        let mut wisdom = WisdomSet {
+            kev_dependency_rules: vec![KevDependencyRule {
+                package_name: "serde".into(),
+                ecosystem: DependencyEcosystem::Cargo,
+                cve_id: "CVE-2026-9999".into(),
+                affected_versions: vec!["1.0.150".into()],
+                summary: "synthetic crucible fixture".into(),
+            }],
+            ..Default::default()
+        };
+        wisdom.sort();
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = r#"diff --git a/Cargo.lock b/Cargo.lock
+index 1111111..2222222 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1,0 +1,6 @@
++version = 4
++
++[[package]]
++name = "serde"
++version = "1.0.150"
++"#;
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("supply_chain:kev_dependency")),
+            "Crucible: KEV dependency fixture was not surfaced in antipattern details"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: KEV dependency fixture must contribute at least 150 points"
         );
     }
 }

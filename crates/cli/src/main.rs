@@ -2801,7 +2801,7 @@ fn cmd_bounce(
                     }
                 }
             };
-            let mut score = PatchBouncer.bounce(&patch, &registry)?;
+            let mut score = PatchBouncer::for_workspace(project_root).bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
 
@@ -4167,7 +4167,7 @@ fn cmd_self_test() -> anyhow::Result<()> {
         );
 
         let registry = SymbolRegistry::default();
-        let ghost_a_passed = match PatchBouncer.bounce(synthetic_diff, &registry) {
+        let ghost_a_passed = match PatchBouncer::default().bounce(synthetic_diff, &registry) {
             Ok(score) => score.score() > 0,
             Err(_) => false,
         };

@@ -305,11 +305,22 @@ fn run_dep_check(path: &str) -> Result<serde_json::Value> {
 
     let registry = anatomist::manifest::scan_manifests(root);
     let zombies = anatomist::manifest::find_zombie_deps(root, &registry);
+    let kev_findings = std::fs::read(root.join("Cargo.lock"))
+        .ok()
+        .map(|lock| {
+            anatomist::manifest::check_kev_deps(&lock, &root.join(".janitor").join("wisdom.rkyv"))
+        })
+        .unwrap_or_default();
 
     Ok(serde_json::json!({
         "total_declared": registry.len(),
         "zombie_count": zombies.len(),
         "zombie_deps": zombies,
+        "kev_count": kev_findings.len(),
+        "kev_findings": kev_findings
+            .into_iter()
+            .map(|f| f.description)
+            .collect::<Vec<_>>(),
     }))
 }
 
@@ -403,7 +414,7 @@ fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_
 
     use forge::slop_filter::{PRBouncer, PatchBouncer};
     let registry = common::registry::SymbolRegistry::default();
-    let score = PatchBouncer
+    let score = PatchBouncer::for_workspace(&root)
         .bounce(&patch_text, &registry)
         .context("PatchBouncer::bounce failed")?;
 

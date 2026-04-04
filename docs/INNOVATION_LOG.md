@@ -137,44 +137,6 @@ traversal concatenation. Missing deserialization and shell-injection vectors.
 
 ---
 
-### IDEA-002: Provenance-Aware KEV Escalation — Dependency × CVE Correlation
-
-**Class:** Threat Intelligence Integration
-**Priority:** P0
-**Inspired by:** `crates/anatomist/src/manifest.rs::find_version_silos_from_lockfile`
-
-**Observation:**
-The KEV gate (`Severity::KevCritical`, 150 pts) fires only when a patch
-contains a *syntactic pattern* matching a known exploit class. The most common
-real-world scenario is different: a dependency upgrade silently introduces a
-version that *contains* a CVE-listed vulnerability, with no change to the
-calling code.
-
-**Proposal:**
-Extend `janitor_dep_check` to correlate the resolved dependency tree against
-the CISA KEV catalog (fetched via `update-wisdom`):
-
-1. For each direct + transitive dep in `Cargo.lock`, query the local
-   `wisdom.db` for KEV entries matching the crate + version range.
-2. If a match is found, synthesize a `SlopFinding` with
-   `severity: KevCritical`, `category: "supply_chain:kev_dependency"`, and
-   the CVE ID in `description`.
-3. The finding is emitted into the bounce result even if the patch itself
-   contains no dangerous code.
-
-**Security impact:**
-Closes the gap between "dep is vulnerable" and "patch uses the vulnerable
-codepath." A `cargo add serde_json@1.0.94` that pulls in a KEV-listed
-transitive dep becomes a hard block at `slop_score >= 150` before the PR
-is merged.
-
-**Implementation path:**
-`crates/anatomist/src/manifest.rs::check_kev_deps(lockfile, wisdom_db)`
-→ returns `Vec<SlopFinding>` with `KevCritical` severity
-→ merged into `PatchBouncer::bounce()` result alongside structural findings.
-
----
-
 ### VULN-01: Sovereign Governor Binary (Long-term)
 
 **Severity:** Critical

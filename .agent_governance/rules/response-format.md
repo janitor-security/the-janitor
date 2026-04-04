@@ -5,8 +5,17 @@ below. No other top-level structure is acceptable.
 
 ## The Law
 
-All substantive responses (implementation, release, audit, research) must be
-organized into the following four named sections, in order:
+During active execution (reading files, compiling, fixing bugs, waiting on
+tests, or patching), agents MAY use natural, concise status updates such as
+`Running tests...`, `Failed on line 12. Patching...`, or `Release push in
+progress.`  These interim updates must stay brief and operational.
+
+The four-section structure below is reserved strictly for the **final summary**
+after the directive is complete and any requested `/release` has been triggered.
+Do **not** use it for intermediate execution updates.
+
+All final substantive summaries (implementation, release, audit, research) must
+be organized into the following four named sections, in order:
 
 ```
 ## [EXECUTION STATUS]
@@ -37,8 +46,10 @@ the exact command to begin. No vague "consider" language — name the action.
 
 - Conversational responses (e.g., "what does X do?") are exempt from this
   structure.
-- Directive responses (any session that modifies files or runs commands) are
-  NOT exempt. The format is non-negotiable.
+- Interim execution updates during an active directive are exempt and should
+  use concise natural language.
+- Final directive summaries (any session that modifies files or runs commands)
+  are NOT exempt. The format is non-negotiable.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
   `docs/INNOVATION_LOG.md` — it is not a free-form opinion.
 

@@ -31,6 +31,8 @@
 
 use aho_corasick::AhoCorasick;
 use common::deps::{DependencyEcosystem, DependencyEntry, DependencyRegistry};
+use common::wisdom::find_kev_dependency_hits;
+use forge::slop_hunter::{Severity, SlopFinding};
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -56,6 +58,36 @@ const MANIFEST_NAMES: &[&str] = &[
     SPIN_MANIFEST,
     WRANGLER_MANIFEST,
 ];
+
+/// Cross-reference a resolved `Cargo.lock` payload against the KEV dependency
+/// rules stored in `wisdom.rkyv`.
+///
+/// Returns one [`SlopFinding`] per matching dependency/CVE pair. Findings fire
+/// at [`Severity::KevCritical`] (+150 pts) and use the canonical
+/// `supply_chain:kev_dependency` category prefix in the description.
+pub fn check_kev_deps(lockfile: &[u8], wisdom_db: &Path) -> Vec<SlopFinding> {
+    let mut findings = Vec::new();
+    for hit in find_kev_dependency_hits(lockfile, wisdom_db) {
+        let mut description = format!(
+            "supply_chain:kev_dependency — dependency `{}` resolved at v{} matches KEV {}",
+            hit.package_name, hit.version, hit.cve_id
+        );
+        if !hit.summary.trim().is_empty() {
+            description.push_str(&format!(" — {}", hit.summary.trim()));
+        }
+
+        findings.push(SlopFinding {
+            start_byte: 0,
+            end_byte: 0,
+            description,
+            domain: forge::metadata::DOMAIN_ALL,
+            severity: Severity::KevCritical,
+        });
+    }
+
+    findings.sort_by(|a, b| a.description.cmp(&b.description));
+    findings
+}
 
 /// Scans `project_root` for manifest files and builds a `DependencyRegistry`.
 ///
@@ -1699,6 +1731,108 @@ version = "1.0.200"
         let silos = find_version_silos_from_lockfile(&blobs, None);
         assert_eq!(silos.len(), 1, "with no base, all head silos returned");
         assert_eq!(silos[0].name, "serde");
+    }
+
+    fn write_wisdom_file(
+        dir: &tempfile::TempDir,
+        rules: Vec<common::wisdom::KevDependencyRule>,
+    ) -> std::path::PathBuf {
+        let path = dir.path().join("wisdom.rkyv");
+        let mut wisdom = common::wisdom::WisdomSet {
+            kev_dependency_rules: rules,
+            ..Default::default()
+        };
+        wisdom.sort();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_check_kev_deps_detects_exact_version_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let wisdom_path = write_wisdom_file(
+            &dir,
+            vec![common::wisdom::KevDependencyRule {
+                package_name: "serde".into(),
+                ecosystem: DependencyEcosystem::Cargo,
+                cve_id: "CVE-2026-9999".into(),
+                affected_versions: vec!["1.0.150".into()],
+                summary: "synthetic regression fixture".into(),
+            }],
+        );
+        let lockfile = br#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.150"
+"#;
+
+        let findings = check_kev_deps(lockfile, &wisdom_path);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::KevCritical);
+        assert!(
+            findings[0]
+                .description
+                .contains("supply_chain:kev_dependency"),
+            "category prefix must be preserved"
+        );
+        assert!(
+            findings[0].description.contains("CVE-2026-9999"),
+            "CVE identifier must be present in the finding"
+        );
+    }
+
+    #[test]
+    fn test_check_kev_deps_detects_semver_range_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let wisdom_path = write_wisdom_file(
+            &dir,
+            vec![common::wisdom::KevDependencyRule {
+                package_name: "tokio".into(),
+                ecosystem: DependencyEcosystem::Cargo,
+                cve_id: "CVE-2026-1111".into(),
+                affected_versions: vec![">=1.20.0, <1.30.0".into()],
+                summary: String::new(),
+            }],
+        );
+        let lockfile = br#"
+version = 4
+
+[[package]]
+name = "tokio"
+version = "1.25.0"
+"#;
+
+        let findings = check_kev_deps(lockfile, &wisdom_path);
+        assert_eq!(
+            findings.len(),
+            1,
+            "semver range should match resolved version"
+        );
+    }
+
+    #[test]
+    fn test_check_kev_deps_legacy_wisdom_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = common::wisdom::LegacyWisdomSet::default();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&legacy).unwrap();
+        let wisdom_path = dir.path().join("wisdom.rkyv");
+        std::fs::write(&wisdom_path, bytes).unwrap();
+
+        let lockfile = br#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.150"
+"#;
+
+        assert!(
+            check_kev_deps(lockfile, &wisdom_path).is_empty(),
+            "legacy wisdom archive without KEV rules must not emit findings"
+        );
     }
 
     // ── find_phantom_calls tests ─────────────────────────────────────────────
