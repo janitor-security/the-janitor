@@ -725,6 +725,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v962-git-exclusion-override-taint-spine-initialization-p0-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.2: Git Exclusion Override &amp; Taint Spine Initialization (P0-1)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -951,6 +960,15 @@
   <a href="#2026-04-04-v960-omni-purge-mcp-structured-findings-p1-3" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — v9.6.0: Omni-Purge &amp; MCP Structured Findings (P1-3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v962-git-exclusion-override-taint-spine-initialization-p0-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.2: Git Exclusion Override &amp; Taint Spine Initialization (P0-1)
     </span>
   </a>
   
@@ -1329,6 +1347,18 @@ Surrender Index to quantify AI-introduced structural rot density.</p>
 - <code>/tmp/omni_mapper*</code>, <code>/tmp/the-janitor*</code> <em>(purged)</em> — orphaned clone cleanup
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.0</code></p>
 <p><strong>Status:</strong> P1-3 COMPLETED. Crucible 156/156 + 3/3. <code>just audit</code> ✅.</p>
+<hr />
+<h2 id="2026-04-04-v962-git-exclusion-override-taint-spine-initialization-p0-1">2026-04-04 — v9.6.2: Git Exclusion Override &amp; Taint Spine Initialization (P0-1)</h2>
+<p><strong>Directive:</strong> Git Hygiene Fix + P0-1 Taint Spine Foundation</p>
+<p><strong>Changes:</strong>
+- <code>.gitignore</code> <em>(modified)</em> — <code>!docs/v1/wisdom.rkyv</code> exception punched below <code>*.rkyv</code> rule; <code>git add -f</code> staged the artifact
+- <code>crates/common/src/taint.rs</code> <em>(created)</em> — <code>TaintKind</code> enum (7 variants, stable <code>repr(u8)</code> for rkyv persistence), <code>TaintedParam</code> struct, <code>TaintExportRecord</code> struct; all derive <code>Archive + Serialize + Deserialize</code> (rkyv + serde); 3 unit tests
+- <code>crates/common/src/lib.rs</code> <em>(modified)</em> — <code>pub mod taint</code> registered
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>ParsedUnit&lt;'src&gt;</code> struct exported: holds <code>source: &amp;[u8]</code>, <code>tree: Option&lt;Tree&gt;</code>, <code>language: Option&lt;Language&gt;</code>; <code>new()</code> and <code>unparsed()</code> constructors; no <code>find_slop</code> refactor yet (foundational type only)
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-009 appended
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.2</code></p>
+<p><strong>Status:</strong> P0-1 foundation COMPLETE. <code>just audit</code> ✅.</p>
 
 
 
