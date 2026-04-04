@@ -238,3 +238,37 @@ fixtures; resolve CT-003 by making `gpg-preset-passphrase` path portable.
 
 **Commit:** `fc9c11f`
 
+
+---
+
+## 2026-04-03 — Universal Agent Protocol & RCE Hardening (v9.2.0)
+
+**Directive:** Establish shared multi-agent governance layer; intercept WebLogic
+T3/IIOP `resolve()` and XMLDecoder F5/WebLogic RCE vectors; add Cognition
+Surrender Index to quantify AI-introduced structural rot density.
+
+**Files modified:**
+- `.agent_governance/` *(created)* — UAP canonical governance dir; `README.md`
+  documents bootstrap sequence and shared ledger mandate for all agents
+- `.agent_governance/rules/` — git mv from `.claude/rules/` (symlink preserved)
+- `.agent_governance/commands/` — git mv from `.claude/commands/` (symlink preserved)
+- `.agent_governance/skills/` — git mv from `.claude/skills/` (symlink preserved)
+- `.claude/rules`, `.claude/commands`, `.claude/skills` *(converted to symlinks)*
+- `.cursorrules` *(created)* — Codex/Cursor bootstrap: reads `.agent_governance/`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `JAVA_MARKERS` gains `b"resolve"`;
+  `"lookup"` arm extended to `"lookup" | "resolve"` (WebLogic CVE-2023-21839/21931);
+  `new XMLDecoder(stream)` `object_creation_expression` gate (KevCritical,
+  CVE-2017-10271, CVE-2019-2725); 3 new unit tests
+- `crates/crucible/src/main.rs` *(modified)* — 3 new fixtures: ctx.resolve TP/TN,
+  XMLDecoder TP; Crucible 141/141 → 144/144
+- `crates/cli/src/report.rs` *(modified)* — `BounceLogEntry` gains
+  `cognition_surrender_index: f64`; `render_step_summary` outputs CSI row
+- `crates/cli/src/main.rs` *(modified)* — CSI computed in main log entry (inline);
+  timeout entry gains `cognition_surrender_index: 0.0`; test helper updated
+- `crates/cli/src/daemon.rs` *(modified)* — `cognition_surrender_index: 0.0`
+- `crates/cli/src/git_drive.rs` *(modified)* — `cognition_surrender_index: 0.0` (×2)
+- `crates/cli/src/cbom.rs` *(modified)* — `cognition_surrender_index: 0.0`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.2.0`
+
+**Commit:** *(pending)*

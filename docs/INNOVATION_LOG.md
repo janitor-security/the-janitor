@@ -503,3 +503,30 @@ automated run produces a meaningful diff rather than a silent baseline write.
 ## Continuous Telemetry — 2026-04-03 (Epoch 2, Go SQLi Interceptor v9.1.4)
 
 <!-- no new telemetry findings this session beyond CT-003 resolution -->
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Epoch 2, UAP & RCE Hardening v9.2.0)
+
+### CT-004: UAP symlink compatibility untested on Windows host
+
+**Found during:** Universal Agent Protocol & RCE Hardening (v9.2.0)
+**Location:** `.claude/rules`, `.claude/commands`, `.claude/skills` (git symlinks)
+**Issue:** The `.claude/` directory symlinks (→ `.agent_governance/`) are created
+as POSIX symlinks. On Windows (non-WSL) hosts, git checks out symlinks as text
+files containing the target path. Claude Code running natively on Windows may
+not resolve these, breaking skill invocations (`/release`, `/audit`).
+**Suggested fix:** Add a CI step (`windows-latest`) that verifies
+`cat .claude/commands/release.md` resolves through the symlink. If broken,
+implement a `just sync-governance` recipe that copies `.agent_governance/` →
+`.claude/` on Windows instead of relying on symlinks.
+
+### CT-005: `cognition_surrender_index` not visible in CSV export
+
+**Found during:** Universal Agent Protocol & RCE Hardening (v9.2.0)
+**Location:** `crates/cli/src/report.rs::render_csv`
+**Issue:** `cognition_surrender_index` is present in `BounceLogEntry` and the
+JSON output but not in the CSV export (column 18 would need to be added).
+SIEM integrations consuming CSV (not JSON webhooks) cannot track CSI trends.
+**Suggested fix:** Add `cognition_surrender_index` as column 18 in `render_csv`,
+update the column-count test, and document in `docs/architecture.md`.

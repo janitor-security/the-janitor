@@ -671,6 +671,29 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         desc_fragment: Some("xxe_documentbuilder"),
     },
 
+    // ── Java RCE Hardening: WebLogic T3/IIOP + XMLDecoder ────────────────────
+    Entry {
+        name: "Java/ctx.resolve(dynamic) WebLogic IIOP — INTERCEPT",
+        lang: "java",
+        source: b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(userInput);\n",
+        must_intercept: true,
+        desc_fragment: Some("jndi_injection"),
+    },
+    Entry {
+        name: "Java/ctx.resolve(string_literal) — SAFE",
+        lang: "java",
+        source: b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(\"java:comp/env/jdbc/ds\");\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Java/new XMLDecoder(stream) — INTERCEPT (WebLogic/F5 vector)",
+        lang: "java",
+        source: b"XMLDecoder decoder = new XMLDecoder(inputStream);\nObject obj = decoder.readObject();\n",
+        must_intercept: true,
+        desc_fragment: Some("unsafe_deserialization"),
+    },
+
     // ── Phase 3 R&D: C# AST Walk (TypeNameHandling + BinaryFormatter) ────────
     Entry {
         name: "C#/TypeNameHandling.Objects AST assignment — INTERCEPT",

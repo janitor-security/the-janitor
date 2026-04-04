@@ -191,6 +191,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         provenance: Provenance::default(),
         governor_status: None,
         pqc_sig: None,
+        cognition_surrender_index: 0.0,
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -492,6 +493,15 @@ pub struct BounceLogEntry {
     /// the chain-of-custody mechanism for this entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pqc_sig: Option<String>,
+
+    /// Structural rot density attributable to agentic authorship.
+    ///
+    /// Formula: `slop_score as f64 / agentic_pct` when `agentic_pct > 0.0`,
+    /// otherwise `0.0`.  Higher values indicate more structural damage per unit
+    /// of AI contribution.  Surfaces in the GitHub Step Summary to help teams
+    /// distinguish noise from genuine AI-introduced regressions.
+    #[serde(default)]
+    pub cognition_surrender_index: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -2766,7 +2776,13 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
     out.push_str(&format!("{:.0}% agentic contribution", entry.agentic_pct));
     out.push_str(" | ");
     out.push_str(agent_icon);
-    out.push_str(" |\n\n");
+    out.push_str(" |\n");
+    if entry.cognition_surrender_index > 0.0 {
+        out.push_str("| Cognition Surrender Index | ");
+        out.push_str(&format!("{:.2} pts/%", entry.cognition_surrender_index));
+        out.push_str(" | 🔴 |\n");
+    }
+    out.push('\n');
 
     // ── Structural Topology ────────────────────────────────────────────────────
     out.push_str("### Structural Topology\n\n");
@@ -2957,6 +2973,7 @@ mod tests {
             },
             governor_status: None,
             pqc_sig: None,
+            cognition_surrender_index: 0.0,
         }
     }
 
@@ -3072,6 +3089,7 @@ mod webhook_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            cognition_surrender_index: 0.0,
         }
     }
 
@@ -3139,6 +3157,7 @@ mod soft_fail_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            cognition_surrender_index: 0.0,
         }
     }
 

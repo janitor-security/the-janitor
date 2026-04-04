@@ -816,6 +816,7 @@ async fn main() -> anyhow::Result<()> {
                             provenance: report::Provenance::default(),
                             governor_status: None,
                             pqc_sig: None,
+                            cognition_surrender_index: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
                         if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
@@ -3204,6 +3205,19 @@ probable AI context-collapse (hallucinated function reference)"
         governor_status: None,
         // pqc_sig set by --pqc-key signing block below (if key path provided).
         pqc_sig: None,
+        // CSI = slop density per unit of agentic authorship.
+        cognition_surrender_index: {
+            let ap: f64 = if score.agentic_origin_penalty > 0 {
+                100.0
+            } else {
+                0.0
+            };
+            if ap > 0.0 {
+                slop_score_val as f64 / ap
+            } else {
+                0.0
+            }
+        },
     };
 
     // ── BYOK Local PQC Attestation (--pqc-key) ───────────────────────────────
@@ -4272,6 +4286,7 @@ mod pqc_signing_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            cognition_surrender_index: 0.0,
         }
     }
 

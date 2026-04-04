@@ -1807,6 +1807,7 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         b"getRuntime",
         b"InitialContext",
         b"lookup",
+        b"resolve",
         b"ProcessBuilder",
         b"DocumentBuilderFactory",
     ];
@@ -1977,11 +1978,15 @@ fn find_java_danger_invocations(
                     });
                 }
             }
-            "lookup" => {
+            // Gate Java-JNDI: lookup() and resolve() on naming context receivers.
+            // `lookup()` is the Log4Shell / CVE-2021-44228 vector (InitialContext JNDI).
+            // `resolve()` is the WebLogic T3/IIOP deserialization vector used in
+            // CVE-2023-21839 and CVE-2023-21931; same receiver class, same suppression rule.
+            "lookup" | "resolve" => {
                 // Fire only when:
                 // (a) Receiver text directly names an InitialContext/JNDI context class, OR
                 // (b) Receiver variable was declared as InitialContext in this file, AND
-                // (c) First argument is NOT a string literal (dynamic JNDI injection).
+                // (c) First argument is NOT a string literal (dynamic injection).
                 let is_jndi_receiver = object_text.contains("InitialContext")
                     || object_text.contains("Context")
                     || ctx_var_names.iter().any(|v| v == &object_text);
@@ -1992,10 +1997,12 @@ fn find_java_danger_invocations(
                                 start_byte: node.start_byte(),
                                 end_byte: node.end_byte(),
                                 description: format!(
-                                    "security:jndi_injection — `{object_text}.lookup()` with a \
-                                     dynamic (non-literal) argument is the Log4Shell \
-                                     (CVE-2021-44228) JNDI injection vector; restrict to \
-                                     static config strings and disable remote JNDI class loading"
+                                    "security:jndi_injection — `{object_text}.{name_text}()` \
+                                     with a dynamic (non-literal) argument is a JNDI \
+                                     injection vector; `lookup()` maps to Log4Shell \
+                                     (CVE-2021-44228); `resolve()` maps to WebLogic T3/IIOP \
+                                     RCE (CVE-2023-21839); restrict to static config strings \
+                                     and disable remote JNDI class loading"
                                 ),
                                 domain: DOMAIN_FIRST_PARTY,
                                 severity: Severity::KevCritical,
@@ -2048,6 +2055,26 @@ fn find_java_danger_invocations(
             .child_by_field_name("type")
             .and_then(|n| n.utf8_text(source).ok())
             .unwrap_or("");
+        // Java-RCE-XMLDecoder: new XMLDecoder(stream) — constructs an XML
+        // deserializer that executes arbitrary Java code defined in the XML.
+        // Used in WebLogic (CVE-2017-10271, CVE-2019-2725) and F5 BIG-IP RCE
+        // chains.  Fire unconditionally on construction — any stream source is
+        // suspect.  The existing `readObject()` gate catches the downstream call;
+        // this gate catches the root of the exploit chain.
+        if type_text == "XMLDecoder" {
+            findings.push(SlopFinding {
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+                description: "security:unsafe_deserialization — `new XMLDecoder(stream)` \
+                              deserializes arbitrary Java objects from XML; used in WebLogic \
+                              T3/IIOP and F5 BIG-IP RCE chains (CVE-2017-10271, \
+                              CVE-2019-2725, CVE-2023-21839); use JAXB or Jackson with \
+                              strict schema validation instead"
+                    .to_owned(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::KevCritical,
+            });
+        }
         if type_text == "ProcessBuilder" {
             if let Some(args) = node.child_by_field_name("arguments") {
                 let first_arg = args.named_children(&mut args.walk()).next();
@@ -5700,6 +5727,48 @@ mod phase2_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("xxe_documentbuilder")),
             "@Test method body must not fire xxe_documentbuilder"
+        );
+    }
+
+    // ── Java-JNDI resolve() — WebLogic T3/IIOP vector ────────────────────────
+
+    #[test]
+    fn test_java_jndi_resolve_dynamic_fires() {
+        let src =
+            b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(userInput);\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("jndi_injection")),
+            "ctx.resolve(dynamic) must fire jndi_injection"
+        );
+    }
+
+    #[test]
+    fn test_java_jndi_resolve_static_safe() {
+        let src =
+            b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(\"java:comp/env/jdbc/ds\");\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("jndi_injection")),
+            "ctx.resolve(string_literal) must not fire jndi_injection"
+        );
+    }
+
+    // ── Java-RCE-XMLDecoder — WebLogic/F5 construction gate ──────────────────
+
+    #[test]
+    fn test_java_xmldecoder_construction_fires() {
+        let src = b"XMLDecoder decoder = new XMLDecoder(inputStream);\nObject obj = decoder.readObject();\n";
+        let findings = find_java_slop(eng(), src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unsafe_deserialization")),
+            "new XMLDecoder(stream) must fire unsafe_deserialization"
         );
     }
 }

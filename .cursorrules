@@ -1,0 +1,33 @@
+# Cursor / Codex Agent Rules — The Janitor
+
+## Universal Agent Protocol
+
+All governance rules, commands, and skills are defined in `.agent_governance/`.
+Read this directory on startup before taking any action.
+
+## Mandatory Startup Sequence
+
+1. Read `.agent_governance/README.md` — bootstrapping overview
+2. Read all files in `.agent_governance/rules/` — hard operational laws
+3. Read relevant files in `.agent_governance/commands/` before executing commands
+4. Check `.agent_governance/skills/` for auto-invoked protocols
+
+## Shared Ledgers (both agents maintain)
+
+- `docs/IMPLEMENTATION_BACKLOG.md` — append every completed directive here
+- `docs/INNOVATION_LOG.md` — P0/P1/P2 forward-looking proposals; never append completed work
+
+## Critical Laws (summary — full text in `.agent_governance/rules/`)
+
+- **Zero-Copy**: `memmap2::Mmap` for file reads; `rkyv` for IPC
+- **Pre-Commit Gate**: Run `janitor_bounce` MCP before every commit; `slop_score == 0` required
+- **Definition of Done**: `just audit` must exit 0 (fmt + clippy + check + test)
+- **No Co-authorship trailers**: Sole author is Riley Ghramm
+- **SAST Hygiene**: Static assertion messages only — no `{findings:?}` interpolation
+- **Context Asceticism**: No exploratory reads; no sub-agents; fail-fast on ambiguity
+- **Response Format**: Every directive response uses the 4-section mandatory format
+
+## Version
+
+Engine version is the single source of truth in `Cargo.toml [workspace.package].version`.
+Never hardcode version strings elsewhere.

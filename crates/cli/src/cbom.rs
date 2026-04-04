@@ -203,6 +203,7 @@ mod tests {
             provenance: crate::report::Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            cognition_surrender_index: 0.0,
         }
     }
 
