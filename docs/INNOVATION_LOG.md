@@ -592,3 +592,19 @@ consistency.
 ## Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization & Redundancy Purge v9.2.1)
 
 <!-- no telemetry findings this session beyond IDEA-005 and IDEA-006 -->
+
+---
+
+## Continuous Telemetry — 2026-04-04 (Epoch 2, Codex Alignment & Git Hygiene v9.2.2)
+
+### CT-006: Release recipe stages untracked local agent state
+
+**Found during:** Codex Alignment & Git Hygiene (v9.2.2)
+**Location:** `justfile` — `fast-release` recipe
+**Issue:** `git add .` in the release path stages every untracked file in the
+workspace, including local assistant state such as `.agents/`, `.codex/`, and
+`AGENTS.md`. This pollutes signed release commits with machine-local artefacts
+and violates the repository's commit hygiene law.
+**Suggested fix:** Replace the blanket staging step with
+`git commit -a -S -m "chore: release v{{version}}"` behind a dirty-tree check
+and add explicit ignore rules for local assistant state in `.gitignore`.

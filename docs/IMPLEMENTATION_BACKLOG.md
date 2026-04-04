@@ -102,6 +102,22 @@ command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.
 
 ---
 
+## 2026-04-04 — Codex Alignment & Git Hygiene (v9.2.2)
+
+**Directive:** Enforce tracked-only release commits, ignore local agent state,
+resynchronize to the mandatory response format law, and cut `v9.2.2`.
+
+**Files modified:**
+- `justfile` *(modified)* — `fast-release` now uses `git commit -a -S -m "chore: release v{{version}}"` behind a dirty-tree guard, preventing untracked local files from being staged during releases
+- `.gitignore` *(modified)* — explicit ignore rules added for `.agents/`, `.codex/`, `AGENTS.md`, and other local tool-state directories
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.2.2`
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-006 logged for the release hygiene regression; session telemetry section appended
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-03 — Codex Initialization & Redundancy Purge (v9.2.1)
 
 **Directive:** Align Codex to UAP governance, audit release execution paths for redundant compute, record legacy-governance drift proposals, and cut the `9.2.1` release.

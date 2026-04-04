@@ -82,6 +82,11 @@ attestations/local/
 CLAUDE.md
 RUNBOOK.md
 .agent/
+.agents/
+.codex/
+AGENTS.md
+.cursor/
+.windsurf/
 # Machine-local Claude Code state — never commit.
 .claude/settings.local.json
 .claude/mcp.json
