@@ -5,6 +5,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
+
+**Directive:** Pivot `update-wisdom` off the dead `api.thejanitor.app`
+endpoint onto the live CDN, fail open in `--ci-mode` with an empty manifest on
+bootstrap/network faults, publish a bootstrap `docs/v1/wisdom.rkyv`, and cut
+`v9.6.1`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.6.1`
+- `crates/cli/src/main.rs` *(modified)* — `update-wisdom` now fetches from `https://thejanitor.app/v1/wisdom.rkyv`, supports URL overrides for controlled verification, degrades to an empty `wisdom_manifest.json` in `--ci-mode` on Wisdom/KEV fetch failures, and adds regression coverage for the fallback path
+- `docs/v1/wisdom.rkyv` *(created)* — bootstrap empty `WisdomSet` archive committed for CDN hosting at `/v1/wisdom.rkyv`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-008 telemetry recorded for the DNS/CDN pivot
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Release Pipeline Eradication & Rescue (v9.5.2)
 
 **Directive:** Rescue the burned `v9.5.1` state by committing the staged

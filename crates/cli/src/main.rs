@@ -391,7 +391,7 @@ enum Commands {
     },
     /// Synchronise the local Wisdom Registry with Janitor Sentinel.
     ///
-    /// Downloads the latest `wisdom.rkyv` from `https://api.thejanitor.app/v1/wisdom.rkyv`
+    /// Downloads the latest `wisdom.rkyv` from `https://thejanitor.app/v1/wisdom.rkyv`
     /// and overwrites `.janitor/wisdom.rkyv` in the project root.
     ///
     /// When `--ci-mode` is active, additionally fetches the CISA Known Exploited
@@ -3856,25 +3856,56 @@ fn cmd_report(
 /// writes `.janitor/wisdom_manifest.json` — a sorted, diff-friendly JSON file
 /// listing every CVE entry by ID, vendor, product, and date.
 ///
-/// On any network or I/O failure the function returns an error — no partial
-/// write is left on disk (downloads are buffered before overwriting).
+/// In `--ci-mode`, Wisdom or KEV fetch failures degrade to an empty manifest so
+/// scheduled sync jobs fail open on first bootstrap rather than crashing.
 fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
-    const WISDOM_URL: &str = "https://api.thejanitor.app/v1/wisdom.rkyv";
-    const CISA_KEV_URL: &str =
+    const DEFAULT_WISDOM_URL: &str = "https://thejanitor.app/v1/wisdom.rkyv";
+    const DEFAULT_CISA_KEV_URL: &str =
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 
-    let mut response = ureq::get(WISDOM_URL)
-        .call()
-        .map_err(|e| anyhow::anyhow!("update-wisdom: GET {WISDOM_URL} failed: {e}"))?;
+    let wisdom_url = env::var("JANITOR_WISDOM_URL")
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_WISDOM_URL.to_string());
+    let kev_url = env::var("JANITOR_CISA_KEV_URL")
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_CISA_KEV_URL.to_string());
 
-    let bytes = response
-        .body_mut()
-        .read_to_vec()
-        .map_err(|e| anyhow::anyhow!("update-wisdom: reading response body failed: {e}"))?;
+    cmd_update_wisdom_with_urls(project_root, ci_mode, &wisdom_url, &kev_url)
+}
 
+fn cmd_update_wisdom_with_urls(
+    project_root: &Path,
+    ci_mode: bool,
+    wisdom_url: &str,
+    kev_url: &str,
+) -> anyhow::Result<()> {
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
         .with_context(|| format!("creating {}", janitor_dir.display()))?;
+
+    let mut response = match ureq::get(wisdom_url).call() {
+        Ok(response) => response,
+        Err(e) if ci_mode => {
+            eprintln!("warning: update-wisdom --ci-mode: GET {wisdom_url} failed: {e}");
+            write_empty_wisdom_manifest(
+                &janitor_dir,
+                "wisdom bootstrap unavailable",
+                &format!("GET {wisdom_url} failed: {e}"),
+            )?;
+            return Ok(());
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "update-wisdom: GET {wisdom_url} failed: {e}"
+            ));
+        }
+    };
+
+    let bytes = response.body_mut().read_to_vec().map_err(|e| {
+        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_url} failed: {e}")
+    })?;
 
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &bytes)
@@ -3883,9 +3914,18 @@ fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
     println!("\u{1f9e0} Wisdom Registry synchronized with Janitor Sentinel.");
 
     if ci_mode {
-        let mut kev_resp = ureq::get(CISA_KEV_URL).call().map_err(|e| {
-            anyhow::anyhow!("update-wisdom --ci-mode: GET {CISA_KEV_URL} failed: {e}")
-        })?;
+        let mut kev_resp = match ureq::get(kev_url).call() {
+            Ok(response) => response,
+            Err(e) => {
+                eprintln!("warning: update-wisdom --ci-mode: GET {kev_url} failed: {e}");
+                write_empty_wisdom_manifest(
+                    &janitor_dir,
+                    "kev bootstrap unavailable",
+                    &format!("GET {kev_url} failed: {e}"),
+                )?;
+                return Ok(());
+            }
+        };
 
         let kev_bytes = kev_resp.body_mut().read_to_vec().map_err(|e| {
             anyhow::anyhow!("update-wisdom --ci-mode: reading KEV response failed: {e}")
@@ -3924,21 +3964,42 @@ fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
             "entries":      entries,
         });
 
-        let manifest_path = janitor_dir.join("wisdom_manifest.json");
-        let manifest_str = serde_json::to_string_pretty(&manifest).map_err(|e| {
-            anyhow::anyhow!("update-wisdom --ci-mode: serializing manifest failed: {e}")
-        })?;
-        std::fs::write(&manifest_path, manifest_str.as_bytes())
-            .with_context(|| format!("writing {}", manifest_path.display()))?;
+        write_wisdom_manifest(&janitor_dir, &manifest)?;
 
         println!(
             "\u{1f4cb} KEV manifest written: {} entries \u{2192} {}",
             manifest["entry_count"],
-            manifest_path.display()
+            janitor_dir.join("wisdom_manifest.json").display()
         );
     }
 
     Ok(())
+}
+
+fn write_wisdom_manifest(janitor_dir: &Path, manifest: &serde_json::Value) -> anyhow::Result<()> {
+    let manifest_path = janitor_dir.join("wisdom_manifest.json");
+    let manifest_str = serde_json::to_string_pretty(manifest).map_err(|e| {
+        anyhow::anyhow!("update-wisdom --ci-mode: serializing manifest failed: {e}")
+    })?;
+    std::fs::write(&manifest_path, manifest_str.as_bytes())
+        .with_context(|| format!("writing {}", manifest_path.display()))?;
+    Ok(())
+}
+
+fn write_empty_wisdom_manifest(
+    janitor_dir: &Path,
+    source: &str,
+    reason: &str,
+) -> anyhow::Result<()> {
+    let manifest = serde_json::json!({
+        "source": source,
+        "generated_at": utc_now_iso8601(),
+        "entry_count": 0,
+        "entries": [],
+        "status": "bootstrap-empty",
+        "reason": reason,
+    });
+    write_wisdom_manifest(janitor_dir, &manifest)
 }
 
 // ---------------------------------------------------------------------------
@@ -4512,5 +4573,44 @@ mod governor_routing_tests {
         );
 
         let _ = std::fs::remove_dir_all(&temp_root);
+    }
+}
+
+#[cfg(test)]
+mod wisdom_sync_tests {
+    use super::cmd_update_wisdom_with_urls;
+    use std::fs;
+
+    #[test]
+    fn ci_mode_writes_empty_manifest_when_wisdom_fetch_fails() {
+        let temp_root =
+            std::env::temp_dir().join(format!("janitor-wisdom-sync-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_root).expect("temp root must be created");
+
+        cmd_update_wisdom_with_urls(
+            &temp_root,
+            true,
+            "http://127.0.0.1:9/wisdom.rkyv",
+            "http://127.0.0.1:9/kev.json",
+        )
+        .expect("ci-mode fallback must not fail");
+
+        let manifest_path = temp_root.join(".janitor").join("wisdom_manifest.json");
+        assert!(
+            manifest_path.exists(),
+            "ci-mode fallback must emit an empty wisdom manifest"
+        );
+
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).expect("manifest must be readable"))
+                .expect("manifest must be valid json");
+
+        assert_eq!(manifest["entry_count"], 0);
+        assert_eq!(manifest["status"], "bootstrap-empty");
+        assert_eq!(manifest["entries"], serde_json::json!([]));
+        assert!(
+            !temp_root.join(".janitor").join("wisdom.rkyv").exists(),
+            "fallback must not fabricate a wisdom archive"
+        );
     }
 }

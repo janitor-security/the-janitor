@@ -211,4 +211,8 @@ classification helpers; replace `extract_patch_ext()` string returns with a
 
 ## Continuous Telemetry — 2026-04-04
 
-<!-- no telemetry findings this session — structural work only (P1-3 implementation) -->
+- `CT-008: Wisdom Sync DNS Failure Resolved` — `janitor update-wisdom` now
+  targets `https://thejanitor.app/v1/wisdom.rkyv` and `--ci-mode` degrades to
+  a bootstrap-empty `wisdom_manifest.json` when the CDN or KEV source is
+  unreachable, preventing first-run cron failure while the static registry is
+  propagating.
