@@ -972,16 +972,25 @@ Add a governance parity test spanning <code>Cargo.toml</code>, <code>.cursorrule
 <p><strong>Observation:</strong>
 Documented release entrypoints can silently diverge from the actual linearized
 execution graph, reintroducing redundant audit/build paths or stale operator
-instructions.</p>
+instructions. The burned <code>v9.5.1</code> release exposed a second failure mode:
+recipes that reason about only the unstaged worktree can publish a tag and
+GitHub release for the previous <code>HEAD</code> while the real audited payload is
+already staged and waiting to be committed.</p>
 <p><strong>Proposal:</strong>
 Add a release-surface parity test that asserts all documented entrypoints
-resolve to the same <code>audit -&gt; fast-release</code> path.</p>
+resolve to the same <code>audit -&gt; fast-release</code> path, and add a release-integrity
+test that proves the emitted commit/tag pair actually contains the staged
+release payload rather than merely matching the pre-release <code>HEAD</code>.</p>
 <p><strong>Security impact:</strong>
 Preserves symmetric-failure semantics while preventing redundant release work
 from masking real regressions behind repeated compile passes.</p>
 <p><strong>Implementation path:</strong>
 Add a shell regression in <code>tools/tests/</code> that parses <code>justfile</code>,
-<code>.agent_governance/commands/release.md</code>, and <code>.cursorrules</code> for consistency.</p>
+<code>.agent_governance/commands/release.md</code>, and <code>.cursorrules</code> for consistency.
+Add a second regression that stages a synthetic tracked change, runs the
+release recipe in fixture mode, asserts a new commit object is created before
+tag emission, and fails if <code>vX.Y.Z</code> can still resolve to the pre-release
+<code>HEAD</code>.</p>
 <h3 id="p2-5-filename-aware-surface-routing-spine">P2-5: Filename-Aware Surface Routing Spine</h3>
 <p><strong>Class:</strong> Core Engine Plumbing
 <strong>Inspired by:</strong> Extensionless security surfaces discovered during P0-1 execution</p>

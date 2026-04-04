@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-release-pipeline-eradication-rescue-v952" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-autonomous-expansion-release-hygiene-v951" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)
@@ -741,6 +750,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-release-pipeline-eradication-rescue-v952" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-autonomous-expansion-release-hygiene-v951" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)
@@ -924,6 +942,19 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-04-release-pipeline-eradication-rescue-v952">2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)</h2>
+<p><strong>Directive:</strong> Rescue the burned <code>v9.5.1</code> state by committing the staged
+executable-surface expansion manually, eradicate the unstaged-only
+<code>git diff --quiet</code> heuristic from the release path, roll forward to <code>v9.5.2</code>,
+and cut a real signed release from the audited code.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — fast-release now stages the governed release set and commits unconditionally; empty-release attempts fail closed under <code>set -euo pipefail</code>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.5.2</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — release-surface debt updated to include staged-only ghost-tag failure and the need for a tag-target regression test</p>
+<p><strong>Rescue commit:</strong> <code>e095fae</code> — <code>feat: autonomous expansion for executable gaps (v9.5.1)</code>
+<strong>Commit:</strong> <code>pending release commit</code></p>
+<hr />
 <h2 id="2026-04-04-autonomous-expansion-release-hygiene-v951">2026-04-04 — Autonomous Expansion &amp; Release Hygiene (v9.5.1)</h2>
 <p><strong>Directive:</strong> Repair the fast-release staging gap that dropped new crates from
 the prior tag, autonomously execute <code>P0-1</code> by expanding the executable-surface
@@ -937,7 +968,7 @@ new architecture debt discovered during implementation.</p>
 - <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — true-positive and true-negative fixtures added for all six new executable-surface detectors
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — implemented <code>P0-1</code> removed; new <code>P2-5</code> added for filename-aware surface routing
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
-<p><strong>Commit:</strong> <code>pending release commit</code></p>
+<p><strong>Commit:</strong> <code>e095fae</code></p>
 <hr />
 <h2 id="2026-04-04-air-gap-update-v950">2026-04-04 — Air-Gap Update (v9.5.0)</h2>
 <p><strong>Directive:</strong> Execute the Sovereign Governor extraction, decouple CLI
