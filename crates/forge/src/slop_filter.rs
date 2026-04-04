@@ -529,13 +529,19 @@ pub fn split_patch_by_file(patch: &str) -> Vec<&str> {
 pub struct PatchBouncer {
     repo_root: Option<PathBuf>,
     wisdom_path: Option<PathBuf>,
+    deep_scan: bool,
 }
 
 impl PatchBouncer {
     pub fn for_workspace(root: &Path) -> Self {
+        Self::for_workspace_with_deep_scan(root, false)
+    }
+
+    pub fn for_workspace_with_deep_scan(root: &Path, deep_scan: bool) -> Self {
         Self {
             repo_root: Some(root.to_path_buf()),
             wisdom_path: Some(root.join(".janitor").join("wisdom.rkyv")),
+            deep_scan,
         }
     }
 
@@ -586,6 +592,8 @@ impl PatchBouncer {
 
 impl PRBouncer for PatchBouncer {
     fn bounce(&self, patch: &str, registry: &SymbolRegistry) -> Result<SlopScore> {
+        const DEFAULT_PATCH_MAX_BYTES: usize = 64 * 1024;
+        const DEEP_SCAN_MAX_BYTES: usize = 32 * 1024 * 1024;
         // ── Multi-file patch dispatch ─────────────────────────────────────────
         //
         // If the patch contains `diff --git ` boundaries (standard git output),
@@ -899,7 +907,12 @@ impl PRBouncer for PatchBouncer {
         // below 256 KB.  64 KB is the empirical safe ceiling for hand-authored
         // diffs; beyond it the content is overwhelmingly generated (P/Invoke
         // bindings, protobuf stubs, WASM glue, test fixtures).
-        if source.len() > 64 * 1024 {
+        let max_patch_bytes = if self.deep_scan {
+            DEEP_SCAN_MAX_BYTES
+        } else {
+            DEFAULT_PATCH_MAX_BYTES
+        };
+        if source.len() > max_patch_bytes {
             return Ok(SlopScore::default());
         }
 
@@ -934,21 +947,29 @@ impl PRBouncer for PatchBouncer {
             .set_language(&cfg.language)
             .map_err(|e| anyhow::anyhow!("Failed to load grammar for .{ext}: {e}"))?;
 
-        let tree = match crate::slop_hunter::parse_with_timeout(&mut parser, source) {
+        let tree = match crate::slop_hunter::parse_with_timeout(&mut parser, source).or_else(|| {
+            self.deep_scan.then(|| {
+                crate::slop_hunter::parse_with_timeout_budget(
+                    &mut parser,
+                    source,
+                    crate::slop_hunter::DEEP_SCAN_TIMEOUT_MICROS,
+                )
+            })?
+        }) {
             Some(t) => t,
             None => {
-                // parse() returning None after set_timeout_micros means the 500 ms
-                // deadline expired — probable AST Bomb.  Return a scored SlopScore
-                // rather than a neutral default so the finding reaches the audit log.
-                let desc = format!(
-                    "security:parser_exhaustion_anomaly — tree-sitter parse of .{ext} file \
-                     exceeded 500 ms timeout; probable AST Bomb (deeply nested adversarial \
-                     input designed to exhaust the parser); file rejected"
-                );
+                let finding = if self.deep_scan {
+                    crate::slop_hunter::parser_exhaustion_finding_with_budget(
+                        ext,
+                        crate::slop_hunter::DEEP_SCAN_TIMEOUT_MICROS,
+                    )
+                } else {
+                    crate::slop_hunter::parser_exhaustion_finding(ext)
+                };
                 return Ok(SlopScore {
                     antipatterns_found: 1,
                     antipattern_score: 100,
-                    antipattern_details: vec![desc],
+                    antipattern_details: vec![finding.description],
                     ..SlopScore::default()
                 });
             }
@@ -1616,6 +1637,7 @@ pub fn bounce_git(
     base_sha: &str,
     head_sha: &str,
     registry: &SymbolRegistry,
+    deep_scan: bool,
 ) -> Result<(SlopScore, HashMap<std::path::PathBuf, Vec<u8>>)> {
     let repo = git2::Repository::open(repo_path).map_err(|e| {
         anyhow::anyhow!("bounce_git: cannot open repo {}: {e}", repo_path.display())
@@ -1635,12 +1657,18 @@ pub fn bounce_git(
     // or massive monolithic stubs.  Tree-sitter AST allocation on multi-megabyte
     // inputs can exhaust the 8 GB heap on large corpora; real "slop" is never in
     // these files.  Skip them entirely.
-    const MAX_BLOB_BYTES: usize = 1_048_576; // 1 MiB
+    const DEFAULT_MAX_BLOB_BYTES: usize = 1_048_576; // 1 MiB
+    const DEEP_SCAN_MAX_BLOB_BYTES: usize = 32 * 1024 * 1024; // 32 MiB
+    let max_blob_bytes = if deep_scan {
+        DEEP_SCAN_MAX_BLOB_BYTES
+    } else {
+        DEFAULT_MAX_BLOB_BYTES
+    };
 
     // Chemotaxis: process high-calorie slop vectors (.rs, .py, .js, .ts, .go)
     // before low-calorie files (.md, .txt) so structural violations surface early.
     for (path, blob_bytes) in snapshot.iter_by_priority() {
-        if blob_bytes.len() > MAX_BLOB_BYTES {
+        if blob_bytes.len() > max_blob_bytes {
             continue; // Circuit breaker — skip oversized blobs.
         }
 
@@ -1704,7 +1732,9 @@ pub fn bounce_git(
             }
         }
 
-        if let Ok(mut score) = PatchBouncer::for_workspace(repo_path).bounce(patch, registry) {
+        if let Ok(mut score) =
+            PatchBouncer::for_workspace_with_deep_scan(repo_path, deep_scan).bounce(patch, registry)
+        {
             total.dead_symbols_added += score.dead_symbols_added;
             total.logic_clones_found += score.logic_clones_found;
             total.zombie_symbols_added += score.zombie_symbols_added;

@@ -254,6 +254,12 @@ enum Commands {
         /// Can also be set via `soft_fail = true` in `janitor.toml`.
         #[arg(long)]
         soft_fail: bool,
+        /// Raise bounce analysis budgets to the deep-scan profile (32 MiB / 30 s).
+        ///
+        /// Also retries parser-exhaustion candidates with the 30 s parse budget
+        /// before emitting a `Severity::Exhaustion` finding.
+        #[arg(long)]
+        deep_scan: bool,
         /// Path to an ML-DSA-65 private key file (4032 raw bytes) for BYOK
         /// local attestation (FIPS 204 — Signature Sovereignty mode).
         ///
@@ -712,6 +718,7 @@ async fn main() -> anyhow::Result<()> {
             head_sha,
             timeout_secs,
             soft_fail,
+            deep_scan,
             pqc_key,
         } => {
             // Clone owned values for spawn_blocking (required for 'static bound).
@@ -732,6 +739,7 @@ async fn main() -> anyhow::Result<()> {
             let head_sha = head_sha.clone();
             let timeout_secs = *timeout_secs;
             let soft_fail = *soft_fail;
+            let deep_scan = *deep_scan;
             let pqc_key = pqc_key.clone();
 
             // Capture fields needed for the timeout failure payload before the
@@ -767,6 +775,7 @@ async fn main() -> anyhow::Result<()> {
                     analysis_token.as_deref(),
                     head_sha.as_deref(),
                     soft_fail,
+                    deep_scan,
                     pqc_key.as_deref(),
                 )
             });
@@ -2644,6 +2653,7 @@ fn cmd_bounce(
     analysis_token: Option<&str>,
     head_sha: Option<&str>,
     soft_fail_flag: bool,
+    deep_scan_flag: bool,
     pqc_key: Option<&Path>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
@@ -2658,6 +2668,7 @@ fn cmd_bounce(
 
     // Effective soft-fail: CLI flag takes precedence, then janitor.toml.
     let soft_fail = soft_fail_flag || policy.soft_fail;
+    let deep_scan = deep_scan_flag || policy.forge.deep_scan;
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
     // `registry_loaded` tracks whether the rkyv file was actually present on disk.
@@ -2705,7 +2716,8 @@ fn cmd_bounce(
         (Some(repo_path), Some(base_sha), Some(head_sha)) => {
             // Git-native mode: shadow_git blob extraction.
             // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
-            let (mut score, blobs) = bounce_git(repo_path, base_sha, head_sha, &registry)?;
+            let (mut score, blobs) =
+                bounce_git(repo_path, base_sha, head_sha, &registry, deep_scan)?;
             // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
             let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
             let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
@@ -2801,7 +2813,8 @@ fn cmd_bounce(
                     }
                 }
             };
-            let mut score = PatchBouncer::for_workspace(project_root).bounce(&patch, &registry)?;
+            let mut score = PatchBouncer::for_workspace_with_deep_scan(project_root, deep_scan)
+                .bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
 

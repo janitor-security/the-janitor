@@ -121,18 +121,26 @@ impl Severity {
 /// parser and stack-overflowing the GitHub Action runner.  When `parse()` returns
 /// `None` after this deadline, [`parser_exhaustion_finding`] is emitted instead.
 pub const PARSER_TIMEOUT_MICROS: u64 = 500_000;
+pub const DEEP_SCAN_TIMEOUT_MICROS: u64 = 30_000_000;
 
 /// Construct a [`SlopFinding`] representing a parser timeout on `lang_hint`.
 ///
 /// Called at every tree-sitter parse site when `parser.parse()` returns `None`
 /// after [`PARSER_TIMEOUT_MICROS`] have elapsed.
 pub fn parser_exhaustion_finding(lang_hint: &str) -> SlopFinding {
+    parser_exhaustion_finding_with_budget(lang_hint, PARSER_TIMEOUT_MICROS)
+}
+
+/// Construct a [`SlopFinding`] representing a parser timeout on `lang_hint`
+/// after `timeout_micros` microseconds.
+pub fn parser_exhaustion_finding_with_budget(lang_hint: &str, timeout_micros: u64) -> SlopFinding {
+    let timeout_ms = timeout_micros / 1_000;
     SlopFinding {
         start_byte: 0,
         end_byte: 0,
         description: format!(
             "security:parser_exhaustion_anomaly — tree-sitter parse of .{lang_hint} file \
-             exceeded 500 ms timeout; probable AST Bomb (deeply nested adversarial input \
+             exceeded {timeout_ms} ms timeout; probable AST Bomb (deeply nested adversarial input \
              designed to exhaust the parser); file rejected"
         ),
         domain: DOMAIN_ALL,
@@ -152,9 +160,17 @@ pub(crate) fn parse_with_timeout(
     parser: &mut tree_sitter::Parser,
     source: &[u8],
 ) -> Option<tree_sitter::Tree> {
+    parse_with_timeout_budget(parser, source, PARSER_TIMEOUT_MICROS)
+}
+
+pub(crate) fn parse_with_timeout_budget(
+    parser: &mut tree_sitter::Parser,
+    source: &[u8],
+    timeout_micros: u64,
+) -> Option<tree_sitter::Tree> {
     let start = Instant::now();
     let mut timeout_cb = |_: &tree_sitter::ParseState| -> ControlFlow<()> {
-        if start.elapsed().as_micros() as u64 >= PARSER_TIMEOUT_MICROS {
+        if start.elapsed().as_micros() as u64 >= timeout_micros {
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
@@ -5887,7 +5903,6 @@ mod phase3_rd_tests {
 
     #[test]
     fn test_pp_merge_sink_suppressed_in_sanitize_function() {
-        let src = b"function sanitizeAndMerge(target, source) {\n    _.merge(target, source);\n    return target;\n}\n";
         // 'source' is not in USER_INPUT_NAMES so this wouldn't fire anyway,
         // but we verify suppression logic by using a tainted name in a sanitize function.
         let src2 = b"function sanitizeInput(target) {\n    _.merge(target, req.body);\n    return target;\n}\n";

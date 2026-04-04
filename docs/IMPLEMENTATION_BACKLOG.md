@@ -5,6 +5,29 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Deep-Scan & Innovation Synthesis (v9.4.0)
+
+**Directive:** Enforce the fast-release law, add a deep-scan evasion shield to
+the bounce path and GitHub Action, clear Forge warning debt, and perform a
+dedicated innovation synthesis pass over MCP and slop-hunter.
+
+**Files modified:**
+- `.agent_governance/commands/release.md` *(modified)* — absolute prohibition added against `just release`; release path now explicitly mandates `just audit` followed by `just fast-release <v>`
+- `action.yml` *(modified)* — optional `deep_scan` input added; composite action now forwards `--deep-scan` to `janitor bounce`
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.4.0`
+- `crates/common/src/policy.rs` *(modified)* — `[forge].deep_scan` config added and covered in TOML roundtrip tests
+- `crates/cli/src/main.rs` *(modified)* — `janitor bounce` gains `--deep-scan`; CLI now merges the flag with `[forge].deep_scan` policy config
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce call updated for the deep-scan-capable `bounce_git` signature
+- `crates/forge/src/slop_hunter.rs` *(modified)* — configurable parse-budget helper added; 30 s deep-scan timeout constant added; stale test warning removed
+- `crates/forge/src/slop_filter.rs` *(modified)* — patch and git-native size budgets raised to 32 MiB under deep-scan; parser timeouts retry at 30 s before emitting `Severity::Exhaustion`
+- `crates/forge/src/metadata.rs` *(modified)* — stale test warning removed
+- `docs/INNOVATION_LOG.md` *(modified)* — `IDEA-003` and `IDEA-004` rewritten from the mandatory MCP/slop-hunter synthesis pass
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Communication Bifurcation & KEV Correlation Strike (v9.3.0)
 
 **Directive:** Relax intermediate execution messaging while preserving the

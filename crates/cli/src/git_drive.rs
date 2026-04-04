@@ -570,7 +570,7 @@ fn bounce_one(
         });
     }
 
-    let (mut score, blobs) = bounce_git(repo_path, &merge_base_sha, pr_sha, registry)
+    let (mut score, blobs) = bounce_git(repo_path, &merge_base_sha, pr_sha, registry, false)
         .map_err(|e| {
             eprintln!("hyper-drive PR#{pr_num}: {e}");
         })

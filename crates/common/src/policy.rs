@@ -206,6 +206,9 @@ pub struct ForgeConfig {
     /// automation_accounts = ["r-ryantm", "app/nixpkgs-ci"]
     /// ```
     pub automation_accounts: Vec<String>,
+    /// Raises bounce analysis budgets from the default 1 MiB / 500 ms path to
+    /// the deep-scan 32 MiB / 30 s path for AST-evasion-resistant analysis.
+    pub deep_scan: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -725,6 +728,7 @@ mod tests {
         let p = JanitorPolicy {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned(), "app/nixpkgs-ci".to_owned()],
+                deep_scan: false,
             },
             ..Default::default()
         };
@@ -736,9 +740,11 @@ mod tests {
 
     #[test]
     fn forge_automation_accounts_roundtrip_toml() {
-        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\n";
+        let raw =
+            "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ndeep_scan = true\n";
         let p: JanitorPolicy = toml::from_str(raw).unwrap();
         assert_eq!(p.forge.automation_accounts, ["r-ryantm", "app/nixpkgs-ci"]);
+        assert!(p.forge.deep_scan);
         assert!(p.is_automation_account("r-ryantm"));
         assert!(p.is_automation_account("app/nixpkgs-ci"));
         assert!(!p.is_automation_account("human-author"));
@@ -750,6 +756,7 @@ mod tests {
         let p = JanitorPolicy {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned()],
+                deep_scan: false,
             },
             ..Default::default()
         };

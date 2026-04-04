@@ -233,56 +233,67 @@ Rationale: build-time RCE via user-controlled toolchain variable.
 
 ---
 
-### IDEA-003: Adversarial Grammar Stress Harness
+### IDEA-003: MCP Structured Finding Envelope + Deep-Scan Negotiation
 
-**Class:** Defensive Hardening / Fuzzing
+**Class:** Agent Protocol / Integration
 **Priority:** P1
-**Inspired by:** `PARSER_TIMEOUT_MICROS`, `Severity::Exhaustion`, VULN-04
+**Inspired by:** `crates/mcp/src/lib.rs::run_bounce`, `run_dep_check`
 
 **Observation:**
-The 500 ms parse timeout exists because adversarially crafted source can
-drive tree-sitter into O(n²) or O(n³) parse time on certain grammar
-ambiguities. We have no systematic way to discover which inputs trigger
-worst-case parse behaviour across all 23 grammars before a real attacker does.
+The MCP server collapses bounce and dependency analysis into lossy JSON
+summaries: `run_bounce()` returns flattened strings in `antipattern_details`,
+and `run_dep_check()` emits KEV hits as plain descriptions only. The protocol
+cannot carry severity, byte ranges, domains, retry provenance, or whether a
+result was produced under normal scan vs deep-scan budgets.
 
 **Proposal:**
-Build a `crates/fuzz` target (cargo-fuzz / libFuzzer) for each grammar:
-1. Takes arbitrary bytes as input.
-2. Attempts to parse with the grammar under a 100 ms budget.
-3. If the parse exhausts the budget, records the input as a new
-   `Severity::Exhaustion` Crucible fixture.
-4. Runs as a scheduled CI job (nightly, 30 min budget per grammar).
+Extend MCP outputs to return a structured finding envelope:
+1. `findings[]` with `{category, severity, description, byte_range, domain}`.
+2. `analysis_profile` with `{deep_scan, parse_budget_ms, blob_budget_bytes}`.
+3. `retry_trace` when a parser timeout escalates from 500 ms to 30 s.
+4. `dep_findings[]` preserving package, version, CVE, and ecosystem fields.
+
+**Security impact:**
+Agents can triage and act on deep-scan escalations deterministically instead of
+regex-parsing prose. This closes the gap between engine certainty and agent
+execution quality, especially for pre-commit auto-remediation.
 
 **Implementation path:**
-`crates/fuzz/fuzz_targets/fuzz_grammar_<lang>.rs` × 23
-→ crash corpus committed to `crates/crucible/fixtures/exhaustion/`
+`crates/mcp/src/lib.rs` response schema upgrade
+→ `common` finding DTO shared by CLI + MCP
+→ backward-compatible `schema_version` bump for clients.
 
 ---
 
-### IDEA-004: HSM / KMS Integration for `--pqc-key`
+### IDEA-004: Parse-Forest Reuse + Interprocedural Taint Spine
 
-**Class:** Compliance / Key Custody
-**Priority:** P1
-**Inspired by:** CT-006 (v9.1.0), FedRAMP/DISA STIG requirements
+**Class:** Detection Depth / Performance
+**Priority:** P0
+**Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
 
 **Observation:**
-`--pqc-key` accepts only a path to raw private key bytes on disk. Enterprise
-FedRAMP and DISA STIG deployments require that private key material NEVER
-touch the runner filesystem — signing operations must be delegated to an
-HSM (PKCS#11) or cloud KMS.
+`slop_hunter.rs` repeatedly constructs `tree_sitter::Parser`, reparses the same
+source, and reruns detector-local AST walks for each language phase. The engine
+also treats taint as statement-local (`argument_is_tainted`) rather than
+interprocedural or cross-file, so helper wrappers and module relays erase the
+signal before it reaches SSRF/SQLi/path-traversal sinks.
 
-**Proposal (v9.2.x):**
-Extend `--pqc-key` to accept:
-- PKCS#11 URI: `pkcs11:token=janitor;object=mlksa-key`
-- AWS KMS ARN: `arn:aws:kms:us-east-1:123456789012:key/abc-...`
-- Azure Key Vault URI: `https://vault.azure.net/keys/janitor-pqc/...`
+**Proposal:**
+Build a per-file parse-forest cache and taint spine:
+1. Parse each file once per language into a shared detector context.
+2. Materialize a lightweight symbol/assignment graph for intra-file taint
+   propagation across helper functions.
+3. Add optional cross-file export/import taint summaries for module boundaries.
+4. Reuse the same context for logic-erasure, sink detection, and future dataflow rules.
 
-The file-path mode remains the default for air-gapped deployments. The
-KMS/HSM mode requires a thin shim crate (`crates/pqc-kms`).
+**Security impact:**
+Raises true-positive depth on real exploit paths while eliminating the current
+O(detectors × parse_cost) architecture that burns CPU on repeated tree walks.
 
 **Implementation path:**
-`crates/cli/src/main.rs` — extend `--pqc-key` arg type; add `PqcKeySource`
-enum in `crates/pqc-kms/src/lib.rs`.
+`crates/forge/src/slop_hunter.rs` detector-context refactor
+→ shared `ParsedUnit` + taint summary structs
+→ optional cross-file summaries threaded from `PatchBouncer`.
 
 ---
 

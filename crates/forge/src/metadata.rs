@@ -965,7 +965,7 @@ diff --git a/src/lib.rs b/src/lib.rs
             ("SQLi", "Closes SQLi in the database layer."),
             ("vulnerability", "Fixes a critical vulnerability in login."),
         ];
-        for (kw, body) in &bodies {
+        for (_kw, body) in &bodies {
             let finding = detect_hallucinated_fix(body, &non_code, "");
             assert!(
                 finding.is_some(),

@@ -5,11 +5,15 @@ description: >
   is never left pending. The sole PR gate is the 'Janitor Integrity Check'
   run issued by the Governor via the GitHub Checks API.
 
-# Only two inputs. All other configuration is governor-side.
+# Only three inputs. All other configuration is governor-side.
 inputs:
   token:
     description: 'GitHub token (contents: read, pull-requests: read)'
     required: true
+  deep_scan:
+    description: 'Enable 32 MiB / 30 s deep-scan budgets for bounce analysis.'
+    required: false
+    default: 'false'
   installation_id:
     description: >
       Janitor Sentinel App installation ID for this repository.
@@ -114,7 +118,8 @@ runs:
           --pr-number     "${{ github.event.pull_request.number }}" \
           --report-url    https://the-governor.fly.dev/v1/report \
           --analysis-token "$ANALYSIS_TOKEN" \
-          --head-sha      "$HEAD_SHA"
+          --head-sha      "$HEAD_SHA" \
+          ${{ inputs.deep_scan == 'true' && '--deep-scan' || '' }}
 
     # Step 6 — Publish Integrity Dashboard to GitHub Actions Step Summary.
     #
