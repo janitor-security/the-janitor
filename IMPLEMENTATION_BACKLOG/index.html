@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-log-compaction-ciso-pulse-hardening-v941" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-deep-scan-innovation-synthesis-v940" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)
@@ -714,6 +723,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-log-compaction-ciso-pulse-hardening-v941" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-deep-scan-innovation-synthesis-v940" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)
@@ -869,6 +887,17 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-log-compaction-ciso-pulse-hardening-v941">2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)</h2>
+<p><strong>Directive:</strong> Enforce hard compaction in the Evolution Tracker, purge
+completed and telemetry debt from the innovation log, re-index active work
+into clean P0/P1/P2 numbering, and cut <code>v9.4.1</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/skills/evolution-tracker/SKILL.md</code> <em>(modified)</em> — CISO Pulse rewritten to enforce hard compaction: delete completed work, delete telemetry, drop legacy IDs, and re-index active items into <code>P0-1</code>, <code>P1-1</code>, <code>P2-1</code>, etc.
+- <code>docs/INNOVATION_LOG.md</code> <em>(rewritten)</em> — completed grammar-depth work, legacy telemetry, and stale IDs purged; active debt compacted into clean P0/P1/P2 numbering
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.4.1</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-deep-scan-innovation-synthesis-v940">2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)</h2>
 <p><strong>Directive:</strong> Enforce the fast-release law, add a deep-scan evasion shield to
