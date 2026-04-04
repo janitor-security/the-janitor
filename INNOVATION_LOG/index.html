@@ -772,6 +772,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-uap-rce-hardening-v920" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, UAP &amp; RCE Hardening v9.2.0)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, UAP & RCE Hardening v9.2.0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-004-uap-symlink-compatibility-untested-on-windows-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-004: UAP symlink compatibility untested on Windows host
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-005-cognition_surrender_index-not-visible-in-csv-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-005: cognition_surrender_index not visible in CSV export
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1087,6 +1120,39 @@
       Continuous Telemetry — 2026-04-03 (Epoch 2, Go SQLi Interceptor v9.1.4)
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-uap-rce-hardening-v920" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, UAP &amp; RCE Hardening v9.2.0)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-03 (Epoch 2, UAP & RCE Hardening v9.2.0)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-004-uap-symlink-compatibility-untested-on-windows-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-004: UAP symlink compatibility untested on Windows host
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ct-005-cognition_surrender_index-not-visible-in-csv-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-005: cognition_surrender_index not visible in CSV export
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1540,6 +1606,28 @@ automated run produces a meaningful diff rather than a silent baseline write.</p
 <hr />
 <h2 id="continuous-telemetry-2026-04-03-epoch-2-go-sqli-interceptor-v914">Continuous Telemetry — 2026-04-03 (Epoch 2, Go SQLi Interceptor v9.1.4)</h2>
 <!-- no new telemetry findings this session beyond CT-003 resolution -->
+
+<hr />
+<h2 id="continuous-telemetry-2026-04-03-epoch-2-uap-rce-hardening-v920">Continuous Telemetry — 2026-04-03 (Epoch 2, UAP &amp; RCE Hardening v9.2.0)</h2>
+<h3 id="ct-004-uap-symlink-compatibility-untested-on-windows-host">CT-004: UAP symlink compatibility untested on Windows host</h3>
+<p><strong>Found during:</strong> Universal Agent Protocol &amp; RCE Hardening (v9.2.0)
+<strong>Location:</strong> <code>.claude/rules</code>, <code>.claude/commands</code>, <code>.claude/skills</code> (git symlinks)
+<strong>Issue:</strong> The <code>.claude/</code> directory symlinks (→ <code>.agent_governance/</code>) are created
+as POSIX symlinks. On Windows (non-WSL) hosts, git checks out symlinks as text
+files containing the target path. Claude Code running natively on Windows may
+not resolve these, breaking skill invocations (<code>/release</code>, <code>/audit</code>).
+<strong>Suggested fix:</strong> Add a CI step (<code>windows-latest</code>) that verifies
+<code>cat .claude/commands/release.md</code> resolves through the symlink. If broken,
+implement a <code>just sync-governance</code> recipe that copies <code>.agent_governance/</code> →
+<code>.claude/</code> on Windows instead of relying on symlinks.</p>
+<h3 id="ct-005-cognition_surrender_index-not-visible-in-csv-export">CT-005: <code>cognition_surrender_index</code> not visible in CSV export</h3>
+<p><strong>Found during:</strong> Universal Agent Protocol &amp; RCE Hardening (v9.2.0)
+<strong>Location:</strong> <code>crates/cli/src/report.rs::render_csv</code>
+<strong>Issue:</strong> <code>cognition_surrender_index</code> is present in <code>BounceLogEntry</code> and the
+JSON output but not in the CSV export (column 18 would need to be added).
+SIEM integrations consuming CSV (not JSON webhooks) cannot track CSI trends.
+<strong>Suggested fix:</strong> Add <code>cognition_surrender_index</code> as column 18 in <code>render_csv</code>,
+update the column-count test, and document in <code>docs/architecture.md</code>.</p>
 
 
 

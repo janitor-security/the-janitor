@@ -626,6 +626,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-03-universal-agent-protocol-rce-hardening-v920" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Universal Agent Protocol &amp; RCE Hardening (v9.2.0)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -753,6 +762,15 @@
   <a href="#2026-04-03-go-sqli-interceptor-portability-fix-v914" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Go SQLi Interceptor &amp; Portability Fix (v9.1.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-03-universal-agent-protocol-rce-hardening-v920" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Universal Agent Protocol &amp; RCE Hardening (v9.2.0)
     </span>
   </a>
   
@@ -962,6 +980,35 @@ fixtures; resolve CT-003 by making <code>gpg-preset-passphrase</code> path porta
   CT-003 section purged (auto-purge: all findings completed)
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.1.4</code></p>
+<p><strong>Commit:</strong> <code>fc9c11f</code></p>
+<hr />
+<h2 id="2026-04-03-universal-agent-protocol-rce-hardening-v920">2026-04-03 — Universal Agent Protocol &amp; RCE Hardening (v9.2.0)</h2>
+<p><strong>Directive:</strong> Establish shared multi-agent governance layer; intercept WebLogic
+T3/IIOP <code>resolve()</code> and XMLDecoder F5/WebLogic RCE vectors; add Cognition
+Surrender Index to quantify AI-introduced structural rot density.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/</code> <em>(created)</em> — UAP canonical governance dir; <code>README.md</code>
+  documents bootstrap sequence and shared ledger mandate for all agents
+- <code>.agent_governance/rules/</code> — git mv from <code>.claude/rules/</code> (symlink preserved)
+- <code>.agent_governance/commands/</code> — git mv from <code>.claude/commands/</code> (symlink preserved)
+- <code>.agent_governance/skills/</code> — git mv from <code>.claude/skills/</code> (symlink preserved)
+- <code>.claude/rules</code>, <code>.claude/commands</code>, <code>.claude/skills</code> <em>(converted to symlinks)</em>
+- <code>.cursorrules</code> <em>(created)</em> — Codex/Cursor bootstrap: reads <code>.agent_governance/</code>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>JAVA_MARKERS</code> gains <code>b"resolve"</code>;
+  <code>"lookup"</code> arm extended to <code>"lookup" | "resolve"</code> (WebLogic CVE-2023-21839/21931);
+  <code>new XMLDecoder(stream)</code> <code>object_creation_expression</code> gate (KevCritical,
+  CVE-2017-10271, CVE-2019-2725); 3 new unit tests
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — 3 new fixtures: ctx.resolve TP/TN,
+  XMLDecoder TP; Crucible 141/141 → 144/144
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>BounceLogEntry</code> gains
+  <code>cognition_surrender_index: f64</code>; <code>render_step_summary</code> outputs CSI row
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — CSI computed in main log entry (inline);
+  timeout entry gains <code>cognition_surrender_index: 0.0</code>; test helper updated
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — <code>cognition_surrender_index: 0.0</code>
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — <code>cognition_surrender_index: 0.0</code> (×2)
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — <code>cognition_surrender_index: 0.0</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.2.0</code></p>
 <p><strong>Commit:</strong> <em>(pending)</em></p>
 
 
