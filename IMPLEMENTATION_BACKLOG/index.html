@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-parse-forest-integration-telemetry-hardening-v963" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-wisdom-infrastructure-pivot-v961" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
@@ -777,6 +786,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-parse-forest-integration-telemetry-hardening-v963" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-wisdom-infrastructure-pivot-v961" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
@@ -995,6 +1013,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-parse-forest-integration-telemetry-hardening-v963">2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)</h2>
+<p><strong>Directive:</strong> Enforce autonomous telemetry updates in the UAP evolution
+tracker, refactor Forge so <code>find_slop</code> consumes a shared <code>ParsedUnit</code>, reuse
+the Python CST instead of reparsing it, verify with <code>just audit</code> plus
+<code>cargo run -p crucible</code>, and cut <code>v9.6.3</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/skills/evolution-tracker/SKILL.md</code> <em>(modified)</em> — Continuous Telemetry law now forbids waiting for operator instruction; every prompt must autonomously append <code>CT-NNN</code> findings before session close
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.6.3</code>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>ParsedUnit</code> upgraded to a cache-bearing parse carrier; <code>find_slop</code> now accepts <code>&amp;ParsedUnit</code>; Python AST walk reuses or lazily populates the cached tree instead of reparsing raw bytes
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — patch analysis now instantiates one <code>ParsedUnit</code> per file and passes it into the slop dispatch chain
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — Crucible now routes fixtures through <code>ParsedUnit</code> so the gallery exercises the production API shape
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — autonomous telemetry entry <code>CT-009</code> appended for the tracked CDN artefact gap</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-wisdom-infrastructure-pivot-v961">2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)</h2>
 <p><strong>Directive:</strong> Pivot <code>update-wisdom</code> off the dead <code>api.thejanitor.app</code>
