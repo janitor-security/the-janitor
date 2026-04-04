@@ -1,583 +1,234 @@
 # Innovation Log
 
-Autonomous architectural insights, structural gap observations, intelligence
-ledgers, and forward-looking feature proposals. Maintained by the Evolution
-Tracker skill. Entries are organized by priority tier and dated at creation.
-
-**CISO Pulse Audit completed 2026-04-03 (v9.1.1).** All entries re-tiered
-into P0/P1/P2. Twelve new grammar depth rules added. Redundant ideas merged.
-Low-value noise dropped.
+Active architectural debt only. Completed work, resolved telemetry, and legacy
+ID epochs are purged during hard compaction.
 
 ---
 
-## P0 — Enterprise Security Depth
+## P0 — Core Security
 
-*Grammar-first. Every language construct without an AST gate is a liability
-a CISO cannot sign off on. P0 entries are the reason enterprises select
-the Janitor over byte-pattern scanners.*
+### P0-1: Sovereign Governor Binary
 
----
-
-### Grammar Depth: Go — 3 New Detection Rules
-
-**Languages to target:** Go (current AST coverage: 2 rules — `exec.Command`
-shell interpreter, `InsecureSkipVerify`)
-
-**Go-3 — `security:sql_injection_concatenation` (KevCritical, 150 pts)**
-`[COMPLETED — v9.1.4]`
-- Implemented in `find_go_danger_nodes()` — AST walk on `call_expression` with
-  `selector_expression` field in `{Query,Exec,QueryRow,QueryContext,ExecContext}`;
-  fires when first arg is `binary_expression{+}` with at least one non-literal operand.
-- Crucible: TP (`db.Query("..." + userID)`) + TN (parameterized `db.Query("?", id)`)
-- 3 unit tests: dynamic fires, literal-concat safe, parameterized safe
-
-**Go-4 — `security:unsafe_pointer_cast` (Critical, 50 pts)**
-- **Trigger:** `call_expression` matching `unsafe.Pointer(expr)` inside
-  a type conversion `(*T)(unsafe.Pointer(...))` where the inner expression
-  is not an address-of literal.
-- **Suppress if:** inside a function named with `ffi`, `cgo`, or `bridge`.
-- **AST node:** `type_conversion_expression → call_expression{unsafe.Pointer}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_go_slop()`
-- **CVE class:** CWE-843 (type confusion), memory safety
-
-**Go-5 — `security:path_traversal_http_serve` (KevCritical, 150 pts)**
-- **Trigger:** `call_expression` matching `http.ServeFile|os.Open|os.ReadFile`
-  where the path argument is a `binary_expression{+}` containing a variable.
-- **Suppress if:** path is a `interpreted_string_literal` (constant).
-- **AST node:** `call_expression{http.ServeFile|os.Open} → argument → binary_expression{+}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_go_slop()`
-- **CVE class:** CWE-22 (path traversal), OWASP A01
-
----
-
-### Grammar Depth: Rust — 3 New Detection Rules
-
-**Rust current AST coverage:** 2 rules — `mem::transmute`, raw pointer deref.
-
-**Rust-3 — `security:unsafe_slice_from_raw_parts` (Critical, 50 pts)**
-- **Trigger:** `call_expression` matching `from_raw_parts|from_raw_parts_mut`
-  inside an `unsafe` block where the pointer argument is not an address-of
-  expression (`&arr[0]` is acceptable; a variable is not).
-- **Suppress if:** function name contains `ffi`, `raw`, `sys`, `extern`.
-- **AST node:** `unsafe_block → call_expression{from_raw_parts}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_rust_slop()`
-- **CVE class:** CWE-119 (buffer overflow / out-of-bounds read)
-
-**Rust-4 — `security:smart_ptr_from_raw` (Critical, 50 pts)**
-- **Trigger:** `call_expression` matching `Box::from_raw|Arc::from_raw|Rc::from_raw`
-  inside an `unsafe` block; any argument.
-- **Suppress if:** function name contains `ffi`, `raw`, `extern`.
-- **Rationale:** `from_raw` reconstructs ownership from a raw pointer; misuse
-  causes use-after-free or double-free.
-- **AST node:** `unsafe_block → call_expression{Box::from_raw|Arc::from_raw|Rc::from_raw}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_rust_slop()`
-- **CVE class:** CWE-416 (use-after-free), CWE-415 (double-free)
-
-**Rust-5 — `security:process_command_injection` (KevCritical, 150 pts)**
-- **Trigger:** `call_expression` matching `Command::new(expr)` where `expr`
-  is not a `string_literal` — i.e., the executable name is user-influenced.
-- **Suppress if:** function is `#[test]` or name contains `test`.
-- **Rationale:** `Command::new(user_input)` is direct OS command injection
-  with no shell interpolation needed; more dangerous than shell=True Python
-  equivalents.
-- **AST node:** `call_expression{Command::new} → argument` (non-literal)
-- **File:** `crates/forge/src/slop_hunter.rs::find_rust_slop()`
-- **CVE class:** CWE-78 (OS command injection)
-
----
-
-### Grammar Depth: Java — 3 New AST-Level Rules `[COMPLETED — v9.1.2]`
-
-**Java-1 `[COMPLETED — v9.1.2]`** — `readObject()` upgraded to `KevCritical`;
-test-method suppression added; existing `find_java_slop` extended.
-
-**Java-2 `[COMPLETED — v9.1.2]`** — `Runtime.getRuntime().exec()` upgraded to
-`KevCritical`; `new ProcessBuilder(expr)` non-literal detection added.
-
-**Java-3 `[COMPLETED — v9.1.2]`** — `DocumentBuilderFactory.newInstance()`
-without XXE hardening fires `security:xxe_documentbuilder` at `Critical`.
-
----
-
-### Grammar Depth: Python — 3 New Detection Rules
-
-**Python current AST coverage:** SQLi concatenation, SSRF dynamic URL, path
-traversal concatenation. Missing deserialization and shell-injection vectors.
-
-**Python-1 — `security:pickle_deserialization` (KevCritical, 150 pts)**
-- **Trigger:** `call{pickle.loads|pickle.load}` where the argument is not a
-  `bytes` literal.
-- **Suppress if:** inside a function named `test*` or `*_test`.
-- **AST node:** `call → attribute{pickle.loads|pickle.load}`
-- **File:** `crates/forge/src/slop_hunter.rs::find_python_slop()`
-- **CVE class:** CWE-502; countless ML-pipeline supply chain attacks
-  (pickle is the serialization format for PyTorch, scikit-learn model files)
-
-**Python-2 — `security:yaml_unsafe_load` (Critical, 50 pts)**
-- **Trigger:** `call{yaml.load}` where the `keywords` list does NOT contain
-  a `keyword_argument` with key `Loader`.
-- **Suppress if:** inside a function named `test*`.
-- **Rationale:** `yaml.load(data)` without `Loader=yaml.SafeLoader` executes
-  arbitrary Python objects embedded in YAML.
-- **AST node:** `call → attribute{yaml.load}` → assert no `Loader=` keyword
-- **File:** `crates/forge/src/slop_hunter.rs::find_python_slop()`
-- **CVE class:** CVE-2017-18342; OWASP A08 (software/data integrity)
-
-**Python-3 — `security:subprocess_shell_injection` (KevCritical, 150 pts)**
-- **Trigger:** `call{subprocess.Popen|subprocess.call|subprocess.run|subprocess.check_call}`
-  where a `keyword_argument{shell=True}` is present AND the first positional
-  argument is not a `string` literal.
-- **Suppress if:** inside a function named `test*`.
-- **Rationale:** `shell=True` combined with a non-literal first arg passes
-  user input to `/bin/sh -c`, enabling full OS command injection.
-- **AST node:** `call{subprocess.*}` with `keyword_argument{shell: True}`
-  and non-literal first arg
-- **File:** `crates/forge/src/slop_hunter.rs::find_python_slop()`
-- **CVE class:** CWE-78; the most common Python pentest finding
-
----
-
-### VULN-01: Sovereign Governor Binary (Long-term)
-
-**Severity:** Critical
 **Class:** Infrastructure / Reliability
-
-The short-term `--soft-fail` mode is `[COMPLETED — v9.0.0]`. The long-term
-sovereign deployment path is still open.
-
-**Long-term (v9.1.x) — Sovereign Governor binary:**
-Package the Governor as a self-contained binary (`janitor-gov`) that the
-customer deploys inside their own VPC (EKS, GKE, or bare-metal). The SaaS
-Fly.io Governor becomes optional; `janitor bounce --governor-url
-https://janitor-gov.internal` routes to the on-prem instance. Stateless-first —
-PostgreSQL is optional; SQLite (`janitor-gov --storage sqlite:///.janitor/gov.db`)
-is the default for air-gapped deployments.
-
-**Definition of Done:**
-- `just audit` passes with Sovereign Governor binary crate skeleton
-- `cmd_bounce` routes to `--governor-url` override when set
-- Integration test: custom governor URL path validates end-to-end
-
----
-
-### VULN-04: `--deep-scan` Flag — Extended Parse Budget
-
-**Severity:** High
-**Class:** Detection Coverage / Evasion
-
-**Finding:**
-Two circuit breakers create exploitable blind spots:
-1. **1 MiB patch skip** — files exceeding 1 MiB are skipped before
-   tree-sitter parsing. A malicious actor can pad a payload past this
-   threshold to guarantee bypass.
-2. **500 ms parse timeout** — adversarially crafted source can force a
-   timeout, causing the file to be skipped with `Severity::Exhaustion`.
-
-**Solution — `--deep-scan` mode in `janitor bounce`:**
-- File size limit raised from 1 MiB to 32 MiB (configurable via
-  `[forge] deep_scan_max_bytes` in `janitor.toml`)
-- Parse timeout raised from 500 ms to 30 s per file
-- Parallelism capped at `Pulse::Constrict` level (2 workers) to prevent OOM
-
-**Definition of Done:**
-- `--deep-scan` flag parsed in `cmd_bounce`; `ForgeConfig` gains
-  `deep_scan_max_bytes: Option<u64>` and `deep_scan_timeout_us: Option<u64>`
-- Unit test: 2 MiB synthetic file skipped on fast path, processed on
-  deep-scan path
-- `cargo test` covers Exhaustion retry logic under deep-scan
-
----
-
-## P1 — Compliance / Zero-Upload
-
-*These entries unlock regulated-market deals (FedRAMP, DISA STIG, ISO 27001)
-and multi-SCM enterprises. Not the primary reason a CISO buys the product,
-but hard blocks on procurement if absent.*
-
----
-
-### Executable Surface Gaps — 5 New Grammar Extensions
-
-**Current grammar coverage:** 23 languages, all AST depth.
-**Unmapped critical extensions in the enterprise corpus:**
-
-| Rank | Extension | Count | Class | Risk |
-|---|---|---|---|---|
-| 1 | Dockerfile | ∞ | container | Critical — supply chain |
-| 2 | xml | 1 439 | infra / config | Critical — XXE |
-| 3 | proto | 481 | RPC contract | High — deser gadget |
-| 4 | bzl, bazel | 473 | build system | High — unverified fetch |
-| 5 | cmake | 48 | build system | High — build injection |
-
-**Proposed AST gates:**
-
-**Gate 1 — `security:dockerfile_pipe_execution` (Critical, 50 pts)**
-Grammar: `tree-sitter-dockerfile` | Trigger: `RUN … | bash/sh`
-Rationale: supply-chain execution; XZ Utils backdoor class.
-
-**Gate 2 — `security:xxe_external_entity` (Critical, 50 pts)**
-Grammar: `tree-sitter-xml` | Trigger: `DOCTYPE … SYSTEM/PUBLIC`
-Rationale: OWASP A05, CWE-611; Spring/Java/Android attack surface.
-
-**Gate 3 — `security:protobuf_any_type_field` (High, 50 pts)**
-Grammar: `tree-sitter-proto` | Trigger: `google.protobuf.Any` field in RPC message
-Rationale: arbitrary-message gadget chain via attacker-controlled `type_url`.
-
-**Gate 4 — `security:bazel_unverified_http_archive` (Critical, 50 pts)**
-Grammar: `tree-sitter-starlark` | Trigger: `http_archive()` without `sha256`
-Rationale: mirrors Nix-1 gate; supply-chain tarball substitution.
-
-**Gate 5 — `security:cmake_execute_process_injection` (High, 50 pts)**
-Grammar: `tree-sitter-cmake` | Trigger: `execute_process(COMMAND ${VAR})`
-Rationale: build-time RCE via user-controlled toolchain variable.
-
----
-
-### IDEA-003: MCP Structured Finding Envelope + Deep-Scan Negotiation
-
-**Class:** Agent Protocol / Integration
-**Priority:** P1
-**Inspired by:** `crates/mcp/src/lib.rs::run_bounce`, `run_dep_check`
+**Inspired by:** Governor soft-fail path and enterprise air-gap requirements
 
 **Observation:**
-The MCP server collapses bounce and dependency analysis into lossy JSON
-summaries: `run_bounce()` returns flattened strings in `antipattern_details`,
-and `run_dep_check()` emits KEV hits as plain descriptions only. The protocol
-cannot carry severity, byte ranges, domains, retry provenance, or whether a
-result was produced under normal scan vs deep-scan budgets.
+The current Governor path still assumes a shared SaaS endpoint for full
+attestation. Regulated customers need a self-hosted verification endpoint
+inside their own trust boundary.
 
 **Proposal:**
-Extend MCP outputs to return a structured finding envelope:
-1. `findings[]` with `{category, severity, description, byte_range, domain}`.
-2. `analysis_profile` with `{deep_scan, parse_budget_ms, blob_budget_bytes}`.
-3. `retry_trace` when a parser timeout escalates from 500 ms to 30 s.
-4. `dep_findings[]` preserving package, version, CVE, and ecosystem fields.
+Package the Governor as a self-contained `janitor-gov` binary deployable to
+customer VPCs or bare metal, with SQLite as the default storage backend and
+customer-controlled webhook credentials.
 
 **Security impact:**
-Agents can triage and act on deep-scan escalations deterministically instead of
-regex-parsing prose. This closes the gap between engine certainty and agent
-execution quality, especially for pre-commit auto-remediation.
+Removes the external Governor dependency from high-assurance deployments and
+preserves zero-upload guarantees under sovereign hosting.
 
 **Implementation path:**
-`crates/mcp/src/lib.rs` response schema upgrade
-→ `common` finding DTO shared by CLI + MCP
-→ backward-compatible `schema_version` bump for clients.
+Add a local Governor crate and route `janitor bounce --governor-url` to the
+customer-hosted control plane.
 
----
+### P0-2: Executable Surface Gaps
 
-### IDEA-004: Parse-Forest Reuse + Interprocedural Taint Spine
+**Class:** Detection Expansion
+**Inspired by:** Current grammar registry coverage and remaining non-AST attack surface
+
+**Observation:**
+Critical enterprise file types still lack AST-level enforcement, including
+Dockerfile, XML, Proto, Bazel/Starlark, CMake, and C/C++ detector coverage.
+
+**Proposal:**
+Add dedicated AST rules for:
+- Dockerfile pipeline execution
+- XML external entities
+- `google.protobuf.Any`
+- Bazel `http_archive()` without `sha256`
+- CMake `execute_process(COMMAND ${VAR})`
+- C/C++ unsafe APIs including `gets`, `strcpy`, `sprintf`, and `system`
+
+**Security impact:**
+Closes high-value blind spots in supply-chain, deserialization, and native-code
+attack classes that are currently underrepresented in the firewall.
+
+**Implementation path:**
+Extend `crates/forge/src/slop_hunter.rs` with new language handlers and AST
+rules; add Crucible fixtures for each class.
+
+### P0-3: Parse-Forest Reuse + Interprocedural Taint Spine
 
 **Class:** Detection Depth / Performance
-**Priority:** P0
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
 
 **Observation:**
-`slop_hunter.rs` repeatedly constructs `tree_sitter::Parser`, reparses the same
-source, and reruns detector-local AST walks for each language phase. The engine
-also treats taint as statement-local (`argument_is_tainted`) rather than
-interprocedural or cross-file, so helper wrappers and module relays erase the
-signal before it reaches SSRF/SQLi/path-traversal sinks.
+`slop_hunter.rs` reparses the same file for multiple detector phases and treats
+taint as statement-local rather than propagating through helper functions or
+module boundaries.
 
 **Proposal:**
-Build a per-file parse-forest cache and taint spine:
-1. Parse each file once per language into a shared detector context.
-2. Materialize a lightweight symbol/assignment graph for intra-file taint
-   propagation across helper functions.
-3. Add optional cross-file export/import taint summaries for module boundaries.
-4. Reuse the same context for logic-erasure, sink detection, and future dataflow rules.
+Build a shared parse context per file and a lightweight taint graph that can
+propagate source-to-sink signal across local helpers and exported wrappers.
 
 **Security impact:**
-Raises true-positive depth on real exploit paths while eliminating the current
-O(detectors × parse_cost) architecture that burns CPU on repeated tree walks.
+Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
+chains while cutting repeated parse overhead from the hot path.
 
 **Implementation path:**
-`crates/forge/src/slop_hunter.rs` detector-context refactor
-→ shared `ParsedUnit` + taint summary structs
-→ optional cross-file summaries threaded from `PatchBouncer`.
+Refactor detector dispatch around shared `ParsedUnit` state plus optional
+cross-file taint summaries threaded from `PatchBouncer`.
 
----
+## P1 — Compliance / Integration
 
-### VULN-03: `ScmContext` Abstraction
+### P1-1: KMS / HSM Key Sources for `--pqc-key`
 
-**Severity:** High
+**Class:** Compliance / Key Custody
+**Inspired by:** Enterprise attestation requirements for BYOK signing
+
+**Observation:**
+`--pqc-key` currently accepts only filesystem-backed key material, which does
+not satisfy FedRAMP or DISA STIG controls requiring hardware- or KMS-isolated
+private keys.
+
+**Proposal:**
+Extend `--pqc-key` to support PKCS#11 URIs and managed cloud KMS backends while
+preserving file-path mode for air-gapped deployments.
+
+**Security impact:**
+Moves PQC signing into compliant custody models without changing the attestation
+protocol or exposing raw private key bytes on runner disks.
+
+**Implementation path:**
+Introduce a key-source abstraction and a thin `pqc-kms` integration crate for
+PKCS#11, AWS KMS, and Azure Key Vault backends.
+
+### P1-2: SCM Context Abstraction
+
 **Class:** Portability / Ecosystem
+**Inspired by:** GitHub-specific env resolution in CLI and Action paths
 
-**Finding:**
-All env var resolution and webhook handling are coupled to GitHub's specific
-contract (`GITHUB_SHA`, `GITHUB_REF`, GitHub App installation IDs). GitLab CI,
-Bitbucket Pipelines, and Azure DevOps lock the Janitor out of ~45% of the
-enterprise SCM market.
+**Observation:**
+Bounce execution is still heavily coupled to GitHub environment variables and
+App metadata, limiting portability to GitLab, Bitbucket, Azure DevOps, and
+generic on-prem CI runners.
 
-**Solution — `ScmContext` struct in `crates/common/src/scm.rs`:**
-```rust
-pub enum ScmProvider { GitHub, GitLab, Bitbucket, AzureDevOps, Generic }
-pub struct ScmContext {
-    pub provider: ScmProvider,
-    pub commit_sha: String,
-    pub repo_slug: String,
-    pub pr_number: Option<u64>,
-    pub base_ref: String,
-    pub head_ref: String,
-    pub token: Option<String>,
-}
-impl ScmContext { pub fn from_env() -> Self { … } }
-```
-Detection priority: `GITLAB_CI` → GitLab; `BITBUCKET_BUILD_NUMBER` →
-Bitbucket; `TF_BUILD` → Azure DevOps; `GITHUB_ACTIONS` → GitHub; else Generic.
+**Proposal:**
+Introduce a provider-neutral `ScmContext` that normalizes commit SHA, repo
+slug, PR number, refs, and auth tokens across supported SCM providers.
 
-**Definition of Done:**
-- `ScmContext::from_env()` detects all 4 providers in unit tests
-- `cmd_bounce` uses `ScmContext` for all env var reads
-- CI matrix tests GitHub + GitLab env fixture sets
+**Security impact:**
+Expands zero-upload deployment into multi-SCM enterprises without forking the
+attestation model per CI platform.
 
----
+**Implementation path:**
+Add `crates/common/src/scm.rs`, teach CLI entrypoints to consume it, and add
+fixture-based env tests for each provider.
 
-## P2 — Operational / CLI Ergonomics
+### P1-3: MCP Structured Findings Envelope
 
-*DX improvements and maintenance items. Important for retention but not the
-primary purchasing decision driver. Implement after P0 and P1 queues drain.*
+**Class:** Agent Protocol / Integration
+**Inspired by:** `crates/mcp/src/lib.rs`
 
----
+**Observation:**
+The MCP server still returns flattened prose lists for bounce and dependency
+findings, discarding severity, byte ranges, domains, and deep-scan provenance.
 
-### IDEA-001: Semantic CST Diff Engine — Structural Patch Analysis
+**Proposal:**
+Emit structured finding envelopes and analysis profiles from MCP tools,
+including deep-scan budget metadata and retry traces.
+
+**Security impact:**
+Lets agents consume firewall verdicts deterministically without regex-parsing
+human strings, improving pre-commit remediation and audit accuracy.
+
+**Implementation path:**
+Define shared finding DTOs in `common`, upgrade `run_bounce()` and
+`run_dep_check()`, and bump the MCP schema version compatibly.
+
+## P2 — Architecture / Ergonomics
+
+### P2-1: Semantic CST Diff Engine
 
 **Class:** Core Engine Enhancement
-**Priority:** P2
-**Inspired by:** `crates/forge/src/hashing.rs::AstSimHasher`, VULN-04
+**Inspired by:** Diff-surface false negatives in current line-based bounce flow
 
 **Observation:**
-The current bounce engine operates on line-level unified diffs. Two diffs that
-are semantically identical produce different line hashes, inflating clone
-detection false-negative rate. A malicious payload inserted via a
-whitespace-only formatting change can evade the diff pre-filter.
+Line-level unified diffs lose structural intent. Semantically equivalent edits
+hash differently, and whitespace or formatting churn can obscure the true
+changed subtrees.
 
 **Proposal:**
-Replace the line-diff input to `find_slop()` with a CST diff computed via
-tree-sitter's incremental parsing. Feed only the *changed subtrees* into the
-slop detectors — not the whole file diff.
+Add an incremental CST diff engine that feeds only changed subtrees into the
+detectors and clone heuristics.
 
 **Security impact:**
-Eliminates whitespace-padding evasion. Enables sub-file granularity for
-the 1 MiB circuit breaker.
+Improves precision, reduces whitespace-padding evasion, and enables more
+granular gating on large files.
 
 **Implementation path:**
-`crates/forge/src/cst_diff.rs` (new) → `CstDelta { added: Vec<Node>, removed: Vec<Node> }`
-→ wire into `PatchBouncer::bounce()` as optional fast path via `--cst-diff`.
+Introduce `crates/forge/src/cst_diff.rs` and wire an optional subtree-based
+path into `PatchBouncer`.
 
----
+### P2-2: Grammar Stress Fuzzer
 
-### CT-001: `BounceLogEntry` Default Derive
-
-**Found during:** VULN-01 Remediation
-**Location:** `crates/cli/src/report.rs`
-**Issue:** `BounceLogEntry` does not derive `Default`, forcing every callsite
-to enumerate all fields. Adding a new field requires updating every struct
-literal across `main.rs`, `daemon.rs`, `git_drive.rs`, `cbom.rs`, and test
-helpers.
-**Suggested fix:** Derive `Default` on `BounceLogEntry`; switch existing
-struct literals to `BounceLogEntry { field: value, ..Default::default() }`.
-
----
-
-### CT-002: Degraded Attestation Has No SIEM Visibility Path
-
-**Found during:** VULN-01 Remediation
-**Location:** `crates/cli/src/main.rs` (soft_fail match arm)
-**Issue:** When `governor_status: "degraded"` is written to the local NDJSON
-log, there is no mechanism to forward the degraded event to the configured
-webhook endpoint. A governance auditor reviewing the webhook feed would have
-no signal that some CI runs proceeded without attestation.
-**Suggested fix:** Add a `"degraded_attestation"` event class to
-`WebhookConfig::events` filter and fire `fire_webhook_if_configured` in the
-soft-fail match arm.
-
----
-
-### CT-004: `just fast-release` Has No Audit Stamp Guard
-
-**Found during:** Forward-Looking Telemetry
-**Location:** `justfile` — `fast-release` recipe
-**Issue:** `fast-release` skips the `audit` prerequisite on the honour-system
-assumption that the caller ran `just audit` first. An operator who invokes
-`just fast-release` directly will ship a binary that has never been audited.
-**Suggested fix:** In `just audit`, write `.janitor/audit_stamp` containing
-`git rev-parse HEAD`. In `just fast-release`, verify that `.janitor/audit_stamp`
-matches `HEAD` before proceeding; abort with an actionable error if not.
-
----
-
-## Continuous Telemetry — 2026-04-03 (CISO Pulse Audit, v9.1.1)
-
-### CT-007: `update-wisdom` has no CISA KEV diff / checklist export path
-
-**Found during:** CISO Pulse & Autonomous Clock (v9.1.1)
-**Location:** `crates/cli/src/main.rs::cmd_update_wisdom`
-**Issue:** `update-wisdom` downloads a binary `wisdom.rkyv` file — a format
-that cannot be diffed in CI, grepped by jq, or used to generate human-readable
-checklists. The CISA KEV sync workflow (`cisa-kev-sync.yml`) therefore fetches
-the CISA JSON directly from `www.cisa.gov` rather than using the wisdom
-registry. This bypasses the on-device sovereignty model and creates a
-split-path architecture: the wisdom registry and the KEV catalog are not
-unified.
-**Suggested fix:** Add a `--ci-mode` flag to `update-wisdom` that, in addition
-to writing `wisdom.rkyv`, emits a JSON summary
-(`.janitor/wisdom_manifest.json`) listing all KEV entries in a diffable,
-human-readable format. The CISA sync workflow can then use this JSON file
-instead of fetching the CISA feed independently.
-
-### CT-008: C/C++ grammars have zero AST-level detectors
-
-**Found during:** CISO Pulse grammar depth audit
-**Location:** `crates/forge/src/slop_hunter.rs`
-**Issue:** `tree-sitter-c` and `tree-sitter-cpp` are loaded into the polyglot
-registry but have no corresponding `find_c_slop()` or `find_cpp_slop()`
-functions in `slop_hunter.rs`. All C/C++ detection is byte-level
-(`binary_hunter.rs`). The following high-priority patterns have no AST gate:
-`gets()` (CWE-119), `strcpy()` / `strcat()` with non-literal dest (CWE-121),
-`sprintf()` / `vsprintf()` with non-literal format string (CWE-134),
-`system()` with non-literal arg (CWE-78).
-**Suggested fix (P0):** Implement `find_c_slop()` and `find_cpp_slop()` for
-the four patterns above. C/C++ is the language most represented in CVE
-exploits; having only byte-level detection is a credibility gap in enterprise
-security conversations.
-
----
-
-## Continuous Telemetry — 2026-04-03 (Epoch 2, Wisdom & Java Consolidation v9.1.2)
-
-*CT counter reset to CT-001 per Logic 5 CISO Pulse epoch boundary.*
-
-### CT-001: `utc_now_iso8601()` is file-local — not accessible across modules
-
-**Found during:** Wisdom & Java Consolidation (v9.1.2)
-**Location:** `crates/cli/src/main.rs`
-**Issue:** `utc_now_iso8601()` is defined in `main.rs` as a private function.
-The `--ci-mode` path in `cmd_update_wisdom` calls it directly, coupling the
-timestamp implementation to a single file.  If the function is ever needed
-in a library crate (e.g., `crates/common`), this will require a refactor.
-**Suggested fix:** Move `utc_now_iso8601()` to `crates/common/src/` as a
-`pub` utility, or introduce a thin `janitor_timestamp()` wrapper in a
-shared utilities module.
-
-### CT-002: `wisdom_manifest.json` is not committed to the repo as a baseline
-
-**Found during:** Wisdom & Java Consolidation (v9.1.2)
-**Location:** `.github/workflows/cisa-kev-sync.yml`
-**Issue:** The `cisa_kev_ids.txt` snapshot is committed as part of the first
-workflow run.  Until that first run executes, the diff step has no baseline
-and will always output "No prior snapshot — writing baseline."  This means
-the first Monday after deployment produces no PR — a confusing no-op.
-**Suggested fix:** Commit an initial `.janitor/cisa_kev_ids.txt` (populated
-from the current CISA KEV catalog) as part of this session, so the first
-automated run produces a meaningful diff rather than a silent baseline write.
-
----
-
-## Continuous Telemetry — 2026-04-03 (Epoch 2, Go SQLi Interceptor v9.1.4)
-
-<!-- no new telemetry findings this session beyond CT-003 resolution -->
-
----
-
-## Continuous Telemetry — 2026-04-03 (Epoch 2, UAP & RCE Hardening v9.2.0)
-
-### CT-004: UAP symlink compatibility untested on Windows host
-
-**Found during:** Universal Agent Protocol & RCE Hardening (v9.2.0)
-**Location:** `.claude/rules`, `.claude/commands`, `.claude/skills` (git symlinks)
-**Issue:** The `.claude/` directory symlinks (→ `.agent_governance/`) are created
-as POSIX symlinks. On Windows (non-WSL) hosts, git checks out symlinks as text
-files containing the target path. Claude Code running natively on Windows may
-not resolve these, breaking skill invocations (`/release`, `/audit`).
-**Suggested fix:** Add a CI step (`windows-latest`) that verifies
-`cat .claude/commands/release.md` resolves through the symlink. If broken,
-implement a `just sync-governance` recipe that copies `.agent_governance/` →
-`.claude/` on Windows instead of relying on symlinks.
-
-### CT-005: `cognition_surrender_index` not visible in CSV export
-
-**Found during:** Universal Agent Protocol & RCE Hardening (v9.2.0)
-**Location:** `crates/cli/src/report.rs::render_csv`
-**Issue:** `cognition_surrender_index` is present in `BounceLogEntry` and the
-JSON output but not in the CSV export (column 18 would need to be added).
-SIEM integrations consuming CSV (not JSON webhooks) cannot track CSI trends.
-**Suggested fix:** Add `cognition_surrender_index` as column 18 in `render_csv`,
-update the column-count test, and document in `docs/architecture.md`.
-
----
-
-## Legacy Governance Gaps (P2)
-
-### IDEA-005: Governance Bootstrap Drift Sentinel
-
-**Class:** Architecture
-**Priority:** P2
-**Inspired by:** `CLAUDE.md`, `.cursorrules`, `.agent_governance/README.md`
+**Class:** Defensive Hardening / Fuzzing
+**Inspired by:** Parse-budget exhaustion risk and AST bomb classes
 
 **Observation:**
-Legacy bootstrap surfaces still drift from the canonical UAP source of truth.
-`CLAUDE.md` advertises `.claude/` as authoritative and still pins the engine at
-`v9.0.1`, while `.agent_governance/README.md` and `.cursorrules` declare
-`.agent_governance/` as canonical. A stale bootstrap path can bind an agent to
-obsolete workflow law before the zero-upload AST firewall ever executes.
+The engine now has deep-scan retry logic, but there is still no systematic
+corpus generation for grammar-specific worst-case parse behavior.
 
 **Proposal:**
-Add a deterministic governance consistency check that fails when bootstrap
-documents reference a non-canonical governance root or stale engine version.
+Build nightly fuzz targets per grammar that record timeout-inducing inputs into
+Crucible fixtures for permanent regression coverage.
 
 **Security impact:**
-Prevents startup drift from disabling current zero-upload, symmetric-failure,
-and release-coupling mandates in downstream agents.
+Turns parser-exhaustion failures into harvested adversarial corpora before
+attackers can weaponize them in CI.
 
 **Implementation path:**
-Add `just governance-audit` plus a test fixture that cross-checks
-`CLAUDE.md`, `.cursorrules`, `.agent_governance/README.md`, and
-`Cargo.toml [workspace.package].version`.
+Add `crates/fuzz` targets and promote timeout reproducers into
+`crates/crucible/fixtures/exhaustion/`.
 
-### IDEA-006: Release Surface Parity Gate
+### P2-3: Governance Bootstrap Drift Sentinel
+
+**Class:** Governance / Consistency
+**Inspired by:** Historical drift between governance entrypoints and canonical docs
+
+**Observation:**
+Bootstrap surfaces can still drift on engine version, canonical governance
+root, or release instructions across local rules and operator entrypoints.
+
+**Proposal:**
+Add a deterministic governance audit that cross-checks version strings,
+governance roots, and release-path documentation for parity.
+
+**Security impact:**
+Prevents stale operator surfaces from binding downstream agents to obsolete
+workflow law before the firewall executes.
+
+**Implementation path:**
+Add a governance parity test spanning `Cargo.toml`, `.cursorrules`,
+`.agent_governance/README.md`, and release command docs.
+
+### P2-4: Release Surface Parity Gate
 
 **Class:** Defensive Hardening
-**Priority:** P2
-**Inspired by:** `justfile`, `.agent_governance/commands/release.md`, `CLAUDE.md`
+**Inspired by:** `justfile` and release command drift across operator surfaces
 
 **Observation:**
-The canonical command doc requires `just audit` once followed by
-`just fast-release`, but legacy operator surfaces still advertise
-`/release -> just release <X.Y.Z>`. Without a parity gate, execution entrypoints
-can silently diverge and reintroduce redundant audit/build paths.
+Documented release entrypoints can silently diverge from the actual linearized
+execution graph, reintroducing redundant audit/build paths or stale operator
+instructions.
 
 **Proposal:**
-Add a release-surface parity test that asserts all documented release entrypoints
-resolve to the same linearized execution graph and that `release` is only a thin
-delegator to `fast-release`.
+Add a release-surface parity test that asserts all documented entrypoints
+resolve to the same `audit -> fast-release` path.
 
 **Security impact:**
-Preserves symmetric-failure semantics while reducing redundant CI/runtime load
-that can mask true release regressions behind repeated compile passes.
+Preserves symmetric-failure semantics while preventing redundant release work
+from masking real regressions behind repeated compile passes.
 
 **Implementation path:**
 Add a shell regression in `tools/tests/` that parses `justfile`,
-`.agent_governance/commands/release.md`, and `.cursorrules` for release-path
-consistency.
-
----
-
-## Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization & Redundancy Purge v9.2.1)
-
-<!-- no telemetry findings this session beyond IDEA-005 and IDEA-006 -->
-
----
-
-## Continuous Telemetry — 2026-04-04 (Epoch 2, Codex Alignment & Git Hygiene v9.2.2)
-
-### CT-006: Release recipe stages untracked local agent state
-
-**Found during:** Codex Alignment & Git Hygiene (v9.2.2)
-**Location:** `justfile` — `fast-release` recipe
-**Issue:** `git add .` in the release path stages every untracked file in the
-workspace, including local assistant state such as `.agents/`, `.codex/`, and
-`AGENTS.md`. This pollutes signed release commits with machine-local artefacts
-and violates the repository's commit hygiene law.
-**Suggested fix:** Replace the blanket staging step with
-`git commit -a -S -m "chore: release v{{version}}"` behind a dirty-tree check
-and add explicit ignore rules for local assistant state in `.gitignore`.
+`.agent_governance/commands/release.md`, and `.cursorrules` for consistency.

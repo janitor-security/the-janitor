@@ -5,6 +5,22 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Log Compaction & CISO Pulse Hardening (v9.4.1)
+
+**Directive:** Enforce hard compaction in the Evolution Tracker, purge
+completed and telemetry debt from the innovation log, re-index active work
+into clean P0/P1/P2 numbering, and cut `v9.4.1`.
+
+**Files modified:**
+- `.agent_governance/skills/evolution-tracker/SKILL.md` *(modified)* — CISO Pulse rewritten to enforce hard compaction: delete completed work, delete telemetry, drop legacy IDs, and re-index active items into `P0-1`, `P1-1`, `P2-1`, etc.
+- `docs/INNOVATION_LOG.md` *(rewritten)* — completed grammar-depth work, legacy telemetry, and stale IDs purged; active debt compacted into clean P0/P1/P2 numbering
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.4.1`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Deep-Scan & Innovation Synthesis (v9.4.0)
 
 **Directive:** Enforce the fast-release law, add a deep-scan evasion shield to

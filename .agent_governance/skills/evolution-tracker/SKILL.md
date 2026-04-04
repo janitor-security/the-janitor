@@ -170,11 +170,10 @@ embedded within it.
 
 ---
 
-## Logic 5 — CISO Pulse Audit (CT-10 Rule)
+## Logic 5 — CISO Pulse Audit (Hard Compaction Law)
 
 **Trigger:** Either of these conditions is true:
-1. The Continuous Telemetry (CT) counter reaches a **multiple of 10** (e.g.,
-   CT-010, CT-020, CT-030).
+1. The Continuous Telemetry counter reaches a **multiple of 10**.
 2. `docs/INNOVATION_LOG.md` has **0 active items** after an Auto-Purge sweep.
 
 **Action:** Halt standard execution. Perform a full CISO Pulse Audit before
@@ -183,7 +182,14 @@ proceeding with any other work.
 ### CISO Pulse Audit Protocol
 
 1. **Read `docs/INNOVATION_LOG.md` in full.**
-2. **Re-tier every entry** into one of three priority buckets:
+2. **Delete all completed work immediately.**
+   - Delete every entry marked `[COMPLETED]`.
+   - Delete all resolved telemetry.
+   - Delete all historic `## Continuous Telemetry` sections.
+3. **Delete all legacy IDs.**
+   - Drop every `IDEA-XXX` and `CT-XXX` identifier.
+   - The compacted log must not preserve old numbering as aliases.
+4. **Re-tier every remaining active entry** into one of three priority buckets:
    - **P0 — Enterprise Security Depth**: grammar rules, KEV gates, threat
      detection expansion, CVSS ≥ 9.0 blast radius. These are the entries
      that would close a CISO's critical-risk register.
@@ -193,31 +199,29 @@ proceeding with any other work.
    - **P2 — Operational / CLI Ergonomics**: developer-experience improvements,
      performance wins, internal tooling. These have value but are never the
      reason an enterprise selects a security product.
-3. **Merge redundant ideas.** If two entries describe variations of the same
+5. **Merge redundant ideas.** If two entries describe variations of the same
    change (e.g., "add Java SQLi AST gate" and "promote Java byte-level SQLi
    to AST"), merge them into a single entry with the stronger proposal.
-4. **Drop low-value noise.** If an entry describes a cosmetic cleanup, a
+6. **Drop low-value noise.** If an entry describes a cosmetic cleanup, a
    note about an internal script, or a speculative idea with no concrete
    security impact, delete it. The log is a CISO-facing signal board, not
    a scratch pad.
-5. **Add Grammar Depth entries for any language with fewer than 3 AST-level
+7. **Add Grammar Depth entries for any language with fewer than 3 AST-level
    detection rules.** Grammar depth is always P0. Name the rule, the AST
    node, the CVE class, and the file to modify.
-6. **Rewrite `docs/INNOVATION_LOG.md`** in the new P0/P1/P2 structure.
-7. **Append a `## Continuous Telemetry` section** for the current session.
-8. **Reset the CT counter.** After a CISO Pulse Audit, CT numbering restarts
-   at `CT-001` for the new epoch. Do NOT carry over old CT numbers from the
-   previous epoch. The very next CT entry filed after the Pulse MUST be
-   `CT-001`. Label the new Continuous Telemetry section to make the epoch
-   boundary explicit (e.g., `## Continuous Telemetry — YYYY-MM-DD (Epoch 2)`).
+8. **Hard-compact the file.**
+   - Rewrite `docs/INNOVATION_LOG.md` so only active items remain.
+   - Re-index active entries into clean tier-local numbering:
+     `P0-1`, `P0-2`, `P1-1`, `P2-1`, etc.
+   - Do not retain superseded numbering, epoch markers, or telemetry ledgers.
 9. **Commit the rewritten log** and continue with the original directive.
 
 ### Enforcement
 
 A CISO Pulse Audit overrides the append-only rule for this specific
-rewrite operation. Merged, dropped, and reorganized entries do not
-require individual `[COMPLETED]` markers — the commit history is the audit
-trail. Record the rewrite in the Backlog entry for the session.
+rewrite operation. Merged, dropped, completed, and reorganized entries do not
+require individual markers — the commit history is the audit trail. Record the
+rewrite in the Backlog entry for the session.
 
 ---
 
