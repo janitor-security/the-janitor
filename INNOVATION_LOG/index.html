@@ -1008,7 +1008,13 @@ classification helpers; replace <code>extract_patch_ext()</code> string returns 
 <code>SurfaceKind</code> return path; teach <code>slop_hunter::find_slop()</code> to dispatch on
 <code>SurfaceKind</code>; update report/MCP serialization to include the resolved surface.</p>
 <h2 id="continuous-telemetry-2026-04-04">Continuous Telemetry — 2026-04-04</h2>
-<!-- no telemetry findings this session — structural work only (P1-3 implementation) -->
+<ul>
+<li><code>CT-008: Wisdom Sync DNS Failure Resolved</code> — <code>janitor update-wisdom</code> now
+  targets <code>https://thejanitor.app/v1/wisdom.rkyv</code> and <code>--ci-mode</code> degrades to
+  a bootstrap-empty <code>wisdom_manifest.json</code> when the CDN or KEV source is
+  unreachable, preventing first-run cron failure while the static registry is
+  propagating.</li>
+</ul>
 
 
 

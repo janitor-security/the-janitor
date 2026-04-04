@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-wisdom-infrastructure-pivot-v961" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-release-pipeline-eradication-rescue-v952" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)
@@ -759,6 +768,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-wisdom-infrastructure-pivot-v961" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-release-pipeline-eradication-rescue-v952" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)
@@ -959,6 +977,19 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-wisdom-infrastructure-pivot-v961">2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)</h2>
+<p><strong>Directive:</strong> Pivot <code>update-wisdom</code> off the dead <code>api.thejanitor.app</code>
+endpoint onto the live CDN, fail open in <code>--ci-mode</code> with an empty manifest on
+bootstrap/network faults, publish a bootstrap <code>docs/v1/wisdom.rkyv</code>, and cut
+<code>v9.6.1</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.6.1</code>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>update-wisdom</code> now fetches from <code>https://thejanitor.app/v1/wisdom.rkyv</code>, supports URL overrides for controlled verification, degrades to an empty <code>wisdom_manifest.json</code> in <code>--ci-mode</code> on Wisdom/KEV fetch failures, and adds regression coverage for the fallback path
+- <code>docs/v1/wisdom.rkyv</code> <em>(created)</em> — bootstrap empty <code>WisdomSet</code> archive committed for CDN hosting at <code>/v1/wisdom.rkyv</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-008 telemetry recorded for the DNS/CDN pivot</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-release-pipeline-eradication-rescue-v952">2026-04-04 — Release Pipeline Eradication &amp; Rescue (v9.5.2)</h2>
 <p><strong>Directive:</strong> Rescue the burned <code>v9.5.1</code> state by committing the staged
