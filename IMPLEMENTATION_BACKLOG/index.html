@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-communication-bifurcation-kev-correlation-strike-v930" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-02-enterprise-supremacy-ingestion" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-02 — Enterprise Supremacy Ingestion
@@ -696,6 +705,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-communication-bifurcation-kev-correlation-strike-v930" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-02-enterprise-supremacy-ingestion" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-02 — Enterprise Supremacy Ingestion
@@ -833,6 +851,28 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-communication-bifurcation-kev-correlation-strike-v930">2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)</h2>
+<p><strong>Directive:</strong> Relax intermediate execution messaging while preserving the
+final response law, implement KEV-aware dependency correlation across the
+lockfile/bounce/MCP paths, add Crucible regression coverage, and cut <code>v9.3.0</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/rules/response-format.md</code> <em>(modified)</em> — intermediate execution updates now explicitly permit concise natural language; 4-part response format reserved for the final post-release summary only
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.3.0</code>; <code>semver</code> promoted to a workspace dependency for KEV range matching
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — <code>semver.workspace = true</code> added for shared KEV matching logic
+- <code>crates/common/src/deps.rs</code> <em>(modified)</em> — archived <code>DependencyEcosystem</code> gains ordering/equality derives required by KEV rule archival
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — KEV dependency rule schema, archive compatibility loader, and shared <code>find_kev_dependency_hits()</code> matcher added
+- <code>crates/anatomist/Cargo.toml</code> <em>(modified)</em> — <code>semver.workspace = true</code> added
+- <code>crates/anatomist/src/manifest.rs</code> <em>(modified)</em> — <code>check_kev_deps(lockfile, wisdom_db)</code> implemented as the SlopFinding adapter over shared KEV hit correlation; regression tests added
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>PatchBouncer</code> made workspace-aware, KEV findings injected into both aggregate and lockfile-source-text fast paths
+- <code>crates/mcp/src/lib.rs</code> <em>(modified)</em> — <code>janitor_dep_check</code> now surfaces <code>kev_count</code> and <code>kev_findings</code>; <code>run_bounce</code> uses workspace-aware <code>PatchBouncer</code>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — patch-mode bounce path switched to workspace-aware <code>PatchBouncer</code>
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — daemon bounce path switched to workspace-aware <code>PatchBouncer</code>
+- <code>crates/crucible/Cargo.toml</code> <em>(modified)</em> — test dependencies added for synthetic wisdom archive fixtures
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — synthetic <code>Cargo.lock</code> KEV fixture added; 150-point intercept enforced
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>IDEA-002</code> removed as implemented
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-02-enterprise-supremacy-ingestion">2026-04-02 — Enterprise Supremacy Ingestion</h2>
 <p><strong>Directive:</strong> Encode Fortune 500 CISO teardown into architectural ledger and

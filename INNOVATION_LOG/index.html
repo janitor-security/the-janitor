@@ -564,15 +564,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#idea-002-provenance-aware-kev-escalation-dependency-cve-correlation" class="md-nav__link">
-    <span class="md-ellipsis">
-      IDEA-002: Provenance-Aware KEV Escalation — Dependency × CVE Correlation
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#vuln-01-sovereign-governor-binary-long-term" class="md-nav__link">
     <span class="md-ellipsis">
       VULN-01: Sovereign Governor Binary (Long-term)
@@ -975,15 +966,6 @@
   <a href="#grammar-depth-python-3-new-detection-rules" class="md-nav__link">
     <span class="md-ellipsis">
       Grammar Depth: Python — 3 New Detection Rules
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#idea-002-provenance-aware-kev-escalation-dependency-cve-correlation" class="md-nav__link">
-    <span class="md-ellipsis">
-      IDEA-002: Provenance-Aware KEV Escalation — Dependency × CVE Correlation
     </span>
   </a>
   
@@ -1414,38 +1396,6 @@ traversal concatenation. Missing deserialization and shell-injection vectors.</p
   and non-literal first arg
 - <strong>File:</strong> <code>crates/forge/src/slop_hunter.rs::find_python_slop()</code>
 - <strong>CVE class:</strong> CWE-78; the most common Python pentest finding</p>
-<hr />
-<h3 id="idea-002-provenance-aware-kev-escalation-dependency-cve-correlation">IDEA-002: Provenance-Aware KEV Escalation — Dependency × CVE Correlation</h3>
-<p><strong>Class:</strong> Threat Intelligence Integration
-<strong>Priority:</strong> P0
-<strong>Inspired by:</strong> <code>crates/anatomist/src/manifest.rs::find_version_silos_from_lockfile</code></p>
-<p><strong>Observation:</strong>
-The KEV gate (<code>Severity::KevCritical</code>, 150 pts) fires only when a patch
-contains a <em>syntactic pattern</em> matching a known exploit class. The most common
-real-world scenario is different: a dependency upgrade silently introduces a
-version that <em>contains</em> a CVE-listed vulnerability, with no change to the
-calling code.</p>
-<p><strong>Proposal:</strong>
-Extend <code>janitor_dep_check</code> to correlate the resolved dependency tree against
-the CISA KEV catalog (fetched via <code>update-wisdom</code>):</p>
-<ol>
-<li>For each direct + transitive dep in <code>Cargo.lock</code>, query the local
-   <code>wisdom.db</code> for KEV entries matching the crate + version range.</li>
-<li>If a match is found, synthesize a <code>SlopFinding</code> with
-   <code>severity: KevCritical</code>, <code>category: "supply_chain:kev_dependency"</code>, and
-   the CVE ID in <code>description</code>.</li>
-<li>The finding is emitted into the bounce result even if the patch itself
-   contains no dangerous code.</li>
-</ol>
-<p><strong>Security impact:</strong>
-Closes the gap between "dep is vulnerable" and "patch uses the vulnerable
-codepath." A <code>cargo add serde_json@1.0.94</code> that pulls in a KEV-listed
-transitive dep becomes a hard block at <code>slop_score &gt;= 150</code> before the PR
-is merged.</p>
-<p><strong>Implementation path:</strong>
-<code>crates/anatomist/src/manifest.rs::check_kev_deps(lockfile, wisdom_db)</code>
-→ returns <code>Vec&lt;SlopFinding&gt;</code> with <code>KevCritical</code> severity
-→ merged into <code>PatchBouncer::bounce()</code> result alongside structural findings.</p>
 <hr />
 <h3 id="vuln-01-sovereign-governor-binary-long-term">VULN-01: Sovereign Governor Binary (Long-term)</h3>
 <p><strong>Severity:</strong> Critical
