@@ -207,17 +207,19 @@ enum Commands {
         /// or `closed` to classify historical entries as non-actionable in reports.
         #[arg(long, default_value = "open")]
         pr_state: String,
-        /// Governor URL to POST bounce results for attestation (Architecture Inversion mode).
+        /// Governor base URL for attestation (Architecture Inversion mode).
         ///
         /// When set alongside `--analysis-token`, the scored `BounceLogEntry` is
-        /// submitted to the Governor's `/v1/report` endpoint so the Governor can
+        /// submitted to `<governor-url>/v1/report` so the Governor can
         /// issue a GitHub Check Run on behalf of the customer runner.  Source code
-        /// stays on the runner — nothing is transmitted to Janitor infrastructure.
-        #[arg(long)]
-        report_url: Option<String>,
+        /// stays on the runner — nothing is transmitted beyond the structural log.
+        ///
+        /// `--report-url` remains accepted as a compatibility alias.
+        #[arg(long, alias = "report-url")]
+        governor_url: Option<String>,
         /// Short-lived analysis token from `/v1/analysis-token`.
         ///
-        /// Required when `--report-url` is set.  Identifies the PR event and
+        /// Required when `--governor-url` is set.  Identifies the PR event and
         /// authorises the bounce result submission.
         #[arg(long)]
         analysis_token: Option<String>,
@@ -231,7 +233,7 @@ enum Commands {
         /// Hard wall-clock timeout for the entire bounce analysis, in seconds.
         ///
         /// If the analysis does not complete within this duration the CLI sends
-        /// a synthetic failure payload to `--report-url` (if configured) so the
+        /// a synthetic failure payload to `--governor-url` (if configured) so the
         /// Governor can close the GitHub Check Run with a `failure` conclusion
         /// rather than leaving it spinning indefinitely.  Exits non-zero after
         /// dispatching the payload.
@@ -713,7 +715,7 @@ async fn main() -> anyhow::Result<()> {
             pr_body,
             repo_slug,
             pr_state,
-            report_url,
+            governor_url,
             analysis_token,
             head_sha,
             timeout_secs,
@@ -734,7 +736,7 @@ async fn main() -> anyhow::Result<()> {
             let pr_body = pr_body.clone();
             let repo_slug = repo_slug.clone();
             let pr_state = pr_state.clone();
-            let report_url = report_url.clone();
+            let governor_url = governor_url.clone();
             let analysis_token = analysis_token.clone();
             let head_sha = head_sha.clone();
             let timeout_secs = *timeout_secs;
@@ -744,7 +746,11 @@ async fn main() -> anyhow::Result<()> {
 
             // Capture fields needed for the timeout failure payload before the
             // move into spawn_blocking.
-            let timeout_report_url = report_url.clone();
+            let timeout_policy = common::policy::JanitorPolicy::load(&path);
+            let timeout_governor_url = Some(report::resolve_governor_url(
+                governor_url.as_deref(),
+                &timeout_policy,
+            ));
             let timeout_token = analysis_token.clone();
             let timeout_commit_sha = head_sha
                 .clone()
@@ -771,7 +777,7 @@ async fn main() -> anyhow::Result<()> {
                     pr_body.as_deref(),
                     repo_slug.as_deref(),
                     pr_state.as_str(),
-                    report_url.as_deref(),
+                    governor_url.as_deref(),
                     analysis_token.as_deref(),
                     head_sha.as_deref(),
                     soft_fail,
@@ -792,7 +798,7 @@ async fn main() -> anyhow::Result<()> {
                          dispatching failure payload to Governor"
                     );
                     if let (Some(url), Some(token)) =
-                        (timeout_report_url.as_deref(), timeout_token.as_deref())
+                        (timeout_governor_url.as_deref(), timeout_token.as_deref())
                     {
                         let timeout_entry = report::BounceLogEntry {
                             pr_number: timeout_pr_number,
@@ -2649,7 +2655,7 @@ fn cmd_bounce(
     pr_body: Option<&str>,
     repo_slug: Option<&str>,
     pr_state_str: &str,
-    report_url: Option<&str>,
+    governor_url: Option<&str>,
     analysis_token: Option<&str>,
     head_sha: Option<&str>,
     soft_fail_flag: bool,
@@ -2669,6 +2675,7 @@ fn cmd_bounce(
     // Effective soft-fail: CLI flag takes precedence, then janitor.toml.
     let soft_fail = soft_fail_flag || policy.soft_fail;
     let deep_scan = deep_scan_flag || policy.forge.deep_scan;
+    let governor_url = report::resolve_governor_url(governor_url, &policy);
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
     // `registry_loaded` tracks whether the rkyv file was actually present on disk.
@@ -3266,7 +3273,7 @@ probable AI context-collapse (hallucinated function reference)"
         report::append_bounce_log(&janitor_dir, &log_entry);
         report::write_badge(&janitor_dir, log_entry.slop_score);
         report::fire_webhook_if_configured(&log_entry, &policy);
-        report::send_heartbeat_if_due(&janitor_dir);
+        report::send_heartbeat_if_due(&janitor_dir, &governor_url);
         return Ok(());
     }
 
@@ -3283,7 +3290,7 @@ probable AI context-collapse (hallucinated function reference)"
 
     // Measure egress: serialise the entry (egress_bytes_sent = 0 placeholder),
     // record the byte count, then set it on the entry before logging and POST.
-    if report_url.is_some() {
+    if analysis_token.is_some() {
         if let Ok(payload) = serde_json::to_string(&log_entry) {
             log_entry.provenance.egress_bytes_sent = payload.len() as u64;
         }
@@ -3291,9 +3298,9 @@ probable AI context-collapse (hallucinated function reference)"
 
     // Attempt Governor POST — record attestation status before writing the log
     // entry so the local NDJSON audit trail reflects the outcome.
-    if let (Some(url), Some(token)) = (report_url, analysis_token) {
+    if let Some(token) = analysis_token {
         let is_critical = report::is_critical_threat(&log_entry);
-        let post_result = report::post_bounce_result(url, token, &log_entry);
+        let post_result = report::post_bounce_result(&governor_url, token, &log_entry);
         match post_result {
             Ok(()) => {
                 log_entry.governor_status = Some("ok".to_string());
@@ -3328,7 +3335,7 @@ probable AI context-collapse (hallucinated function reference)"
     // ── Weekly heartbeat ───────────────────────────────────────────────────────
     // Best-effort, silent.  Fires at most once per 7 days; result goes to
     // `.janitor/diag.log`.  Never blocks or fails the bounce.
-    report::send_heartbeat_if_due(&janitor_dir);
+    report::send_heartbeat_if_due(&janitor_dir, &governor_url);
 
     Ok(())
 }
@@ -4388,5 +4395,122 @@ mod pqc_signing_tests {
             result_pk.is_err(),
             "wrong-length public key bytes must fail conversion"
         );
+    }
+}
+
+#[cfg(test)]
+mod governor_routing_tests {
+    use super::cmd_bounce;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+
+    #[test]
+    fn governor_url_routes_bounce_payload_to_custom_endpoint() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener bind must succeed");
+        let addr = listener.local_addr().expect("local addr must resolve");
+        let (tx, rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("must accept one connection");
+            let mut reader = BufReader::new(stream.try_clone().expect("clone stream"));
+
+            let mut request_line = String::new();
+            reader
+                .read_line(&mut request_line)
+                .expect("read request line");
+            let mut authorization = String::new();
+            let mut content_length = 0_usize;
+
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).expect("read header");
+                let trimmed = header.trim_end();
+                if trimmed.is_empty() {
+                    break;
+                }
+                if let Some((name, value)) = trimmed.split_once(':') {
+                    if name.eq_ignore_ascii_case("authorization") {
+                        authorization = value.trim().to_string();
+                    }
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = value.trim().parse::<usize>().expect("content length");
+                    }
+                }
+            }
+
+            let mut body = vec![0_u8; content_length];
+            reader.read_exact(&mut body).expect("read body");
+            let body_text = String::from_utf8(body).expect("utf8 body");
+            tx.send((request_line, authorization, body_text))
+                .expect("send capture");
+
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+            )
+            .expect("write response");
+        });
+
+        let temp_root =
+            std::env::temp_dir().join(format!("janitor-governor-route-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(temp_root.join(".janitor")).expect("create janitor dir");
+        std::fs::write(temp_root.join(".janitor").join("heartbeat"), b"recent")
+            .expect("write heartbeat");
+        let patch_path = temp_root.join("bounce.patch");
+        std::fs::write(
+            &patch_path,
+            concat!(
+                "--- a/src/lib.rs\n",
+                "+++ b/src/lib.rs\n",
+                "@@ -0,0 +1,3 @@\n",
+                "+fn routed() {\n",
+                "+    println!(\"ok\");\n",
+                "+}\n",
+            ),
+        )
+        .expect("write patch");
+
+        let governor_url = format!("http://{addr}");
+        let result = cmd_bounce(
+            &temp_root,
+            Some(&patch_path),
+            None,
+            "json",
+            None,
+            None,
+            None,
+            Some(42),
+            Some("operator"),
+            None,
+            Some("acme/repo"),
+            "open",
+            Some(&governor_url),
+            Some("stub-token"),
+            Some("deadbeef"),
+            false,
+            false,
+            None,
+        );
+        assert!(result.is_ok(), "cmd_bounce should POST to custom governor");
+
+        let (request_line, authorization, body) = rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("captured request");
+        assert!(
+            request_line.starts_with("POST /v1/report "),
+            "bounce must target /v1/report, got: {request_line}"
+        );
+        assert_eq!(authorization, "Bearer stub-token");
+        assert!(
+            body.contains("\"pr_number\":42"),
+            "captured payload must include the bounce entry"
+        );
+        assert!(
+            body.contains("\"commit_sha\":\"deadbeef\""),
+            "captured payload must use the supplied head sha"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 }

@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Air-Gap Update (v9.5.0)
+
+**Directive:** Execute the Sovereign Governor extraction, decouple CLI
+attestation routing from the Fly.io default, prove custom Governor routing in
+tests, retire `P0-1` from the Innovation Log, and cut `v9.5.0`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.5.0`; shared `serde_json` workspace dependency normalized for the new Governor crate
+- `crates/gov/Cargo.toml` *(created)* — new `janitor-gov` binary crate added to the workspace
+- `crates/gov/src/main.rs` *(created)* — minimal localhost Governor stub added with `/v1/report` and `/v1/analysis-token` JSON-validation endpoints
+- `crates/common/src/policy.rs` *(modified)* — `[forge].governor_url` added and covered in TOML/load tests
+- `crates/cli/src/main.rs` *(modified)* — `janitor bounce` now accepts `--governor-url` (with `--report-url` compatibility alias), resolves base URL through policy, and routes timeout/report traffic through the custom Governor
+- `crates/cli/src/report.rs` *(modified)* — Governor URL resolution centralized; `/v1/report` and `/health` endpoints derived from the configured base URL; routing tests updated
+- `docs/INNOVATION_LOG.md` *(modified)* — `P0-1` removed as implemented; remaining P0 items re-indexed
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Log Compaction & CISO Pulse Hardening (v9.4.1)
 
 **Directive:** Enforce hard compaction in the Evolution Tracker, purge

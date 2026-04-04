@@ -7,30 +7,7 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-1: Sovereign Governor Binary
-
-**Class:** Infrastructure / Reliability
-**Inspired by:** Governor soft-fail path and enterprise air-gap requirements
-
-**Observation:**
-The current Governor path still assumes a shared SaaS endpoint for full
-attestation. Regulated customers need a self-hosted verification endpoint
-inside their own trust boundary.
-
-**Proposal:**
-Package the Governor as a self-contained `janitor-gov` binary deployable to
-customer VPCs or bare metal, with SQLite as the default storage backend and
-customer-controlled webhook credentials.
-
-**Security impact:**
-Removes the external Governor dependency from high-assurance deployments and
-preserves zero-upload guarantees under sovereign hosting.
-
-**Implementation path:**
-Add a local Governor crate and route `janitor bounce --governor-url` to the
-customer-hosted control plane.
-
-### P0-2: Executable Surface Gaps
+### P0-1: Executable Surface Gaps
 
 **Class:** Detection Expansion
 **Inspired by:** Current grammar registry coverage and remaining non-AST attack surface
@@ -56,7 +33,7 @@ attack classes that are currently underrepresented in the firewall.
 Extend `crates/forge/src/slop_hunter.rs` with new language handlers and AST
 rules; add Crucible fixtures for each class.
 
-### P0-3: Parse-Forest Reuse + Interprocedural Taint Spine
+### P0-2: Parse-Forest Reuse + Interprocedural Taint Spine
 
 **Class:** Detection Depth / Performance
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`

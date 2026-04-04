@@ -206,6 +206,13 @@ pub struct ForgeConfig {
     /// automation_accounts = ["r-ryantm", "app/nixpkgs-ci"]
     /// ```
     pub automation_accounts: Vec<String>,
+    /// Base URL for the Janitor Governor control plane.
+    ///
+    /// When present, `janitor bounce --analysis-token ...` POSTs attestation
+    /// payloads to `<governor_url>/v1/report` and heartbeat probes to
+    /// `<governor_url>/health`. When absent, the CLI falls back to its built-in
+    /// default Governor base URL.
+    pub governor_url: Option<String>,
     /// Raises bounce analysis budgets from the default 1 MiB / 500 ms path to
     /// the deep-scan 32 MiB / 30 s path for AST-evasion-resistant analysis.
     pub deep_scan: bool,
@@ -728,6 +735,7 @@ mod tests {
         let p = JanitorPolicy {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned(), "app/nixpkgs-ci".to_owned()],
+                governor_url: None,
                 deep_scan: false,
             },
             ..Default::default()
@@ -740,10 +748,13 @@ mod tests {
 
     #[test]
     fn forge_automation_accounts_roundtrip_toml() {
-        let raw =
-            "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ndeep_scan = true\n";
+        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ngovernor_url = \"http://127.0.0.1:3000\"\ndeep_scan = true\n";
         let p: JanitorPolicy = toml::from_str(raw).unwrap();
         assert_eq!(p.forge.automation_accounts, ["r-ryantm", "app/nixpkgs-ci"]);
+        assert_eq!(
+            p.forge.governor_url.as_deref(),
+            Some("http://127.0.0.1:3000")
+        );
         assert!(p.forge.deep_scan);
         assert!(p.is_automation_account("r-ryantm"));
         assert!(p.is_automation_account("app/nixpkgs-ci"));
@@ -756,6 +767,7 @@ mod tests {
         let p = JanitorPolicy {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned()],
+                governor_url: None,
                 deep_scan: false,
             },
             ..Default::default()
@@ -783,12 +795,16 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("janitor.toml"),
-            "min_slop_score = 200\nrequire_issue_link = true\n",
+            "min_slop_score = 200\nrequire_issue_link = true\n[forge]\ngovernor_url = \"http://127.0.0.1:4040\"\n",
         )
         .unwrap();
         let p = JanitorPolicy::load(&dir);
         assert_eq!(p.min_slop_score, 200);
         assert!(p.require_issue_link);
+        assert_eq!(
+            p.forge.governor_url.as_deref(),
+            Some("http://127.0.0.1:4040")
+        );
     }
 
     // --- AgenticOrigin detection ---

@@ -30,6 +30,7 @@ use std::path::Path;
 ///
 /// Source: industry Workslop research (2026). See <https://builtin.com/articles/what-is-workslop>.
 pub const MINUTES_PER_TRIAGE: f64 = 12.0;
+pub const DEFAULT_GOVERNOR_URL: &str = "https://the-governor.fly.dev";
 
 // ---------------------------------------------------------------------------
 // Categorical Billing — Threat Classification
@@ -310,7 +311,7 @@ pub struct Provenance {
     pub source_bytes_processed: u64,
     /// Exact byte-length of the JSON payload POSTed to the Governor control plane.
     ///
-    /// Zero when `--report-url` is not configured (local-only / CLI-only mode).
+    /// Zero when `--analysis-token` is absent (local-only / CLI-only mode).
     /// This is the *only* data that leaves the runner.
     pub egress_bytes_sent: u64,
 }
@@ -478,7 +479,7 @@ pub struct BounceLogEntry {
     /// - `"ok"` — bounce result successfully POSTed to the Governor.
     /// - `"degraded"` — POST failed and `--soft-fail` was active; pipeline
     ///   proceeded without attestation.  The slop score is still authoritative.
-    /// - `None` (field absent) — Governor not configured (`--report-url` absent).
+    /// - `None` (field absent) — Governor attestation not attempted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub governor_status: Option<String>,
 
@@ -704,9 +705,39 @@ fn render_badge_svg(score: u32) -> String {
 // Architecture Inversion — Governor result submission
 // ---------------------------------------------------------------------------
 
+/// Returns the effective Governor base URL after trimming a trailing slash.
+pub fn normalize_governor_url(url: &str) -> String {
+    url.trim_end_matches('/').to_string()
+}
+
+/// Resolve the Governor base URL from CLI override, policy, or built-in default.
+pub fn resolve_governor_url(
+    cli_override: Option<&str>,
+    policy: &common::policy::JanitorPolicy,
+) -> String {
+    cli_override
+        .map(normalize_governor_url)
+        .or_else(|| {
+            policy
+                .forge
+                .governor_url
+                .as_deref()
+                .map(normalize_governor_url)
+        })
+        .unwrap_or_else(|| DEFAULT_GOVERNOR_URL.to_string())
+}
+
+fn governor_report_endpoint(base_url: &str) -> String {
+    format!("{}/v1/report", normalize_governor_url(base_url))
+}
+
+fn governor_health_endpoint(base_url: &str) -> String {
+    format!("{}/health", normalize_governor_url(base_url))
+}
+
 /// POST the [`BounceLogEntry`] to the Governor's `/v1/report` endpoint.
 ///
-/// Used in Architecture Inversion mode: after `append_bounce_log`, if `--report-url`
+/// Used in Architecture Inversion mode: after `append_bounce_log`, if `--governor-url`
 /// and `--analysis-token` are set, the scored entry is submitted to the Governor so
 /// it can update the GitHub Check Run without ever receiving source code.
 ///
@@ -714,9 +745,14 @@ fn render_badge_svg(score: u32) -> String {
 /// The caller (`cmd_bounce`) must propagate this as a hard process exit so the
 /// firewall cannot be bypassed by a degraded or hostile Governor endpoint.
 /// The Bearer token is the short-lived JWT obtained from `/v1/analysis-token`.
-pub fn post_bounce_result(url: &str, token: &str, entry: &BounceLogEntry) -> anyhow::Result<()> {
+pub fn post_bounce_result(
+    governor_base_url: &str,
+    token: &str,
+    entry: &BounceLogEntry,
+) -> anyhow::Result<()> {
     let body = serde_json::to_string(entry)?;
-    let result = ureq::post(url)
+    let report_url = governor_report_endpoint(governor_base_url);
+    let result = ureq::post(&report_url)
         .header("Authorization", &format!("Bearer {token}"))
         .header("Content-Type", "application/json")
         .send(body.as_str());
@@ -766,11 +802,11 @@ pub fn append_diag_log(janitor_dir: &Path, msg: &str) {
 ///
 /// - Checks the mtime of `.janitor/heartbeat`; skips if modified within the
 ///   last 7 days.
-/// - On a due cycle: GETs `https://the-governor.fly.dev/health` with a 5-second
+/// - On a due cycle: GETs `<governor_url>/health` with a 5-second
 ///   timeout, logs the result to `.janitor/diag.log`, then touches the heartbeat
 ///   file to reset the 7-day window.
 /// - Entirely best-effort and silent: no stdout/stderr output, no CI impact.
-pub fn send_heartbeat_if_due(janitor_dir: &Path) {
+pub fn send_heartbeat_if_due(janitor_dir: &Path, governor_base_url: &str) {
     let heartbeat_path = janitor_dir.join("heartbeat");
 
     let due = match std::fs::metadata(&heartbeat_path) {
@@ -787,7 +823,7 @@ pub fn send_heartbeat_if_due(janitor_dir: &Path) {
         return;
     }
 
-    let msg = match ureq::get("https://the-governor.fly.dev/health")
+    let msg = match ureq::get(&governor_health_endpoint(governor_base_url))
         .config()
         .timeout_global(Some(std::time::Duration::from_secs(5)))
         .build()
@@ -3167,7 +3203,7 @@ mod soft_fail_tests {
     fn post_bounce_result_fails_for_unreachable_endpoint() {
         let entry = make_test_entry();
         // Port 1 is always connection-refused; never has a listener.
-        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
         assert!(result.is_err(), "unreachable endpoint must return Err");
     }
 
@@ -3176,7 +3212,7 @@ mod soft_fail_tests {
     #[test]
     fn soft_fail_suppresses_governor_error() {
         let entry = make_test_entry();
-        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = true;
         let handled: anyhow::Result<()> = match result {
             Ok(()) => Ok(()),
@@ -3193,7 +3229,7 @@ mod soft_fail_tests {
     #[test]
     fn hard_fail_propagates_governor_error() {
         let entry = make_test_entry();
-        let result = post_bounce_result("http://127.0.0.1:1/v1/report", "fake-token", &entry);
+        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = false;
         let handled: anyhow::Result<()> = match result {
             Ok(()) => Ok(()),
@@ -3203,6 +3239,19 @@ mod soft_fail_tests {
         assert!(
             handled.is_err(),
             "hard-fail path must propagate Err when governor unreachable"
+        );
+    }
+
+    #[test]
+    fn resolve_governor_url_prefers_cli_then_policy_then_default() {
+        let mut policy = common::policy::JanitorPolicy::default();
+        assert_eq!(resolve_governor_url(None, &policy), DEFAULT_GOVERNOR_URL);
+
+        policy.forge.governor_url = Some("http://127.0.0.1:3000/".to_string());
+        assert_eq!(resolve_governor_url(None, &policy), "http://127.0.0.1:3000");
+        assert_eq!(
+            resolve_governor_url(Some("http://127.0.0.1:4000/"), &policy),
+            "http://127.0.0.1:4000"
         );
     }
 }
