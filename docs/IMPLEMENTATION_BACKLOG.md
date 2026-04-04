@@ -5,6 +5,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Release Pipeline Eradication & Rescue (v9.5.2)
+
+**Directive:** Rescue the burned `v9.5.1` state by committing the staged
+executable-surface expansion manually, eradicate the unstaged-only
+`git diff --quiet` heuristic from the release path, roll forward to `v9.5.2`,
+and cut a real signed release from the audited code.
+
+**Files modified:**
+- `justfile` *(modified)* — fast-release now stages the governed release set and commits unconditionally; empty-release attempts fail closed under `set -euo pipefail`
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.5.2`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `docs/INNOVATION_LOG.md` *(modified)* — release-surface debt updated to include staged-only ghost-tag failure and the need for a tag-target regression test
+
+**Rescue commit:** `e095fae` — `feat: autonomous expansion for executable gaps (v9.5.1)`
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Autonomous Expansion & Release Hygiene (v9.5.1)
 
 **Directive:** Repair the fast-release staging gap that dropped new crates from
@@ -21,7 +39,7 @@ new architecture debt discovered during implementation.
 - `docs/INNOVATION_LOG.md` *(modified)* — implemented `P0-1` removed; new `P2-5` added for filename-aware surface routing
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 
-**Commit:** `pending release commit`
+**Commit:** `e095fae`
 
 ---
 

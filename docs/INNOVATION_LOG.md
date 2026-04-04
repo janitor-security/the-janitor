@@ -170,11 +170,16 @@ Add a governance parity test spanning `Cargo.toml`, `.cursorrules`,
 **Observation:**
 Documented release entrypoints can silently diverge from the actual linearized
 execution graph, reintroducing redundant audit/build paths or stale operator
-instructions.
+instructions. The burned `v9.5.1` release exposed a second failure mode:
+recipes that reason about only the unstaged worktree can publish a tag and
+GitHub release for the previous `HEAD` while the real audited payload is
+already staged and waiting to be committed.
 
 **Proposal:**
 Add a release-surface parity test that asserts all documented entrypoints
-resolve to the same `audit -> fast-release` path.
+resolve to the same `audit -> fast-release` path, and add a release-integrity
+test that proves the emitted commit/tag pair actually contains the staged
+release payload rather than merely matching the pre-release `HEAD`.
 
 **Security impact:**
 Preserves symmetric-failure semantics while preventing redundant release work
@@ -183,6 +188,10 @@ from masking real regressions behind repeated compile passes.
 **Implementation path:**
 Add a shell regression in `tools/tests/` that parses `justfile`,
 `.agent_governance/commands/release.md`, and `.cursorrules` for consistency.
+Add a second regression that stages a synthetic tracked change, runs the
+release recipe in fixture mode, asserts a new commit object is created before
+tag emission, and fails if `vX.Y.Z` can still resolve to the pre-release
+`HEAD`.
 
 ### P2-5: Filename-Aware Surface Routing Spine
 
