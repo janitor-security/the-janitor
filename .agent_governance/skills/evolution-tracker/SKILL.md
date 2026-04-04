@@ -131,9 +131,17 @@ Entry format:
 ```
 
 **Absolute mandate:** This scan is not optional and is not waived by
-directive scope. Even a one-line fix can surface a CT entry. If nothing is
-found, explicitly note `<!-- no telemetry findings this session -->` in the
-INNOVATION_LOG so the absence of findings is recorded, not silently skipped.
+directive scope. Even a one-line fix can surface a CT entry.
+
+**Autonomous enforcement:** You are FORBIDDEN from waiting for explicit
+operator instructions to update the `INNOVATION_LOG.md`. On EVERY prompt,
+regardless of the task, if you observe a code inefficiency, missing test, or
+architectural gap, you MUST automatically append a `CT-NNN` entry to the log
+before concluding the session.
+
+If nothing is found, explicitly note `<!-- no telemetry findings this session -->`
+in the INNOVATION_LOG so the absence of findings is recorded, not silently
+skipped.
 
 ---
 
