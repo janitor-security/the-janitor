@@ -805,6 +805,48 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#legacy-governance-gaps-p2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Legacy Governance Gaps (P2)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legacy Governance Gaps (P2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#idea-005-governance-bootstrap-drift-sentinel" class="md-nav__link">
+    <span class="md-ellipsis">
+      IDEA-005: Governance Bootstrap Drift Sentinel
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idea-006-release-surface-parity-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      IDEA-006: Release Surface Parity Gate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-codex-initialization-redundancy-purge-v921" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization &amp; Redundancy Purge v9.2.1)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1153,6 +1195,48 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legacy-governance-gaps-p2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Legacy Governance Gaps (P2)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legacy Governance Gaps (P2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#idea-005-governance-bootstrap-drift-sentinel" class="md-nav__link">
+    <span class="md-ellipsis">
+      IDEA-005: Governance Bootstrap Drift Sentinel
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idea-006-release-surface-parity-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      IDEA-006: Release Surface Parity Gate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-03-epoch-2-codex-initialization-redundancy-purge-v921" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization &amp; Redundancy Purge v9.2.1)
+    </span>
+  </a>
   
 </li>
       
@@ -1628,6 +1712,51 @@ JSON output but not in the CSV export (column 18 would need to be added).
 SIEM integrations consuming CSV (not JSON webhooks) cannot track CSI trends.
 <strong>Suggested fix:</strong> Add <code>cognition_surrender_index</code> as column 18 in <code>render_csv</code>,
 update the column-count test, and document in <code>docs/architecture.md</code>.</p>
+<hr />
+<h2 id="legacy-governance-gaps-p2">Legacy Governance Gaps (P2)</h2>
+<h3 id="idea-005-governance-bootstrap-drift-sentinel">IDEA-005: Governance Bootstrap Drift Sentinel</h3>
+<p><strong>Class:</strong> Architecture
+<strong>Priority:</strong> P2
+<strong>Inspired by:</strong> <code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>.agent_governance/README.md</code></p>
+<p><strong>Observation:</strong>
+Legacy bootstrap surfaces still drift from the canonical UAP source of truth.
+<code>CLAUDE.md</code> advertises <code>.claude/</code> as authoritative and still pins the engine at
+<code>v9.0.1</code>, while <code>.agent_governance/README.md</code> and <code>.cursorrules</code> declare
+<code>.agent_governance/</code> as canonical. A stale bootstrap path can bind an agent to
+obsolete workflow law before the zero-upload AST firewall ever executes.</p>
+<p><strong>Proposal:</strong>
+Add a deterministic governance consistency check that fails when bootstrap
+documents reference a non-canonical governance root or stale engine version.</p>
+<p><strong>Security impact:</strong>
+Prevents startup drift from disabling current zero-upload, symmetric-failure,
+and release-coupling mandates in downstream agents.</p>
+<p><strong>Implementation path:</strong>
+Add <code>just governance-audit</code> plus a test fixture that cross-checks
+<code>CLAUDE.md</code>, <code>.cursorrules</code>, <code>.agent_governance/README.md</code>, and
+<code>Cargo.toml [workspace.package].version</code>.</p>
+<h3 id="idea-006-release-surface-parity-gate">IDEA-006: Release Surface Parity Gate</h3>
+<p><strong>Class:</strong> Defensive Hardening
+<strong>Priority:</strong> P2
+<strong>Inspired by:</strong> <code>justfile</code>, <code>.agent_governance/commands/release.md</code>, <code>CLAUDE.md</code></p>
+<p><strong>Observation:</strong>
+The canonical command doc requires <code>just audit</code> once followed by
+<code>just fast-release</code>, but legacy operator surfaces still advertise
+<code>/release -&gt; just release &lt;X.Y.Z&gt;</code>. Without a parity gate, execution entrypoints
+can silently diverge and reintroduce redundant audit/build paths.</p>
+<p><strong>Proposal:</strong>
+Add a release-surface parity test that asserts all documented release entrypoints
+resolve to the same linearized execution graph and that <code>release</code> is only a thin
+delegator to <code>fast-release</code>.</p>
+<p><strong>Security impact:</strong>
+Preserves symmetric-failure semantics while reducing redundant CI/runtime load
+that can mask true release regressions behind repeated compile passes.</p>
+<p><strong>Implementation path:</strong>
+Add a shell regression in <code>tools/tests/</code> that parses <code>justfile</code>,
+<code>.agent_governance/commands/release.md</code>, and <code>.cursorrules</code> for release-path
+consistency.</p>
+<hr />
+<h2 id="continuous-telemetry-2026-04-03-epoch-2-codex-initialization-redundancy-purge-v921">Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization &amp; Redundancy Purge v9.2.1)</h2>
+<!-- no telemetry findings this session beyond IDEA-005 and IDEA-006 -->
 
 
 

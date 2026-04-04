@@ -582,6 +582,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-03-codex-initialization-redundancy-purge-v921" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Codex Initialization &amp; Redundancy Purge (v9.2.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-03-forward-looking-telemetry-v902" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Forward-Looking Telemetry (v9.0.2)
@@ -717,6 +726,15 @@
   <a href="#2026-04-03-signature-sovereignty-v910" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Signature Sovereignty (v9.1.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-03-codex-initialization-redundancy-purge-v921" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-03 — Codex Initialization &amp; Redundancy Purge (v9.2.1)
     </span>
   </a>
   
@@ -868,7 +886,17 @@ command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.</p>
 - <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — <code>pqc_sig: None</code> added to struct literal
 - <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — <code>pqc_sig: None</code> added to 2 struct literals
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — VULN-02 section purged (all findings <code>[COMPLETED — v9.1.0]</code>); roadmap table updated</p>
-<p><strong>Commit:</strong> <em>(pending)</em></p>
+<p><strong>Commit:</strong> <code>89d742f</code></p>
+<hr />
+<h2 id="2026-04-03-codex-initialization-redundancy-purge-v921">2026-04-03 — Codex Initialization &amp; Redundancy Purge (v9.2.1)</h2>
+<p><strong>Directive:</strong> Align Codex to UAP governance, audit release execution paths for redundant compute, record legacy-governance drift proposals, and cut the <code>9.2.1</code> release.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — <code>release</code> recipe collapsed into a thin <code>audit</code> → <code>fast-release</code> delegator so agentic deploys follow the single-audit path without duplicated release logic
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.2.1</code>
+- <code>docs/architecture.md</code> <em>(modified)</em> — stale <code>just release</code> pipeline description corrected to the linear <code>audit</code> → <code>fast-release</code> flow
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>Legacy Governance Gaps (P2)</code> section appended with governance-drift proposals; session telemetry recorded
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-03-forward-looking-telemetry-v902">2026-04-03 — Forward-Looking Telemetry (v9.0.2)</h2>
 <p><strong>Directive:</strong> Add <code>just fast-release</code> recipe (audit-free release path); harden
@@ -1009,7 +1037,7 @@ Surrender Index to quantify AI-introduced structural rot density.</p>
 - <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — <code>cognition_surrender_index: 0.0</code>
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.2.0</code></p>
-<p><strong>Commit:</strong> <em>(pending)</em></p>
+<p><strong>Commit:</strong> <code>89d742f</code></p>
 
 
 

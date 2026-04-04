@@ -2489,7 +2489,11 @@ No-op. Token is injected at runtime via <code>--token</code> flag. Stateless aut
 Updates version strings in <code>Cargo.toml</code> (root + all <code>crates/</code> + <code>tools/</code>), <code>README.md</code>, <code>docs/index.md</code>, <code>ARCHITECTURE.md</code>, and <code>CLAUDE.md</code>. Runs <code>cargo check</code> as sanity pass.</p>
 <p><div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>just release &lt;version&gt;
 </code></pre></div>
-Full release pipeline: <code>audit</code> → <code>bump-version</code> → <code>cargo build --release</code> → <code>strip target/release/janitor</code> → <code>git commit</code> → <code>git tag v&lt;version&gt;</code> → floating major tag (<code>v&lt;MAJOR&gt;</code>, force-pushed) → <code>git push</code> → <code>gh release create</code> → <code>mkdocs gh-deploy</code>.</p>
+Linear release entrypoint: runs <code>just audit</code> once, then delegates to
+<code>just fast-release &lt;version&gt;</code> for <code>cargo build --release</code> → <code>strip
+target/release/janitor</code> → <code>git commit</code> → <code>git tag v&lt;version&gt;</code> → floating
+major tag (<code>v&lt;MAJOR&gt;</code>, force-pushed) → <code>git push</code> → <code>gh release create</code> →
+<code>mkdocs gh-deploy</code>.</p>
 <p><div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>just run-gauntlet [*ARGS]
 </code></pre></div>
 Build <code>gauntlet-runner</code> (<code>cargo build --release -p gauntlet-runner</code>) then execute. Reads <code>gauntlet_targets.txt</code>. Uses <code>gh pr diff</code> subshells per PR (parallel-bounce mode). Accepts: <code>--pr-limit</code>, <code>--timeout</code>, <code>--targets</code>, <code>--gauntlet-dir</code>, <code>--out-dir</code>, <code>--resume</code>, <code>--concurrency</code> (0 = auto from RAM).</p>
