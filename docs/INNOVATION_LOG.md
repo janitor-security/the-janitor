@@ -530,3 +530,65 @@ JSON output but not in the CSV export (column 18 would need to be added).
 SIEM integrations consuming CSV (not JSON webhooks) cannot track CSI trends.
 **Suggested fix:** Add `cognition_surrender_index` as column 18 in `render_csv`,
 update the column-count test, and document in `docs/architecture.md`.
+
+---
+
+## Legacy Governance Gaps (P2)
+
+### IDEA-005: Governance Bootstrap Drift Sentinel
+
+**Class:** Architecture
+**Priority:** P2
+**Inspired by:** `CLAUDE.md`, `.cursorrules`, `.agent_governance/README.md`
+
+**Observation:**
+Legacy bootstrap surfaces still drift from the canonical UAP source of truth.
+`CLAUDE.md` advertises `.claude/` as authoritative and still pins the engine at
+`v9.0.1`, while `.agent_governance/README.md` and `.cursorrules` declare
+`.agent_governance/` as canonical. A stale bootstrap path can bind an agent to
+obsolete workflow law before the zero-upload AST firewall ever executes.
+
+**Proposal:**
+Add a deterministic governance consistency check that fails when bootstrap
+documents reference a non-canonical governance root or stale engine version.
+
+**Security impact:**
+Prevents startup drift from disabling current zero-upload, symmetric-failure,
+and release-coupling mandates in downstream agents.
+
+**Implementation path:**
+Add `just governance-audit` plus a test fixture that cross-checks
+`CLAUDE.md`, `.cursorrules`, `.agent_governance/README.md`, and
+`Cargo.toml [workspace.package].version`.
+
+### IDEA-006: Release Surface Parity Gate
+
+**Class:** Defensive Hardening
+**Priority:** P2
+**Inspired by:** `justfile`, `.agent_governance/commands/release.md`, `CLAUDE.md`
+
+**Observation:**
+The canonical command doc requires `just audit` once followed by
+`just fast-release`, but legacy operator surfaces still advertise
+`/release -> just release <X.Y.Z>`. Without a parity gate, execution entrypoints
+can silently diverge and reintroduce redundant audit/build paths.
+
+**Proposal:**
+Add a release-surface parity test that asserts all documented release entrypoints
+resolve to the same linearized execution graph and that `release` is only a thin
+delegator to `fast-release`.
+
+**Security impact:**
+Preserves symmetric-failure semantics while reducing redundant CI/runtime load
+that can mask true release regressions behind repeated compile passes.
+
+**Implementation path:**
+Add a shell regression in `tools/tests/` that parses `justfile`,
+`.agent_governance/commands/release.md`, and `.cursorrules` for release-path
+consistency.
+
+---
+
+## Continuous Telemetry — 2026-04-03 (Epoch 2, Codex Initialization & Redundancy Purge v9.2.1)
+
+<!-- no telemetry findings this session beyond IDEA-005 and IDEA-006 -->

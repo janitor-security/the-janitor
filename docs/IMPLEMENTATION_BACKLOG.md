@@ -102,6 +102,21 @@ command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.
 
 ---
 
+## 2026-04-03 — Codex Initialization & Redundancy Purge (v9.2.1)
+
+**Directive:** Align Codex to UAP governance, audit release execution paths for redundant compute, record legacy-governance drift proposals, and cut the `9.2.1` release.
+
+**Files modified:**
+- `justfile` *(modified)* — `release` recipe collapsed into a thin `audit` → `fast-release` delegator so agentic deploys follow the single-audit path without duplicated release logic
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.2.1`
+- `docs/architecture.md` *(modified)* — stale `just release` pipeline description corrected to the linear `audit` → `fast-release` flow
+- `docs/INNOVATION_LOG.md` *(modified)* — `Legacy Governance Gaps (P2)` section appended with governance-drift proposals; session telemetry recorded
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-03 — Forward-Looking Telemetry (v9.0.2)
 
 **Directive:** Add `just fast-release` recipe (audit-free release path); harden

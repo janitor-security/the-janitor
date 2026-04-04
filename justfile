@@ -68,41 +68,13 @@ auth-refresh:
 # Prerequisites: set [workspace.package].version in root Cargo.toml, then run:
 #   just release <X.Y.Z>   (bare version — recipe prepends 'v' for tags)
 #
-# Pipeline: audit → build → strip → git tag vX.Y.Z + vX (floating major)
-#           → push → gh release → deploy-docs
+# Pipeline: audit → fast-release (build → strip → tag → push → gh release → deploy-docs)
 #
 release version: audit
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚀 Initiating Release Sequence v{{version}}..."
-	cargo build --release --workspace
-	strip target/release/janitor
-	git add .
-	git diff --cached --quiet || git commit -m "chore: release v{{version}}"
-	# Pre-cache GPG passphrase from env if set — allows unattended signing
-	# without a TTY.  Export JANITOR_GPG_PASSPHRASE before running the recipe.
-	# If not set, falls back to the cached passphrase from `gpg-unlock`.
-	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
-	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
-	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \
-	               -name gpg-preset-passphrase -print -quit 2>/dev/null || true)"
-	    if [[ -n "${PRESET_BIN}" ]]; then
-	        printf '%s' "${JANITOR_GPG_PASSPHRASE}" | "${PRESET_BIN}" --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
-	    fi
-	fi
-	git tag -s v{{version}} -m "release v{{version}}"
-	# Floating major-version tag — lets users pin to a major and always receive
-	# the latest stable patch without editing their workflows.
-	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
-	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
-	git push origin HEAD:main "v{{version}}"
-	git push origin "v${MAJOR}" --force
-	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
-		--title "v{{version}} - The Industrial Pivot" \
-		--notes-file README.md \
-		--latest
-	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
-	echo "💀 Release v{{version}} deployed."
+	exec just fast-release "{{version}}"
 
 # 4b. FAST RELEASE — identical to `release` but skips the audit prerequisite.
 #

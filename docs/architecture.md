@@ -427,7 +427,11 @@ Updates version strings in `Cargo.toml` (root + all `crates/` + `tools/`), `READ
 ```
 just release <version>
 ```
-Full release pipeline: `audit` → `bump-version` → `cargo build --release` → `strip target/release/janitor` → `git commit` → `git tag v<version>` → floating major tag (`v<MAJOR>`, force-pushed) → `git push` → `gh release create` → `mkdocs gh-deploy`.
+Linear release entrypoint: runs `just audit` once, then delegates to
+`just fast-release <version>` for `cargo build --release` → `strip
+target/release/janitor` → `git commit` → `git tag v<version>` → floating
+major tag (`v<MAJOR>`, force-pushed) → `git push` → `gh release create` →
+`mkdocs gh-deploy`.
 
 ```
 just run-gauntlet [*ARGS]
