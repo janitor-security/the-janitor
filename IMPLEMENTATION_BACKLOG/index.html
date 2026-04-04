@@ -582,6 +582,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-codex-alignment-git-hygiene-v922" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Codex Alignment &amp; Git Hygiene (v9.2.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-03-codex-initialization-redundancy-purge-v921" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Codex Initialization &amp; Redundancy Purge (v9.2.1)
@@ -726,6 +735,15 @@
   <a href="#2026-04-03-signature-sovereignty-v910" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-03 — Signature Sovereignty (v9.1.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-04-codex-alignment-git-hygiene-v922" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Codex Alignment &amp; Git Hygiene (v9.2.2)
     </span>
   </a>
   
@@ -887,6 +905,17 @@ command, ML-DSA-65 signing/verification, CycloneDX upgrade to v1.6.</p>
 - <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — <code>pqc_sig: None</code> added to 2 struct literals
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — VULN-02 section purged (all findings <code>[COMPLETED — v9.1.0]</code>); roadmap table updated</p>
 <p><strong>Commit:</strong> <code>89d742f</code></p>
+<hr />
+<h2 id="2026-04-04-codex-alignment-git-hygiene-v922">2026-04-04 — Codex Alignment &amp; Git Hygiene (v9.2.2)</h2>
+<p><strong>Directive:</strong> Enforce tracked-only release commits, ignore local agent state,
+resynchronize to the mandatory response format law, and cut <code>v9.2.2</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> now uses <code>git commit -a -S -m "chore: release v{{version}}"</code> behind a dirty-tree guard, preventing untracked local files from being staged during releases
+- <code>.gitignore</code> <em>(modified)</em> — explicit ignore rules added for <code>.agents/</code>, <code>.codex/</code>, <code>AGENTS.md</code>, and other local tool-state directories
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.2.2</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-006 logged for the release hygiene regression; session telemetry section appended
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-03-codex-initialization-redundancy-purge-v921">2026-04-03 — Codex Initialization &amp; Redundancy Purge (v9.2.1)</h2>
 <p><strong>Directive:</strong> Align Codex to UAP governance, audit release execution paths for redundant compute, record legacy-governance drift proposals, and cut the <code>9.2.1</code> release.</p>
