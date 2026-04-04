@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-deep-scan-innovation-synthesis-v940" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-communication-bifurcation-kev-correlation-strike-v930" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)
@@ -705,6 +714,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-deep-scan-innovation-synthesis-v940" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-communication-bifurcation-kev-correlation-strike-v930" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)
@@ -851,6 +869,24 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-deep-scan-innovation-synthesis-v940">2026-04-04 — Deep-Scan &amp; Innovation Synthesis (v9.4.0)</h2>
+<p><strong>Directive:</strong> Enforce the fast-release law, add a deep-scan evasion shield to
+the bounce path and GitHub Action, clear Forge warning debt, and perform a
+dedicated innovation synthesis pass over MCP and slop-hunter.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/commands/release.md</code> <em>(modified)</em> — absolute prohibition added against <code>just release</code>; release path now explicitly mandates <code>just audit</code> followed by <code>just fast-release &lt;v&gt;</code>
+- <code>action.yml</code> <em>(modified)</em> — optional <code>deep_scan</code> input added; composite action now forwards <code>--deep-scan</code> to <code>janitor bounce</code>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.4.0</code>
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>[forge].deep_scan</code> config added and covered in TOML roundtrip tests
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>janitor bounce</code> gains <code>--deep-scan</code>; CLI now merges the flag with <code>[forge].deep_scan</code> policy config
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — git-native bounce call updated for the deep-scan-capable <code>bounce_git</code> signature
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — configurable parse-budget helper added; 30 s deep-scan timeout constant added; stale test warning removed
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — patch and git-native size budgets raised to 32 MiB under deep-scan; parser timeouts retry at 30 s before emitting <code>Severity::Exhaustion</code>
+- <code>crates/forge/src/metadata.rs</code> <em>(modified)</em> — stale test warning removed
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>IDEA-003</code> and <code>IDEA-004</code> rewritten from the mandatory MCP/slop-hunter synthesis pass
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-communication-bifurcation-kev-correlation-strike-v930">2026-04-04 — Communication Bifurcation &amp; KEV Correlation Strike (v9.3.0)</h2>
 <p><strong>Directive:</strong> Relax intermediate execution messaging while preserving the

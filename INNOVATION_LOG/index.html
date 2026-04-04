@@ -606,18 +606,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#idea-003-adversarial-grammar-stress-harness" class="md-nav__link">
+  <a href="#idea-003-mcp-structured-finding-envelope-deep-scan-negotiation" class="md-nav__link">
     <span class="md-ellipsis">
-      IDEA-003: Adversarial Grammar Stress Harness
+      IDEA-003: MCP Structured Finding Envelope + Deep-Scan Negotiation
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#idea-004-hsm-kms-integration-for-pqc-key" class="md-nav__link">
+  <a href="#idea-004-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      IDEA-004: HSM / KMS Integration for --pqc-key
+      IDEA-004: Parse-Forest Reuse + Interprocedural Taint Spine
     </span>
   </a>
   
@@ -1014,18 +1014,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#idea-003-adversarial-grammar-stress-harness" class="md-nav__link">
+  <a href="#idea-003-mcp-structured-finding-envelope-deep-scan-negotiation" class="md-nav__link">
     <span class="md-ellipsis">
-      IDEA-003: Adversarial Grammar Stress Harness
+      IDEA-003: MCP Structured Finding Envelope + Deep-Scan Negotiation
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#idea-004-hsm-kms-integration-for-pqc-key" class="md-nav__link">
+  <a href="#idea-004-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      IDEA-004: HSM / KMS Integration for --pqc-key
+      IDEA-004: Parse-Forest Reuse + Interprocedural Taint Spine
     </span>
   </a>
   
@@ -1509,45 +1509,55 @@ Rationale: mirrors Nix-1 gate; supply-chain tarball substitution.</p>
 Grammar: <code>tree-sitter-cmake</code> | Trigger: <code>execute_process(COMMAND ${VAR})</code>
 Rationale: build-time RCE via user-controlled toolchain variable.</p>
 <hr />
-<h3 id="idea-003-adversarial-grammar-stress-harness">IDEA-003: Adversarial Grammar Stress Harness</h3>
-<p><strong>Class:</strong> Defensive Hardening / Fuzzing
+<h3 id="idea-003-mcp-structured-finding-envelope-deep-scan-negotiation">IDEA-003: MCP Structured Finding Envelope + Deep-Scan Negotiation</h3>
+<p><strong>Class:</strong> Agent Protocol / Integration
 <strong>Priority:</strong> P1
-<strong>Inspired by:</strong> <code>PARSER_TIMEOUT_MICROS</code>, <code>Severity::Exhaustion</code>, VULN-04</p>
+<strong>Inspired by:</strong> <code>crates/mcp/src/lib.rs::run_bounce</code>, <code>run_dep_check</code></p>
 <p><strong>Observation:</strong>
-The 500 ms parse timeout exists because adversarially crafted source can
-drive tree-sitter into O(n²) or O(n³) parse time on certain grammar
-ambiguities. We have no systematic way to discover which inputs trigger
-worst-case parse behaviour across all 23 grammars before a real attacker does.</p>
+The MCP server collapses bounce and dependency analysis into lossy JSON
+summaries: <code>run_bounce()</code> returns flattened strings in <code>antipattern_details</code>,
+and <code>run_dep_check()</code> emits KEV hits as plain descriptions only. The protocol
+cannot carry severity, byte ranges, domains, retry provenance, or whether a
+result was produced under normal scan vs deep-scan budgets.</p>
 <p><strong>Proposal:</strong>
-Build a <code>crates/fuzz</code> target (cargo-fuzz / libFuzzer) for each grammar:
-1. Takes arbitrary bytes as input.
-2. Attempts to parse with the grammar under a 100 ms budget.
-3. If the parse exhausts the budget, records the input as a new
-   <code>Severity::Exhaustion</code> Crucible fixture.
-4. Runs as a scheduled CI job (nightly, 30 min budget per grammar).</p>
+Extend MCP outputs to return a structured finding envelope:
+1. <code>findings[]</code> with <code>{category, severity, description, byte_range, domain}</code>.
+2. <code>analysis_profile</code> with <code>{deep_scan, parse_budget_ms, blob_budget_bytes}</code>.
+3. <code>retry_trace</code> when a parser timeout escalates from 500 ms to 30 s.
+4. <code>dep_findings[]</code> preserving package, version, CVE, and ecosystem fields.</p>
+<p><strong>Security impact:</strong>
+Agents can triage and act on deep-scan escalations deterministically instead of
+regex-parsing prose. This closes the gap between engine certainty and agent
+execution quality, especially for pre-commit auto-remediation.</p>
 <p><strong>Implementation path:</strong>
-<code>crates/fuzz/fuzz_targets/fuzz_grammar_&lt;lang&gt;.rs</code> × 23
-→ crash corpus committed to <code>crates/crucible/fixtures/exhaustion/</code></p>
+<code>crates/mcp/src/lib.rs</code> response schema upgrade
+→ <code>common</code> finding DTO shared by CLI + MCP
+→ backward-compatible <code>schema_version</code> bump for clients.</p>
 <hr />
-<h3 id="idea-004-hsm-kms-integration-for-pqc-key">IDEA-004: HSM / KMS Integration for <code>--pqc-key</code></h3>
-<p><strong>Class:</strong> Compliance / Key Custody
-<strong>Priority:</strong> P1
-<strong>Inspired by:</strong> CT-006 (v9.1.0), FedRAMP/DISA STIG requirements</p>
+<h3 id="idea-004-parse-forest-reuse-interprocedural-taint-spine">IDEA-004: Parse-Forest Reuse + Interprocedural Taint Spine</h3>
+<p><strong>Class:</strong> Detection Depth / Performance
+<strong>Priority:</strong> P0
+<strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs::find_slop</code></p>
 <p><strong>Observation:</strong>
-<code>--pqc-key</code> accepts only a path to raw private key bytes on disk. Enterprise
-FedRAMP and DISA STIG deployments require that private key material NEVER
-touch the runner filesystem — signing operations must be delegated to an
-HSM (PKCS#11) or cloud KMS.</p>
-<p><strong>Proposal (v9.2.x):</strong>
-Extend <code>--pqc-key</code> to accept:
-- PKCS#11 URI: <code>pkcs11:token=janitor;object=mlksa-key</code>
-- AWS KMS ARN: <code>arn:aws:kms:us-east-1:123456789012:key/abc-...</code>
-- Azure Key Vault URI: <code>https://vault.azure.net/keys/janitor-pqc/...</code></p>
-<p>The file-path mode remains the default for air-gapped deployments. The
-KMS/HSM mode requires a thin shim crate (<code>crates/pqc-kms</code>).</p>
+<code>slop_hunter.rs</code> repeatedly constructs <code>tree_sitter::Parser</code>, reparses the same
+source, and reruns detector-local AST walks for each language phase. The engine
+also treats taint as statement-local (<code>argument_is_tainted</code>) rather than
+interprocedural or cross-file, so helper wrappers and module relays erase the
+signal before it reaches SSRF/SQLi/path-traversal sinks.</p>
+<p><strong>Proposal:</strong>
+Build a per-file parse-forest cache and taint spine:
+1. Parse each file once per language into a shared detector context.
+2. Materialize a lightweight symbol/assignment graph for intra-file taint
+   propagation across helper functions.
+3. Add optional cross-file export/import taint summaries for module boundaries.
+4. Reuse the same context for logic-erasure, sink detection, and future dataflow rules.</p>
+<p><strong>Security impact:</strong>
+Raises true-positive depth on real exploit paths while eliminating the current
+O(detectors × parse_cost) architecture that burns CPU on repeated tree walks.</p>
 <p><strong>Implementation path:</strong>
-<code>crates/cli/src/main.rs</code> — extend <code>--pqc-key</code> arg type; add <code>PqcKeySource</code>
-enum in <code>crates/pqc-kms/src/lib.rs</code>.</p>
+<code>crates/forge/src/slop_hunter.rs</code> detector-context refactor
+→ shared <code>ParsedUnit</code> + taint summary structs
+→ optional cross-file summaries threaded from <code>PatchBouncer</code>.</p>
 <hr />
 <h3 id="vuln-03-scmcontext-abstraction">VULN-03: <code>ScmContext</code> Abstraction</h3>
 <p><strong>Severity:</strong> High
