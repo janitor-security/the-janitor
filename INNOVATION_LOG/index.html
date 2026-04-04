@@ -528,27 +528,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-sovereign-governor-binary" class="md-nav__link">
+  <a href="#p0-1-executable-surface-gaps" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Sovereign Governor Binary
+      P0-1: Executable Surface Gaps
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-2-executable-surface-gaps" class="md-nav__link">
+  <a href="#p0-2-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-2: Executable Surface Gaps
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: Parse-Forest Reuse + Interprocedural Taint Spine
+      P0-2: Parse-Forest Reuse + Interprocedural Taint Spine
     </span>
   </a>
   
@@ -726,27 +717,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-sovereign-governor-binary" class="md-nav__link">
+  <a href="#p0-1-executable-surface-gaps" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Sovereign Governor Binary
+      P0-1: Executable Surface Gaps
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-2-executable-surface-gaps" class="md-nav__link">
+  <a href="#p0-2-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-2: Executable Surface Gaps
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: Parse-Forest Reuse + Interprocedural Taint Spine
+      P0-2: Parse-Forest Reuse + Interprocedural Taint Spine
     </span>
   </a>
   
@@ -873,24 +855,7 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-1-sovereign-governor-binary">P0-1: Sovereign Governor Binary</h3>
-<p><strong>Class:</strong> Infrastructure / Reliability
-<strong>Inspired by:</strong> Governor soft-fail path and enterprise air-gap requirements</p>
-<p><strong>Observation:</strong>
-The current Governor path still assumes a shared SaaS endpoint for full
-attestation. Regulated customers need a self-hosted verification endpoint
-inside their own trust boundary.</p>
-<p><strong>Proposal:</strong>
-Package the Governor as a self-contained <code>janitor-gov</code> binary deployable to
-customer VPCs or bare metal, with SQLite as the default storage backend and
-customer-controlled webhook credentials.</p>
-<p><strong>Security impact:</strong>
-Removes the external Governor dependency from high-assurance deployments and
-preserves zero-upload guarantees under sovereign hosting.</p>
-<p><strong>Implementation path:</strong>
-Add a local Governor crate and route <code>janitor bounce --governor-url</code> to the
-customer-hosted control plane.</p>
-<h3 id="p0-2-executable-surface-gaps">P0-2: Executable Surface Gaps</h3>
+<h3 id="p0-1-executable-surface-gaps">P0-1: Executable Surface Gaps</h3>
 <p><strong>Class:</strong> Detection Expansion
 <strong>Inspired by:</strong> Current grammar registry coverage and remaining non-AST attack surface</p>
 <p><strong>Observation:</strong>
@@ -910,7 +875,7 @@ attack classes that are currently underrepresented in the firewall.</p>
 <p><strong>Implementation path:</strong>
 Extend <code>crates/forge/src/slop_hunter.rs</code> with new language handlers and AST
 rules; add Crucible fixtures for each class.</p>
-<h3 id="p0-3-parse-forest-reuse-interprocedural-taint-spine">P0-3: Parse-Forest Reuse + Interprocedural Taint Spine</h3>
+<h3 id="p0-2-parse-forest-reuse-interprocedural-taint-spine">P0-2: Parse-Forest Reuse + Interprocedural Taint Spine</h3>
 <p><strong>Class:</strong> Detection Depth / Performance
 <strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs::find_slop</code></p>
 <p><strong>Observation:</strong>

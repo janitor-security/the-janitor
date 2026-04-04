@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-air-gap-update-v950" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Air-Gap Update (v9.5.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-log-compaction-ciso-pulse-hardening-v941" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)
@@ -723,6 +732,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-air-gap-update-v950" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Air-Gap Update (v9.5.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-log-compaction-ciso-pulse-hardening-v941" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)
@@ -887,6 +905,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-air-gap-update-v950">2026-04-04 — Air-Gap Update (v9.5.0)</h2>
+<p><strong>Directive:</strong> Execute the Sovereign Governor extraction, decouple CLI
+attestation routing from the Fly.io default, prove custom Governor routing in
+tests, retire <code>P0-1</code> from the Innovation Log, and cut <code>v9.5.0</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.5.0</code>; shared <code>serde_json</code> workspace dependency normalized for the new Governor crate
+- <code>crates/gov/Cargo.toml</code> <em>(created)</em> — new <code>janitor-gov</code> binary crate added to the workspace
+- <code>crates/gov/src/main.rs</code> <em>(created)</em> — minimal localhost Governor stub added with <code>/v1/report</code> and <code>/v1/analysis-token</code> JSON-validation endpoints
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>[forge].governor_url</code> added and covered in TOML/load tests
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>janitor bounce</code> now accepts <code>--governor-url</code> (with <code>--report-url</code> compatibility alias), resolves base URL through policy, and routes timeout/report traffic through the custom Governor
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — Governor URL resolution centralized; <code>/v1/report</code> and <code>/health</code> endpoints derived from the configured base URL; routing tests updated
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>P0-1</code> removed as implemented; remaining P0 items re-indexed
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-log-compaction-ciso-pulse-hardening-v941">2026-04-04 — Log Compaction &amp; CISO Pulse Hardening (v9.4.1)</h2>
 <p><strong>Directive:</strong> Enforce hard compaction in the Evolution Tracker, purge
