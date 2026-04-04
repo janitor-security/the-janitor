@@ -75,27 +75,6 @@ attestation model per CI platform.
 Add `crates/common/src/scm.rs`, teach CLI entrypoints to consume it, and add
 fixture-based env tests for each provider.
 
-### P1-3: MCP Structured Findings Envelope
-
-**Class:** Agent Protocol / Integration
-**Inspired by:** `crates/mcp/src/lib.rs`
-
-**Observation:**
-The MCP server still returns flattened prose lists for bounce and dependency
-findings, discarding severity, byte ranges, domains, and deep-scan provenance.
-
-**Proposal:**
-Emit structured finding envelopes and analysis profiles from MCP tools,
-including deep-scan budget metadata and retry traces.
-
-**Security impact:**
-Lets agents consume firewall verdicts deterministically without regex-parsing
-human strings, improving pre-commit remediation and audit accuracy.
-
-**Implementation path:**
-Define shared finding DTOs in `common`, upgrade `run_bounce()` and
-`run_dep_check()`, and bump the MCP schema version compatibly.
-
 ## P2 — Architecture / Ergonomics
 
 ### P2-1: Semantic CST Diff Engine
@@ -229,3 +208,7 @@ Add `crates/common/src/surface.rs` with `SurfaceKind` plus deterministic
 classification helpers; replace `extract_patch_ext()` string returns with a
 `SurfaceKind` return path; teach `slop_hunter::find_slop()` to dispatch on
 `SurfaceKind`; update report/MCP serialization to include the resolved surface.
+
+## Continuous Telemetry — 2026-04-04
+
+<!-- no telemetry findings this session — structural work only (P1-3 implementation) -->

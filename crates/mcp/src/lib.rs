@@ -279,11 +279,24 @@ fn run_scan(path: &str, library: bool) -> Result<serde_json::Value> {
         anatomist::pipeline::run(root, &mut host, library, None, &[]).context("Pipeline failed")?;
 
     let dead_names: Vec<&str> = result.dead.iter().map(|e| e.name.as_str()).collect();
+    let findings: Vec<serde_json::Value> = result
+        .dead
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "id": "dead_symbol",
+                "file": e.file_path,
+                "line": e.start_line,
+                "name": e.name,
+            })
+        })
+        .collect();
     Ok(serde_json::json!({
         "source": "live",
         "total": result.total,
         "dead": result.dead.len(),
         "dead_symbols": dead_names,
+        "findings": findings,
         "orphan_files": result.orphan_files,
     }))
 }
@@ -439,6 +452,7 @@ fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_
         "dead_symbols_added": score.dead_symbols_added,
         "antipatterns_found": score.antipatterns_found,
         "antipattern_details": score.antipattern_details,
+        "findings": score.structured_findings,
         "comment_violations": score.comment_violations,
         "version_silo_details": score.version_silo_details,
         "suppressed_by_domain": score.suppressed_by_domain,

@@ -199,6 +199,18 @@ pub struct SlopScore {
     /// parallel compilation artifacts and is a common source of diamond dependency
     /// conflicts in rapidly evolving monorepos.
     pub version_silo_details: Vec<String>,
+
+    /// Machine-readable structured findings for MCP consumers.
+    ///
+    /// Parallel to [`antipattern_details`](Self::antipattern_details) but
+    /// structured for agent consumption: each entry carries a machine-readable
+    /// `id`, an optional relative `file` path, and an optional 1-indexed `line`
+    /// number.  File context is populated in the `bounce_git` path (per-blob
+    /// iteration has the path in scope); it is `None` in the unified-diff
+    /// `PatchBouncer::bounce` path.
+    ///
+    /// Does **not** contribute to [`Self::score()`].
+    pub structured_findings: Vec<common::slop::StructuredFinding>,
 }
 
 impl SlopScore {
@@ -1068,13 +1080,17 @@ impl PRBouncer for PatchBouncer {
             }
         }
         let antipatterns_found = accepted.len() as u32;
-        let antipattern_details: Vec<String> = accepted
-            .into_iter()
-            .map(|f| {
-                let line = byte_offset_to_line(source, f.start_byte);
-                format!("{} (line={line})", f.description)
-            })
-            .collect();
+        let mut antipattern_details = Vec::with_capacity(accepted.len());
+        let mut structured_findings = Vec::with_capacity(accepted.len());
+        for f in accepted {
+            let line = byte_offset_to_line(source, f.start_byte);
+            antipattern_details.push(format!("{} (line={line})", f.description));
+            structured_findings.push(common::slop::StructuredFinding {
+                id: f.description,
+                file: None, // file context injected by bounce_git caller
+                line: Some(line),
+            });
+        }
 
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =
@@ -1359,7 +1375,6 @@ impl PRBouncer for PatchBouncer {
             + payload_count * 50
             + boilerplate_count * 50
             + regression_count * 50;
-        let mut antipattern_details = antipattern_details;
         antipattern_details.extend(ncd_findings);
         antipattern_details.extend(payload_findings);
         antipattern_details.extend(boilerplate_details);
@@ -1371,6 +1386,7 @@ impl PRBouncer for PatchBouncer {
             antipatterns_found,
             antipattern_score,
             antipattern_details,
+            structured_findings,
             suppressed_by_domain,
             necrotic_flag,
             ..SlopScore::default()
@@ -1754,6 +1770,14 @@ pub fn bounce_git(
             total
                 .antipattern_details
                 .append(&mut score.antipattern_details);
+            // Inject file context into structured findings before accumulating.
+            let file_str = path.to_string_lossy().into_owned();
+            for sf in &mut score.structured_findings {
+                sf.file = Some(file_str.clone());
+            }
+            total
+                .structured_findings
+                .append(&mut score.structured_findings);
         }
     }
 
@@ -2347,6 +2371,45 @@ mod tests {
                 .iter()
                 .any(|d| d.contains("blast_radius_violation")),
             "Cargo.lock must not count toward blast radius dir count"
+        );
+    }
+
+    #[test]
+    fn test_structured_findings_parallel_antipattern_details() {
+        // A Python patch with a dynamic eval call must produce a structured finding
+        // with a non-None line and a machine-readable id matching the prose detail.
+        let src = "def inject(user_input):\n    eval(user_input)\n";
+        let patch = make_patch("app.py", src);
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+        // structured_findings and antipattern_details must be co-indexed.
+        assert_eq!(
+            score.structured_findings.len(),
+            score.antipatterns_found as usize,
+            "structured_findings length must match antipatterns_found"
+        );
+        if !score.structured_findings.is_empty() {
+            let sf = &score.structured_findings[0];
+            assert!(sf.line.is_some(), "line must be populated in bounce path");
+            // id must be the raw description (no line annotation).
+            assert!(
+                !sf.id.contains("(line="),
+                "id must not embed the line annotation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_structured_finding_clean_patch_is_empty() {
+        let src = "def add(a: int, b: int) -> int:\n    return a + b\n";
+        let patch = make_patch("math.py", src);
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+        assert!(
+            score.structured_findings.is_empty(),
+            "clean patch must produce no structured findings"
         );
     }
 }

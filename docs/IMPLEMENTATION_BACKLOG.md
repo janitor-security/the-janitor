@@ -427,3 +427,20 @@ Surrender Index to quantify AI-introduced structural rot density.
 - `Cargo.toml` *(modified)* — version bumped to `9.2.0`
 
 **Commit:** `89d742f`
+
+
+---
+
+## 2026-04-04 — v9.6.0: Omni-Purge & MCP Structured Findings (P1-3)
+
+**Directive:** Omni-Purge + MCP Structured Findings Envelope (P1-3)
+
+**Changes:**
+- `crates/common/src/slop.rs` *(created)* — `StructuredFinding` DTO: `{ id: String, file: Option<String>, line: Option<u32> }`; registered in `common::lib.rs`
+- `crates/forge/src/slop_filter.rs` *(modified)* — `SlopScore` gains `structured_findings: Vec<StructuredFinding>`; `bounce()` populates findings from accepted antipatterns with line numbers; `bounce_git()` injects file context per blob; redundant `let mut` rebinding removed
+- `crates/mcp/src/lib.rs` *(modified)* — `run_bounce()` emits `"findings"` structured array alongside `"antipattern_details"`; `run_scan()` emits dead-symbol findings as `{ id: "dead_symbol", file, line, name }`
+- `SOVEREIGN_BRIEFING.md` *(modified)* — `StructuredFinding` DTO row in primitives table; Stage 17 in bounce pipeline
+- `/tmp/omni_mapper*`, `/tmp/the-janitor*` *(purged)* — orphaned clone cleanup
+- `Cargo.toml` *(modified)* — version bumped to `9.6.0`
+
+**Status:** P1-3 COMPLETED. Crucible 156/156 + 3/3. `just audit` ✅.
