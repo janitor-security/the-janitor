@@ -18,7 +18,7 @@
 //! - `1` — BREACH DETECTED: one or more entries failed
 
 use forge::slop_filter::{PRBouncer, PatchBouncer, SlopScore};
-use forge::slop_hunter::find_slop;
+use forge::slop_hunter::{find_slop, ParsedUnit};
 
 // ---------------------------------------------------------------------------
 // Gallery entry type
@@ -387,7 +387,8 @@ resource \"aws_s3_bucket_acl\" \"private\" {
     },
 
     // ── Credential Leak — Secret Interception ─────────────────────────────
-    // Uses find_slop("rs", source) because the credential scan runs on ALL
+    // Uses find_slop("rs", &ParsedUnit::unparsed(source)) because the
+    // credential scan runs on ALL
     // languages via find_credential_slop() called from find_slop().
     Entry {
         name: "Rust/AWS IAM key prefix — INTERCEPT",
@@ -1300,7 +1301,8 @@ pub fn run_gallery() -> bool {
     let mut failed: usize = 0;
 
     for entry in GALLERY {
-        let findings = find_slop(entry.lang, entry.source);
+        let parsed = ParsedUnit::unparsed(entry.source);
+        let findings = find_slop(entry.lang, &parsed);
         let intercepted = !findings.is_empty();
 
         let ok = if entry.must_intercept {

@@ -216,4 +216,10 @@ classification helpers; replace `extract_patch_ext()` string returns with a
   a bootstrap-empty `wisdom_manifest.json` when the CDN or KEV source is
   unreachable, preventing first-run cron failure while the static registry is
   propagating.
+- `CT-009: Release-Tracked CDN Artefact Gap` — `docs/v1/wisdom.rkyv` is still
+  matched by the global `*.rkyv` ignore rule, so the CDN bootstrap registry can
+  deploy from the working tree without entering the signed release commit.
+  Suggested fix: carve out an explicit `!docs/v1/*.rkyv` exception or move
+  governed published registries under a dedicated tracked artefact directory
+  enforced by the release-surface parity gate.
 - CT-009: P0-1 Foundation Laid — `TaintKind`, `TaintedParam`, `TaintExportRecord` in `crates/common/src/taint.rs`; `ParsedUnit<'src>` in `crates/forge/src/slop_hunter.rs`; foundational types for 3-hop cross-file taint propagation (v9.6.2)

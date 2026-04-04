@@ -47,12 +47,14 @@
 //!
 //! ## Usage
 //! ```ignore
-//! let findings = slop_hunter::find_slop("yaml", source_bytes);
+//! let unit = slop_hunter::ParsedUnit::unparsed(source_bytes);
+//! let findings = slop_hunter::find_slop("yaml", &unit);
 //! for f in findings {
 //!     eprintln!("[SLOP] {}:{}-{}", f.description, f.start_byte, f.end_byte);
 //! }
 //! ```
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::sync::OnceLock;
@@ -201,10 +203,9 @@ pub(crate) fn parse_with_timeout_budget(
 /// and the resolved grammar language so that multiple detector phases can share
 /// a single `parser.parse()` call instead of repeating it.
 ///
-/// **v9.6.2 baseline**: `ParsedUnit` is defined here as the foundational type
-/// for the P0-1 Taint Spine.  The current `find_slop` dispatch still performs
-/// per-language parsing inline; a future release will refactor the hot path to
-/// accept `&ParsedUnit` and reuse the tree across detectors.
+/// `ParsedUnit` is the shared parse carrier for the P0-1 Taint Spine. The hot
+/// path instantiates it once per file, then detector phases reuse the cached
+/// tree or lazily populate it on first need.
 pub struct ParsedUnit<'src> {
     /// Raw source bytes of the file.
     pub source: &'src [u8],
@@ -212,11 +213,11 @@ pub struct ParsedUnit<'src> {
     ///
     /// `None` when the grammar is unsupported, the file exceeded the 1 MiB
     /// circuit-breaker, or the parse timed out.
-    pub tree: Option<tree_sitter::Tree>,
+    tree: RefCell<Option<tree_sitter::Tree>>,
     /// The tree-sitter `Language` used to produce `tree`.
     ///
     /// `None` when `tree` is `None`.
-    pub language: Option<tree_sitter::Language>,
+    language: RefCell<Option<tree_sitter::Language>>,
 }
 
 impl<'src> ParsedUnit<'src> {
@@ -228,8 +229,8 @@ impl<'src> ParsedUnit<'src> {
     ) -> Self {
         Self {
             source,
-            tree,
-            language,
+            tree: RefCell::new(tree),
+            language: RefCell::new(language),
         }
     }
 
@@ -239,9 +240,41 @@ impl<'src> ParsedUnit<'src> {
     pub fn unparsed(source: &'src [u8]) -> Self {
         Self {
             source,
-            tree: None,
-            language: None,
+            tree: RefCell::new(None),
+            language: RefCell::new(None),
         }
+    }
+
+    /// Returns the cached parse tree when one is already available.
+    pub fn tree(&self) -> Option<tree_sitter::Tree> {
+        self.tree.borrow().clone()
+    }
+
+    /// Ensure a cached tree exists for `language`, parsing once on demand.
+    ///
+    /// Returns `Ok(None)` when parsing fails without hitting the timeout budget.
+    /// Returns `Err(SlopFinding)` when parsing exceeded the configured budget.
+    pub fn ensure_tree(
+        &self,
+        language: tree_sitter::Language,
+        lang_hint: &str,
+    ) -> Result<Option<tree_sitter::Tree>, SlopFinding> {
+        if let Some(tree) = self.tree() {
+            return Ok(Some(tree));
+        }
+
+        let mut parser = tree_sitter::Parser::new();
+        if parser.set_language(&language).is_err() {
+            return Ok(None);
+        }
+
+        let Some(tree) = parse_with_timeout(&mut parser, self.source) else {
+            return Err(parser_exhaustion_finding(lang_hint));
+        };
+
+        *self.tree.borrow_mut() = Some(tree.clone());
+        *self.language.borrow_mut() = Some(language);
+        Ok(Some(tree))
     }
 }
 
@@ -388,14 +421,15 @@ fn engine() -> Option<&'static QueryEngine> {
 // Public API
 // ---------------------------------------------------------------------------
 
-/// Detect structural security antipatterns in `source`.
+/// Detect structural security antipatterns in `parsed`.
 ///
 /// `language` should be the file extension (`"yaml"`, `"c"`, `"tf"`).
 /// Returns an empty [`Vec`] for unsupported languages — never an error.
-pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
+pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     let Some(eng) = engine() else {
         return Vec::new();
     };
+    let source = parsed.source;
 
     let mut findings = match language {
         "dockerfile" => find_dockerfile_slop(source),
@@ -418,7 +452,7 @@ pub fn find_slop(language: &str, source: &[u8]) -> Vec<SlopFinding> {
             f.extend(find_python_ssrf_slop(eng, source));
             f.extend(find_python_path_traversal_slop(eng, source));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
-            f.extend(find_python_slop_ast(eng, source));
+            f.extend(find_python_slop_ast(eng, parsed));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -2024,7 +2058,8 @@ fn find_python_danger_calls(
 /// and on lines containing `# noqa`.
 ///
 /// Phase 2 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 1).
-fn find_python_slop_ast(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_python_slop_ast(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files that can't contain any dangerous call.
     let has_any = PYTHON_DANGER_CALLS.iter().any(|(callee, _, _)| {
         let needle = callee.as_bytes();
@@ -2034,12 +2069,10 @@ fn find_python_slop_ast(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.python_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("py")];
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_python_danger_calls(tree.root_node(), source, &mut findings, false);
@@ -4478,7 +4511,21 @@ pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
+fn find_slop_bytes(language: &str, source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    find_slop(language, &parsed)
+}
+
+#[cfg(test)]
+fn find_python_slop_ast_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_python_slop_ast(eng, &parsed)
+}
+
+#[cfg(test)]
 mod tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     #[test]
@@ -5136,6 +5183,7 @@ mod logic_regression_tests {
 
 #[cfg(test)]
 mod credential_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     // ── find_credential_slop ─────────────────────────────────────────────
@@ -5337,6 +5385,7 @@ mod credential_tests {
 
 #[cfg(test)]
 mod kev_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     // ── Severity tier ──────────────────────────────────────────────────────
@@ -5519,6 +5568,7 @@ mod kev_tests {
 
 #[cfg(test)]
 mod exhaustion_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     #[test]
@@ -5571,6 +5621,7 @@ mod exhaustion_tests {
 
 #[cfg(test)]
 mod phase1_rd_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     // ── Java deserialization ─────────────────────────────────────────────────
@@ -5757,6 +5808,8 @@ mod phase1_rd_tests {
 
 #[cfg(test)]
 mod phase2_rd_tests {
+    use super::find_python_slop_ast_bytes_test as find_python_slop_ast_bytes;
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     fn eng() -> &'static QueryEngine {
@@ -5768,7 +5821,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_exec_fires() {
         let src = b"exec(user_input)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5780,7 +5833,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_eval_fires_in_production_code() {
         let src = b"result = eval(expression)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5793,7 +5846,7 @@ mod phase2_rd_tests {
     fn test_python_eval_suppressed_in_test_function() {
         let src =
             b"def test_eval_behavior():\n    result = eval('1 + 2')\n    assert result == 3\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5805,7 +5858,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_eval_suppressed_by_noqa() {
         let src = b"result = eval(expression)  # noqa\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5817,7 +5870,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_pickle_loads_fires() {
         let src = b"import pickle\nobj = pickle.loads(data)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5829,7 +5882,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_os_system_fires() {
         let src = b"import os\nos.system(cmd)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5841,7 +5894,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_dunder_import_fires() {
         let src = b"mod = __import__(module_name)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         assert!(
             findings
                 .iter()
@@ -5853,7 +5906,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_python_ast_literal_eval_safe() {
         let src = b"import ast\nresult = ast.literal_eval(user_input)\n";
-        let findings = find_python_slop_ast(eng(), src);
+        let findings = find_python_slop_ast_bytes(src);
         // ast.literal_eval is not in PYTHON_DANGER_CALLS — must be silent.
         assert!(
             findings
@@ -6040,6 +6093,7 @@ mod phase2_rd_tests {
 
 #[cfg(test)]
 mod phase3_rd_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     fn eng() -> &'static QueryEngine {
@@ -6206,6 +6260,7 @@ mod phase3_rd_tests {
 
 #[cfg(test)]
 mod phase4_rd_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     fn eng() -> &'static QueryEngine {
@@ -6508,6 +6563,7 @@ mod phase4_rd_tests {
 
 #[cfg(test)]
 mod phase5_rd_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     fn eng() -> &'static QueryEngine {
@@ -7410,6 +7466,7 @@ fn find_jsx_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
 
 #[cfg(test)]
 mod phase7_rd_tests {
+    use super::find_slop_bytes as find_slop;
     use super::*;
 
     fn eng() -> &'static QueryEngine {

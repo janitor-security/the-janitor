@@ -1053,7 +1053,12 @@ impl PRBouncer for PatchBouncer {
 
         // Language-specific antipattern detection via slop_hunter.
         // Apply the domain bitmask matrix, then the severity-based test-domain filter.
-        let raw_findings = crate::slop_hunter::find_slop(ext, source);
+        let parsed_unit = crate::slop_hunter::ParsedUnit::new(
+            source,
+            Some(tree.clone()),
+            Some(cfg.language.clone()),
+        );
+        let raw_findings = crate::slop_hunter::find_slop(ext, &parsed_unit);
         let mut suppressed_by_domain: u32 = 0;
         let mut antipattern_score: u32 = 0;
         let mut accepted: Vec<crate::slop_hunter::SlopFinding> =

@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Parse-Forest Integration & Telemetry Hardening (v9.6.3)
+
+**Directive:** Enforce autonomous telemetry updates in the UAP evolution
+tracker, refactor Forge so `find_slop` consumes a shared `ParsedUnit`, reuse
+the Python CST instead of reparsing it, verify with `just audit` plus
+`cargo run -p crucible`, and cut `v9.6.3`.
+
+**Files modified:**
+- `.agent_governance/skills/evolution-tracker/SKILL.md` *(modified)* — Continuous Telemetry law now forbids waiting for operator instruction; every prompt must autonomously append `CT-NNN` findings before session close
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.6.3`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `ParsedUnit` upgraded to a cache-bearing parse carrier; `find_slop` now accepts `&ParsedUnit`; Python AST walk reuses or lazily populates the cached tree instead of reparsing raw bytes
+- `crates/forge/src/slop_filter.rs` *(modified)* — patch analysis now instantiates one `ParsedUnit` per file and passes it into the slop dispatch chain
+- `crates/crucible/src/main.rs` *(modified)* — Crucible now routes fixtures through `ParsedUnit` so the gallery exercises the production API shape
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `docs/INNOVATION_LOG.md` *(modified)* — autonomous telemetry entry `CT-009` appended for the tracked CDN artefact gap
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Wisdom Infrastructure Pivot (v9.6.1)
 
 **Directive:** Pivot `update-wisdom` off the dead `api.thejanitor.app`
