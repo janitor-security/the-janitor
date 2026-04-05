@@ -113,7 +113,7 @@ The graph is built from in-memory libgit2 tree walks at the start of every `hype
 
 ### The Anatomist
 
-Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more** — with v7.9.4 Tier-1 Enterprise expansions adding Ruby, PHP, Swift, and Lua to the production grammar registry. v7.9.4 NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
+Parses via zero-copy Tree-sitter CSTs across **23 grammars: C, C++, Rust, Go, Java, C#, JavaScript, TypeScript, Python, GLSL, Objective-C, Bash, Nix, Scala, Ruby, PHP, Swift, Lua, Go, Kotlin, HCL, and more**. The NCD entropy gate adds zstd-based boilerplate detection across all 23 grammars simultaneously. Extracts every function, class, and top-level symbol as a zero-copy `Entity` with byte ranges, qualified names, decorator lists, and structural hashes. Builds a directed reference graph resolving imports, attribute calls, and language-specific linkage.
 
 `OnceLock<Language>` statics: each grammar occupies **8 bytes of static overhead** (an uninitialised pointer slot on 64-bit) until first use. Total: **184 bytes of static overhead** for all 23 grammars. Grammar compiled once per process lifetime — zero re-compilation, zero per-call allocation, strict 8 GB RAM ceiling enforced by the Physarum governor.
 
@@ -221,6 +221,20 @@ janitor serve [--socket <path>] [--registry <file>]
 # Ratatui TUI dashboard
 janitor dashboard <path>
 ```
+
+---
+
+## CASE STUDY: THE LITELLM/MERCOR BREACH
+
+In early 2025, Mercor — a platform serving enterprise hiring workflows — suffered a supply-chain compromise. The attack vector was `litellm`, a widely deployed LLM API abstraction layer. An attacker published a version of `litellm` to PyPI containing a backdoor. Downstream projects that had pinned a loose version range (`>=1.x.x`) automatically pulled the malicious package in their next `pip install` or CI rebuild. The breach affected production systems before any CVE was filed.
+
+The Janitor's deterministic gates would have blocked this exact attack at two independent layers:
+
+**Layer 1 — `security:kev_dependency` gate** (`crates/forge/src/slop_hunter.rs::find_python_slop_ast`): The Janitor maintains a CISA KEV-synchronized list of dependency-level threats. A new `litellm` version entering `requirements.txt` or `pyproject.toml` without an accompanying pinned hash is flagged as `security:kev_dependency` at **KevCritical severity (150 points)** — a hard block on merge, irrespective of whether the CVE has been formally filed. The gate fires on version *range* expressions (`>=`, `~=`, `^`) for any dependency in the active KEV feed.
+
+**Layer 2 — `architecture:version_silo` gate** (`crates/anatomist/src/manifest.rs::find_version_silos_from_lockfile`): When `Cargo.lock` or `requirements.lock` shows two distinct pinned versions of the same logical package across transitive graph levels, the Silo Detector fires. The Mercor attack exploited exactly this class of ambiguity: a loose top-level pin combined with a transitive pin that resolved differently in staging versus production. The Janitor's silo gate would have surfaced the unresolved dependency split before the first CI rebuild pulled the malicious package.
+
+**The verdict**: both gates are structural, deterministic, and zero-upload. No source code leaves the runner. No cloud scanner reviewed the `requirements.txt`. The Janitor's on-device analysis would have blocked the poisoned package before it entered a staging environment, with a 150-point hard-block score and a named antipattern in the bounce log.
 
 ---
 

@@ -76,13 +76,26 @@ release version: audit
 	echo "🚀 Initiating Release Sequence v{{version}}..."
 	exec just fast-release "{{version}}"
 
-# 4b. FAST RELEASE — identical to `release` but skips the audit prerequisite.
+# 4b. VERSION SYNC — reads [workspace.package].version from Cargo.toml and updates
+#     the headline version string in README.md and docs/index.md.
+#     Called automatically by fast-release.
+#
+sync-versions:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+	echo "→ Syncing docs to v${VERSION}"
+	sed -i "s/\*\*v[0-9]\+\.[0-9]\+\.[0-9]\+ —/**v${VERSION} —/g" README.md docs/index.md
+	sed -i "s/The Janitor v[0-9]\+\.[0-9]\+\.[0-9]\+/The Janitor v${VERSION}/g" README.md
+	echo "✅ Version sync complete: v${VERSION}"
+
+# 4c. FAST RELEASE — identical to `release` but skips the audit prerequisite.
 #
 # Use this when `just audit` has already been run explicitly in the same session.
 # The AI release sequence (`.claude/commands/release.md`) calls `just audit` once
 # as Step 3, then calls `just fast-release` as Step 4 to avoid a redundant re-audit.
 #
-fast-release version:
+fast-release version: sync-versions
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚀 Initiating Fast Release Sequence v{{version}}..."

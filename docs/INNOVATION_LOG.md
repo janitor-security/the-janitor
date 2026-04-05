@@ -236,4 +236,12 @@ classification helpers; replace `extract_patch_ext()` string returns with a
 **Found during:** UAP Pipeline Integration & Parse-Forest Completion (v9.6.4)
 **Location:** `crates/forge/src/slop_hunter.rs` — `find_go_slop`, `find_ruby_slop`, `find_bash_slop`, `find_php_slop`, `find_kotlin_slop`, `find_scala_slop`, `find_swift_slop`, `find_lua_slop`, `find_nix_slop`, `find_gdscript_slop`, `find_objc_slop`, `find_rust_slop`
 **Issue:** 12 single-language AST detectors (Phase 4–7) still create their own `tree_sitter::Parser::new()` instead of using `ParsedUnit::ensure_tree()`. No redundancy within a single call, but inconsistent with the P0-1 architecture and blocks future multi-phase detectors for those languages from sharing the cached tree.
-**Suggested fix:** Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to `(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the same `ensure_tree` pattern established in v9.6.4. Add `_bytes_test` wrappers and update test aliases. Target: v9.6.5 or next forge session.
+**Suggested fix:** Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to `(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the same `ensure_tree` pattern established in v9.6.4. Add `_bytes_test` wrappers and update test aliases. Target: v9.7.x or next forge session.
+
+## Continuous Telemetry — 2026-04-04
+
+### CT-011: sync-versions sed Pattern Covers Only Headline Format
+**Found during:** Canonical Alignment Strike (v9.7.0)
+**Location:** `justfile::sync-versions`
+**Issue:** The `sync-versions` recipe uses `sed` to match `**vX.Y.Z —` (bold-prefixed headline pattern). This covers README.md and docs/index.md but will silently skip any doc file that stores the version in a different format (e.g., plain `vX.Y.Z` in a JSON badge or YAML frontmatter). Future version-bearing files may drift without a compile-time contract.
+**Suggested fix:** Introduce a `docs/VERSION` sentinel file containing only the raw version string; `sync-versions` reads it and `cargo build` script writes it. Any file referencing the version imports from this single source. Eliminates pattern fragility.

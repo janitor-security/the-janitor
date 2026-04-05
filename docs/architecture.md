@@ -382,7 +382,7 @@ Log file polled for changes every **2 seconds**.
 | `Esc` / `Backspace` | Return to TargetSelection |
 | `q` | Quit |
 
-*(Mode 3 — Static Dashboard `draw_dashboard` removed in v7.9.1. The WOPR TUI is the sole production view.)*
+*(Mode 3 — Static Dashboard `draw_dashboard` removed. The WOPR TUI is the sole production view.)*
 
 ---
 
@@ -463,15 +463,15 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 |---|---|---|---|
 | `advanced_threats` | `binary_hunter.rs` | **PRODUCTION** (wired into `slop_filter.rs` + `cli`) | Zero-allocation AhoCorasick scanner for ELF/PE/WASM/miner byte patterns. 7 patterns. `THREAT_LABEL = "security:compiled_payload_anomaly"`. +50 pts per match. |
 | `backlog_pruner` | — | **PRODUCTION** (wired into `forge`) | Necrotic GC flag assignment: classifies PRs as `SEMANTIC_NULL`, `GHOST_COLLISION`, or `UNWIRED_ISLAND`. Populates `necrotic_flag` on `SlopScore`. |
-| `include_deflator` | — | **PRODUCTION** — graduated v7.9.2. C/C++ transitive header dependency analyser. IncludeGraphBuilder used in git_drive.rs; powers architecture:compile_time_bloat and architecture:graph_entanglement antipatterns and WOPR Structural Topology tab. | C/C++ compile-time silo analysis |
-| `phantom_ffi_gate` | — | **DELETED (v7.9.1)** | Architecture requires full-repo C++ registry (not patch-scope). Cannot be wired into `PatchBouncer::bounce()` — only produces false negatives on single-file diffs. |
+| `include_deflator` | — | **PRODUCTION**. C/C++ transitive header dependency analyser. IncludeGraphBuilder used in git_drive.rs; powers architecture:compile_time_bloat and architecture:graph_entanglement antipatterns and WOPR Structural Topology tab. | C/C++ compile-time silo analysis |
+| `phantom_ffi_gate` | — | **DELETED** | Architecture requires full-repo C++ registry (not patch-scope). Cannot be wired into `PatchBouncer::bounce()` — only produces false negatives on single-file diffs. |
 
 ---
 
 ## IX. FINAL VERSION
 
 ```
-7.9.4
+9.7.0
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
@@ -481,7 +481,7 @@ MSRV: `rust-version = "1.88"` (enforced by CI MSRV workflow).
 Edition: `2021`.
 License: `BUSL-1.1` (all workspace crates via `license.workspace = true`).
 
-### v7.9.4 — Architecture Inversion Implementation
+### Architecture Inversion Implementation
 
 Architecture Inversion (Steps 1–4 complete):
 

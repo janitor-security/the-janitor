@@ -5,6 +5,29 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Canonical Alignment Strike (v9.7.0)
+
+**Directive:** Eradicate stale version strings from all forward-facing docs, add a
+`sync-versions` justfile recipe hardlinked as a `fast-release` prerequisite, add the
+LiteLLM/Mercor breach case study to `docs/manifesto.md`, complete the P0-1 ParsedUnit
+migration verification, and cut `v9.7.0`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.7.0`
+- `justfile` *(modified)* — `sync-versions` recipe added; made prerequisite of `fast-release`
+- `README.md` *(modified)* — headline version updated to `v9.7.0`; Vibe-Check Gate version qualifier removed
+- `docs/index.md` *(modified)* — headline version updated to `v9.7.0`
+- `docs/manifesto.md` *(modified)* — `v7.9.4` qualifiers removed; LiteLLM/Mercor case study added
+- `docs/privacy.md` *(modified)* — `v7.9.4+` updated to `v9.7.0+`
+- `docs/architecture.md` *(modified)* — FINAL VERSION block updated; version qualifiers stripped from table and section headers
+- `RUNBOOK.md` *(modified)* — example release command updated; inline version qualifiers removed
+- `SOVEREIGN_BRIEFING.md` *(modified)* — version qualifiers stripped from table, section headers, and FINAL VERSION block
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — UAP Pipeline Integration & Parse-Forest Completion (v9.6.4)
 
 **Directive:** Fix the release pipeline to include `.agent_governance/` in the
