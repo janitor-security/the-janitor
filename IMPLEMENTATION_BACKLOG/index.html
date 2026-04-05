@@ -798,6 +798,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-the-ecosystem-scrub-universal-parsedunit-v991" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — The Ecosystem Scrub &amp; Universal ParsedUnit (v9.9.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-direct-triage-commercial-expansion-v981" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — Direct Triage &amp; Commercial Expansion (v9.8.1)
@@ -1104,6 +1113,15 @@
   <a href="#2026-04-04-v964-uap-pipeline-integration-parse-forest-completion-p0-1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — v9.6.4: UAP Pipeline Integration &amp; Parse-Forest Completion (P0-1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-05-the-ecosystem-scrub-universal-parsedunit-v991" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — The Ecosystem Scrub &amp; Universal ParsedUnit (v9.9.1)
     </span>
   </a>
   
@@ -1606,6 +1624,22 @@ Surrender Index to quantify AI-introduced structural rot density.</p>
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.4</code></p>
 <p><strong>Commit:</strong> (see tag v9.6.4)</p>
 <p><strong>Status:</strong> P0-1 Phase 2 COMPLETE (Python 4→1 parse, JS 6→1 parse per file). Crucible 156/156 + 3/3. <code>just audit</code> ✅.</p>
+<hr />
+<h2 id="2026-04-05-the-ecosystem-scrub-universal-parsedunit-v991">2026-04-05 — The Ecosystem Scrub &amp; Universal ParsedUnit (v9.9.1)</h2>
+<p><strong>Directive:</strong> Remove internal blueprint files from the public Git surface,
+professionalize the GitHub release page, hard-compact completed innovation
+sections, and migrate the remaining single-language AST detectors to the shared
+<code>ParsedUnit</code> path.</p>
+<p><strong>Files modified:</strong>
+- <code>AGENTS.md</code> <em>(deleted from git index)</em> — removed from the tracked public release surface
+- <code>SOVEREIGN_BRIEFING.md</code> <em>(deleted from git index)</em> — removed from the tracked public release surface
+- <code>.gitignore</code> <em>(modified)</em> — explicit ignore added for <code>SOVEREIGN_BRIEFING.md</code>
+- <code>justfile</code> <em>(modified)</em> — GitHub release creation now uses generated notes and a professional title
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — all completed sections purged; <code>P0-3</code> removed after ParsedUnit universalization; only active P1/P2 debt remains
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — Go, Ruby, Bash, PHP, Kotlin, Scala, Swift, Lua, Nix, GDScript, ObjC, and Rust detectors now consume <code>ParsedUnit</code>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.1</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.1</code></p>
 <hr />
 <h2 id="2026-04-05-direct-triage-commercial-expansion-v981">2026-04-05 — Direct Triage &amp; Commercial Expansion (v9.8.1)</h2>
 <p><strong>Directive:</strong> Replace CT backlog batching with direct P-tier triage, implement

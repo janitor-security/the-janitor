@@ -524,39 +524,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-1-interprocedural-taint-spine-completed-v990" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-2-executable-surface-gaps-completed-v980" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-phase-47-single-language-detectors-parsedunit-migration" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -573,15 +540,6 @@
   <a href="#p1-1-kms-hsm-key-sources-for-pqc-key" class="md-nav__link">
     <span class="md-ellipsis">
       P1-1: KMS / HSM Key Sources for --pqc-key
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-scm-context-abstraction-completed-v981" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
     </span>
   </a>
   
@@ -642,15 +600,6 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-5-governance-command-surface-drift-completed-v990" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
     </span>
   </a>
   
@@ -731,39 +680,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-1-interprocedural-taint-spine-completed-v990" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-2-executable-surface-gaps-completed-v980" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-phase-47-single-language-detectors-parsedunit-migration" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -780,15 +696,6 @@
   <a href="#p1-1-kms-hsm-key-sources-for-pqc-key" class="md-nav__link">
     <span class="md-ellipsis">
       P1-1: KMS / HSM Key Sources for --pqc-key
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-scm-context-abstraction-completed-v981" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
     </span>
   </a>
   
@@ -854,15 +761,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p2-5-governance-command-surface-drift-completed-v990" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -891,58 +789,6 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-1-interprocedural-taint-spine-completed-v990">P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]</h3>
-<p><strong>Class:</strong> Detection Depth / Performance
-<strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs::find_slop</code></p>
-<p><strong>Observation:</strong>
-Intra-file Go SQLi taint confirmation implemented in v9.7.1. Cross-file 3-hop
-propagation completed in v9.9.0: <code>taint_catalog.rs</code> provides zero-copy rkyv
-I/O; <code>PatchBouncer</code> maps the catalog and scans Python/JS/Java diffs for calls
-to cataloged sink functions. <code>security:cross_file_taint_sink</code> fires at
-KevCritical (+150 pts) on confirmed multi-file taint paths.</p>
-<h3 id="p0-2-executable-surface-gaps-completed-v980">P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]</h3>
-<p><strong>Class:</strong> Foundational Attack Surface
-<strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs</code> executable-surface review</p>
-<p><strong>Observation:</strong>
-Foundational build and control-plane surfaces needed first-class intercepts for
-Dockerfile shell piping, XML external entities, <code>google.protobuf.Any</code>, Bazel
-remote fetch integrity, and CMake command interpolation.</p>
-<p><strong>Proposal:</strong>
-Implement the five gates directly in <code>slop_hunter.rs</code>, prove them in Crucible,
-and bind their detector IDs to the canonical security taxonomy used by the
-governance layer.</p>
-<p><strong>Security impact:</strong>
-Closes the baseline executable ingress surfaces used by build-time RCE,
-deserialization confusion, XXE SSRF/file disclosure, and supply-chain archive
-substitution.</p>
-<p><strong>Implementation path:</strong>
-Completed in <code>v9.8.0</code>: detector IDs aligned to
-<code>security:dockerfile_pipe_execution</code>,
-<code>security:xxe_external_entity</code>,
-<code>security:protobuf_any_type_field</code>,
-<code>security:bazel_unverified_http_archive</code>, and
-<code>security:cmake_execute_process_injection</code>, with TP/TN Crucible coverage.</p>
-<h3 id="p0-3-phase-47-single-language-detectors-parsedunit-migration">P0-3: Phase 4–7 Single-Language Detectors — ParsedUnit Migration</h3>
-<p><strong>Class:</strong> Architecture / Performance
-<strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs</code> Phase 4–7 language gates</p>
-<p><strong>Observation:</strong>
-12 single-language AST detectors (<code>find_go_slop</code>, <code>find_ruby_slop</code>,
-<code>find_bash_slop</code>, <code>find_php_slop</code>, <code>find_kotlin_slop</code>, <code>find_scala_slop</code>,
-<code>find_swift_slop</code>, <code>find_lua_slop</code>, <code>find_nix_slop</code>, <code>find_gdscript_slop</code>,
-<code>find_objc_slop</code>, <code>find_rust_slop</code>) still create their own <code>tree_sitter::Parser</code>
-instead of using <code>ParsedUnit::ensure_tree()</code>. This blocks multi-phase detector
-sharing for those languages and diverges from the P0-1 architecture.</p>
-<p><strong>Proposal:</strong>
-Migrate each of the 12 functions from <code>(eng: &amp;QueryEngine, source: &amp;[u8])</code> to
-<code>(eng: &amp;QueryEngine, parsed: &amp;ParsedUnit&lt;'_&gt;)</code> using the <code>ensure_tree</code> pattern.
-Add <code>_bytes_test</code> wrappers and update dispatch aliases.</p>
-<p><strong>Security impact:</strong>
-Enables multi-phase taint tracking for Go, Ruby, PHP, Kotlin, Scala, Swift, Lua,
-Nix, GDScript, ObjC, and Rust — same TP gains as the Python/Java/JS migration.</p>
-<p><strong>Implementation path:</strong>
-Modify each of the 12 functions in <code>crates/forge/src/slop_hunter.rs</code>. Update
-<code>find_slop()</code> dispatch to pass <code>parsed</code> instead of <code>source</code>. Add
-<code>ParsedUnit::unparsed()</code> test wrappers for each migrated function.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="p1-1-kms-hsm-key-sources-for-pqc-key">P1-1: KMS / HSM Key Sources for <code>--pqc-key</code></h3>
 <p><strong>Class:</strong> Compliance / Key Custody
@@ -960,22 +806,6 @@ protocol or exposing raw private key bytes on runner disks.</p>
 <p><strong>Implementation path:</strong>
 Introduce a key-source abstraction and a thin <code>pqc-kms</code> integration crate for
 PKCS#11, AWS KMS, and Azure Key Vault backends.</p>
-<h3 id="p1-2-scm-context-abstraction-completed-v981">P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]</h3>
-<p><strong>Class:</strong> Portability / Ecosystem
-<strong>Inspired by:</strong> GitHub-specific env resolution in CLI and Action paths</p>
-<p><strong>Observation:</strong>
-Bounce execution is still heavily coupled to GitHub environment variables and
-App metadata, limiting portability to GitLab, Bitbucket, Azure DevOps, and
-generic on-prem CI runners.</p>
-<p><strong>Proposal:</strong>
-Introduce a provider-neutral <code>ScmContext</code> that normalizes commit SHA, repo
-slug, PR number, refs, and auth tokens across supported SCM providers.</p>
-<p><strong>Security impact:</strong>
-Expands zero-upload deployment into multi-SCM enterprises without forking the
-attestation model per CI platform.</p>
-<p><strong>Implementation path:</strong>
-Add <code>crates/common/src/scm.rs</code>, teach CLI entrypoints to consume it, and add
-fixture-based env tests for each provider.</p>
 <h3 id="p1-3-wisdom-manifest-is-metadata-not-kev-authority">P1-3: Wisdom Manifest Is Metadata, Not KEV Authority</h3>
 <p><strong>Class:</strong> Infrastructure / Threat Intel Integrity
 <strong>Inspired by:</strong> <code>crates/common/src/wisdom.rs::resolve_kev_database</code></p>
@@ -1062,12 +892,6 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
-<h3 id="p2-5-governance-command-surface-drift-completed-v990">P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]</h3>
-<p><strong>Class:</strong> Operational Integrity
-<strong>Inspired by:</strong> <code>.agent_governance/commands/ciso-pulse.md</code></p>
-<p>Rewritten in v9.9.0: CT-NNN numbering, IDEA-XXX labels, and the <code>grep -c "CT-"</code>
-release gate removed. Protocol now reflects the direct-triage P0/P1/P2
-compaction model. CI gate updated to verify P0/P1/P2 structure.</p>
 
 
 
