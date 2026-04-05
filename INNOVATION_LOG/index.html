@@ -667,6 +667,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-04">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-011-sync-versions-sed-pattern-covers-only-headline-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-011: sync-versions sed Pattern Covers Only Headline Format
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -880,6 +904,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-04">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-011-sync-versions-sed-pattern-covers-only-headline-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-011: sync-versions sed Pattern Covers Only Headline Format
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1081,7 +1129,13 @@ classification helpers; replace <code>extract_patch_ext()</code> string returns 
 <p><strong>Found during:</strong> UAP Pipeline Integration &amp; Parse-Forest Completion (v9.6.4)
 <strong>Location:</strong> <code>crates/forge/src/slop_hunter.rs</code> — <code>find_go_slop</code>, <code>find_ruby_slop</code>, <code>find_bash_slop</code>, <code>find_php_slop</code>, <code>find_kotlin_slop</code>, <code>find_scala_slop</code>, <code>find_swift_slop</code>, <code>find_lua_slop</code>, <code>find_nix_slop</code>, <code>find_gdscript_slop</code>, <code>find_objc_slop</code>, <code>find_rust_slop</code>
 <strong>Issue:</strong> 12 single-language AST detectors (Phase 4–7) still create their own <code>tree_sitter::Parser::new()</code> instead of using <code>ParsedUnit::ensure_tree()</code>. No redundancy within a single call, but inconsistent with the P0-1 architecture and blocks future multi-phase detectors for those languages from sharing the cached tree.
-<strong>Suggested fix:</strong> Migrate each of the 12 functions from <code>(eng: &amp;QueryEngine, source: &amp;[u8])</code> to <code>(eng: &amp;QueryEngine, parsed: &amp;ParsedUnit&lt;'_&gt;)</code> using the same <code>ensure_tree</code> pattern established in v9.6.4. Add <code>_bytes_test</code> wrappers and update test aliases. Target: v9.6.5 or next forge session.</p>
+<strong>Suggested fix:</strong> Migrate each of the 12 functions from <code>(eng: &amp;QueryEngine, source: &amp;[u8])</code> to <code>(eng: &amp;QueryEngine, parsed: &amp;ParsedUnit&lt;'_&gt;)</code> using the same <code>ensure_tree</code> pattern established in v9.6.4. Add <code>_bytes_test</code> wrappers and update test aliases. Target: v9.7.x or next forge session.</p>
+<h2 id="continuous-telemetry-2026-04-04_2">Continuous Telemetry — 2026-04-04</h2>
+<h3 id="ct-011-sync-versions-sed-pattern-covers-only-headline-format">CT-011: sync-versions sed Pattern Covers Only Headline Format</h3>
+<p><strong>Found during:</strong> Canonical Alignment Strike (v9.7.0)
+<strong>Location:</strong> <code>justfile::sync-versions</code>
+<strong>Issue:</strong> The <code>sync-versions</code> recipe uses <code>sed</code> to match <code>**vX.Y.Z —</code> (bold-prefixed headline pattern). This covers README.md and docs/index.md but will silently skip any doc file that stores the version in a different format (e.g., plain <code>vX.Y.Z</code> in a JSON badge or YAML frontmatter). Future version-bearing files may drift without a compile-time contract.
+<strong>Suggested fix:</strong> Introduce a <code>docs/VERSION</code> sentinel file containing only the raw version string; <code>sync-versions</code> reads it and <code>cargo build</code> script writes it. Any file referencing the version imports from this single source. Eliminates pattern fragility.</p>
 
 
 

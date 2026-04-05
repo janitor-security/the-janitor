@@ -882,7 +882,7 @@
 </tbody>
 </table>
 <p><strong>Sentinel mode</strong>: When you install Janitor Sentinel as a GitHub App, source code is temporarily cloned to Janitor's Fly.io infrastructure to perform the structural analysis. The clone is deleted immediately after the analysis completes — it is never written to persistent storage. Only the structural analysis result (slop score, antipattern labels, collided PR numbers) is retained in the Governor's database.</p>
-<p><strong>Post-Architecture-Inversion (v7.9.4+)</strong>: After the architecture inversion is deployed with <code>GOVERNOR_INVERT_MODE=1</code>, Sentinel mode will match the CLI/Action model — no source code will be transmitted to Janitor infrastructure.</p>
+<p><strong>Post-Architecture-Inversion (v9.7.0+)</strong>: After the architecture inversion is deployed with <code>GOVERNOR_INVERT_MODE=1</code>, Sentinel mode will match the CLI/Action model — no source code will be transmitted to Janitor infrastructure.</p>
 <hr />
 <h2 id="9-changes-to-this-policy">9. Changes to This Policy</h2>
 <p>This policy may be updated. The Effective Date at the top of this document reflects the most recent revision. Material changes will be noted in the project's release notes.</p>

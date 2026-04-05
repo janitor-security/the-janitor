@@ -681,9 +681,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#v794-architecture-inversion-implementation" class="md-nav__link">
+  <a href="#architecture-inversion-implementation" class="md-nav__link">
     <span class="md-ellipsis">
-      v7.9.4 — Architecture Inversion Implementation
+      Architecture Inversion Implementation
     </span>
   </a>
   
@@ -1465,9 +1465,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#v794-architecture-inversion-implementation" class="md-nav__link">
+  <a href="#architecture-inversion-implementation" class="md-nav__link">
     <span class="md-ellipsis">
-      v7.9.4 — Architecture Inversion Implementation
+      Architecture Inversion Implementation
     </span>
   </a>
   
@@ -2462,7 +2462,7 @@ Log file polled for changes every <strong>2 seconds</strong>.</p>
 </tr>
 </tbody>
 </table>
-<p><em>(Mode 3 — Static Dashboard <code>draw_dashboard</code> removed in v7.9.1. The WOPR TUI is the sole production view.)</em></p>
+<p><em>(Mode 3 — Static Dashboard <code>draw_dashboard</code> removed. The WOPR TUI is the sole production view.)</em></p>
 <hr />
 <h2 id="vii-operational-commands-complete-justfile-manifest">VII. OPERATIONAL COMMANDS — COMPLETE JUSTFILE MANIFEST</h2>
 <p><div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>just shell
@@ -2534,27 +2534,27 @@ Build <code>gauntlet-runner</code> + <code>cli</code> (<code>cargo build --relea
 <tr>
 <td><code>include_deflator</code></td>
 <td>—</td>
-<td><strong>PRODUCTION</strong> — graduated v7.9.2. C/C++ transitive header dependency analyser. IncludeGraphBuilder used in git_drive.rs; powers architecture:compile_time_bloat and architecture:graph_entanglement antipatterns and WOPR Structural Topology tab.</td>
+<td><strong>PRODUCTION</strong>. C/C++ transitive header dependency analyser. IncludeGraphBuilder used in git_drive.rs; powers architecture:compile_time_bloat and architecture:graph_entanglement antipatterns and WOPR Structural Topology tab.</td>
 <td>C/C++ compile-time silo analysis</td>
 </tr>
 <tr>
 <td><code>phantom_ffi_gate</code></td>
 <td>—</td>
-<td><strong>DELETED (v7.9.1)</strong></td>
+<td><strong>DELETED</strong></td>
 <td>Architecture requires full-repo C++ registry (not patch-scope). Cannot be wired into <code>PatchBouncer::bounce()</code> — only produces false negatives on single-file diffs.</td>
 </tr>
 </tbody>
 </table>
 <hr />
 <h2 id="ix-final-version">IX. FINAL VERSION</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>7.9.4
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>9.7.0
 </code></pre></div>
 <p>Extracted from <code>[workspace.package].version</code> in root <code>Cargo.toml</code>.</p>
 <p>Release profile: <code>opt-level = "z"</code>, <code>lto = true</code>, <code>codegen-units = 1</code>, <code>strip = true</code>, <code>panic = "abort"</code>.
 MSRV: <code>rust-version = "1.88"</code> (enforced by CI MSRV workflow).
 Edition: <code>2021</code>.
 License: <code>BUSL-1.1</code> (all workspace crates via <code>license.workspace = true</code>).</p>
-<h3 id="v794-architecture-inversion-implementation">v7.9.4 — Architecture Inversion Implementation</h3>
+<h3 id="architecture-inversion-implementation">Architecture Inversion Implementation</h3>
 <p>Architecture Inversion (Steps 1–4 complete):</p>
 <ol>
 <li>
