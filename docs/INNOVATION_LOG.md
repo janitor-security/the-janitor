@@ -7,27 +7,33 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-1: Parse-Forest Reuse + Interprocedural Taint Spine
+### P0-1: Interprocedural Taint Spine
 
 **Class:** Detection Depth / Performance
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
 
 **Observation:**
-`slop_hunter.rs` reparses the same file for multiple detector phases and treats
-taint as statement-local rather than propagating through helper functions or
-module boundaries.
+Parse-forest reuse is complete as of v9.6.4 — all major detectors (`find_java_slop`,
+`find_csharp_slop`, `find_jsx_dangerous_html_slop`, Python/JS/C gates) now share a
+cached `ParsedUnit` via `ensure_tree()`. Taint tracking remains statement-local;
+source-to-sink signal does not propagate through helper functions or module
+boundaries.
 
 **Proposal:**
-Build a shared parse context per file and a lightweight taint graph that can
-propagate source-to-sink signal across local helpers and exported wrappers.
+Build a lightweight taint graph on top of the existing `ParsedUnit`/`TaintExportRecord`
+foundation that propagates source-to-sink signal across local helpers and exported
+wrappers (3-hop depth).
 
 **Security impact:**
 Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
-chains while cutting repeated parse overhead from the hot path.
+chains — current detectors miss sinks that receive tainted values via one call level
+of indirection.
 
 **Implementation path:**
-Refactor detector dispatch around shared `ParsedUnit` state plus optional
-cross-file taint summaries threaded from `PatchBouncer`.
+Wire `TaintExportRecord` (already in `crates/common/src/taint.rs`) into
+`PatchBouncer`; implement 3-hop propagation in a new `taint_propagate.rs`;
+thread taint summaries into `find_python_slop_ast`, `find_java_slop`, and
+`find_js_sqli_slop`.
 
 ## P1 — Compliance / Integration
 
@@ -223,3 +229,11 @@ classification helpers; replace `extract_patch_ext()` string returns with a
   governed published registries under a dedicated tracked artefact directory
   enforced by the release-surface parity gate.
 - CT-009: P0-1 Foundation Laid — `TaintKind`, `TaintedParam`, `TaintExportRecord` in `crates/common/src/taint.rs`; `ParsedUnit<'src>` in `crates/forge/src/slop_hunter.rs`; foundational types for 3-hop cross-file taint propagation (v9.6.2)
+
+## Continuous Telemetry — 2026-04-04
+
+### CT-010: Phase 4–7 Single-Language Detectors Still Instantiate Own Parsers
+**Found during:** UAP Pipeline Integration & Parse-Forest Completion (v9.6.4)
+**Location:** `crates/forge/src/slop_hunter.rs` — `find_go_slop`, `find_ruby_slop`, `find_bash_slop`, `find_php_slop`, `find_kotlin_slop`, `find_scala_slop`, `find_swift_slop`, `find_lua_slop`, `find_nix_slop`, `find_gdscript_slop`, `find_objc_slop`, `find_rust_slop`
+**Issue:** 12 single-language AST detectors (Phase 4–7) still create their own `tree_sitter::Parser::new()` instead of using `ParsedUnit::ensure_tree()`. No redundancy within a single call, but inconsistent with the P0-1 architecture and blocks future multi-phase detectors for those languages from sharing the cached tree.
+**Suggested fix:** Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to `(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the same `ensure_tree` pattern established in v9.6.4. Add `_bytes_test` wrappers and update test aliases. Target: v9.6.5 or next forge session.

@@ -447,26 +447,26 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "glsl" | "vert" | "frag" => find_glsl_slop(source),
         "py" => {
             let mut f = find_python_slop(source);
-            // CISA KEV gates — AST-based (Python grammar)
-            f.extend(find_python_sqli_slop(eng, source));
-            f.extend(find_python_ssrf_slop(eng, source));
-            f.extend(find_python_path_traversal_slop(eng, source));
+            // CISA KEV gates — AST-based (Python grammar); share parse tree via ParsedUnit
+            f.extend(find_python_sqli_slop(eng, parsed));
+            f.extend(find_python_ssrf_slop(eng, parsed));
+            f.extend(find_python_path_traversal_slop(eng, parsed));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
             f.extend(find_python_slop_ast(eng, parsed));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
-            let mut f = find_js_slop(eng, source);
-            // CISA KEV gates — AST-based (JS grammar)
-            f.extend(find_js_sqli_slop(eng, source));
-            f.extend(find_js_ssrf_slop(eng, source));
-            f.extend(find_js_path_traversal_slop(eng, source));
+            let mut f = find_js_slop(eng, parsed);
+            // CISA KEV gates — AST-based (JS grammar); share parse tree via ParsedUnit
+            f.extend(find_js_sqli_slop(eng, parsed));
+            f.extend(find_js_ssrf_slop(eng, parsed));
+            f.extend(find_js_path_traversal_slop(eng, parsed));
             // Phase 1 R&D: prototype pollution Layer A (AhoCorasick)
             f.extend(find_prototype_pollution_slop(source));
             // Phase 3 R&D: prototype pollution Layer B — merge sink AST walk
-            f.extend(find_prototype_merge_sink_slop(eng, source));
+            f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
-            f.extend(find_jsx_dangerous_html_slop(eng, source));
+            f.extend(find_jsx_dangerous_html_slop(eng, parsed));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -474,7 +474,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             let mut f = find_java_sqli_slop(source);
             f.extend(find_java_slop_fast(source));
             // Phase 2 R&D: method_invocation AST walk (deser + JNDI + runtime exec)
-            f.extend(find_java_slop(eng, source));
+            f.extend(find_java_slop(eng, parsed));
             f
         }
         "go" => {
@@ -500,7 +500,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
             // Phase 3 R&D: TypeNameHandling/BinaryFormatter AST walk (Tier 1)
-            f.extend(find_csharp_slop(eng, source));
+            f.extend(find_csharp_slop(eng, parsed));
             f
         }
         _ => Vec::new(),
@@ -1158,18 +1158,17 @@ fn find_python_slop(source: &[u8]) -> Vec<SlopFinding> {
 /// Uses the JavaScript grammar, which covers `.js`, `.jsx`, `.ts`, and `.tsx`
 /// files (TypeScript is a superset of JavaScript at the assignment level and
 /// shares compatible AST structure for member expressions).
-fn find_js_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_js_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const INNER_HTML: &[u8] = b"innerHTML";
     if !source.windows(INNER_HTML.len()).any(|w| w == INNER_HTML) {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("js")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -1737,7 +1736,8 @@ fn has_sql_string_leaf(node: Node<'_>, source: &[u8]) -> bool {
 
 /// SQL injection detection for Python: flags [`SQL_EXEC_METHODS`] calls whose
 /// first argument is a `binary_operator` (`+`) containing a SQL keyword literal.
-fn find_python_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_python_sqli_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     let has_sql = SQL_KEYWORDS_STR
         .iter()
         .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
@@ -1747,12 +1747,10 @@ fn find_python_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     if !source.windows(3).any(|w| w == b" + ") {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.python_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("py")];
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_sqli_calls_py(tree.root_node(), source, &mut findings);
@@ -1802,19 +1800,18 @@ fn find_sqli_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
 
 /// SSRF detection for Python: flags [`SSRF_HTTP_CALLEES_PY`] calls whose URL
 /// argument is a `binary_operator` (`+`), indicating dynamic URL construction.
-fn find_python_ssrf_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_python_ssrf_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     let has_http = SSRF_HTTP_CALLEES_PY
         .iter()
         .any(|c| source.windows(c.len()).any(|w| w == c.as_bytes()));
     if !has_http {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.python_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("py")];
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_ssrf_calls_py(tree.root_node(), source, &mut findings);
@@ -1862,19 +1859,18 @@ fn find_ssrf_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
 
 /// Path traversal detection for Python: flags `open()` calls whose first
 /// argument is a `binary_operator` (`+`) instead of `os.path.join()`.
-fn find_python_path_traversal_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_python_path_traversal_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     if !source.windows(5).any(|w| w == b"open(") {
         return Vec::new();
     }
     if !source.windows(3).any(|w| w == b" + ") {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.python_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("py")];
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_path_traversal_py(tree.root_node(), source, &mut findings);
@@ -2096,7 +2092,8 @@ fn find_python_slop_ast(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopF
 /// receiver text does not literally contain `"InitialContext"`.
 ///
 /// Phase 2 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 2).
-fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_java_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: at least one dangerous class or method name present.
     const JAVA_MARKERS: &[&[u8]] = &[
         b"ObjectInputStream",
@@ -2116,12 +2113,10 @@ fn find_java_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.java_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("java")];
+    let tree = match parsed.ensure_tree(eng.java_lang.clone(), "java") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     // Collect variable names by declared type so that short variable names
@@ -2426,7 +2421,8 @@ fn java_has_test_annotation(method_decl: Node<'_>, source: &[u8]) -> bool {
 
 /// SQL injection detection for JS/TS: flags [`SQL_EXEC_METHODS`] calls whose
 /// argument list contains a `binary_expression` (`+`) with a SQL string leaf.
-fn find_js_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_js_sqli_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     let has_sql = SQL_KEYWORDS_STR
         .iter()
         .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
@@ -2436,12 +2432,10 @@ fn find_js_sqli_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     if !source.windows(3).any(|w| w == b" + ") {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("js")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_sqli_calls_js(tree.root_node(), source, &mut findings);
@@ -2491,19 +2485,18 @@ fn find_sqli_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
 
 /// SSRF detection for JS/TS: flags [`SSRF_HTTP_CALLEES_JS`] calls whose first
 /// argument is a `binary_expression` or `template_string` (dynamic URL).
-fn find_js_ssrf_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_js_ssrf_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     let has_http = SSRF_HTTP_CALLEES_JS
         .iter()
         .any(|c| source.windows(c.len()).any(|w| w == c.as_bytes()));
     if !has_http {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("js")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_ssrf_calls_js(tree.root_node(), source, &mut findings);
@@ -2551,7 +2544,8 @@ fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
 /// Path traversal detection for JS/TS: flags [`FS_OPEN_CALLEES_JS`] calls
 /// whose first argument is a `binary_expression` (`+`) instead of
 /// `path.join()`.
-fn find_js_path_traversal_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_js_path_traversal_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     let has_fs = FS_OPEN_CALLEES_JS.iter().any(|c| {
         let method = c.split('.').next_back().unwrap_or("");
         source.windows(method.len()).any(|w| w == method.as_bytes())
@@ -2562,12 +2556,10 @@ fn find_js_path_traversal_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFind
     if !source.windows(3).any(|w| w == b" + ") {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("js")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_path_traversal_js(tree.root_node(), source, &mut findings);
@@ -2979,7 +2971,8 @@ const CSHARP_DANGEROUS_TNH: &[&str] = &[
 /// `BinaryFormatter` object creation via tree-sitter AST walk.
 ///
 /// Phase 3 R&D upgrade per `docs/R_AND_D_ROADMAP.md` Section I (Shallow Language 3).
-fn find_csharp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_csharp_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files with neither TypeNameHandling nor BinaryFormatter.
     const CSHARP_MARKERS: &[&[u8]] = &[b"TypeNameHandling", b"BinaryFormatter"];
     if !CSHARP_MARKERS
@@ -2989,12 +2982,10 @@ fn find_csharp_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.csharp_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("cs")];
+    let tree = match parsed.ensure_tree(eng.csharp_lang.clone(), "cs") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -4399,7 +4390,8 @@ fn find_merge_sink_calls(
 /// Suppressed inside functions named `sanitize*` or `validate*`.
 ///
 /// Phase 3 R&D per `docs/R_AND_D_ROADMAP.md` Section III (Tier 1 AST walk).
-fn find_prototype_merge_sink_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_prototype_merge_sink_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files without any known merge utility
     let has_merge = MERGE_CALL_TARGETS
         .iter()
@@ -4408,12 +4400,10 @@ fn find_prototype_merge_sink_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopF
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("js")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -4521,6 +4511,34 @@ fn find_python_slop_ast_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
     let parsed = ParsedUnit::unparsed(source);
     let eng = engine().expect("QueryEngine must initialise in tests");
     find_python_slop_ast(eng, &parsed)
+}
+
+#[cfg(test)]
+fn find_java_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_java_slop(eng, &parsed)
+}
+
+#[cfg(test)]
+fn find_csharp_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_csharp_slop(eng, &parsed)
+}
+
+#[cfg(test)]
+fn find_prototype_merge_sink_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_prototype_merge_sink_slop(eng, &parsed)
+}
+
+#[cfg(test)]
+fn find_jsx_dangerous_html_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_jsx_dangerous_html_slop(eng, &parsed)
 }
 
 #[cfg(test)]
@@ -5808,6 +5826,7 @@ mod phase1_rd_tests {
 
 #[cfg(test)]
 mod phase2_rd_tests {
+    use super::find_java_slop_bytes_test as find_java_slop;
     use super::find_python_slop_ast_bytes_test as find_python_slop_ast_bytes;
     use super::find_slop_bytes as find_slop;
     use super::*;
@@ -5922,7 +5941,7 @@ mod phase2_rd_tests {
     fn test_java_read_object_fires() {
         let src =
             b"ObjectInputStream ois = new ObjectInputStream(in);\nObject obj = ois.readObject();\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5934,7 +5953,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_runtime_exec_fires() {
         let src = b"Process p = Runtime.getRuntime().exec(userInput);\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5947,7 +5966,7 @@ mod phase2_rd_tests {
     fn test_java_jndi_dynamic_fires() {
         let src =
             b"InitialContext ctx = new InitialContext();\nObject obj = ctx.lookup(userInput);\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5959,7 +5978,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_jndi_static_string_safe() {
         let src = b"InitialContext ctx = new InitialContext();\nDataSource ds = (DataSource) ctx.lookup(\"java:comp/env/jdbc/mydb\");\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5971,7 +5990,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_clean_mapper_read_value_safe() {
         let src = b"ObjectMapper mapper = new ObjectMapper();\nMyClass obj = mapper.readValue(json, MyClass.class);\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5985,7 +6004,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_process_builder_dynamic_fires() {
         let src = b"ProcessBuilder pb = new ProcessBuilder(userCommand);\npb.start();\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -5997,7 +6016,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_process_builder_literal_safe() {
         let src = b"ProcessBuilder pb = new ProcessBuilder(\"git\", \"status\");\npb.start();\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6011,7 +6030,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_documentbuilder_xxe_fires() {
         let src = b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nDocumentBuilder builder = factory.newDocumentBuilder();\nDocument doc = builder.parse(inputStream);\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6023,7 +6042,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_documentbuilder_hardened_safe() {
         let src = b"DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nfactory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\nDocumentBuilder builder = factory.newDocumentBuilder();\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6039,7 +6058,7 @@ mod phase2_rd_tests {
         // @Test-annotated methods must not produce findings for any of the
         // three Java danger categories.
         let src = b"@Test\npublic void testXmlParsing() {\nDocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();\nDocumentBuilder builder = factory.newDocumentBuilder();\n}\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6054,7 +6073,7 @@ mod phase2_rd_tests {
     fn test_java_jndi_resolve_dynamic_fires() {
         let src =
             b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(userInput);\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6067,7 +6086,7 @@ mod phase2_rd_tests {
     fn test_java_jndi_resolve_static_safe() {
         let src =
             b"InitialContext ctx = new InitialContext();\nObject obj = ctx.resolve(\"java:comp/env/jdbc/ds\");\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6081,7 +6100,7 @@ mod phase2_rd_tests {
     #[test]
     fn test_java_xmldecoder_construction_fires() {
         let src = b"XMLDecoder decoder = new XMLDecoder(inputStream);\nObject obj = decoder.readObject();\n";
-        let findings = find_java_slop(eng(), src);
+        let findings = find_java_slop(src);
         assert!(
             findings
                 .iter()
@@ -6093,6 +6112,8 @@ mod phase2_rd_tests {
 
 #[cfg(test)]
 mod phase3_rd_tests {
+    use super::find_csharp_slop_bytes_test as find_csharp_slop;
+    use super::find_prototype_merge_sink_slop_bytes_test as find_prototype_merge_sink_slop;
     use super::find_slop_bytes as find_slop;
     use super::*;
 
@@ -6106,7 +6127,7 @@ mod phase3_rd_tests {
     fn test_csharp_type_name_handling_all_fires_via_ast() {
         let src =
             b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };\n";
-        let findings = find_csharp_slop(eng(), src);
+        let findings = find_csharp_slop(src);
         assert!(
             findings
                 .iter()
@@ -6118,7 +6139,7 @@ mod phase3_rd_tests {
     #[test]
     fn test_csharp_type_name_handling_objects_fires_via_ast() {
         let src = b"settings.TypeNameHandling = TypeNameHandling.Objects;\n";
-        let findings = find_csharp_slop(eng(), src);
+        let findings = find_csharp_slop(src);
         assert!(
             findings
                 .iter()
@@ -6131,7 +6152,7 @@ mod phase3_rd_tests {
     fn test_csharp_binary_formatter_fires_via_ast() {
         let src =
             b"BinaryFormatter formatter = new BinaryFormatter();\nformatter.Serialize(ms, obj);\n";
-        let findings = find_csharp_slop(eng(), src);
+        let findings = find_csharp_slop(src);
         assert!(
             findings
                 .iter()
@@ -6144,7 +6165,7 @@ mod phase3_rd_tests {
     fn test_csharp_type_name_handling_none_safe_via_ast() {
         let src =
             b"var s = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };\n";
-        let findings = find_csharp_slop(eng(), src);
+        let findings = find_csharp_slop(src);
         assert!(
             findings
                 .iter()
@@ -6156,7 +6177,7 @@ mod phase3_rd_tests {
     #[test]
     fn test_csharp_clean_stj_safe_via_ast() {
         let src = b"var obj = System.Text.Json.JsonSerializer.Deserialize<MyType>(json);\n";
-        let findings = find_csharp_slop(eng(), src);
+        let findings = find_csharp_slop(src);
         assert!(
             findings
                 .iter()
@@ -6171,7 +6192,7 @@ mod phase3_rd_tests {
     fn test_pp_merge_sink_json_parse_arg_fires() {
         // Inline JSON.parse as a direct argument is the canonical tainted pattern.
         let src = b"_.merge(target, JSON.parse(userInput));\n";
-        let findings = find_prototype_merge_sink_slop(eng(), src);
+        let findings = find_prototype_merge_sink_slop(src);
         assert!(
             findings
                 .iter()
@@ -6183,7 +6204,7 @@ mod phase3_rd_tests {
     #[test]
     fn test_pp_merge_sink_req_body_fires() {
         let src = b"Object.assign(config, req.body);\n";
-        let findings = find_prototype_merge_sink_slop(eng(), src);
+        let findings = find_prototype_merge_sink_slop(src);
         assert!(
             findings
                 .iter()
@@ -6195,7 +6216,7 @@ mod phase3_rd_tests {
     #[test]
     fn test_pp_merge_sink_query_identifier_fires() {
         let src = b"_.merge(defaults, query);\n";
-        let findings = find_prototype_merge_sink_slop(eng(), src);
+        let findings = find_prototype_merge_sink_slop(src);
         assert!(
             findings
                 .iter()
@@ -6209,7 +6230,7 @@ mod phase3_rd_tests {
         // 'source' is not in USER_INPUT_NAMES so this wouldn't fire anyway,
         // but we verify suppression logic by using a tainted name in a sanitize function.
         let src2 = b"function sanitizeInput(target) {\n    _.merge(target, req.body);\n    return target;\n}\n";
-        let findings = find_prototype_merge_sink_slop(eng(), src2);
+        let findings = find_prototype_merge_sink_slop(src2);
         assert!(
             findings
                 .iter()
@@ -6222,7 +6243,7 @@ mod phase3_rd_tests {
     fn test_pp_merge_sink_clean_literal_arg_safe() {
         // Merging a literal object — no user input, must not fire.
         let src = b"_.merge(defaults, { theme: 'dark', locale: 'en' });\n";
-        let findings = find_prototype_merge_sink_slop(eng(), src);
+        let findings = find_prototype_merge_sink_slop(src);
         assert!(
             findings
                 .iter()
@@ -7408,17 +7429,16 @@ fn find_hcl_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
 /// literal.  Appended to the `"js"|"jsx"|"ts"|"tsx"` branch of `find_slop`.
 ///
 /// Reuses `eng.js_lang` — the JavaScript grammar parses JSX constructs.
-fn find_jsx_dangerous_html_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_jsx_dangerous_html_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const MARKER: &[u8] = b"dangerouslySetInnerHTML";
     if !source.windows(MARKER.len()).any(|w| w == MARKER) {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.js_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("jsx")];
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_jsx_danger_nodes(tree.root_node(), source, &mut findings);
@@ -7466,6 +7486,7 @@ fn find_jsx_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
 
 #[cfg(test)]
 mod phase7_rd_tests {
+    use super::find_jsx_dangerous_html_slop_bytes_test as find_jsx_dangerous_html_slop;
     use super::find_slop_bytes as find_slop;
     use super::*;
 
@@ -7628,7 +7649,7 @@ mod phase7_rd_tests {
     #[test]
     fn test_jsx_dangerous_set_inner_html_dynamic_fires() {
         let src = b"const el = <div dangerouslySetInnerHTML={{ __html: userInput }} />;\n";
-        let findings = find_jsx_dangerous_html_slop(eng(), src);
+        let findings = find_jsx_dangerous_html_slop(src);
         assert!(
             findings
                 .iter()
@@ -7640,7 +7661,7 @@ mod phase7_rd_tests {
     #[test]
     fn test_jsx_dangerous_set_inner_html_literal_clean() {
         let src = b"const el = <div dangerouslySetInnerHTML={{ __html: \"<b>static</b>\" }} />;\n";
-        let findings = find_jsx_dangerous_html_slop(eng(), src);
+        let findings = find_jsx_dangerous_html_slop(src);
         assert!(
             findings
                 .iter()

@@ -5,6 +5,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — UAP Pipeline Integration & Parse-Forest Completion (v9.6.4)
+
+**Directive:** Fix the release pipeline to include `.agent_governance/` in the
+`git add` surface, complete P0-1 by migrating `find_java_slop`, `find_csharp_slop`,
+and `find_jsx_dangerous_html_slop` to consume cached trees via `ParsedUnit::ensure_tree()`,
+verify with crucible + `just audit`, and cut `v9.6.4`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.6.4`
+- `justfile` *(modified)* — `fast-release` `git add` now includes `.agent_governance/`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `find_java_slop`, `find_csharp_slop`, `find_jsx_dangerous_html_slop` migrated to `ParsedUnit`/`ensure_tree`; all Phase 4–7 detectors share cached CST
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `docs/INNOVATION_LOG.md` *(modified)* — P0-1 parse-forest phase marked complete; CT-010 filed for residual Phase 4–7 single-language detectors
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Parse-Forest Integration & Telemetry Hardening (v9.6.3)
 
 **Directive:** Enforce autonomous telemetry updates in the UAP evolution
@@ -499,3 +517,19 @@ Surrender Index to quantify AI-introduced structural rot density.
 - `Cargo.toml` *(modified)* — version bumped to `9.6.2`
 
 **Status:** P0-1 foundation COMPLETE. `just audit` ✅.
+
+---
+
+## 2026-04-04 — v9.6.4: UAP Pipeline Integration & Parse-Forest Completion (P0-1)
+
+**Directive:** Fix release pipeline to include `.agent_governance/` in `git add`; complete P0-1 parse-forest reuse by migrating all high-redundancy AST-heavy detectors to `ParsedUnit::ensure_tree()`
+
+**Files modified:**
+- `justfile` *(modified)* — `fast-release` recipe: `git add` now includes `.agent_governance/` directory so governance rule changes enter the release commit
+- `crates/forge/src/slop_hunter.rs` *(modified)* — 11 AST-heavy detectors migrated from `(eng, source: &[u8])` to `(eng, parsed: &ParsedUnit<'_>)` using `ensure_tree()`: `find_js_slop`, `find_python_sqli_slop`, `find_python_ssrf_slop`, `find_python_path_traversal_slop`, `find_java_slop`, `find_js_sqli_slop`, `find_js_ssrf_slop`, `find_js_path_traversal_slop`, `find_csharp_slop`, `find_prototype_merge_sink_slop`, `find_jsx_dangerous_html_slop`; 4 `#[cfg(test)]` byte-wrappers added; 3 test module aliases updated; `find_slop` call sites updated to pass `parsed`
+- `SOVEREIGN_BRIEFING.md` *(modified)* — `find_slop` signature updated to `(lang, &ParsedUnit)` with P0-1 parse-forest note; stale `(lang, source)` reference corrected
+- `Cargo.toml` *(modified)* — version bumped to `9.6.4`
+
+**Commit:** (see tag v9.6.4)
+
+**Status:** P0-1 Phase 2 COMPLETE (Python 4→1 parse, JS 6→1 parse per file). Crucible 156/156 + 3/3. `just audit` ✅.
