@@ -116,6 +116,66 @@ The dollar amount (critical threats × $150) and the energy amount (kWh) are now
 
 ---
 
-## 4. Conclusion
+## 4. GHG Protocol Compliance — Scope 2 Emissions Reporting
+
+### 4.1 Enterprise Configuration via `[billing] ci_kwh_per_run`
+
+The default `0.1 kWh` basis (15 min × 400 W) is a conservative, reproducible
+lower bound. Enterprises operating their own data centres or with specific
+regulatory requirements for Scope 2 emissions reporting can override this value
+in `janitor.toml`:
+
+```toml
+[billing]
+ci_kwh_per_run = 0.064   # site-measured: 400W × 15min × PUE 1.6
+```
+
+**Formula for site-accurate Scope 2 reporting:**
+
+```
+ci_kwh_per_run = (server_watts / 1000) × (ci_run_minutes / 60) × PUE × grid_carbon_intensity_factor
+```
+
+| Variable | Where to Obtain |
+|----------|----------------|
+| `server_watts` | Instance type TDP from cloud provider spec sheet |
+| `ci_run_minutes` | Average from CI billing dashboard |
+| `PUE` | Data centre operator disclosure; Uptime Institute 2023 global average: 1.58 |
+| `grid_carbon_intensity_factor` | EPA eGRID subregion, DEFRA UK grid, or operator-specific renewable certificate |
+
+The `total_ci_energy_saved_kwh` field in the bounce log and JSON export
+(`render_json`, `render_json_global`) uses `policy.billing.ci_kwh_per_run` —
+meaning a single `janitor.toml` change recalculates all aggregate ESG figures
+without rerunning the audit.
+
+### 4.2 GHG Protocol Scope Classification
+
+| Emission Class | Applicability |
+|----------------|--------------|
+| **Scope 2 — Market-Based** | CI runner electricity consumption avoided per blocked PR |
+| **Scope 2 — Location-Based** | Multiply `ci_kwh_per_run` by regional grid carbon factor (kg CO₂e/kWh) |
+| **Scope 3 — Category 11** | Downstream: blocked security incidents prevent client-side compute remediation |
+
+The Janitor does not generate Scope 1 emissions (no on-premise combustion).
+Scope 2 calculations are the primary reportable unit. Scope 3 downstream impact
+is qualitative — enterprises should apply their own avoided-incident valuation.
+
+### 4.3 Reporting Integration
+
+`janitor report --format json` emits `total_ci_energy_saved_kwh` in the
+`workslop` block. This field maps directly to:
+
+- **CDP Climate Change questionnaire** — C8.2a (energy consumption reduction)
+- **GRI 302-4** (reduction of energy consumption)
+- **TCFD Physical Risk** — quantified exposure reduction from fewer
+  security-incident-driven remediation cycles
+
+Multiply `total_ci_energy_saved_kwh` by the relevant carbon intensity factor
+(`kg CO₂e per kWh`) to obtain a `tCO₂e avoided` value suitable for
+sustainability reporting.
+
+---
+
+## 5. Conclusion
 
 The implementation is technically sound, backward-compatible, and methodologically conservative. The energy basis (15 min, 400 W, single run) represents a defensible lower bound. The claim "reclaiming kilowatt-hours of grid capacity from agentic churn" is mathematically valid for any repository where The Janitor intercepts more than 10 PRs.

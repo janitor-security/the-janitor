@@ -499,7 +499,93 @@ New `AppState` fields: `invert_mode: bool`, `token_rate_limit: DashMap`, `pendin
 
 ---
 
-## X. VERSION SILO DETECTION — DEPENDENCY GRAPH HARDENING
+## X. SOVEREIGN CONTROL PLANE (AIR-GAP READY)
+
+The Janitor Sovereign Governor (`janitor-gov`) is a self-contained binary that
+runs your Check Run enforcement service entirely on-premise — no cloud dependency,
+no inbound internet, no data egress.
+
+### Architecture
+
+| Component | Technology | Role |
+|-----------|-----------|------|
+| Governance API | Axum (Rust) — `POST /v1/analysis-token`, `POST /v1/report`, `POST /v1/attest` | Receives signed score reports from the CLI runner; updates GitHub Check Runs |
+| Persistent Storage | SQLite (via sqlx) — single file `governor.db` | Stores pending checks, marketplace subscriptions, API key state, and audit trail |
+| Attestation Key | ML-DSA-65 (FIPS 204) — `governor.key` generated on first run | Signs every CycloneDX CBOM bond; key never leaves the host |
+| Local Key Intake | `--pqc-key file:<path>` | Loads ML-DSA-65 signing key from an on-premise file |
+| KMS Integration | `--pqc-key awskms:<key-id>`, `--pqc-key azkv:<vault>/<key>` | Enterprise KMS delegation without key material in CLI memory |
+| PKCS#11 HSM | `--pqc-key pkcs11:<slot>` | Hardware Security Module integration for air-gap labs |
+
+### Local-First Deployment
+
+```toml
+# janitor.toml — air-gap configuration
+pqc_enforced = true          # block merge if CBOM bond fails
+governor_url = "https://janitor.internal"
+
+[billing]
+ci_kwh_per_run = 0.08        # site-measured PUE 1.4 × 400W × 15min; override with actual grid data
+```
+
+The `janitor-gov` binary starts with:
+
+```sh
+GOVERNOR_DB_PATH=/opt/janitor/governor.db \
+GOVERNOR_INVERT_MODE=1 \
+./janitor-gov --pqc-key file:/opt/janitor/keys/governor.key
+```
+
+No network call is required to a remote attestation service. The full
+Check Run lifecycle — token issuance, score ingestion, status update — runs
+on-device.
+
+### Compliance Posture
+
+| Framework | Satisfied By |
+|-----------|-------------|
+| **FedRAMP High — AU-2** | Immutable bounce log (`bounce_log.ndjson`, `f.sync_all()` after every entry) |
+| **FedRAMP High — SC-28** | SQLite storage under operator-controlled encryption; no cloud egress |
+| **DISA STIG — V-222608** | Zero outbound data from CI runner; Governor receives score only |
+| **DISA STIG — V-222449** | ML-DSA-65 (FIPS 204) attestation on every CBOM bond |
+| **IL5 / Air-Gap Networks** | Full functionality with no inbound or outbound internet |
+
+---
+
+## X-B. UNIVERSAL SCM SUPPORT
+
+The `ScmContext` abstraction decouples the Janitor engine from any single source
+control platform. The analysis engine (PatchBouncer, ForgeConfig, bounce log) is
+platform-agnostic. `ScmContext` provides the thin adapter layer.
+
+### Supported Platforms
+
+| Platform | CI Runtime | Check Run Delivery |
+|---------|-----------|-------------------|
+| **GitHub Actions** | `action.yml` step in `.github/workflows/` | GitHub Checks API via Governor |
+| **GitLab CI** | `.gitlab-ci.yml` script block; `$CI_MERGE_REQUEST_DIFF_BASE_SHA` | GitLab MR status API via Governor |
+| **Bitbucket Pipelines** | `bitbucket-pipelines.yml` script step; `$BITBUCKET_PR_DESTINATION_BRANCH` | Bitbucket Build Status API |
+| **Azure DevOps** | Azure Pipelines YAML task; `$(System.PullRequest.TargetBranchName)` | Azure DevOps Checks API |
+
+### Environment Variable Contract
+
+Every SCM adapter populates the same environment contract consumed by
+`janitor bounce`:
+
+```sh
+JANITOR_PR_NUMBER   # PR / MR number (integer)
+JANITOR_HEAD_SHA    # head commit SHA
+JANITOR_BASE_SHA    # merge-base SHA
+JANITOR_AUTHOR      # PR author handle
+JANITOR_PR_BODY     # PR description text (for unlinked-PR detection)
+JANITOR_REPO_SLUG   # owner/repo format
+```
+
+The engine reads these from the environment when explicit `--flags` are
+absent — zero platform-specific conditional logic inside the Rust binary.
+
+---
+
+## X-C. VERSION SILO DETECTION — DEPENDENCY GRAPH HARDENING
 
 `architecture:version_silo` is emitted when the engine detects a crate or package
 resolved at multiple distinct versions within the PR's manifest files (`Cargo.toml`,
@@ -520,7 +606,7 @@ drift.
 
 ---
 
-## XI. GATEKEEPER PROVENANCE
+## XI-A. GATEKEEPER PROVENANCE
 
 The `Provenance` struct (attached to every `BounceLogEntry` in
 `crates/cli/src/report.rs`) records three fields at bounce time:

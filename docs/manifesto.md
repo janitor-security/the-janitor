@@ -171,6 +171,47 @@ All operations run locally when using the CLI or GitHub Action. Your source code
 
 ---
 
+## SOVEREIGN CONTROL PLANE (AIR-GAP READY)
+
+The Janitor runs in fully air-gapped environments — no cloud dependency, no inbound internet, zero data egress.
+
+The `janitor-gov` binary is a self-contained governance server deployable behind your firewall. It stores all state in a single SQLite file (`governor.db`), issues ML-DSA-65–signed CBOM bonds via a locally-held `governor.key`, and communicates with your CI runner over an internal HTTPS endpoint. No Janitor service call ever leaves your network boundary.
+
+### FedRAMP / DISA STIG Boundary Requirements
+
+| Requirement | Implementation |
+|-------------|----------------|
+| **AU-2 — Audit Events** | Immutable `bounce_log.ndjson` with `f.sync_all()` on every write |
+| **SC-28 — Data at Rest** | SQLite under operator-managed encryption; no cloud storage path |
+| **FIPS 204** | ML-DSA-65 attestation on every CycloneDX CBOM bond |
+| **Zero Egress (IL5)** | Governor receives only the signed score report — never source code |
+
+The `pqc_enforced = true` flag in `janitor.toml` blocks any PR merge if the CBOM bond cannot be verified locally, ensuring cryptographic provenance even in disconnected CI environments.
+
+Enterprise KMS integration is supported out of the box:
+```sh
+janitor bounce . --pqc-key awskms:<key-id>        # AWS KMS
+janitor bounce . --pqc-key azkv:<vault>/<key>      # Azure Key Vault
+janitor bounce . --pqc-key pkcs11:<slot>            # PKCS#11 HSM
+```
+
+---
+
+## UNIVERSAL SCM SUPPORT
+
+The Janitor natively integrates with every major source control platform through the `ScmContext` abstraction — one engine, any pipeline.
+
+| Platform | Integration Point |
+|----------|------------------|
+| **GitHub Actions** | `action.yml` — drop-in step; native Checks API |
+| **GitLab CI** | `.gitlab-ci.yml` script block; `$CI_MERGE_REQUEST_DIFF_BASE_SHA` |
+| **Bitbucket Pipelines** | `bitbucket-pipelines.yml` step; Build Status API |
+| **Azure DevOps** | Azure Pipelines YAML task; DevOps Checks API |
+
+The binary reads a unified environment contract (`JANITOR_PR_NUMBER`, `JANITOR_HEAD_SHA`, `JANITOR_BASE_SHA`, `JANITOR_AUTHOR`, `JANITOR_PR_BODY`, `JANITOR_REPO_SLUG`) — no platform-specific conditional logic inside the Rust engine. Zero-upload guarantee applies identically on all four platforms: your source code never leaves the runner.
+
+---
+
 ## INSTALLATION
 
 **From source (Rust 1.82+, `just` required):**

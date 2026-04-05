@@ -43,6 +43,7 @@ audit:
 	cargo clippy --workspace -- -D warnings
 	cargo check --workspace
 	cargo test --workspace
+	./tools/verify_doc_parity.sh
 	echo "✅ System Clean."
 
 build:

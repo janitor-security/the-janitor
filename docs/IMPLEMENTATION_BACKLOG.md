@@ -5,6 +5,25 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — Fortune 500 Synchronization Strike (v9.9.4)
+
+**Directive:** Full codebase audit + documentation parity enforcement. Expose
+v9.x architecture (Sovereign Governor, ScmContext, KMS Key Custody) in public
+docs. Harden ESG ledger with GHG Protocol guidance. Add documentation parity
+gate to `just audit`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.4`
+- `docs/architecture.md` *(modified)* — added Section X: Sovereign Control Plane (air-gap, FedRAMP/DISA STIG compliance table, KMS key delegation); added Section X-B: Universal SCM Support (GitLab CI, Bitbucket, Azure DevOps, ScmContext env contract)
+- `docs/manifesto.md` *(modified)* — added "Sovereign Control Plane (Air-Gap Ready)" section; added "Universal SCM Support" section; both expose FedRAMP boundary compliance and multi-platform table
+- `docs/energy_conservation_audit.md` *(modified)* — added Section 4: GHG Protocol Compliance with `[billing] ci_kwh_per_run` override documentation, PUE formula, Scope 2/3 classification table, CDP/GRI 302-4/TCFD mapping
+- `tools/verify_doc_parity.sh` *(created)* — documentation parity gate; extracts version from Cargo.toml; greps README.md and docs/index.md; exits 1 on version drift
+- `justfile` *(modified)* — `audit` recipe now calls `./tools/verify_doc_parity.sh` as final step; stale docs now block release
+
+**Commit:** pending `just fast-release 9.9.4`
+
+---
+
 ## 2026-04-05 — Cryptographic Provenance & Strategic Seeding (v9.9.3)
 
 **Directive:** Execute P1-4 key-custody provenance, harden docs deployment
