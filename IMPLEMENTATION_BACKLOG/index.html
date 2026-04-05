@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-cryptographic-provenance-strategic-seeding-v993" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Cryptographic Provenance &amp; Strategic Seeding (v9.9.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-esg-egress-key-custody-v992" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — ESG Egress &amp; Key Custody (v9.9.2)
@@ -935,6 +944,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-cryptographic-provenance-strategic-seeding-v993" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Cryptographic Provenance &amp; Strategic Seeding (v9.9.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-esg-egress-key-custody-v992" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — ESG Egress &amp; Key Custody (v9.9.2)
@@ -1243,6 +1261,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-05-cryptographic-provenance-strategic-seeding-v993">2026-04-05 — Cryptographic Provenance &amp; Strategic Seeding (v9.9.3)</h2>
+<p><strong>Directive:</strong> Execute P1-4 key-custody provenance, harden docs deployment
+against <code>gh-pages</code> ref-lock races, seed the innovation log with three new P0
+architecture breakthroughs, and release <code>v9.9.3</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.3</code>
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — added stable custody labels for PQC key sources
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — bounce log now records typed <code>pqc_key_source</code> from the parsed key source
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>BounceLogEntry</code> carries <code>pqc_key_source</code>; step summary renders <code>Key Custody: &lt;type&gt;</code>
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — CycloneDX CBOM now emits <code>janitor:pqc_key_source</code> properties for deterministic attestation provenance
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> now delegates docs publication to <code>just deploy-docs</code>; <code>deploy-docs</code> retries <code>mkdocs gh-deploy --force</code> up to 3 times with 2-second backoff
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>P1-4</code> removed as completed; seeded <code>P0-4</code>, <code>P0-5</code>, and <code>P0-6</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.3</code></p>
 <hr />
 <h2 id="2026-04-05-esg-egress-key-custody-v992">2026-04-05 — ESG Egress &amp; Key Custody (v9.9.2)</h2>
 <p><strong>Directive:</strong> Surface the energy audit in public docs, harden version syncing,

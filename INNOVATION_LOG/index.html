@@ -592,6 +592,39 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="P0 — Core Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-4-deterministic-slopsquating-interceptor" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-4: Deterministic Slopsquating Interceptor
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-5-wasm-byor-bring-your-own-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-5: Wasm BYOR (Bring Your Own Rule)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-6-fips-205-slh-dsa-stateless-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-6: FIPS 205 (SLH-DSA) Stateless Signatures
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -608,15 +641,6 @@
   <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
     <span class="md-ellipsis">
       P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-4-attestation-key-provenance-envelope" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-4: Attestation Key Provenance Envelope
     </span>
   </a>
   
@@ -748,6 +772,39 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="P0 — Core Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-4-deterministic-slopsquating-interceptor" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-4: Deterministic Slopsquating Interceptor
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-5-wasm-byor-bring-your-own-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-5: Wasm BYOR (Bring Your Own Rule)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-6-fips-205-slh-dsa-stateless-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-6: FIPS 205 (SLH-DSA) Stateless Signatures
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -764,15 +821,6 @@
   <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
     <span class="md-ellipsis">
       P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-4-attestation-key-provenance-envelope" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-4: Attestation Key Provenance Envelope
     </span>
   </a>
   
@@ -857,6 +905,61 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
+<h3 id="p0-4-deterministic-slopsquating-interceptor">P0-4: Deterministic Slopsquating Interceptor</h3>
+<p><strong>Class:</strong> AI Supply Chain Defense
+<strong>Inspired by:</strong> package hallucination drift observed in AI-authored import surfaces</p>
+<p><strong>Observation:</strong>
+The engine can already flag zombie dependencies after manifests land, but it has
+no O(1) pre-resolution gate for LLM-hallucinated package namespaces at the AST
+import layer. That leaves a gap between the first fake import and later manifest
+or lockfile validation.</p>
+<p><strong>Proposal:</strong>
+Implement an <code>rkyv</code>-backed Bloom filter of known LLM-hallucinated package
+namespaces and cross-reference it against AST import nodes, emitting
+<code>security:slopsquat_injection</code> as a critical bounce when a namespace matches.</p>
+<p><strong>Security impact:</strong>
+Intercepts typo-free AI supply-chain injections before dependency resolution,
+shrinking the window where a fabricated package name can enter review or artifact
+generation.</p>
+<p><strong>Implementation path:</strong>
+Add a compact namespace filter in <code>crates/common/src/wisdom.rs</code>, load it into
+<code>PatchBouncer</code>, and thread import-node lookups through <code>slop_hunter.rs</code> for
+Python, JS/TS, Rust, Go, and package-manager manifests.</p>
+<h3 id="p0-5-wasm-byor-bring-your-own-rule">P0-5: Wasm BYOR (Bring Your Own Rule)</h3>
+<p><strong>Class:</strong> Enterprise Governance
+<strong>Inspired by:</strong> repeated customer demand for proprietary detector logic without forks</p>
+<p><strong>Observation:</strong>
+Enterprises that need private AST rules must currently fork the engine or wait
+for upstream additions. That creates governance drift, slows adoption, and makes
+customer-specific policy impossible to ship without source divergence.</p>
+<p><strong>Proposal:</strong>
+Integrate a lightweight WebAssembly runtime so enterprises can compile
+proprietary AST rules into <code>.wasm</code> modules and mount them via
+<code>janitor bounce --wasm-rules ./corp.wasm</code>, enabling zero-fork custom governance.</p>
+<p><strong>Security impact:</strong>
+Allows closed-world policy enforcement on sovereign infrastructure without
+exposing proprietary heuristics or weakening the deterministic core engine.</p>
+<p><strong>Implementation path:</strong>
+Add a sandboxed Wasm rule host in <code>crates/forge</code>, define a stable ABI for
+serialized findings and parsed-node views, and expose module loading through
+<code>crates/cli/src/main.rs</code> plus policy controls in <code>crates/common/src/policy.rs</code>.</p>
+<h3 id="p0-6-fips-205-slh-dsa-stateless-signatures">P0-6: FIPS 205 (SLH-DSA) Stateless Signatures</h3>
+<p><strong>Class:</strong> Post-Quantum Cryptography
+<strong>Inspired by:</strong> long-horizon CBOM permanence beyond stateful key-management assumptions</p>
+<p><strong>Observation:</strong>
+The current CBOM attestation path relies solely on ML-DSA-65. That is strong,
+but it does not offer a hash-based stateless companion for environments that
+want absolute post-quantum permanence and diversity against lattice-family risk.</p>
+<p><strong>Proposal:</strong>
+Implement the SLH-DSA hash-based signature scheme as a companion to ML-DSA-65 so
+CBOMs can optionally carry a second, stateless FIPS 205 signature.</p>
+<p><strong>Security impact:</strong>
+Introduces cryptographic diversity and immutable long-term verification paths for
+artifact attestations that may need to survive decades of compliance retention.</p>
+<p><strong>Implementation path:</strong>
+Add a parallel signing backend in <code>crates/common/src/pqc.rs</code>, extend the CBOM
+envelope to carry dual-signature metadata, and update <code>verify-cbom</code> to validate
+ML-DSA, SLH-DSA, or both under explicit policy.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="p1-3-wisdom-manifest-is-metadata-not-kev-authority">P1-3: Wisdom Manifest Is Metadata, Not KEV Authority</h3>
 <p><strong>Class:</strong> Infrastructure / Threat Intel Integrity
@@ -875,27 +978,6 @@ binding archive is absent, corrupted, or replaced with manifest-only state.</p>
 <p><strong>Implementation path:</strong>
 Clarify the contract in <code>update-wisdom</code>, the docs CDN bootstrap, and the MCP
 dependency-check surface so archive absence is surfaced immediately.</p>
-<h3 id="p1-4-attestation-key-provenance-envelope">P1-4: Attestation Key Provenance Envelope</h3>
-<p><strong>Class:</strong> Compliance / Attestation Forensics
-<strong>Inspired by:</strong> <code>crates/common/src/pqc.rs</code> and the <code>--pqc-key</code> source split</p>
-<p><strong>Observation:</strong>
-The bounce log currently records only <code>pqc_sig</code>. Once enterprise key custody is
-enabled, auditors will need to distinguish whether a signature was produced by a
-raw on-disk key, AWS KMS, Azure Key Vault, or PKCS#11 hardware without reading
-runner-local configuration.</p>
-<p><strong>Proposal:</strong>
-Add a typed <code>pqc_key_source</code> provenance field to <code>BounceLogEntry</code>, Step Summary,
-and CBOM output. Record the source class (<code>file</code>, <code>aws_kms</code>, <code>azure_key_vault</code>,
-<code>pkcs11</code>) plus a redacted locator hash so custody mode is reviewable without
-leaking key identifiers.</p>
-<p><strong>Security impact:</strong>
-Closes the auditability gap between "signature present" and "signature produced
-under compliant key custody," which is mandatory for regulated procurement and
-post-incident attestation review.</p>
-<p><strong>Implementation path:</strong>
-Extend <code>crates/common/src/pqc.rs</code>, <code>crates/cli/src/report.rs</code>,
-<code>crates/cli/src/cbom.rs</code>, and the Governor report envelope to persist typed
-attestation-key provenance alongside <code>pqc_sig</code>.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
 <p><strong>Class:</strong> Core Engine Enhancement
