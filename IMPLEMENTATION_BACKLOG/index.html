@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-executable-surface-gaps-kev-binding-v980" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-deterministic-pulse-taint-spine-v971" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)
@@ -822,6 +831,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-executable-surface-gaps-kev-binding-v980" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-deterministic-pulse-taint-spine-v971" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)
@@ -1085,6 +1103,22 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-executable-surface-gaps-kev-binding-v980">2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)</h2>
+<p><strong>Directive:</strong> Complete the foundational executable-surface gap sweep,
+realign the detector IDs to the canonical governance taxonomy, harden KEV
+database loading so MCP/CI cannot go blind when <code>wisdom.rkyv</code> is missing, and
+cut <code>v9.8.0</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.8.0</code>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — added Dockerfile <code>RUN ... | bash/sh</code> gate; aligned XML/Proto/Bazel detector IDs to <code>xxe_external_entity</code>, <code>protobuf_any_type_field</code>, and <code>bazel_unverified_http_archive</code>; retained CMake execute-process gate; unit assertions updated
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added TP/TN fixtures for Dockerfile pipe execution and updated TP fragments for XML/Proto/Bazel detector IDs
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — exposed archive loader and added verified KEV database resolution that rejects manifest-only state
+- <code>crates/anatomist/src/manifest.rs</code> <em>(modified)</em> — added fail-closed <code>check_kev_deps_required()</code> for callers that must not silently degrade
+- <code>crates/mcp/src/lib.rs</code> <em>(modified)</em> — <code>janitor_dep_check</code> now fails closed in CI when the KEV database is missing, corrupt, or reduced to <code>wisdom_manifest.json</code> alone; regression test added
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P0-2 marked completed under operator override; former ParsedUnit migration debt moved to P0-3; CT-010 appended</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-deterministic-pulse-taint-spine-v971">2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)</h2>
 <p><strong>Directive:</strong> Replace agentic CT-pulse rule with a deterministic CI gate in
