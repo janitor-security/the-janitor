@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-taint-spine-realization-governance-drift-v990" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Taint Spine Realization &amp; Governance Drift (v9.9.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-executable-surface-gaps-kev-binding-v980" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)
@@ -840,6 +849,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-taint-spine-realization-governance-drift-v990" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Taint Spine Realization &amp; Governance Drift (v9.9.0)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-executable-surface-gaps-kev-binding-v980" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)
@@ -1121,6 +1139,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-05-taint-spine-realization-governance-drift-v990">2026-04-05 — Taint Spine Realization &amp; Governance Drift (v9.9.0)</h2>
+<p><strong>Directive:</strong> Complete P0-1 cross-file taint spine; fix P2-5 governance drift
+in <code>/ciso-pulse</code>; verify Crucible; release v9.9.0.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.0</code>
+- <code>.agent_governance/commands/ciso-pulse.md</code> <em>(modified)</em> — CT-NNN/IDEA-XXX labels and <code>grep -c "CT-"</code> gate removed; protocol rewritten to reflect direct-triage P0/P1/P2 model
+- <code>crates/forge/src/taint_catalog.rs</code> <em>(created)</em> — <code>CatalogView</code> (memmap2 zero-copy), <code>write_catalog</code>, <code>append_record</code>, <code>scan_cross_file_sinks</code> (Python/JS/Java); 8 unit tests
+- <code>crates/forge/src/lib.rs</code> <em>(modified)</em> — <code>pub mod taint_catalog</code> added
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>catalog_path</code> field in <code>PatchBouncer</code>; cross-file taint block wired for <code>py/js/jsx/java</code>; emits <code>security:cross_file_taint_sink</code> at KevCritical
+- <code>crates/forge/Cargo.toml</code> <em>(modified)</em> — <code>tempfile = "3"</code> dev-dependency added
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — TP fixture (<code>cross_file_taint_python_intercepted</code>) + TN fixture (<code>cross_file_taint_python_safe</code>) added
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P0-1 and P2-5 marked <code>[COMPLETED — v9.9.0]</code>
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-executable-surface-gaps-kev-binding-v980">2026-04-04 — Executable Surface Gaps &amp; KEV Binding (v9.8.0)</h2>
 <p><strong>Directive:</strong> Complete the foundational executable-surface gap sweep,

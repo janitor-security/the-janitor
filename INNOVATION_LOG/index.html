@@ -528,9 +528,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-interprocedural-taint-spine" class="md-nav__link">
+  <a href="#p0-1-interprocedural-taint-spine-completed-v990" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Interprocedural Taint Spine
+      P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
     </span>
   </a>
   
@@ -648,9 +648,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-5-governance-command-surface-drift" class="md-nav__link">
+  <a href="#p2-5-governance-command-surface-drift-completed-v990" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-5: Governance Command Surface Drift
+      P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
     </span>
   </a>
   
@@ -735,9 +735,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-interprocedural-taint-spine" class="md-nav__link">
+  <a href="#p0-1-interprocedural-taint-spine-completed-v990" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Interprocedural Taint Spine
+      P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
     </span>
   </a>
   
@@ -855,9 +855,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-5-governance-command-surface-drift" class="md-nav__link">
+  <a href="#p2-5-governance-command-surface-drift-completed-v990" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-5: Governance Command Surface Drift
+      P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
     </span>
   </a>
   
@@ -891,27 +891,15 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-1-interprocedural-taint-spine">P0-1: Interprocedural Taint Spine</h3>
+<h3 id="p0-1-interprocedural-taint-spine-completed-v990">P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]</h3>
 <p><strong>Class:</strong> Detection Depth / Performance
 <strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs::find_slop</code></p>
 <p><strong>Observation:</strong>
-Intra-file Go SQLi taint confirmation implemented in v9.7.1: <code>track_taint_go_sqli</code>
-in <code>crates/forge/src/taint_propagate.rs</code> confirms parameter→SQL-sink flows for
-the Go-3 gate. Cross-file 3-hop propagation is not yet implemented; taint
-summaries cannot follow values through helper functions or module boundaries.</p>
-<p><strong>Proposal:</strong>
-Extend <code>taint_propagate.rs</code> to emit <code>TaintExportRecord</code> entries into
-<code>.janitor/taint_catalog.rkyv</code> and implement a 3-hop consumer in <code>PatchBouncer</code>
-that follows taint across file boundaries.</p>
-<p><strong>Security impact:</strong>
-Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
-chains that route tainted values through one or two helper call levels — the
-dominant real-world pattern in enterprise middleware.</p>
-<p><strong>Implementation path:</strong>
-1. Add <code>TaintExportRecord</code> emission in <code>track_taint_go_sqli</code> after confirmed flow.
-2. Implement <code>taint_catalog.rs</code> in <code>crates/forge/src/</code> for rkyv-backed catalog I/O.
-3. Wire catalog lookups into <code>find_python_slop_ast</code>, <code>find_java_slop</code>, and
-   <code>find_js_sqli_slop</code> for cross-file confirmation.</p>
+Intra-file Go SQLi taint confirmation implemented in v9.7.1. Cross-file 3-hop
+propagation completed in v9.9.0: <code>taint_catalog.rs</code> provides zero-copy rkyv
+I/O; <code>PatchBouncer</code> maps the catalog and scans Python/JS/Java diffs for calls
+to cataloged sink functions. <code>security:cross_file_taint_sink</code> fires at
+KevCritical (+150 pts) on confirmed multi-file taint paths.</p>
 <h3 id="p0-2-executable-surface-gaps-completed-v980">P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]</h3>
 <p><strong>Class:</strong> Foundational Attack Surface
 <strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs</code> executable-surface review</p>
@@ -1074,25 +1062,12 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
-<h3 id="p2-5-governance-command-surface-drift">P2-5: Governance Command Surface Drift</h3>
+<h3 id="p2-5-governance-command-surface-drift-completed-v990">P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]</h3>
 <p><strong>Class:</strong> Operational Integrity
 <strong>Inspired by:</strong> <code>.agent_governance/commands/ciso-pulse.md</code></p>
-<p><strong>Observation:</strong>
-The direct-triage pivot removed CT numbering and the 10-count pulse gate from
-the live workflow, but <code>.agent_governance/commands/ciso-pulse.md</code> still
-documents the deleted <code>CT-</code> backlog model and the removed <code>grep -c "CT-"</code>
-release check.</p>
-<p><strong>Proposal:</strong>
-Rewrite or remove the stale command surface so governance commands match the
-live direct-triage operating model and release behavior.</p>
-<p><strong>Security impact:</strong>
-Prevents operator and agent drift where an obsolete governance command could
-reintroduce dead release gates or misclassify backlog work during incident
-response.</p>
-<p><strong>Implementation path:</strong>
-Audit <code>.agent_governance/commands/ciso-pulse.md</code> and adjacent command docs;
-delete the obsolete pulse workflow or replace it with a direct-triage
-compaction command that reflects current release rules.</p>
+<p>Rewritten in v9.9.0: CT-NNN numbering, IDEA-XXX labels, and the <code>grep -c "CT-"</code>
+release gate removed. Protocol now reflects the direct-triage P0/P1/P2
+compaction model. CI gate updated to verify P0/P1/P2 structure.</p>
 
 
 
