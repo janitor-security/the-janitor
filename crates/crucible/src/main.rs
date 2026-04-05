@@ -1605,4 +1605,101 @@ index 1111111..2222222 100644
             "Crucible: KEV dependency fixture must contribute at least 150 points"
         );
     }
+
+    // ── P0-1 Phase 3: Cross-File Taint Spine — Crucible fixtures ────────────
+
+    /// True-positive: Python diff calls a cataloged sink helper with a non-literal arg.
+    /// Expects `security:cross_file_taint_sink` at KevCritical (+150 pts).
+    #[test]
+    fn cross_file_taint_python_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        // Catalog entry: `build_query` propagates UserInput taint to DatabaseResult sink.
+        let records = vec![TaintExportRecord {
+            symbol_name: "build_query".to_string(),
+            file_path: "helpers/db.py".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "user_id".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: app.py calls build_query(request_param) — tainted argument.
+        let patch = "diff --git a/app.py b/app.py\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/app.py\n\
+                     +++ b/app.py\n\
+                     @@ -0,0 +1,4 @@\n\
+                     +def handle(request):\n\
+                     +    user_id = request.args[\"uid\"]\n\
+                     +    result = db.execute(build_query(user_id))\n\
+                     +    return result\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: cross_file_taint_sink must fire when cataloged sink helper is called with tainted arg"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
+
+    /// True-negative: Python diff calls a function NOT in the catalog — must be silent.
+    #[test]
+    fn cross_file_taint_python_safe() {
+        use common::taint::{TaintExportRecord, TaintKind};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        // Catalog only contains `other_helper`, not `safe_transform`.
+        let records = vec![TaintExportRecord {
+            symbol_name: "other_helper".to_string(),
+            file_path: "helpers.py".to_string(),
+            tainted_params: vec![],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: false,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: calls safe_transform — not in catalog, must not fire.
+        let patch = "diff --git a/app.py b/app.py\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/app.py\n\
+                     +++ b/app.py\n\
+                     @@ -0,0 +1,3 @@\n\
+                     +def process(data):\n\
+                     +    return safe_transform(data)\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: cross_file_taint_sink must not fire for a function absent from the catalog"
+        );
+    }
 }

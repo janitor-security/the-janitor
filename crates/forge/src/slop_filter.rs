@@ -551,6 +551,10 @@ pub fn split_patch_by_file(patch: &str) -> Vec<&str> {
 pub struct PatchBouncer {
     repo_root: Option<PathBuf>,
     wisdom_path: Option<PathBuf>,
+    /// Path to `.janitor/taint_catalog.rkyv` — loaded for cross-file taint
+    /// analysis on Python / JS / Java diffs.  `None` in the default (no-root)
+    /// configuration; set by [`for_workspace`].
+    catalog_path: Option<PathBuf>,
     deep_scan: bool,
 }
 
@@ -563,6 +567,7 @@ impl PatchBouncer {
         Self {
             repo_root: Some(root.to_path_buf()),
             wisdom_path: Some(root.join(".janitor").join("wisdom.rkyv")),
+            catalog_path: Some(root.join(".janitor").join("taint_catalog.rkyv")),
             deep_scan,
         }
     }
@@ -1076,6 +1081,35 @@ impl PRBouncer for PatchBouncer {
                     domain: crate::metadata::DOMAIN_FIRST_PARTY,
                     severity: crate::slop_hunter::Severity::KevCritical,
                 });
+            }
+        }
+
+        // Cross-file taint spine (P0-1 Phase 3): for Python, JS/JSX, and Java
+        // files, consult the taint catalog to confirm multi-file taint flows.
+        // Each confirmed call to a cataloged sink function with a non-literal
+        // argument emits `security:cross_file_taint_sink` at KevCritical.
+        // Fail-open: if the catalog does not exist or fails to load, this block
+        // is silently skipped — existing per-language detectors remain active.
+        if matches!(ext, "py" | "js" | "jsx" | "java") {
+            if let Some(catalog_path) = self.catalog_path.as_deref() {
+                if let Some(catalog) = crate::taint_catalog::CatalogView::open(catalog_path) {
+                    for sink in
+                        crate::taint_catalog::scan_cross_file_sinks(ext, source, &tree, &catalog)
+                    {
+                        raw_findings.push(crate::slop_hunter::SlopFinding {
+                            start_byte: sink.start_byte,
+                            end_byte: sink.end_byte,
+                            description: format!(
+                                "security:cross_file_taint_sink — call to `{}` passes \
+                                 user-controlled argument to a confirmed multi-file sink; \
+                                 3-hop taint path confirmed in catalog — CISA KEV class",
+                                sink.callee_name
+                            ),
+                            domain: crate::metadata::DOMAIN_FIRST_PARTY,
+                            severity: crate::slop_hunter::Severity::KevCritical,
+                        });
+                    }
+                }
             }
         }
 

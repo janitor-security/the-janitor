@@ -7,32 +7,17 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-1: Interprocedural Taint Spine
+### P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
 
 **Class:** Detection Depth / Performance
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
 
 **Observation:**
-Intra-file Go SQLi taint confirmation implemented in v9.7.1: `track_taint_go_sqli`
-in `crates/forge/src/taint_propagate.rs` confirms parameter→SQL-sink flows for
-the Go-3 gate. Cross-file 3-hop propagation is not yet implemented; taint
-summaries cannot follow values through helper functions or module boundaries.
-
-**Proposal:**
-Extend `taint_propagate.rs` to emit `TaintExportRecord` entries into
-`.janitor/taint_catalog.rkyv` and implement a 3-hop consumer in `PatchBouncer`
-that follows taint across file boundaries.
-
-**Security impact:**
-Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
-chains that route tainted values through one or two helper call levels — the
-dominant real-world pattern in enterprise middleware.
-
-**Implementation path:**
-1. Add `TaintExportRecord` emission in `track_taint_go_sqli` after confirmed flow.
-2. Implement `taint_catalog.rs` in `crates/forge/src/` for rkyv-backed catalog I/O.
-3. Wire catalog lookups into `find_python_slop_ast`, `find_java_slop`, and
-   `find_js_sqli_slop` for cross-file confirmation.
+Intra-file Go SQLi taint confirmation implemented in v9.7.1. Cross-file 3-hop
+propagation completed in v9.9.0: `taint_catalog.rs` provides zero-copy rkyv
+I/O; `PatchBouncer` maps the catalog and scans Python/JS/Java diffs for calls
+to cataloged sink functions. `security:cross_file_taint_sink` fires at
+KevCritical (+150 pts) on confirmed multi-file taint paths.
 
 ### P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]
 
@@ -252,27 +237,11 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
 
-### P2-5: Governance Command Surface Drift
+### P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
 
 **Class:** Operational Integrity
 **Inspired by:** `.agent_governance/commands/ciso-pulse.md`
 
-**Observation:**
-The direct-triage pivot removed CT numbering and the 10-count pulse gate from
-the live workflow, but `.agent_governance/commands/ciso-pulse.md` still
-documents the deleted `CT-` backlog model and the removed `grep -c "CT-"`
-release check.
-
-**Proposal:**
-Rewrite or remove the stale command surface so governance commands match the
-live direct-triage operating model and release behavior.
-
-**Security impact:**
-Prevents operator and agent drift where an obsolete governance command could
-reintroduce dead release gates or misclassify backlog work during incident
-response.
-
-**Implementation path:**
-Audit `.agent_governance/commands/ciso-pulse.md` and adjacent command docs;
-delete the obsolete pulse workflow or replace it with a direct-triage
-compaction command that reflects current release rules.
+Rewritten in v9.9.0: CT-NNN numbering, IDEA-XXX labels, and the `grep -c "CT-"`
+release gate removed. Protocol now reflects the direct-triage P0/P1/P2
+compaction model. CI gate updated to verify P0/P1/P2 structure.

@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — Taint Spine Realization & Governance Drift (v9.9.0)
+
+**Directive:** Complete P0-1 cross-file taint spine; fix P2-5 governance drift
+in `/ciso-pulse`; verify Crucible; release v9.9.0.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.0`
+- `.agent_governance/commands/ciso-pulse.md` *(modified)* — CT-NNN/IDEA-XXX labels and `grep -c "CT-"` gate removed; protocol rewritten to reflect direct-triage P0/P1/P2 model
+- `crates/forge/src/taint_catalog.rs` *(created)* — `CatalogView` (memmap2 zero-copy), `write_catalog`, `append_record`, `scan_cross_file_sinks` (Python/JS/Java); 8 unit tests
+- `crates/forge/src/lib.rs` *(modified)* — `pub mod taint_catalog` added
+- `crates/forge/src/slop_filter.rs` *(modified)* — `catalog_path` field in `PatchBouncer`; cross-file taint block wired for `py/js/jsx/java`; emits `security:cross_file_taint_sink` at KevCritical
+- `crates/forge/Cargo.toml` *(modified)* — `tempfile = "3"` dev-dependency added
+- `crates/crucible/src/main.rs` *(modified)* — TP fixture (`cross_file_taint_python_intercepted`) + TN fixture (`cross_file_taint_python_safe`) added
+- `docs/INNOVATION_LOG.md` *(modified)* — P0-1 and P2-5 marked `[COMPLETED — v9.9.0]`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Executable Surface Gaps & KEV Binding (v9.8.0)
 
 **Directive:** Complete the foundational executable-surface gap sweep,
