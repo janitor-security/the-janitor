@@ -596,15 +596,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-4-deterministic-slopsquating-interceptor" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-4: Deterministic Slopsquating Interceptor
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-5-wasm-byor-bring-your-own-rule" class="md-nav__link">
     <span class="md-ellipsis">
       P0-5: Wasm BYOR (Bring Your Own Rule)
@@ -692,6 +683,15 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-signed-wisdom-feed-provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Signed Wisdom Feed Provenance
     </span>
   </a>
   
@@ -776,15 +776,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-4-deterministic-slopsquating-interceptor" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-4: Deterministic Slopsquating Interceptor
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-5-wasm-byor-bring-your-own-rule" class="md-nav__link">
     <span class="md-ellipsis">
       P0-5: Wasm BYOR (Bring Your Own Rule)
@@ -877,6 +868,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#p2-5-signed-wisdom-feed-provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Signed Wisdom Feed Provenance
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -905,26 +905,6 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-4-deterministic-slopsquating-interceptor">P0-4: Deterministic Slopsquating Interceptor</h3>
-<p><strong>Class:</strong> AI Supply Chain Defense
-<strong>Inspired by:</strong> package hallucination drift observed in AI-authored import surfaces</p>
-<p><strong>Observation:</strong>
-The engine can already flag zombie dependencies after manifests land, but it has
-no O(1) pre-resolution gate for LLM-hallucinated package namespaces at the AST
-import layer. That leaves a gap between the first fake import and later manifest
-or lockfile validation.</p>
-<p><strong>Proposal:</strong>
-Implement an <code>rkyv</code>-backed Bloom filter of known LLM-hallucinated package
-namespaces and cross-reference it against AST import nodes, emitting
-<code>security:slopsquat_injection</code> as a critical bounce when a namespace matches.</p>
-<p><strong>Security impact:</strong>
-Intercepts typo-free AI supply-chain injections before dependency resolution,
-shrinking the window where a fabricated package name can enter review or artifact
-generation.</p>
-<p><strong>Implementation path:</strong>
-Add a compact namespace filter in <code>crates/common/src/wisdom.rs</code>, load it into
-<code>PatchBouncer</code>, and thread import-node lookups through <code>slop_hunter.rs</code> for
-Python, JS/TS, Rust, Go, and package-manager manifests.</p>
 <h3 id="p0-5-wasm-byor-bring-your-own-rule">P0-5: Wasm BYOR (Bring Your Own Rule)</h3>
 <p><strong>Class:</strong> Enterprise Governance
 <strong>Inspired by:</strong> repeated customer demand for proprietary detector logic without forks</p>
@@ -1047,6 +1027,24 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
+<h3 id="p2-5-signed-wisdom-feed-provenance">P2-5: Signed Wisdom Feed Provenance</h3>
+<p><strong>Class:</strong> Threat Intel Supply Integrity
+<strong>Inspired by:</strong> slopsquat seed distribution now depends on unsigned archive transport</p>
+<p><strong>Observation:</strong>
+<code>update-wisdom</code> can fetch a structurally valid <code>wisdom.rkyv</code>, but the archive
+still lacks an authenticated provenance envelope. A CDN or mirror compromise can
+swap the Bloom filter or KEV rules without tripping semantic validation.</p>
+<p><strong>Proposal:</strong>
+Add detached-signature verification for <code>wisdom.rkyv</code> plus manifest-level hash
+pinning so threat-intel updates are rejected unless the archive hash and signer
+identity match policy.</p>
+<p><strong>Security impact:</strong>
+Prevents adversarial replacement of slopsquat seeds or KEV rules and gives CI a
+cryptographically provable trust chain for threat intelligence ingestion.</p>
+<p><strong>Implementation path:</strong>
+Extend <code>crates/common/src/wisdom.rs</code> with signed manifest metadata, publish
+<code>.sig</code> artifacts under <code>docs/v1/</code>, and hard-fail <code>update-wisdom --ci-mode</code> when
+signature verification fails.</p>
 
 
 
