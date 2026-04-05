@@ -7,73 +7,6 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-1: Interprocedural Taint Spine [COMPLETED — v9.9.0]
-
-**Class:** Detection Depth / Performance
-**Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
-
-**Observation:**
-Intra-file Go SQLi taint confirmation implemented in v9.7.1. Cross-file 3-hop
-propagation completed in v9.9.0: `taint_catalog.rs` provides zero-copy rkyv
-I/O; `PatchBouncer` maps the catalog and scans Python/JS/Java diffs for calls
-to cataloged sink functions. `security:cross_file_taint_sink` fires at
-KevCritical (+150 pts) on confirmed multi-file taint paths.
-
-### P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]
-
-**Class:** Foundational Attack Surface
-**Inspired by:** `crates/forge/src/slop_hunter.rs` executable-surface review
-
-**Observation:**
-Foundational build and control-plane surfaces needed first-class intercepts for
-Dockerfile shell piping, XML external entities, `google.protobuf.Any`, Bazel
-remote fetch integrity, and CMake command interpolation.
-
-**Proposal:**
-Implement the five gates directly in `slop_hunter.rs`, prove them in Crucible,
-and bind their detector IDs to the canonical security taxonomy used by the
-governance layer.
-
-**Security impact:**
-Closes the baseline executable ingress surfaces used by build-time RCE,
-deserialization confusion, XXE SSRF/file disclosure, and supply-chain archive
-substitution.
-
-**Implementation path:**
-Completed in `v9.8.0`: detector IDs aligned to
-`security:dockerfile_pipe_execution`,
-`security:xxe_external_entity`,
-`security:protobuf_any_type_field`,
-`security:bazel_unverified_http_archive`, and
-`security:cmake_execute_process_injection`, with TP/TN Crucible coverage.
-
-### P0-3: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
-
-**Class:** Architecture / Performance
-**Inspired by:** `crates/forge/src/slop_hunter.rs` Phase 4–7 language gates
-
-**Observation:**
-12 single-language AST detectors (`find_go_slop`, `find_ruby_slop`,
-`find_bash_slop`, `find_php_slop`, `find_kotlin_slop`, `find_scala_slop`,
-`find_swift_slop`, `find_lua_slop`, `find_nix_slop`, `find_gdscript_slop`,
-`find_objc_slop`, `find_rust_slop`) still create their own `tree_sitter::Parser`
-instead of using `ParsedUnit::ensure_tree()`. This blocks multi-phase detector
-sharing for those languages and diverges from the P0-1 architecture.
-
-**Proposal:**
-Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to
-`(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the `ensure_tree` pattern.
-Add `_bytes_test` wrappers and update dispatch aliases.
-
-**Security impact:**
-Enables multi-phase taint tracking for Go, Ruby, PHP, Kotlin, Scala, Swift, Lua,
-Nix, GDScript, ObjC, and Rust — same TP gains as the Python/Java/JS migration.
-
-**Implementation path:**
-Modify each of the 12 functions in `crates/forge/src/slop_hunter.rs`. Update
-`find_slop()` dispatch to pass `parsed` instead of `source`. Add
-`ParsedUnit::unparsed()` test wrappers for each migrated function.
-
 ## P1 — Compliance / Integration
 
 ### P1-1: KMS / HSM Key Sources for `--pqc-key`
@@ -97,28 +30,6 @@ protocol or exposing raw private key bytes on runner disks.
 **Implementation path:**
 Introduce a key-source abstraction and a thin `pqc-kms` integration crate for
 PKCS#11, AWS KMS, and Azure Key Vault backends.
-
-### P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
-
-**Class:** Portability / Ecosystem
-**Inspired by:** GitHub-specific env resolution in CLI and Action paths
-
-**Observation:**
-Bounce execution is still heavily coupled to GitHub environment variables and
-App metadata, limiting portability to GitLab, Bitbucket, Azure DevOps, and
-generic on-prem CI runners.
-
-**Proposal:**
-Introduce a provider-neutral `ScmContext` that normalizes commit SHA, repo
-slug, PR number, refs, and auth tokens across supported SCM providers.
-
-**Security impact:**
-Expands zero-upload deployment into multi-SCM enterprises without forking the
-attestation model per CI platform.
-
-**Implementation path:**
-Add `crates/common/src/scm.rs`, teach CLI entrypoints to consume it, and add
-fixture-based env tests for each provider.
 
 ### P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
 
@@ -236,12 +147,3 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 **Implementation path:**
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
-
-### P2-5: Governance Command Surface Drift [COMPLETED — v9.9.0]
-
-**Class:** Operational Integrity
-**Inspired by:** `.agent_governance/commands/ciso-pulse.md`
-
-Rewritten in v9.9.0: CT-NNN numbering, IDEA-XXX labels, and the `grep -c "CT-"`
-release gate removed. Protocol now reflects the direct-triage P0/P1/P2
-compaction model. CI gate updated to verify P0/P1/P2 structure.

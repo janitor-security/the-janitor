@@ -43,6 +43,7 @@
 # ------------------------------------------------------------------------------
 .janitor/
 *.rkyv
+!docs/v1/wisdom.rkyv
 
 
 # ------------------------------------------------------------------------------
@@ -85,6 +86,7 @@ RUNBOOK.md
 .agents/
 .codex/
 AGENTS.md
+SOVEREIGN_BRIEFING.md
 .cursor/
 .windsurf/
 # Machine-local Claude Code state — never commit.

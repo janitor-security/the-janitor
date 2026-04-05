@@ -115,10 +115,7 @@ fast-release version: sync-versions
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
 	git push origin HEAD:main "v{{version}}"
 	git push origin "v${MAJOR}" --force
-	"/mnt/c/Program Files/GitHub CLI/gh.exe" release create v{{version}} target/release/janitor \
-		--title "v{{version}} - The Industrial Pivot" \
-		--notes-file README.md \
-		--latest
+	gh release create v{{version}} --generate-notes --title "The Janitor v{{version}}"
 	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
 	echo "💀 Release v{{version}} deployed."
 

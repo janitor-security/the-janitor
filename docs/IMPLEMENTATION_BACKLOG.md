@@ -621,6 +621,27 @@ Surrender Index to quantify AI-introduced structural rot density.
 
 ---
 
+## 2026-04-05 — The Ecosystem Scrub & Universal ParsedUnit (v9.9.1)
+
+**Directive:** Remove internal blueprint files from the public Git surface,
+professionalize the GitHub release page, hard-compact completed innovation
+sections, and migrate the remaining single-language AST detectors to the shared
+`ParsedUnit` path.
+
+**Files modified:**
+- `AGENTS.md` *(deleted from git index)* — removed from the tracked public release surface
+- `SOVEREIGN_BRIEFING.md` *(deleted from git index)* — removed from the tracked public release surface
+- `.gitignore` *(modified)* — explicit ignore added for `SOVEREIGN_BRIEFING.md`
+- `justfile` *(modified)* — GitHub release creation now uses generated notes and a professional title
+- `docs/INNOVATION_LOG.md` *(modified)* — all completed sections purged; `P0-3` removed after ParsedUnit universalization; only active P1/P2 debt remains
+- `crates/forge/src/slop_hunter.rs` *(modified)* — Go, Ruby, Bash, PHP, Kotlin, Scala, Swift, Lua, Nix, GDScript, ObjC, and Rust detectors now consume `ParsedUnit`
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.1`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.1`
+
+---
+
 ## 2026-04-05 — Direct Triage & Commercial Expansion (v9.8.1)
 
 **Directive:** Replace CT backlog batching with direct P-tier triage, implement

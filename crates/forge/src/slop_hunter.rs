@@ -442,7 +442,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
         "hcl" | "tf" => find_hcl_slop_ast(eng, source),
         // Phase 7 R&D: Rust unsafe transmute + raw pointer dereference AST walk
-        "rs" => find_rust_slop(eng, source),
+        "rs" => find_rust_slop(eng, parsed),
         // Phase 7 R&D: GLSL dangerous extension byte scan
         "glsl" | "vert" | "frag" => find_glsl_slop(source),
         "py" => {
@@ -481,21 +481,21 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             let mut f = find_go_sqli_slop(source);
             f.extend(find_go_ssrf_slop(source));
             // Phase 4 R&D: exec.Command shell injection + TLS bypass AST walk
-            f.extend(find_go_slop(eng, source));
+            f.extend(find_go_slop(eng, parsed));
             f
         }
-        "rb" => find_ruby_slop(eng, source),
-        "sh" | "bash" | "zsh" => find_bash_slop(eng, source),
+        "rb" => find_ruby_slop(eng, parsed),
+        "sh" | "bash" | "zsh" => find_bash_slop(eng, parsed),
         // Phase 5 R&D: PHP, Kotlin, Scala, Swift AST walks
-        "php" => find_php_slop(eng, source),
-        "kt" | "kts" => find_kotlin_slop(eng, source),
-        "scala" => find_scala_slop(eng, source),
-        "swift" => find_swift_slop(eng, source),
+        "php" => find_php_slop(eng, parsed),
+        "kt" | "kts" => find_kotlin_slop(eng, parsed),
+        "scala" => find_scala_slop(eng, parsed),
+        "swift" => find_swift_slop(eng, parsed),
         // Phase 6 R&D: Lua, Nix, GDScript, Objective-C AST walks
-        "lua" => find_lua_slop(eng, source),
-        "nix" => find_nix_slop(eng, source),
-        "gd" => find_gdscript_slop(eng, source),
-        "m" | "mm" => find_objc_slop(eng, source),
+        "lua" => find_lua_slop(eng, parsed),
+        "nix" => find_nix_slop(eng, parsed),
+        "gd" => find_gdscript_slop(eng, parsed),
+        "m" | "mm" => find_objc_slop(eng, parsed),
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
@@ -3085,7 +3085,8 @@ fn find_csharp_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Sl
 /// Shell interpreter names that turn exec.Command into a shell injection sink.
 const GO_SHELL_INTERPS: &[&str] = &["sh", "bash", "/bin/sh", "/bin/bash", "cmd", "cmd.exe"];
 
-fn find_go_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_go_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files containing none of the dangerous patterns.
     const GO_MARKERS: &[&[u8]] = &[
         b"exec.Command",
@@ -3103,12 +3104,10 @@ fn find_go_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.go_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("go")];
+    let tree = match parsed.ensure_tree(eng.go_lang.clone(), "go") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -3273,7 +3272,8 @@ fn find_go_danger_nodes(
 /// Ruby method names whose dynamic invocation constitutes a code execution sink.
 const RUBY_DANGEROUS_EXEC_METHODS: &[&str] = &["eval", "system", "exec", "spawn"];
 
-fn find_ruby_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_ruby_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files missing any dangerous keyword.
     const RUBY_MARKERS: &[&[u8]] = &[b"eval", b"system", b"Marshal.load", b"Marshal.restore"];
     if !RUBY_MARKERS
@@ -3283,12 +3283,10 @@ fn find_ruby_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.ruby_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("rb")];
+    let tree = match parsed.ensure_tree(eng.ruby_lang.clone(), "rb") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -3381,7 +3379,8 @@ fn find_ruby_danger_nodes(
 //              eval with unquoted variable expansion (Bash-2)
 // ---------------------------------------------------------------------------
 
-fn find_bash_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_bash_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     // Fast pre-filter: skip files missing both dangerous keywords.
     const BASH_MARKERS: &[&[u8]] = &[b"eval", b"curl", b"wget"];
     if !BASH_MARKERS
@@ -3391,12 +3390,10 @@ fn find_bash_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
         return Vec::new();
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.bash_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("sh")];
+    let tree = match parsed.ensure_tree(eng.bash_lang.clone(), "sh") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
 
     let mut findings = Vec::new();
@@ -3497,7 +3494,8 @@ const PHP_SHELL_EXEC_FUNS: &[&str] = &["system", "exec", "shell_exec", "passthru
 ///
 /// Suppression: PHP-1 and PHP-3 are suppressed when the call site is inside a
 /// function/method whose name begins with `test`.
-fn find_php_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_php_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const PHP_MARKERS: &[&[u8]] = &[
         b"eval(",
         b"unserialize(",
@@ -3511,12 +3509,10 @@ fn find_php_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.php_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("php")];
+    let tree = match parsed.ensure_tree(eng.php_lang.clone(), "php") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_php_danger_nodes(tree.root_node(), source, false, &mut findings);
@@ -3628,7 +3624,8 @@ fn find_php_danger_nodes(
 ///   with a non-literal first argument.
 /// - **Kotlin-2** (`security:dynamic_class_loading`, +50): `Class.forName(` with a
 ///   non-literal argument.
-fn find_kotlin_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_kotlin_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const KOTLIN_MARKERS: &[&[u8]] = &[b"Runtime.getRuntime", b"Class.forName"];
     if !KOTLIN_MARKERS
         .iter()
@@ -3636,12 +3633,10 @@ fn find_kotlin_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.kotlin_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("kt")];
+    let tree = match parsed.ensure_tree(eng.kotlin_lang.clone(), "kt") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_kotlin_danger_nodes(tree.root_node(), source, &mut findings);
@@ -3719,7 +3714,8 @@ const SCALA_DESER_METHODS: &[&str] = &[
 ///   a non-literal argument.
 /// - **Scala-2** (`security:unsafe_deserialization`, +50): `.asInstanceOf[` immediately
 ///   following a known deserialization call.
-fn find_scala_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_scala_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const SCALA_MARKERS: &[&[u8]] = &[b"Class.forName", b"asInstanceOf"];
     if !SCALA_MARKERS
         .iter()
@@ -3727,12 +3723,10 @@ fn find_scala_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.scala_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("scala")];
+    let tree = match parsed.ensure_tree(eng.scala_lang.clone(), "scala") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     // Scala-1: Class.forName AST walk (call_expression nodes)
@@ -3817,7 +3811,8 @@ fn find_scala_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Slo
 ///   non-literal first argument.
 /// - **Swift-2** (`security:dynamic_class_loading`, +50): `NSClassFromString(` with a
 ///   non-literal argument.
-fn find_swift_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_swift_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const SWIFT_MARKERS: &[&[u8]] = &[b"dlopen", b"NSClassFromString"];
     if !SWIFT_MARKERS
         .iter()
@@ -3825,12 +3820,10 @@ fn find_swift_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.swift_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("swift")];
+    let tree = match parsed.ensure_tree(eng.swift_lang.clone(), "swift") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_swift_danger_nodes(tree.root_node(), source, &mut findings);
@@ -3888,7 +3881,8 @@ fn find_swift_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<Slo
 // Lua-2: os.execute with non-literal arg → command injection (50 pts Critical)
 // ---------------------------------------------------------------------------
 
-fn find_lua_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_lua_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const LUA_MARKERS: &[&[u8]] = &[b"loadstring", b"load(", b"os.execute"];
     if !LUA_MARKERS
         .iter()
@@ -3896,12 +3890,10 @@ fn find_lua_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.lua_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("lua")];
+    let tree = match parsed.ensure_tree(eng.lua_lang.clone(), "lua") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_lua_danger_nodes(tree.root_node(), source, &mut findings);
@@ -3963,7 +3955,8 @@ fn find_lua_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
 // Nix-2: builtins.exec with non-literal arg list → exec injection (50 pts Critical)
 // ---------------------------------------------------------------------------
 
-fn find_nix_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_nix_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const NIX_MARKERS: &[&[u8]] = &[b"fetchurl", b"builtins.exec"];
     if !NIX_MARKERS
         .iter()
@@ -3971,12 +3964,10 @@ fn find_nix_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.nix_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("nix")];
+    let tree = match parsed.ensure_tree(eng.nix_lang.clone(), "nix") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_nix_danger_nodes(tree.root_node(), source, &mut findings);
@@ -4058,7 +4049,8 @@ fn find_nix_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
 // GDScript-2: load() with non-literal arg → dynamic class loading (50 pts Critical)
 // ---------------------------------------------------------------------------
 
-fn find_gdscript_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_gdscript_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const GD_MARKERS: &[&[u8]] = &[b"OS.execute", b"load("];
     if !GD_MARKERS
         .iter()
@@ -4066,12 +4058,10 @@ fn find_gdscript_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.gdscript_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("gd")];
+    let tree = match parsed.ensure_tree(eng.gdscript_lang.clone(), "gd") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_gdscript_danger_nodes(tree.root_node(), source, &mut findings);
@@ -4151,7 +4141,8 @@ fn find_gdscript_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<
 // ObjC-2: [obj valueForKeyPath:expr] with non-literal key → KVC injection (50 pts Critical)
 // ---------------------------------------------------------------------------
 
-fn find_objc_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_objc_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const OBJC_MARKERS: &[&[u8]] = &[b"NSClassFromString", b"valueForKeyPath:"];
     if !OBJC_MARKERS
         .iter()
@@ -4159,12 +4150,10 @@ fn find_objc_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.objc_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("m")];
+    let tree = match parsed.ensure_tree(eng.objc_lang.clone(), "m") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_objc_danger_nodes(tree.root_node(), source, &mut findings);
@@ -6304,7 +6293,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_exec_command_bash_fires() {
         let src = b"cmd := exec.Command(\"bash\", \"-c\", userInput)\ncmd.Run()\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6316,7 +6305,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_exec_command_sh_fires() {
         let src = b"cmd := exec.Command(\"sh\", \"-c\", input)\ncmd.Run()\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6328,7 +6317,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_exec_command_non_shell_safe() {
         let src = b"cmd := exec.Command(\"git\", \"status\")\ncmd.Run()\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6341,7 +6330,7 @@ mod phase4_rd_tests {
     fn test_go_exec_command_in_test_func_suppressed() {
         // Call site inside a function named TestSomething — must be suppressed.
         let src = b"func TestRunShell(t *testing.T) {\n    cmd := exec.Command(\"bash\", \"-c\", \"echo hi\")\n    cmd.Run()\n}\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6355,7 +6344,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_insecure_skip_verify_true_fires() {
         let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},\n}\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6367,7 +6356,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_insecure_skip_verify_false_safe() {
         let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: false},\n}\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6381,7 +6370,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_sqli_concat_dynamic_fires() {
         let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6393,7 +6382,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_sqli_concat_literal_safe() {
         let src = b"rows, _ := db.Query(\"SELECT * FROM \" + \"users\")\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6405,7 +6394,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_go_sqli_parameterized_safe() {
         let src = b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = ?\", userID)\n";
-        let findings = find_go_slop(eng(), src);
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6431,7 +6420,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_ruby_eval_dynamic_fires() {
         let src = b"eval(params[:code])\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6443,7 +6432,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_ruby_eval_string_literal_safe() {
         let src = b"eval(\"1 + 1\")\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6455,7 +6444,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_ruby_system_dynamic_fires() {
         let src = b"system(user_command)\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6469,7 +6458,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_ruby_marshal_load_fires() {
         let src = b"obj = Marshal.load(user_data)\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6481,7 +6470,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_ruby_marshal_restore_fires() {
         let src = b"obj = Marshal.restore(payload)\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6494,7 +6483,7 @@ mod phase4_rd_tests {
     fn test_ruby_marshal_dump_safe() {
         // Marshal.dump serializes — does not execute code.
         let src = b"data = Marshal.dump(object)\n";
-        let findings = find_ruby_slop(eng(), src);
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6520,7 +6509,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_bash_curl_pipe_bash_fires() {
         let src = b"curl https://install.example.com/setup.sh | bash\n";
-        let findings = find_bash_slop(eng(), src);
+        let findings = find_bash_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6532,7 +6521,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_bash_wget_pipe_sh_fires() {
         let src = b"wget -qO- https://example.com/install.sh | sh\n";
-        let findings = find_bash_slop(eng(), src);
+        let findings = find_bash_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6545,7 +6534,7 @@ mod phase4_rd_tests {
     fn test_bash_curl_download_then_exec_safe() {
         // Download-then-verify pattern — not a pipeline to bash.
         let src = b"curl -o setup.sh https://install.example.com/setup.sh && bash setup.sh\n";
-        let findings = find_bash_slop(eng(), src);
+        let findings = find_bash_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6559,7 +6548,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_bash_eval_unquoted_var_fires() {
         let src = b"eval $USER_COMMAND\n";
-        let findings = find_bash_slop(eng(), src);
+        let findings = find_bash_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6571,7 +6560,7 @@ mod phase4_rd_tests {
     #[test]
     fn test_bash_eval_string_literal_safe() {
         let src = b"eval \"echo hello\"\n";
-        let findings = find_bash_slop(eng(), src);
+        let findings = find_bash_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6607,7 +6596,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_eval_dynamic_arg_fires() {
         let src = b"<?php\neval($userInput);\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6619,7 +6608,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_eval_string_literal_clean() {
         let src = b"<?php\neval('echo 1;');\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6633,7 +6622,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_unserialize_dynamic_arg_fires() {
         let src = b"<?php\n$obj = unserialize($data);\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6645,7 +6634,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_unserialize_literal_clean() {
         let src = b"<?php\n$obj = unserialize('O:8:\"stdClass\":0:{}');\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6659,7 +6648,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_system_dynamic_arg_fires() {
         let src = b"<?php\nsystem($cmd);\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6671,7 +6660,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_php_shell_exec_literal_clean() {
         let src = b"<?php\n$out = shell_exec('ls -la');\n";
-        let findings = find_php_slop(eng(), src);
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6685,7 +6674,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_kotlin_runtime_exec_dynamic_fires() {
         let src = b"val p = Runtime.getRuntime().exec(userCommand)\n";
-        let findings = find_kotlin_slop(eng(), src);
+        let findings = find_kotlin_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6697,7 +6686,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_kotlin_runtime_exec_literal_clean() {
         let src = b"val p = Runtime.getRuntime().exec(\"git status\")\n";
-        let findings = find_kotlin_slop(eng(), src);
+        let findings = find_kotlin_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6711,7 +6700,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_kotlin_class_for_name_dynamic_fires() {
         let src = b"val cls = Class.forName(className)\n";
-        let findings = find_kotlin_slop(eng(), src);
+        let findings = find_kotlin_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6723,7 +6712,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_kotlin_class_for_name_literal_clean() {
         let src = b"val cls = Class.forName(\"com.example.MyClass\")\n";
-        let findings = find_kotlin_slop(eng(), src);
+        let findings = find_kotlin_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6737,7 +6726,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_scala_class_for_name_dynamic_fires() {
         let src = b"val cls = Class.forName(userInput)\n";
-        let findings = find_scala_slop(eng(), src);
+        let findings = find_scala_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6749,7 +6738,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_scala_class_for_name_literal_clean() {
         let src = b"val cls = Class.forName(\"com.example.Safe\")\n";
-        let findings = find_scala_slop(eng(), src);
+        let findings = find_scala_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6763,7 +6752,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_scala_as_instance_of_after_deser_fires() {
         let src = b"val obj = ois.readObject().asInstanceOf[String]\n";
-        let findings = find_scala_slop(eng(), src);
+        let findings = find_scala_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6775,7 +6764,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_scala_as_instance_of_no_deser_clean() {
         let src = b"val x = anyRef.asInstanceOf[String]\n";
-        let findings = find_scala_slop(eng(), src);
+        let findings = find_scala_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6789,7 +6778,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_swift_dlopen_dynamic_arg_fires() {
         let src = b"let lib = dlopen(libraryPath, RTLD_LAZY)\n";
-        let findings = find_swift_slop(eng(), src);
+        let findings = find_swift_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6801,7 +6790,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_swift_dlopen_literal_clean() {
         let src = b"let lib = dlopen(\"/usr/lib/libz.dylib\", RTLD_LAZY)\n";
-        let findings = find_swift_slop(eng(), src);
+        let findings = find_swift_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6815,7 +6804,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_swift_ns_class_from_string_dynamic_fires() {
         let src = b"let cls = NSClassFromString(className)\n";
-        let findings = find_swift_slop(eng(), src);
+        let findings = find_swift_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6827,7 +6816,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_swift_ns_class_from_string_literal_clean() {
         let src = b"let cls = NSClassFromString(\"NSString\")\n";
-        let findings = find_swift_slop(eng(), src);
+        let findings = find_swift_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             !findings
                 .iter()
@@ -6891,7 +6880,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_lua_loadstring_dynamic_fires() {
         let src = b"local f = loadstring(userInput)\n";
-        let findings = find_lua_slop(eng(), src);
+        let findings = find_lua_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6903,7 +6892,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_lua_loadstring_literal_clean() {
         let src = b"local f = loadstring(\"print('ok')\")\n";
-        let findings = find_lua_slop(eng(), src);
+        let findings = find_lua_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6915,7 +6904,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_lua_os_execute_dynamic_fires() {
         let src = b"os.execute(cmd)\n";
-        let findings = find_lua_slop(eng(), src);
+        let findings = find_lua_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6927,7 +6916,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_lua_os_execute_literal_clean() {
         let src = b"os.execute(\"ls -la\")\n";
-        let findings = find_lua_slop(eng(), src);
+        let findings = find_lua_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6941,7 +6930,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_nix_fetchurl_no_hash_fires() {
         let src = b"fetchurl { url = \"https://example.com/foo.tar.gz\"; }\n";
-        let findings = find_nix_slop(eng(), src);
+        let findings = find_nix_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6953,7 +6942,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_nix_fetchurl_with_sha256_clean() {
         let src = b"fetchurl { url = \"https://example.com/foo.tar.gz\"; sha256 = \"abc123\"; }\n";
-        let findings = find_nix_slop(eng(), src);
+        let findings = find_nix_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6965,7 +6954,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_nix_builtins_exec_dynamic_fires() {
         let src = b"builtins.exec userCmd\n";
-        let findings = find_nix_slop(eng(), src);
+        let findings = find_nix_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6977,7 +6966,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_nix_builtins_exec_literal_list_clean() {
         let src = b"builtins.exec [ \"ls\" \"-la\" ]\n";
-        let findings = find_nix_slop(eng(), src);
+        let findings = find_nix_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -6991,7 +6980,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_gdscript_os_execute_dynamic_fires() {
         let src = b"OS.execute(command, [], true)\n";
-        let findings = find_gdscript_slop(eng(), src);
+        let findings = find_gdscript_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7003,7 +6992,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_gdscript_os_execute_literal_clean() {
         let src = b"OS.execute(\"ls\", [], true)\n";
-        let findings = find_gdscript_slop(eng(), src);
+        let findings = find_gdscript_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7015,7 +7004,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_gdscript_load_dynamic_fires() {
         let src = b"var script = load(script_path)\n";
-        let findings = find_gdscript_slop(eng(), src);
+        let findings = find_gdscript_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7027,7 +7016,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_gdscript_load_literal_clean() {
         let src = b"var script = load(\"res://scripts/Enemy.gd\")\n";
-        let findings = find_gdscript_slop(eng(), src);
+        let findings = find_gdscript_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7041,7 +7030,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_objc_ns_class_from_string_dynamic_fires() {
         let src = b"Class cls = NSClassFromString(className);\n";
-        let findings = find_objc_slop(eng(), src);
+        let findings = find_objc_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7053,7 +7042,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_objc_ns_class_from_string_literal_clean() {
         let src = b"Class cls = NSClassFromString(@\"NSString\");\n";
-        let findings = find_objc_slop(eng(), src);
+        let findings = find_objc_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7065,7 +7054,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_objc_kvc_injection_dynamic_fires() {
         let src = b"id val = [obj valueForKeyPath:userKey];\n";
-        let findings = find_objc_slop(eng(), src);
+        let findings = find_objc_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7077,7 +7066,7 @@ mod phase5_rd_tests {
     #[test]
     fn test_objc_kvc_injection_literal_clean() {
         let src = b"id val = [obj valueForKeyPath:@\"name\"];\n";
-        let findings = find_objc_slop(eng(), src);
+        let findings = find_objc_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7152,7 +7141,8 @@ mod phase5_rd_tests {
 /// FFI/sys boundaries is a frequent AI-generated soundness violation.
 ///
 /// Uses `QueryEngine::rust_lang` (tree-sitter-rust grammar).
-fn find_rust_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
+fn find_rust_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
     const RUST_MARKERS: &[&[u8]] = &[b"unsafe", b"transmute"];
     if !RUST_MARKERS
         .iter()
@@ -7160,12 +7150,10 @@ fn find_rust_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     {
         return Vec::new();
     }
-    let mut parser = tree_sitter::Parser::new();
-    if parser.set_language(&eng.rust_lang).is_err() {
-        return Vec::new();
-    }
-    let Some(tree) = parse_with_timeout(&mut parser, source) else {
-        return vec![parser_exhaustion_finding("rs")];
+    let tree = match parsed.ensure_tree(eng.rust_lang.clone(), "rs") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
     find_rust_danger_nodes(tree.root_node(), source, &mut findings, false, false);
@@ -7512,7 +7500,7 @@ mod phase7_rd_tests {
         let src = b"fn cast(ptr: *const u8) -> u64 {\n\
             unsafe { std::mem::transmute::<*const u8, u64>(ptr) }\n\
             }\n";
-        let findings = find_rust_slop(eng(), src);
+        let findings = find_rust_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7526,7 +7514,7 @@ mod phase7_rd_tests {
         let src = b"fn cast_int() -> i64 {\n\
             unsafe { std::mem::transmute::<u64, i64>(42) }\n\
             }\n";
-        let findings = find_rust_slop(eng(), src);
+        let findings = find_rust_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7542,7 +7530,7 @@ mod phase7_rd_tests {
         let src = b"fn cast_bytes(data: &[u8]) -> u8 {\n\
             unsafe { *data.as_ptr() }\n\
             }\n";
-        let findings = find_rust_slop(eng(), src);
+        let findings = find_rust_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
@@ -7556,7 +7544,7 @@ mod phase7_rd_tests {
         let src = b"fn sys_read_byte(ptr: *const u8) -> u8 {\n\
             unsafe { *ptr }\n\
             }\n";
-        let findings = find_rust_slop(eng(), src);
+        let findings = find_rust_slop(eng(), &ParsedUnit::unparsed(src));
         assert!(
             findings
                 .iter()
