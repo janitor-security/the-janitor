@@ -262,8 +262,8 @@ enum Commands {
         /// before emitting a `Severity::Exhaustion` finding.
         #[arg(long)]
         deep_scan: bool,
-        /// Path to an ML-DSA-65 private key file (4032 raw bytes) for BYOK
-        /// local attestation (FIPS 204 — Signature Sovereignty mode).
+        /// ML-DSA-65 attestation key source for BYOK local attestation
+        /// (FIPS 204 — Signature Sovereignty mode).
         ///
         /// When provided, the CLI signs the CycloneDX v1.6 CBOM for this bounce
         /// result using the customer's locally-stored ML-DSA-65 private key.
@@ -271,10 +271,16 @@ enum Commands {
         /// (base64-encoded, STANDARD alphabet) and is verifiable offline:
         ///   `janitor verify-cbom --key <pub.key> <log.ndjson>`
         ///
+        /// Accepted forms:
+        ///   - `./ml-dsa.key` (existing local file mode)
+        ///   - `arn:aws:kms:...`
+        ///   - `https://<vault>.vault.azure.net/...`
+        ///   - `pkcs11:token=...`
+        ///
         /// Governor attestation is skipped when this flag is set — local PQC
         /// signing is the chain-of-custody mechanism for the entry.
         #[arg(long)]
-        pqc_key: Option<PathBuf>,
+        pqc_key: Option<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -2661,7 +2667,7 @@ fn cmd_bounce(
     head_sha: Option<&str>,
     soft_fail_flag: bool,
     deep_scan_flag: bool,
-    pqc_key: Option<&Path>,
+    pqc_key: Option<&str>,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -3247,12 +3253,23 @@ probable AI context-collapse (hallucinated function reference)"
     // embedded in the log entry (`pqc_sig`).  Governor POST is skipped — local BYOK
     // signing is the chain-of-custody mechanism when Signature Sovereignty mode is
     // active.
-    if let Some(key_path) = pqc_key {
+    if let Some(key_source_raw) = pqc_key {
         use base64::Engine as _;
+        use common::pqc::PqcKeySource;
         use fips204::ml_dsa_65;
         use fips204::traits::{SerDes, Signer};
 
-        let sk_bytes = std::fs::read(key_path)
+        let key_source = PqcKeySource::parse(key_source_raw);
+        if key_source.requires_commercial_governor() {
+            anyhow::bail!(
+                "Enterprise KMS integration requires the `janitor-gov` commercial binary. Contact sales@thejanitor.app."
+            );
+        }
+        let PqcKeySource::File(key_path) = key_source else {
+            unreachable!("commercial key sources were handled above");
+        };
+
+        let sk_bytes = std::fs::read(&key_path)
             .with_context(|| format!("reading PQC private key: {}", key_path.display()))?;
         // ML-DSA-65 private key is exactly 4032 bytes per FIPS 204.
         let sk_array: [u8; 4032] = sk_bytes
@@ -4331,6 +4348,7 @@ mod pqc_signing_tests {
     use super::cbom;
     use crate::report::{BounceLogEntry, PrState, Provenance};
     use base64::Engine as _;
+    use common::pqc::PqcKeySource;
     use fips204::ml_dsa_65;
     use fips204::traits::{KeyGen, Signer, Verifier};
 
@@ -4456,6 +4474,17 @@ mod pqc_signing_tests {
             result_pk.is_err(),
             "wrong-length public key bytes must fail conversion"
         );
+    }
+
+    #[test]
+    fn enterprise_key_sources_are_classified_as_commercial() {
+        let aws = PqcKeySource::parse("arn:aws:kms:us-east-1:123:key/abc");
+        let azure = PqcKeySource::parse("https://corp.vault.azure.net/keys/janitor/main");
+        let pkcs11 = PqcKeySource::parse("pkcs11:token=janitor;object=ml-dsa");
+
+        assert!(aws.requires_commercial_governor());
+        assert!(azure.requires_commercial_governor());
+        assert!(pkcs11.requires_commercial_governor());
     }
 }
 

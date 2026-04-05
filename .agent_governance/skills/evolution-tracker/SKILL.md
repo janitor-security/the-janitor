@@ -125,6 +125,11 @@ directive scope.
 **Autonomous enforcement:** You are FORBIDDEN from waiting for explicit
 operator instructions to update the `INNOVATION_LOG.md`.
 
+**Session floor:** At the end of EVERY session, regardless of the task, you
+MUST append at least ONE new, high-value, highly technical architectural
+proposal (`P0`, `P1`, or `P2`) to `docs/INNOVATION_LOG.md`. A session that
+does not generate new R&D debt is a failed session.
+
 ---
 
 ## Logic 4 — Auto-Purge (Completed Sections)

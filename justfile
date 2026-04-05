@@ -85,8 +85,7 @@ sync-versions:
 	set -euo pipefail
 	VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 	echo "→ Syncing docs to v${VERSION}"
-	sed -i "s/\*\*v[0-9]\+\.[0-9]\+\.[0-9]\+ —/**v${VERSION} —/g" README.md docs/index.md
-	sed -i "s/The Janitor v[0-9]\+\.[0-9]\+\.[0-9]\+/The Janitor v${VERSION}/g" README.md
+	VERSION="${VERSION}" perl -0pi -e 's/\*\*v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\s+—/**v$ENV{VERSION} —/g; s/The Janitor v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/The Janitor v$ENV{VERSION}/g; s#(shields\.io/(?:badge|static/v1)[^)]*?)v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?#$1v$ENV{VERSION}#g' README.md docs/index.md
 	echo "✅ Version sync complete: v${VERSION}"
 
 # 4c. FAST RELEASE — identical to `release` but skips the audit prerequisite.
@@ -101,7 +100,7 @@ fast-release version: sync-versions
 	echo "🚀 Initiating Fast Release Sequence v{{version}}..."
 	cargo build --release --workspace
 	strip target/release/janitor
-	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock justfile action.yml && git commit -S -m "chore: release v{{version}}"
+	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"
 	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
 	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
 	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \

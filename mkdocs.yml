@@ -27,6 +27,8 @@ nav:
   - Architecture: architecture.md
   - Setup: setup.md
   - Intelligence: intelligence.md
+  - Intelligence Reports:
+    - Energy & ESG Audit: energy_conservation_audit.md
   - Discovery: discovery.md
   - Terms: terms.md
   - Privacy: privacy.md

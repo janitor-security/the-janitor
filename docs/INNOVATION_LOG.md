@@ -9,28 +9,6 @@ ID epochs are purged during hard compaction.
 
 ## P1 — Compliance / Integration
 
-### P1-1: KMS / HSM Key Sources for `--pqc-key`
-
-**Class:** Compliance / Key Custody
-**Inspired by:** Enterprise attestation requirements for BYOK signing
-
-**Observation:**
-`--pqc-key` currently accepts only filesystem-backed key material, which does
-not satisfy FedRAMP or DISA STIG controls requiring hardware- or KMS-isolated
-private keys.
-
-**Proposal:**
-Extend `--pqc-key` to support PKCS#11 URIs and managed cloud KMS backends while
-preserving file-path mode for air-gapped deployments.
-
-**Security impact:**
-Moves PQC signing into compliant custody models without changing the attestation
-protocol or exposing raw private key bytes on runner disks.
-
-**Implementation path:**
-Introduce a key-source abstraction and a thin `pqc-kms` integration crate for
-PKCS#11, AWS KMS, and Azure Key Vault backends.
-
 ### P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
 
 **Class:** Infrastructure / Threat Intel Integrity
@@ -53,6 +31,33 @@ binding archive is absent, corrupted, or replaced with manifest-only state.
 **Implementation path:**
 Clarify the contract in `update-wisdom`, the docs CDN bootstrap, and the MCP
 dependency-check surface so archive absence is surfaced immediately.
+
+### P1-4: Attestation Key Provenance Envelope
+
+**Class:** Compliance / Attestation Forensics
+**Inspired by:** `crates/common/src/pqc.rs` and the `--pqc-key` source split
+
+**Observation:**
+The bounce log currently records only `pqc_sig`. Once enterprise key custody is
+enabled, auditors will need to distinguish whether a signature was produced by a
+raw on-disk key, AWS KMS, Azure Key Vault, or PKCS#11 hardware without reading
+runner-local configuration.
+
+**Proposal:**
+Add a typed `pqc_key_source` provenance field to `BounceLogEntry`, Step Summary,
+and CBOM output. Record the source class (`file`, `aws_kms`, `azure_key_vault`,
+`pkcs11`) plus a redacted locator hash so custody mode is reviewable without
+leaking key identifiers.
+
+**Security impact:**
+Closes the auditability gap between "signature present" and "signature produced
+under compliant key custody," which is mandatory for regulated procurement and
+post-incident attestation review.
+
+**Implementation path:**
+Extend `crates/common/src/pqc.rs`, `crates/cli/src/report.rs`,
+`crates/cli/src/cbom.rs`, and the Governor report envelope to persist typed
+attestation-key provenance alongside `pqc_sig`.
 
 ## P2 — Architecture / Ergonomics
 

@@ -5,6 +5,30 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — ESG Egress & Key Custody (v9.9.2)
+
+**Directive:** Surface the energy audit in public docs, harden version syncing,
+implement enterprise-aware `--pqc-key` source parsing with commercial gating,
+strengthen the autonomous innovation protocol, and release `v9.9.2`.
+
+**Files modified:**
+- `mkdocs.yml` *(modified)* — added `Energy & ESG Audit` to the public docs navigation
+- `justfile` *(modified)* — `sync-versions` now rewrites README/docs version headers and badge-style semver tokens from `Cargo.toml`; release staging expanded to include `README.md` and `mkdocs.yml`
+- `README.md` *(modified)* — reset to tracked state, then synchronized to `v9.9.2`
+- `docs/index.md` *(modified)* — synchronized to `v9.9.2`
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.2`
+- `crates/common/src/lib.rs` *(modified)* — registered the new PQC key-source module
+- `crates/common/src/pqc.rs` *(created)* — added `PqcKeySource` parsing for file, AWS KMS, Azure Key Vault, and PKCS#11 inputs
+- `crates/cli/src/main.rs` *(modified)* — `--pqc-key` now accepts string sources and gracefully rejects enterprise URIs with the commercial-binary message
+- `crates/cli/src/report.rs` *(modified)* — PQC attestation documentation updated to reflect source-based semantics
+- `.agent_governance/skills/evolution-tracker/SKILL.md` *(modified)* — every session must now append at least one new high-value proposal to the innovation log
+- `docs/INNOVATION_LOG.md` *(modified)* — `P1-1` removed as completed; added `P1-4` for attestation key provenance
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.2`
+
+---
+
 ## 2026-04-05 — Taint Spine Realization & Governance Drift (v9.9.0)
 
 **Directive:** Complete P0-1 cross-file taint spine; fix P2-5 governance drift

@@ -486,8 +486,9 @@ pub struct BounceLogEntry {
     /// ML-DSA-65 (FIPS 204) signature over the CycloneDX v1.6 CBOM for this entry,
     /// base64-encoded (STANDARD alphabet).
     ///
-    /// Present only when `janitor bounce --pqc-key <path>` was used and signing
-    /// succeeded.  Verifiable offline via:
+    /// Present only when `janitor bounce --pqc-key <source>` was used with a
+    /// filesystem-backed ML-DSA-65 private key and signing succeeded.
+    /// Verifiable offline via:
     ///   `janitor verify-cbom --key <pub.key> <log.ndjson>`
     ///
     /// When present, Governor attestation was skipped — local BYOK signing is
