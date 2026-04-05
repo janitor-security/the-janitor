@@ -30,6 +30,7 @@ pub mod pr_collider;
 pub mod shadow_git;
 pub mod slop_filter;
 pub mod slop_hunter;
+pub mod taint_propagate;
 
 use tree_sitter::Node;
 

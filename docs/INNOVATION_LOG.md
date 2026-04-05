@@ -13,27 +13,53 @@ ID epochs are purged during hard compaction.
 **Inspired by:** `crates/forge/src/slop_hunter.rs::find_slop`
 
 **Observation:**
-Parse-forest reuse is complete as of v9.6.4 — all major detectors (`find_java_slop`,
-`find_csharp_slop`, `find_jsx_dangerous_html_slop`, Python/JS/C gates) now share a
-cached `ParsedUnit` via `ensure_tree()`. Taint tracking remains statement-local;
-source-to-sink signal does not propagate through helper functions or module
-boundaries.
+Intra-file Go SQLi taint confirmation implemented in v9.7.1: `track_taint_go_sqli`
+in `crates/forge/src/taint_propagate.rs` confirms parameter→SQL-sink flows for
+the Go-3 gate. Cross-file 3-hop propagation is not yet implemented; taint
+summaries cannot follow values through helper functions or module boundaries.
 
 **Proposal:**
-Build a lightweight taint graph on top of the existing `ParsedUnit`/`TaintExportRecord`
-foundation that propagates source-to-sink signal across local helpers and exported
-wrappers (3-hop depth).
+Extend `taint_propagate.rs` to emit `TaintExportRecord` entries into
+`.janitor/taint_catalog.rkyv` and implement a 3-hop consumer in `PatchBouncer`
+that follows taint across file boundaries.
 
 **Security impact:**
 Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
-chains — current detectors miss sinks that receive tainted values via one call level
-of indirection.
+chains that route tainted values through one or two helper call levels — the
+dominant real-world pattern in enterprise middleware.
 
 **Implementation path:**
-Wire `TaintExportRecord` (already in `crates/common/src/taint.rs`) into
-`PatchBouncer`; implement 3-hop propagation in a new `taint_propagate.rs`;
-thread taint summaries into `find_python_slop_ast`, `find_java_slop`, and
-`find_js_sqli_slop`.
+1. Add `TaintExportRecord` emission in `track_taint_go_sqli` after confirmed flow.
+2. Implement `taint_catalog.rs` in `crates/forge/src/` for rkyv-backed catalog I/O.
+3. Wire catalog lookups into `find_python_slop_ast`, `find_java_slop`, and
+   `find_js_sqli_slop` for cross-file confirmation.
+
+### P0-2: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
+
+**Class:** Architecture / Performance
+**Inspired by:** `crates/forge/src/slop_hunter.rs` Phase 4–7 language gates
+
+**Observation:**
+12 single-language AST detectors (`find_go_slop`, `find_ruby_slop`,
+`find_bash_slop`, `find_php_slop`, `find_kotlin_slop`, `find_scala_slop`,
+`find_swift_slop`, `find_lua_slop`, `find_nix_slop`, `find_gdscript_slop`,
+`find_objc_slop`, `find_rust_slop`) still create their own `tree_sitter::Parser`
+instead of using `ParsedUnit::ensure_tree()`. This blocks multi-phase detector
+sharing for those languages and diverges from the P0-1 architecture.
+
+**Proposal:**
+Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to
+`(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the `ensure_tree` pattern.
+Add `_bytes_test` wrappers and update dispatch aliases.
+
+**Security impact:**
+Enables multi-phase taint tracking for Go, Ruby, PHP, Kotlin, Scala, Swift, Lua,
+Nix, GDScript, ObjC, and Rust — same TP gains as the Python/Java/JS migration.
+
+**Implementation path:**
+Modify each of the 12 functions in `crates/forge/src/slop_hunter.rs`. Update
+`find_slop()` dispatch to pass `parsed` instead of `source`. Add
+`ParsedUnit::unparsed()` test wrappers for each migrated function.
 
 ## P1 — Compliance / Integration
 
@@ -126,122 +152,51 @@ attackers can weaponize them in CI.
 Add `crates/fuzz` targets and promote timeout reproducers into
 `crates/crucible/fixtures/exhaustion/`.
 
-### P2-3: Governance Bootstrap Drift Sentinel
-
-**Class:** Governance / Consistency
-**Inspired by:** Historical drift between governance entrypoints and canonical docs
-
-**Observation:**
-Bootstrap surfaces can still drift on engine version, canonical governance
-root, or release instructions across local rules and operator entrypoints.
-
-**Proposal:**
-Add a deterministic governance audit that cross-checks version strings,
-governance roots, and release-path documentation for parity.
-
-**Security impact:**
-Prevents stale operator surfaces from binding downstream agents to obsolete
-workflow law before the firewall executes.
-
-**Implementation path:**
-Add a governance parity test spanning `Cargo.toml`, `.cursorrules`,
-`.agent_governance/README.md`, and release command docs.
-
-### P2-4: Release Surface Parity Gate
+### P2-3: Release Surface Parity Gate
 
 **Class:** Defensive Hardening
 **Inspired by:** `justfile` and release command drift across operator surfaces
 
 **Observation:**
 Documented release entrypoints can silently diverge from the actual linearized
-execution graph, reintroducing redundant audit/build paths or stale operator
-instructions. The burned `v9.5.1` release exposed a second failure mode:
-recipes that reason about only the unstaged worktree can publish a tag and
-GitHub release for the previous `HEAD` while the real audited payload is
-already staged and waiting to be committed.
+execution graph. The `v9.5.1` burn incident exposed a failure mode where
+unstaged-worktree reasoning published a tag for the previous `HEAD` rather than
+the staged payload.
 
 **Proposal:**
-Add a release-surface parity test that asserts all documented entrypoints
-resolve to the same `audit -> fast-release` path, and add a release-integrity
-test that proves the emitted commit/tag pair actually contains the staged
-release payload rather than merely matching the pre-release `HEAD`.
+Add a release-surface parity test that asserts all documented entrypoints resolve
+to the same `audit → fast-release` path, and prove the emitted commit/tag pair
+contains the audited payload.
 
 **Security impact:**
 Preserves symmetric-failure semantics while preventing redundant release work
-from masking real regressions behind repeated compile passes.
+from masking regressions.
 
 **Implementation path:**
 Add a shell regression in `tools/tests/` that parses `justfile`,
-`.agent_governance/commands/release.md`, and `.cursorrules` for consistency.
-Add a second regression that stages a synthetic tracked change, runs the
-release recipe in fixture mode, asserts a new commit object is created before
-tag emission, and fails if `vX.Y.Z` can still resolve to the pre-release
-`HEAD`.
+`.agent_governance/commands/release.md` for consistency. Add a second regression
+that stages a synthetic change, runs the recipe in fixture mode, and asserts a
+new commit is created before tag emission.
 
-### P2-5: Filename-Aware Surface Routing Spine
+### P2-4: Filename-Aware Surface Routing Spine
 
 **Class:** Core Engine Plumbing
-**Inspired by:** Extensionless security surfaces discovered during P0-1 execution
+**Inspired by:** Extensionless security surfaces in P0-1 execution
 
 **Observation:**
-The slop firewall still keys most semantic routing off file extensions alone.
-That is structurally incomplete for high-value build and control-plane files
-whose semantics are carried by canonical filenames rather than suffixes:
-`Dockerfile`, `CMakeLists.txt`, `BUILD`, `BUILD.bazel`, `WORKSPACE`,
-`MODULE.bazel`, and many policy roots under repo-specific conventions.
-P0-1 required an ad hoc filename shim in `extract_patch_ext()` to surface these
-files at all. That patch closes the immediate blind spot, but it leaves the
-engine without a first-class notion of "surface identity" separate from raw
-extension text.
+Semantic routing still keys off file extensions alone. High-value build and
+control-plane files (`Dockerfile`, `CMakeLists.txt`, `BUILD`, `BUILD.bazel`,
+`WORKSPACE`, `MODULE.bazel`) carry semantics via canonical filename, not suffix.
 
 **Proposal:**
-Introduce a canonical `SurfaceKind` classifier in `common` that resolves from
-`Path + optional shebang + diff metadata` into a stable semantic target such as
-`Dockerfile`, `CMake`, `StarlarkWorkspace`, `Proto`, `Xml`, `Rust`, or
-`BinaryAsset`. Thread `SurfaceKind` through `PatchBouncer`, `bounce_git`,
-`slop_hunter`, and the MCP response envelope so every detector, budget policy,
-and downstream report keys off the same semantic identity rather than repeating
-filename heuristics in multiple layers.
+Introduce a `SurfaceKind` classifier in `common` that resolves from
+`Path + shebang + diff metadata` to a stable semantic target. Thread it through
+`PatchBouncer`, `bounce_git`, `slop_hunter`, and the MCP response envelope.
 
 **Security impact:**
-Eliminates silent coverage gaps on extensionless build files, prevents future
-detectors from being added only to Crucible or only to one caller path, and
-creates a single authoritative routing layer for size limits, parser budgets,
-domain policy, and supply-chain findings.
+Eliminates silent coverage gaps on extensionless build files and creates a single
+authoritative routing layer for size limits, parser budgets, and domain policy.
 
 **Implementation path:**
-Add `crates/common/src/surface.rs` with `SurfaceKind` plus deterministic
-classification helpers; replace `extract_patch_ext()` string returns with a
-`SurfaceKind` return path; teach `slop_hunter::find_slop()` to dispatch on
-`SurfaceKind`; update report/MCP serialization to include the resolved surface.
-
-## Continuous Telemetry — 2026-04-04
-
-- `CT-008: Wisdom Sync DNS Failure Resolved` — `janitor update-wisdom` now
-  targets `https://thejanitor.app/v1/wisdom.rkyv` and `--ci-mode` degrades to
-  a bootstrap-empty `wisdom_manifest.json` when the CDN or KEV source is
-  unreachable, preventing first-run cron failure while the static registry is
-  propagating.
-- `CT-009: Release-Tracked CDN Artefact Gap` — `docs/v1/wisdom.rkyv` is still
-  matched by the global `*.rkyv` ignore rule, so the CDN bootstrap registry can
-  deploy from the working tree without entering the signed release commit.
-  Suggested fix: carve out an explicit `!docs/v1/*.rkyv` exception or move
-  governed published registries under a dedicated tracked artefact directory
-  enforced by the release-surface parity gate.
-- CT-009: P0-1 Foundation Laid — `TaintKind`, `TaintedParam`, `TaintExportRecord` in `crates/common/src/taint.rs`; `ParsedUnit<'src>` in `crates/forge/src/slop_hunter.rs`; foundational types for 3-hop cross-file taint propagation (v9.6.2)
-
-## Continuous Telemetry — 2026-04-04
-
-### CT-010: Phase 4–7 Single-Language Detectors Still Instantiate Own Parsers
-**Found during:** UAP Pipeline Integration & Parse-Forest Completion (v9.6.4)
-**Location:** `crates/forge/src/slop_hunter.rs` — `find_go_slop`, `find_ruby_slop`, `find_bash_slop`, `find_php_slop`, `find_kotlin_slop`, `find_scala_slop`, `find_swift_slop`, `find_lua_slop`, `find_nix_slop`, `find_gdscript_slop`, `find_objc_slop`, `find_rust_slop`
-**Issue:** 12 single-language AST detectors (Phase 4–7) still create their own `tree_sitter::Parser::new()` instead of using `ParsedUnit::ensure_tree()`. No redundancy within a single call, but inconsistent with the P0-1 architecture and blocks future multi-phase detectors for those languages from sharing the cached tree.
-**Suggested fix:** Migrate each of the 12 functions from `(eng: &QueryEngine, source: &[u8])` to `(eng: &QueryEngine, parsed: &ParsedUnit<'_>)` using the same `ensure_tree` pattern established in v9.6.4. Add `_bytes_test` wrappers and update test aliases. Target: v9.7.x or next forge session.
-
-## Continuous Telemetry — 2026-04-04
-
-### CT-011: sync-versions sed Pattern Covers Only Headline Format
-**Found during:** Canonical Alignment Strike (v9.7.0)
-**Location:** `justfile::sync-versions`
-**Issue:** The `sync-versions` recipe uses `sed` to match `**vX.Y.Z —` (bold-prefixed headline pattern). This covers README.md and docs/index.md but will silently skip any doc file that stores the version in a different format (e.g., plain `vX.Y.Z` in a JSON badge or YAML frontmatter). Future version-bearing files may drift without a compile-time contract.
-**Suggested fix:** Introduce a `docs/VERSION` sentinel file containing only the raw version string; `sync-versions` reads it and `cargo build` script writes it. Any file referencing the version imports from this single source. Eliminates pattern fragility.
+Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
+replace `extract_patch_ext()` string returns; update MCP serialization.

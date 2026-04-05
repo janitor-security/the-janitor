@@ -1058,7 +1058,27 @@ impl PRBouncer for PatchBouncer {
             Some(tree.clone()),
             Some(cfg.language.clone()),
         );
-        let raw_findings = crate::slop_hunter::find_slop(ext, &parsed_unit);
+        let mut raw_findings = crate::slop_hunter::find_slop(ext, &parsed_unit);
+
+        // Intra-file taint spine (P0-1 Phase 2): for Go files, confirm
+        // parameter→SQL-sink flows via taint_propagate::track_taint_go_sqli.
+        // Each confirmed flow emits a KevCritical finding supplementing Go-3.
+        if ext == "go" {
+            for flow in crate::taint_propagate::track_taint_go_sqli(source, tree.root_node()) {
+                raw_findings.push(crate::slop_hunter::SlopFinding {
+                    start_byte: flow.sink_byte,
+                    end_byte: flow.sink_end_byte,
+                    description: format!(
+                        "security:sqli_taint_confirmed — parameter `{}` flows to \
+                         SQL concatenation sink; confirmed taint source — CISA KEV class",
+                        flow.taint_source
+                    ),
+                    domain: crate::metadata::DOMAIN_FIRST_PARTY,
+                    severity: crate::slop_hunter::Severity::KevCritical,
+                });
+            }
+        }
+
         let mut suppressed_by_domain: u32 = 0;
         let mut antipattern_score: u32 = 0;
         let mut accepted: Vec<crate::slop_hunter::SlopFinding> =

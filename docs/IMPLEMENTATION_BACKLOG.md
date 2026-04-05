@@ -5,6 +5,27 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Deterministic Pulse & Taint Spine (v9.7.1)
+
+**Directive:** Replace agentic CT-pulse rule with a deterministic CI gate in
+`fast-release`; execute `/ciso-pulse` to compact CT-008 through CT-011; implement
+Go-3 intra-file SQLi taint confirmation in `crates/forge/src/taint_propagate.rs`;
+wire into `PatchBouncer` for Go files; cut `v9.7.1`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.7.1`
+- `.agent_governance/commands/ciso-pulse.md` *(created)* — `/ciso-pulse` command mapped to Hard Compaction protocol
+- `justfile` *(modified)* — `fast-release` CISO Pulse gate: blocks if CT count ≥ 10
+- `docs/INNOVATION_LOG.md` *(modified)* — CISO Pulse executed: CT-008, CT-009, CT-010, CT-011 purged; entries re-tiered; P0-2 added for Phase 4–7 ParsedUnit migration; P0-1 updated to reflect intra-file Go taint completion
+- `crates/forge/src/taint_propagate.rs` *(created)* — `TaintFlow`, `track_taint_go_sqli`; 5 unit tests (3 TP, 2 TN)
+- `crates/forge/src/lib.rs` *(modified)* — `pub mod taint_propagate` added
+- `crates/forge/src/slop_filter.rs` *(modified)* — Go taint confirmation wired into bounce pipeline; each confirmed flow emits `security:sqli_taint_confirmed` at KevCritical
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Canonical Alignment Strike (v9.7.0)
 
 **Directive:** Eradicate stale version strings from all forward-facing docs, add a
