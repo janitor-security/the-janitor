@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-deterministic-pulse-taint-spine-v971" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-canonical-alignment-strike-v970" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Canonical Alignment Strike (v9.7.0)
@@ -813,6 +822,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-deterministic-pulse-taint-spine-v971" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-canonical-alignment-strike-v970" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Canonical Alignment Strike (v9.7.0)
@@ -1067,6 +1085,22 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-deterministic-pulse-taint-spine-v971">2026-04-04 — Deterministic Pulse &amp; Taint Spine (v9.7.1)</h2>
+<p><strong>Directive:</strong> Replace agentic CT-pulse rule with a deterministic CI gate in
+<code>fast-release</code>; execute <code>/ciso-pulse</code> to compact CT-008 through CT-011; implement
+Go-3 intra-file SQLi taint confirmation in <code>crates/forge/src/taint_propagate.rs</code>;
+wire into <code>PatchBouncer</code> for Go files; cut <code>v9.7.1</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.7.1</code>
+- <code>.agent_governance/commands/ciso-pulse.md</code> <em>(created)</em> — <code>/ciso-pulse</code> command mapped to Hard Compaction protocol
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> CISO Pulse gate: blocks if CT count ≥ 10
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CISO Pulse executed: CT-008, CT-009, CT-010, CT-011 purged; entries re-tiered; P0-2 added for Phase 4–7 ParsedUnit migration; P0-1 updated to reflect intra-file Go taint completion
+- <code>crates/forge/src/taint_propagate.rs</code> <em>(created)</em> — <code>TaintFlow</code>, <code>track_taint_go_sqli</code>; 5 unit tests (3 TP, 2 TN)
+- <code>crates/forge/src/lib.rs</code> <em>(modified)</em> — <code>pub mod taint_propagate</code> added
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — Go taint confirmation wired into bounce pipeline; each confirmed flow emits <code>security:sqli_taint_confirmed</code> at KevCritical
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-canonical-alignment-strike-v970">2026-04-04 — Canonical Alignment Strike (v9.7.0)</h2>
 <p><strong>Directive:</strong> Eradicate stale version strings from all forward-facing docs, add a
