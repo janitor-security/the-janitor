@@ -5,6 +5,27 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-04 — Executable Surface Gaps & KEV Binding (v9.8.0)
+
+**Directive:** Complete the foundational executable-surface gap sweep,
+realign the detector IDs to the canonical governance taxonomy, harden KEV
+database loading so MCP/CI cannot go blind when `wisdom.rkyv` is missing, and
+cut `v9.8.0`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.8.0`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — added Dockerfile `RUN ... | bash/sh` gate; aligned XML/Proto/Bazel detector IDs to `xxe_external_entity`, `protobuf_any_type_field`, and `bazel_unverified_http_archive`; retained CMake execute-process gate; unit assertions updated
+- `crates/crucible/src/main.rs` *(modified)* — added TP/TN fixtures for Dockerfile pipe execution and updated TP fragments for XML/Proto/Bazel detector IDs
+- `crates/common/src/wisdom.rs` *(modified)* — exposed archive loader and added verified KEV database resolution that rejects manifest-only state
+- `crates/anatomist/src/manifest.rs` *(modified)* — added fail-closed `check_kev_deps_required()` for callers that must not silently degrade
+- `crates/mcp/src/lib.rs` *(modified)* — `janitor_dep_check` now fails closed in CI when the KEV database is missing, corrupt, or reduced to `wisdom_manifest.json` alone; regression test added
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `docs/INNOVATION_LOG.md` *(modified)* — P0-2 marked completed under operator override; former ParsedUnit migration debt moved to P0-3; CT-010 appended
+
+**Commit:** `pending release commit`
+
+---
+
 ## 2026-04-04 — Deterministic Pulse & Taint Spine (v9.7.1)
 
 **Directive:** Replace agentic CT-pulse rule with a deterministic CI gate in

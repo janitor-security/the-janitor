@@ -6,7 +6,7 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::collections::HashSet;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(
     Debug,
@@ -220,7 +220,11 @@ pub fn find_kev_dependency_hits(lockfile: &[u8], wisdom_db: &Path) -> Vec<KevDep
     hits
 }
 
-fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
+/// Load a `wisdom.rkyv` archive from `path`.
+///
+/// Returns `None` when the file is missing, corrupt, or not a supported
+/// archived Wisdom format.
+pub fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
     let file = File::open(path).ok()?;
     let mmap = unsafe { Mmap::map(&file).ok()? };
 
@@ -235,6 +239,44 @@ fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
         meta_patterns: legacy.meta_patterns,
         kev_dependency_rules: Vec::new(),
     })
+}
+
+/// Resolve and validate the KEV dependency database under `janitor_dir`.
+///
+/// The machine-readable KEV correlation rules live in `wisdom.rkyv`; the
+/// adjacent `wisdom_manifest.json` is only a human/diff-friendly CISA snapshot
+/// and cannot reconstruct package-version bindings on its own.
+pub fn resolve_kev_database(janitor_dir: &Path) -> anyhow::Result<PathBuf> {
+    let wisdom_path = janitor_dir.join("wisdom.rkyv");
+    let manifest_path = janitor_dir.join("wisdom_manifest.json");
+
+    anyhow::ensure!(
+        wisdom_path.exists(),
+        if manifest_path.exists() {
+            format!(
+                "KEV database missing at {}; {} exists but cannot replace package-version bindings from wisdom.rkyv",
+                wisdom_path.display(),
+                manifest_path.display()
+            )
+        } else {
+            format!("KEV database missing at {}", wisdom_path.display())
+        }
+    );
+
+    let wisdom = load_wisdom_set(&wisdom_path).ok_or_else(|| {
+        anyhow::anyhow!(
+            "failed to deserialize KEV database at {}; file is missing, corrupt, or incompatible",
+            wisdom_path.display()
+        )
+    })?;
+
+    anyhow::ensure!(
+        !wisdom.kev_dependency_rules.is_empty(),
+        "KEV database at {} contains no dependency rules",
+        wisdom_path.display()
+    );
+
+    Ok(wisdom_path)
 }
 
 fn parse_cargo_lock_dependencies(content: &str) -> Vec<ResolvedDependency> {

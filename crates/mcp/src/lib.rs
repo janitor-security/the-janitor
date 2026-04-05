@@ -312,18 +312,30 @@ fn load_cached_summary(rkyv_path: &Path) -> Result<serde_json::Value> {
 }
 
 /// Scan manifests and return zombie dependency report.
+fn ci_mode_active() -> bool {
+    std::env::var_os("GITHUB_ACTIONS").is_some() || std::env::var_os("CI").is_some()
+}
+
 fn run_dep_check(path: &str) -> Result<serde_json::Value> {
+    run_dep_check_with_ci(path, ci_mode_active())
+}
+
+fn run_dep_check_with_ci(path: &str, ci_mode: bool) -> Result<serde_json::Value> {
     let root = Path::new(path);
     anyhow::ensure!(root.is_dir(), "path is not a directory: {path}");
 
     let registry = anatomist::manifest::scan_manifests(root);
     let zombies = anatomist::manifest::find_zombie_deps(root, &registry);
-    let kev_findings = std::fs::read(root.join("Cargo.lock"))
-        .ok()
-        .map(|lock| {
-            anatomist::manifest::check_kev_deps(&lock, &root.join(".janitor").join("wisdom.rkyv"))
-        })
-        .unwrap_or_default();
+    let janitor_dir = root.join(".janitor");
+    let kev_findings = match std::fs::read(root.join("Cargo.lock")) {
+        Ok(lock) if ci_mode => anatomist::manifest::check_kev_deps_required(&lock, &janitor_dir)
+            .context("janitor_dep_check: KEV database unavailable in CI")?,
+        Ok(lock) => common::wisdom::resolve_kev_database(&janitor_dir)
+            .ok()
+            .map(|wisdom_db| anatomist::manifest::check_kev_deps(&lock, &wisdom_db))
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
 
     Ok(serde_json::json!({
         "total_declared": registry.len(),
@@ -1157,6 +1169,34 @@ mod tests {
         assert!(
             err.message.contains("token"),
             "error message must mention `token`"
+        );
+    }
+
+    #[test]
+    fn test_run_dep_check_ci_fails_closed_without_kev_database() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[dependencies]\nserde = \"1\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.lock"),
+            "version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.150\"\n",
+        )
+        .unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).unwrap();
+        std::fs::write(
+            janitor_dir.join("wisdom_manifest.json"),
+            br#"{"entry_count":1,"entries":[{"cve_id":"CVE-2026-9999"}]}"#,
+        )
+        .unwrap();
+
+        let err = run_dep_check_with_ci(dir.path().to_str().unwrap(), true).unwrap_err();
+        assert!(
+            err.to_string().contains("KEV database unavailable in CI"),
+            "CI dep-check must fail closed when only the JSON manifest exists"
         );
     }
 

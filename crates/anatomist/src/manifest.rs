@@ -89,6 +89,20 @@ pub fn check_kev_deps(lockfile: &[u8], wisdom_db: &Path) -> Vec<SlopFinding> {
     findings
 }
 
+/// Resolve the verified KEV database from `janitor_dir` and apply
+/// [`check_kev_deps`] against it.
+///
+/// This fail-closed entrypoint is intended for CI and MCP callers that must not
+/// silently degrade to `kev_count = 0` when the KEV database is missing,
+/// malformed, or reduced to the JSON manifest alone.
+pub fn check_kev_deps_required(
+    lockfile: &[u8],
+    janitor_dir: &Path,
+) -> anyhow::Result<Vec<SlopFinding>> {
+    let wisdom_db = common::wisdom::resolve_kev_database(janitor_dir)?;
+    Ok(check_kev_deps(lockfile, &wisdom_db))
+}
+
 /// Scans `project_root` for manifest files and builds a `DependencyRegistry`.
 ///
 /// Walks at most 6 directory levels deep to handle deep monorepos and
@@ -1832,6 +1846,33 @@ version = "1.0.150"
         assert!(
             check_kev_deps(lockfile, &wisdom_path).is_empty(),
             "legacy wisdom archive without KEV rules must not emit findings"
+        );
+    }
+
+    #[test]
+    fn test_check_kev_deps_required_fails_when_only_manifest_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).unwrap();
+        std::fs::write(
+            janitor_dir.join("wisdom_manifest.json"),
+            br#"{"entry_count":1,"entries":[{"cve_id":"CVE-2026-9999"}]}"#,
+        )
+        .unwrap();
+
+        let lockfile = br#"
+version = 4
+
+[[package]]
+name = "serde"
+version = "1.0.150"
+"#;
+
+        let err = check_kev_deps_required(lockfile, &janitor_dir).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot replace package-version bindings"),
+            "manifest-only KEV state must fail closed"
         );
     }
 

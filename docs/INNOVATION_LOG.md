@@ -34,7 +34,35 @@ dominant real-world pattern in enterprise middleware.
 3. Wire catalog lookups into `find_python_slop_ast`, `find_java_slop`, and
    `find_js_sqli_slop` for cross-file confirmation.
 
-### P0-2: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
+### P0-2: Executable Surface Gaps [COMPLETED — v9.8.0]
+
+**Class:** Foundational Attack Surface
+**Inspired by:** `crates/forge/src/slop_hunter.rs` executable-surface review
+
+**Observation:**
+Foundational build and control-plane surfaces needed first-class intercepts for
+Dockerfile shell piping, XML external entities, `google.protobuf.Any`, Bazel
+remote fetch integrity, and CMake command interpolation.
+
+**Proposal:**
+Implement the five gates directly in `slop_hunter.rs`, prove them in Crucible,
+and bind their detector IDs to the canonical security taxonomy used by the
+governance layer.
+
+**Security impact:**
+Closes the baseline executable ingress surfaces used by build-time RCE,
+deserialization confusion, XXE SSRF/file disclosure, and supply-chain archive
+substitution.
+
+**Implementation path:**
+Completed in `v9.8.0`: detector IDs aligned to
+`security:dockerfile_pipe_execution`,
+`security:xxe_external_entity`,
+`security:protobuf_any_type_field`,
+`security:bazel_unverified_http_archive`, and
+`security:cmake_execute_process_injection`, with TP/TN Crucible coverage.
+
+### P0-3: Phase 4–7 Single-Language Detectors — ParsedUnit Migration
 
 **Class:** Architecture / Performance
 **Inspired by:** `crates/forge/src/slop_hunter.rs` Phase 4–7 language gates
@@ -60,6 +88,15 @@ Nix, GDScript, ObjC, and Rust — same TP gains as the Python/Java/JS migration.
 Modify each of the 12 functions in `crates/forge/src/slop_hunter.rs`. Update
 `find_slop()` dispatch to pass `parsed` instead of `source`. Add
 `ParsedUnit::unparsed()` test wrappers for each migrated function.
+
+## Continuous Telemetry — 2026-04-04
+
+- `CT-010: KEV Manifest Cannot Reconstruct Package Bindings` —
+  `.janitor/wisdom_manifest.json` is only a diffable CISA snapshot; it does not
+  contain package-ecosystem/version binding rules. Any CI or MCP path that
+  treats the manifest as equivalent to `wisdom.rkyv` becomes blind to KEV
+  dependency correlation. Suggested fix: fail closed whenever CI sees a
+  manifest without a verified `wisdom.rkyv` KEV database.
 
 ## P1 — Compliance / Integration
 

