@@ -483,6 +483,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sovereign-control-plane-air-gap-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      SOVEREIGN CONTROL PLANE (AIR-GAP READY)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SOVEREIGN CONTROL PLANE (AIR-GAP READY)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fedramp-disa-stig-boundary-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      FedRAMP / DISA STIG Boundary Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#universal-scm-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      UNIVERSAL SCM SUPPORT
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       INSTALLATION
@@ -977,6 +1010,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sovereign-control-plane-air-gap-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      SOVEREIGN CONTROL PLANE (AIR-GAP READY)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SOVEREIGN CONTROL PLANE (AIR-GAP READY)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fedramp-disa-stig-boundary-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      FedRAMP / DISA STIG Boundary Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#universal-scm-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      UNIVERSAL SCM SUPPORT
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       INSTALLATION
@@ -1214,45 +1280,112 @@
 <h3 id="data-sovereignty">Data Sovereignty</h3>
 <p>All operations run locally when using the CLI or GitHub Action. Your source code is memory-mapped on your hardware and never transmitted when using the CLI or GitHub Action. See deployment models above. The signed attestation token is verified by a 32-byte public key embedded in the binary. No telemetry. No cloud dependency. No exfiltration surface.</p>
 <hr />
+<h2 id="sovereign-control-plane-air-gap-ready">SOVEREIGN CONTROL PLANE (AIR-GAP READY)</h2>
+<p>The Janitor runs in fully air-gapped environments — no cloud dependency, no inbound internet, zero data egress.</p>
+<p>The <code>janitor-gov</code> binary is a self-contained governance server deployable behind your firewall. It stores all state in a single SQLite file (<code>governor.db</code>), issues ML-DSA-65–signed CBOM bonds via a locally-held <code>governor.key</code>, and communicates with your CI runner over an internal HTTPS endpoint. No Janitor service call ever leaves your network boundary.</p>
+<h3 id="fedramp-disa-stig-boundary-requirements">FedRAMP / DISA STIG Boundary Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AU-2 — Audit Events</strong></td>
+<td>Immutable <code>bounce_log.ndjson</code> with <code>f.sync_all()</code> on every write</td>
+</tr>
+<tr>
+<td><strong>SC-28 — Data at Rest</strong></td>
+<td>SQLite under operator-managed encryption; no cloud storage path</td>
+</tr>
+<tr>
+<td><strong>FIPS 204</strong></td>
+<td>ML-DSA-65 attestation on every CycloneDX CBOM bond</td>
+</tr>
+<tr>
+<td><strong>Zero Egress (IL5)</strong></td>
+<td>Governor receives only the signed score report — never source code</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>pqc_enforced = true</code> flag in <code>janitor.toml</code> blocks any PR merge if the CBOM bond cannot be verified locally, ensuring cryptographic provenance even in disconnected CI environments.</p>
+<p>Enterprise KMS integration is supported out of the box:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--pqc-key<span class="w"> </span>awskms:&lt;key-id&gt;<span class="w">        </span><span class="c1"># AWS KMS</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--pqc-key<span class="w"> </span>azkv:&lt;vault&gt;/&lt;key&gt;<span class="w">      </span><span class="c1"># Azure Key Vault</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>.<span class="w"> </span>--pqc-key<span class="w"> </span>pkcs11:&lt;slot&gt;<span class="w">            </span><span class="c1"># PKCS#11 HSM</span>
+</code></pre></div></p>
+<hr />
+<h2 id="universal-scm-support">UNIVERSAL SCM SUPPORT</h2>
+<p>The Janitor natively integrates with every major source control platform through the <code>ScmContext</code> abstraction — one engine, any pipeline.</p>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Integration Point</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GitHub Actions</strong></td>
+<td><code>action.yml</code> — drop-in step; native Checks API</td>
+</tr>
+<tr>
+<td><strong>GitLab CI</strong></td>
+<td><code>.gitlab-ci.yml</code> script block; <code>$CI_MERGE_REQUEST_DIFF_BASE_SHA</code></td>
+</tr>
+<tr>
+<td><strong>Bitbucket Pipelines</strong></td>
+<td><code>bitbucket-pipelines.yml</code> step; Build Status API</td>
+</tr>
+<tr>
+<td><strong>Azure DevOps</strong></td>
+<td>Azure Pipelines YAML task; DevOps Checks API</td>
+</tr>
+</tbody>
+</table>
+<p>The binary reads a unified environment contract (<code>JANITOR_PR_NUMBER</code>, <code>JANITOR_HEAD_SHA</code>, <code>JANITOR_BASE_SHA</code>, <code>JANITOR_AUTHOR</code>, <code>JANITOR_PR_BODY</code>, <code>JANITOR_REPO_SLUG</code>) — no platform-specific conditional logic inside the Rust engine. Zero-upload guarantee applies identically on all four platforms: your source code never leaves the runner.</p>
+<hr />
 <h2 id="installation">INSTALLATION</h2>
 <p><strong>From source (Rust 1.82+, <code>just</code> required):</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/janitor-security/the-janitor
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>the-janitor
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>just<span class="w"> </span>build
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Binary: target/release/janitor</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/janitor-security/the-janitor
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>the-janitor
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>just<span class="w"> </span>build
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Binary: target/release/janitor</span>
 </code></pre></div>
 <p><strong>Pre-built binary:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Download from Releases, then:</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>janitor<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>mv<span class="w"> </span>janitor<span class="w"> </span>/usr/local/bin/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Download from Releases, then:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>janitor<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>mv<span class="w"> </span>janitor<span class="w"> </span>/usr/local/bin/
 </code></pre></div>
 <hr />
 <h2 id="commands">COMMANDS</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Structural dead symbol audit</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>json<span class="o">]</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># PR enforcement gate — score a diff against the registry</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--patch<span class="w"> </span>&lt;file&gt;<span class="w"> </span>--pr-number<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--author<span class="w"> </span>&lt;handle&gt;<span class="w"> </span>--pr-body<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BODY</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>json
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Zombie dependency detection across npm / cargo / pip / spin / wrangler</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--format<span class="w"> </span>json<span class="w">  </span><span class="c1"># zombie_deps in output</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Structural clone detection</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1"># Safe Proxy deduplication (explicit flag required)</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Shadow-simulate deletion → test suite → physical removal</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="c1"># Generate historical slop / clone / zombie intelligence report</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>janitor<span class="w"> </span>report<span class="w"> </span><span class="o">[</span>--repo<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--top<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>markdown<span class="p">|</span>json<span class="o">]</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="c1"># Long-lived daemon for low-latency CI (Unix socket, Physarum backpressure)</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>janitor<span class="w"> </span>serve<span class="w"> </span><span class="o">[</span>--socket<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--registry<span class="w"> </span>&lt;file&gt;<span class="o">]</span>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="c1"># Ratatui TUI dashboard</span>
-<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Structural dead symbol audit</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span><span class="o">[</span>--library<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>json<span class="o">]</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># PR enforcement gate — score a diff against the registry</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>janitor<span class="w"> </span>bounce<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--patch<span class="w"> </span>&lt;file&gt;<span class="w"> </span>--pr-number<span class="w"> </span>&lt;n&gt;<span class="w"> </span>--author<span class="w"> </span>&lt;handle&gt;<span class="w"> </span>--pr-body<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$BODY</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>json
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Zombie dependency detection across npm / cargo / pip / spin / wrangler</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>janitor<span class="w"> </span>scan<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--format<span class="w"> </span>json<span class="w">  </span><span class="c1"># zombie_deps in output</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Structural clone detection</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Safe Proxy deduplication (explicit flag required)</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>janitor<span class="w"> </span>dedup<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--apply<span class="w"> </span>--force-purge
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Shadow-simulate deletion → test suite → physical removal</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>janitor<span class="w"> </span>clean<span class="w"> </span>&lt;path&gt;<span class="w"> </span>--force-purge
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Generate historical slop / clone / zombie intelligence report</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>janitor<span class="w"> </span>report<span class="w"> </span><span class="o">[</span>--repo<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--top<span class="w"> </span>&lt;n&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="w"> </span>markdown<span class="p">|</span>json<span class="o">]</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># Long-lived daemon for low-latency CI (Unix socket, Physarum backpressure)</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>janitor<span class="w"> </span>serve<span class="w"> </span><span class="o">[</span>--socket<span class="w"> </span>&lt;path&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--registry<span class="w"> </span>&lt;file&gt;<span class="o">]</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="c1"># Ratatui TUI dashboard</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
 </code></pre></div>
 <hr />
 <h2 id="case-study-the-litellmmercor-breach">CASE STUDY: THE LITELLM/MERCOR BREACH</h2>

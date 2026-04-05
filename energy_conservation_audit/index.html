@@ -593,9 +593,51 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-conclusion" class="md-nav__link">
+  <a href="#4-ghg-protocol-compliance-scope-2-emissions-reporting" class="md-nav__link">
     <span class="md-ellipsis">
-      4. Conclusion
+      4. GHG Protocol Compliance — Scope 2 Emissions Reporting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. GHG Protocol Compliance — Scope 2 Emissions Reporting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-enterprise-configuration-via-billing-ci_kwh_per_run" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.1 Enterprise Configuration via [billing] ci_kwh_per_run
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-ghg-protocol-scope-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.2 GHG Protocol Scope Classification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-reporting-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.3 Reporting Integration
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Conclusion
     </span>
   </a>
   
@@ -928,9 +970,51 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-conclusion" class="md-nav__link">
+  <a href="#4-ghg-protocol-compliance-scope-2-emissions-reporting" class="md-nav__link">
     <span class="md-ellipsis">
-      4. Conclusion
+      4. GHG Protocol Compliance — Scope 2 Emissions Reporting
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. GHG Protocol Compliance — Scope 2 Emissions Reporting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-enterprise-configuration-via-billing-ci_kwh_per_run" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.1 Enterprise Configuration via [billing] ci_kwh_per_run
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-ghg-protocol-scope-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.2 GHG Protocol Scope Classification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-reporting-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.3 Reporting Integration
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Conclusion
     </span>
   </a>
   
@@ -1097,7 +1181,88 @@ Organisations with longer CI pipelines or high-PUE facilities can now override t
 - <code>RepoStats</code> and <code>GlobalReportData</code> structs
 - <code>generate_client_package.sh</code> case-study Circuit Breaker Impact section</p>
 <hr />
-<h2 id="4-conclusion">4. Conclusion</h2>
+<h2 id="4-ghg-protocol-compliance-scope-2-emissions-reporting">4. GHG Protocol Compliance — Scope 2 Emissions Reporting</h2>
+<h3 id="41-enterprise-configuration-via-billing-ci_kwh_per_run">4.1 Enterprise Configuration via <code>[billing] ci_kwh_per_run</code></h3>
+<p>The default <code>0.1 kWh</code> basis (15 min × 400 W) is a conservative, reproducible
+lower bound. Enterprises operating their own data centres or with specific
+regulatory requirements for Scope 2 emissions reporting can override this value
+in <code>janitor.toml</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[billing]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">ci_kwh_per_run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.064</span><span class="w">   </span><span class="c1"># site-measured: 400W × 15min × PUE 1.6</span>
+</code></pre></div>
+<p><strong>Formula for site-accurate Scope 2 reporting:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ci_kwh_per_run = (server_watts / 1000) × (ci_run_minutes / 60) × PUE × grid_carbon_intensity_factor
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Where to Obtain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>server_watts</code></td>
+<td>Instance type TDP from cloud provider spec sheet</td>
+</tr>
+<tr>
+<td><code>ci_run_minutes</code></td>
+<td>Average from CI billing dashboard</td>
+</tr>
+<tr>
+<td><code>PUE</code></td>
+<td>Data centre operator disclosure; Uptime Institute 2023 global average: 1.58</td>
+</tr>
+<tr>
+<td><code>grid_carbon_intensity_factor</code></td>
+<td>EPA eGRID subregion, DEFRA UK grid, or operator-specific renewable certificate</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>total_ci_energy_saved_kwh</code> field in the bounce log and JSON export
+(<code>render_json</code>, <code>render_json_global</code>) uses <code>policy.billing.ci_kwh_per_run</code> —
+meaning a single <code>janitor.toml</code> change recalculates all aggregate ESG figures
+without rerunning the audit.</p>
+<h3 id="42-ghg-protocol-scope-classification">4.2 GHG Protocol Scope Classification</h3>
+<table>
+<thead>
+<tr>
+<th>Emission Class</th>
+<th>Applicability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope 2 — Market-Based</strong></td>
+<td>CI runner electricity consumption avoided per blocked PR</td>
+</tr>
+<tr>
+<td><strong>Scope 2 — Location-Based</strong></td>
+<td>Multiply <code>ci_kwh_per_run</code> by regional grid carbon factor (kg CO₂e/kWh)</td>
+</tr>
+<tr>
+<td><strong>Scope 3 — Category 11</strong></td>
+<td>Downstream: blocked security incidents prevent client-side compute remediation</td>
+</tr>
+</tbody>
+</table>
+<p>The Janitor does not generate Scope 1 emissions (no on-premise combustion).
+Scope 2 calculations are the primary reportable unit. Scope 3 downstream impact
+is qualitative — enterprises should apply their own avoided-incident valuation.</p>
+<h3 id="43-reporting-integration">4.3 Reporting Integration</h3>
+<p><code>janitor report --format json</code> emits <code>total_ci_energy_saved_kwh</code> in the
+<code>workslop</code> block. This field maps directly to:</p>
+<ul>
+<li><strong>CDP Climate Change questionnaire</strong> — C8.2a (energy consumption reduction)</li>
+<li><strong>GRI 302-4</strong> (reduction of energy consumption)</li>
+<li><strong>TCFD Physical Risk</strong> — quantified exposure reduction from fewer
+  security-incident-driven remediation cycles</li>
+</ul>
+<p>Multiply <code>total_ci_energy_saved_kwh</code> by the relevant carbon intensity factor
+(<code>kg CO₂e per kWh</code>) to obtain a <code>tCO₂e avoided</code> value suitable for
+sustainability reporting.</p>
+<hr />
+<h2 id="5-conclusion">5. Conclusion</h2>
 <p>The implementation is technically sound, backward-compatible, and methodologically conservative. The energy basis (15 min, 400 W, single run) represents a defensible lower bound. The claim "reclaiming kilowatt-hours of grid capacity from agentic churn" is mathematically valid for any repository where The Janitor intercepts more than 10 PRs.</p>
 
 
