@@ -43,7 +43,7 @@ entry to `docs/INNOVATION_LOG.md`:
 Entry structure:
 
 ```markdown
-### IDEA-NNN: <Title>
+### P0-N: <Title>
 
 **Class:** <Core Engine | Threat Intelligence | Defensive Hardening | Architecture | Wild Pivot>
 **Priority:** <P0 | P1 | P2>
@@ -60,8 +60,11 @@ Entry structure:
 
 **Rules:**
 - Do not limit scope — include both incremental improvements and radical ideas.
-- Assign sequential IDEA-NNN IDs (check the last entry for the current count).
-- Append only — never overwrite or remove prior ideas.
+- You MUST NEVER use the `CT-` prefix.
+- When you identify a gap, inefficiency, or missing test, you must IMMEDIATELY
+  classify it as `P0`, `P1`, or `P2` and append it directly to that section in
+  `docs/INNOVATION_LOG.md`.
+- Append only unless an explicit compaction directive says otherwise.
 - Do not implement ideas from this log without an explicit operator directive.
   The log is a proposal registry, not a work queue.
 
@@ -102,9 +105,7 @@ d) **Flaws or missing safeguards in `.claude/` rules** — governance gaps,
 Each proposal must be concrete and technical: name the file, the function, the
 threat class, and the proposed fix. Vague observations are not entries.
 
----
-
-## Logic 3 — Continuous Telemetry (Mandatory on Every Prompt)
+## Logic 3 — Direct Triage (Mandatory on Every Prompt)
 
 **On EVERY prompt received**, as you read the codebase to formulate a
 solution, you MUST actively scan for:
@@ -115,35 +116,14 @@ solution, you MUST actively scan for:
   contention in hot paths)
 - Security blind spots introduced or exposed by the current change
 
-If any finding is identified, append it to `docs/INNOVATION_LOG.md` under a
-`## Continuous Telemetry` section **before concluding the session**.
-
-Entry format:
-
-```markdown
-## Continuous Telemetry — YYYY-MM-DD
-
-### CT-NNN: <Short title>
-**Found during:** <directive name>
-**Location:** `crates/foo/src/bar.rs:LL`
-**Issue:** <description>
-**Suggested fix:** <concrete remediation>
-```
+If any finding is identified, append it directly to the relevant `P0`, `P1`,
+or `P2` section in `docs/INNOVATION_LOG.md` before concluding the session.
 
 **Absolute mandate:** This scan is not optional and is not waived by
-directive scope. Even a one-line fix can surface a CT entry.
+directive scope.
 
 **Autonomous enforcement:** You are FORBIDDEN from waiting for explicit
-operator instructions to update the `INNOVATION_LOG.md`. On EVERY prompt,
-regardless of the task, if you observe a code inefficiency, missing test, or
-architectural gap, you MUST automatically append a `CT-NNN` entry to the log
-before concluding the session.
-
-If nothing is found, explicitly note `<!-- no telemetry findings this session -->`
-in the INNOVATION_LOG so the absence of findings is recorded, not silently
-skipped.
-
----
+operator instructions to update the `INNOVATION_LOG.md`.
 
 ---
 
@@ -158,7 +138,7 @@ all content down to (but not including) the next H2/H3 boundary. The Innovation
 Log must contain only active or partially-active debt. Completed sections are
 dead weight and will accumulate into noise if not purged.
 
-**Scope:** H2 and H3 sections with named findings (VULN-NNN, IDEA-NNN, CT-NNN).
+**Scope:** H2 and H3 sections with named findings.
 Structural sections such as the preamble, summary tables, and the `Roadmap
 Summary` table are exempt from purging.
 
@@ -169,67 +149,8 @@ Summary` table are exempt from purging.
 4. Record the deletion in the current session's Backlog entry under a
    `**Purged sections:**` sub-item.
 
-**Example:** If `## Enterprise Compliance Gaps` contains VULN-01 through
-VULN-04 and all four are `[COMPLETED]`, delete the entire
-`## Enterprise Compliance Gaps` block including the roadmap summary table
-embedded within it.
-
----
-
----
-
-## Logic 5 — CISO Pulse Audit (Hard Compaction Law)
-
-**Trigger:** Either of these conditions is true:
-1. The Continuous Telemetry counter reaches a **multiple of 10**.
-2. `docs/INNOVATION_LOG.md` has **0 active items** after an Auto-Purge sweep.
-
-**Action:** Halt standard execution. Perform a full CISO Pulse Audit before
-proceeding with any other work.
-
-### CISO Pulse Audit Protocol
-
-1. **Read `docs/INNOVATION_LOG.md` in full.**
-2. **Delete all completed work immediately.**
-   - Delete every entry marked `[COMPLETED]`.
-   - Delete all resolved telemetry.
-   - Delete all historic `## Continuous Telemetry` sections.
-3. **Delete all legacy IDs.**
-   - Drop every `IDEA-XXX` and `CT-XXX` identifier.
-   - The compacted log must not preserve old numbering as aliases.
-4. **Re-tier every remaining active entry** into one of three priority buckets:
-   - **P0 — Enterprise Security Depth**: grammar rules, KEV gates, threat
-     detection expansion, CVSS ≥ 9.0 blast radius. These are the entries
-     that would close a CISO's critical-risk register.
-   - **P1 — Compliance / Zero-Upload**: SCM portability, regulatory
-     certification paths (FedRAMP, DISA STIG), local-only processing
-     guarantees. These are the entries that unlock regulated-market deals.
-   - **P2 — Operational / CLI Ergonomics**: developer-experience improvements,
-     performance wins, internal tooling. These have value but are never the
-     reason an enterprise selects a security product.
-5. **Merge redundant ideas.** If two entries describe variations of the same
-   change (e.g., "add Java SQLi AST gate" and "promote Java byte-level SQLi
-   to AST"), merge them into a single entry with the stronger proposal.
-6. **Drop low-value noise.** If an entry describes a cosmetic cleanup, a
-   note about an internal script, or a speculative idea with no concrete
-   security impact, delete it. The log is a CISO-facing signal board, not
-   a scratch pad.
-7. **Add Grammar Depth entries for any language with fewer than 3 AST-level
-   detection rules.** Grammar depth is always P0. Name the rule, the AST
-   node, the CVE class, and the file to modify.
-8. **Hard-compact the file.**
-   - Rewrite `docs/INNOVATION_LOG.md` so only active items remain.
-   - Re-index active entries into clean tier-local numbering:
-     `P0-1`, `P0-2`, `P1-1`, `P2-1`, etc.
-   - Do not retain superseded numbering, epoch markers, or telemetry ledgers.
-9. **Commit the rewritten log** and continue with the original directive.
-
-### Enforcement
-
-A CISO Pulse Audit overrides the append-only rule for this specific
-rewrite operation. Merged, dropped, completed, and reorganized entries do not
-require individual markers — the commit history is the audit trail. Record the
-rewrite in the Backlog entry for the session.
+**Example:** If a section contains only completed items, delete the entire
+parent block rather than leaving dead backlog weight behind.
 
 ---
 

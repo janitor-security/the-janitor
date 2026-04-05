@@ -99,7 +99,6 @@ fast-release version: sync-versions
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚀 Initiating Fast Release Sequence v{{version}}..."
-	if [ "$(grep -c "CT-" docs/INNOVATION_LOG.md)" -ge 10 ]; then echo "CISO Pulse Required. Run /ciso-pulse."; exit 1; fi
 	cargo build --release --workspace
 	strip target/release/janitor
 	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock justfile action.yml && git commit -S -m "chore: release v{{version}}"

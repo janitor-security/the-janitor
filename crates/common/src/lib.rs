@@ -2,6 +2,7 @@ pub mod deps;
 pub mod physarum;
 pub mod policy;
 pub mod registry;
+pub mod scm;
 pub mod slop;
 pub mod taint;
 pub mod wisdom;

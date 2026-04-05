@@ -598,3 +598,33 @@ Surrender Index to quantify AI-introduced structural rot density.
 **Commit:** (see tag v9.6.4)
 
 **Status:** P0-1 Phase 2 COMPLETE (Python 4→1 parse, JS 6→1 parse per file). Crucible 156/156 + 3/3. `just audit` ✅.
+
+---
+
+## 2026-04-05 — Direct Triage & Commercial Expansion (v9.8.1)
+
+**Directive:** Replace CT backlog batching with direct P-tier triage, implement
+provider-neutral SCM context extraction, and roll the portability work into the
+`9.8.1` release line.
+
+**Files modified:**
+- `.agent_governance/skills/evolution-tracker/SKILL.md` *(modified)* — removed
+  CT numbering and 10-count pulse workflow; direct P0/P1/P2 triage is now the
+  mandatory background rule
+- `.agent_governance/rules/response-format.md` *(modified)* — final summary
+  telemetry language aligned to direct triage; next action now requires an
+  explicit TAM / TEI justification
+- `justfile` *(modified)* — removed the `grep -c "CT-"` release gate from
+  `fast-release`
+- `crates/common/src/lib.rs` *(modified)* — registered `scm` module
+- `crates/common/src/scm.rs` *(created)* — provider-neutral `ScmContext` /
+  `ScmProvider` with GitHub, GitLab, Bitbucket, and Azure DevOps normalization
+- `crates/cli/src/main.rs` *(modified)* — replaced raw `GITHUB_*` fallbacks
+  with `ScmContext::from_env()` for repo slug, commit SHA, and PR number
+  resolution
+- `docs/INNOVATION_LOG.md` *(modified)* — removed `CT-010`, moved the Wisdom
+  manifest gap into `P1-3`, and marked `P1-2` completed
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+- `Cargo.toml` *(modified)* — version bumped to `9.8.1`
+
+**Commit:** pending `just fast-release 9.8.1`

@@ -743,6 +743,7 @@ async fn main() -> anyhow::Result<()> {
             let soft_fail = *soft_fail;
             let deep_scan = *deep_scan;
             let pqc_key = pqc_key.clone();
+            let scm_context = common::scm::ScmContext::from_env();
 
             // Capture fields needed for the timeout failure payload before the
             // move into spawn_blocking.
@@ -755,13 +756,13 @@ async fn main() -> anyhow::Result<()> {
             let timeout_commit_sha = head_sha
                 .clone()
                 .or_else(|| head.clone())
-                .or_else(|| std::env::var("GITHUB_SHA").ok())
+                .or_else(|| scm_context.commit_sha.clone())
                 .unwrap_or_default();
             let timeout_repo_slug = repo_slug
                 .clone()
-                .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
+                .or_else(|| scm_context.repo_slug.clone())
                 .unwrap_or_default();
-            let timeout_pr_number = pr_number;
+            let timeout_pr_number = pr_number.or(scm_context.pr_number);
 
             let task = tokio::task::spawn_blocking(move || {
                 cmd_bounce(
@@ -2671,6 +2672,15 @@ fn cmd_bounce(
 
     // Load governance manifest — fallback to defaults if absent or malformed.
     let policy = JanitorPolicy::load(project_root);
+    let scm_context = common::scm::ScmContext::from_env();
+    let resolved_pr_number = pr_number.or(scm_context.pr_number);
+    let resolved_repo_slug = repo_slug
+        .map(|s| s.to_owned())
+        .or_else(|| scm_context.repo_slug.clone());
+    let resolved_commit_sha = head_sha
+        .map(|s| s.to_owned())
+        .or_else(|| head.map(|s| s.to_owned()))
+        .or_else(|| scm_context.commit_sha.clone());
 
     // Effective soft-fail: CLI flag takes precedence, then janitor.toml.
     let soft_fail = soft_fail_flag || policy.soft_fail;
@@ -2751,7 +2761,7 @@ fn cmd_bounce(
                     &mut score,
                     body,
                     &exts,
-                    repo_slug.unwrap_or(""),
+                    resolved_repo_slug.as_deref().unwrap_or(""),
                 );
             }
             // Git-native mode: merkle root is a 64-char hex string — always
@@ -2770,17 +2780,14 @@ fn cmd_bounce(
         }
         _ => {
             // Patch mode: file, auto-fetch via gh, or stdin.
-            let patch = if let (None, Some(pn)) = (patch_file, pr_number) {
+            let patch = if let (None, Some(pn)) = (patch_file, resolved_pr_number) {
                 // Auto-fetch: gh pr diff <N> --repo <slug>
-                let slug = repo_slug
-                    .map(|s| s.to_owned())
-                    .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Auto-fetch requires --repo-slug <owner/repo> \
-                             or the GITHUB_REPOSITORY env var"
-                        )
-                    })?;
+                let slug = resolved_repo_slug.clone().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Auto-fetch requires --repo-slug <owner/repo> \
+                         or a detected SCM repository slug"
+                    )
+                })?;
                 let output = std::process::Command::new("gh")
                     .args(["pr", "diff", &pn.to_string(), "--repo", &slug])
                     .output()
@@ -2851,7 +2858,7 @@ fn cmd_bounce(
                     &mut score,
                     body,
                     &changed_exts,
-                    repo_slug.unwrap_or(""),
+                    resolved_repo_slug.as_deref().unwrap_or(""),
                 );
             }
 
@@ -2894,7 +2901,7 @@ fn cmd_bounce(
         if !prior_entries.is_empty() && min_hashes_vec.len() == 64 && patch_has_entropy {
             // The current PR number as u32 for self-collision exclusion.
             // Zero means unknown — only exclude when a real PR number is known.
-            let current_pr_u32 = pr_number.unwrap_or(0) as u32;
+            let current_pr_u32 = resolved_pr_number.unwrap_or(0) as u32;
             let index = forge::pr_collider::LshIndex::new();
             for entry in &prior_entries {
                 if entry.min_hashes.len() == 64 {
@@ -3157,7 +3164,7 @@ probable AI context-collapse (hallucinated function reference)"
     let is_bot = policy.is_automation_account(author.unwrap_or(""));
     let slop_score_val = score.score();
     let mut log_entry = report::BounceLogEntry {
-        pr_number,
+        pr_number: resolved_pr_number,
         author: author.map(|s| s.to_owned()),
         timestamp: utc_now_iso8601(),
         slop_score: slop_score_val,
@@ -3171,10 +3178,7 @@ probable AI context-collapse (hallucinated function reference)"
         zombie_deps,
         state: pr_state,
         is_bot,
-        repo_slug: repo_slug
-            .map(|s| s.to_owned())
-            .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
-            .unwrap_or_default(),
+        repo_slug: resolved_repo_slug.unwrap_or_default(),
         suppressed_by_domain: score.suppressed_by_domain,
         collided_pr_numbers: score.collided_pr_numbers,
         necrotic_flag: score.necrotic_flag,
@@ -3184,11 +3188,7 @@ probable AI context-collapse (hallucinated function reference)"
         // match the `head_sha` claim inside the analysis JWT.  Using --head
         // (the git ref for diff extraction) as a fallback preserves local-run
         // behaviour; GITHUB_SHA covers plain GitHub Actions without git-native mode.
-        commit_sha: head_sha
-            .map(|s| s.to_owned())
-            .or_else(|| head.map(|s| s.to_owned()))
-            .or_else(|| std::env::var("GITHUB_SHA").ok())
-            .unwrap_or_default(),
+        commit_sha: resolved_commit_sha.unwrap_or_default(),
         policy_hash: {
             let toml_path = project_root.join("janitor.toml");
             if toml_path.exists() {

@@ -89,15 +89,6 @@ Modify each of the 12 functions in `crates/forge/src/slop_hunter.rs`. Update
 `find_slop()` dispatch to pass `parsed` instead of `source`. Add
 `ParsedUnit::unparsed()` test wrappers for each migrated function.
 
-## Continuous Telemetry — 2026-04-04
-
-- `CT-010: KEV Manifest Cannot Reconstruct Package Bindings` —
-  `.janitor/wisdom_manifest.json` is only a diffable CISA snapshot; it does not
-  contain package-ecosystem/version binding rules. Any CI or MCP path that
-  treats the manifest as equivalent to `wisdom.rkyv` becomes blind to KEV
-  dependency correlation. Suggested fix: fail closed whenever CI sees a
-  manifest without a verified `wisdom.rkyv` KEV database.
-
 ## P1 — Compliance / Integration
 
 ### P1-1: KMS / HSM Key Sources for `--pqc-key`
@@ -122,7 +113,7 @@ protocol or exposing raw private key bytes on runner disks.
 Introduce a key-source abstraction and a thin `pqc-kms` integration crate for
 PKCS#11, AWS KMS, and Azure Key Vault backends.
 
-### P1-2: SCM Context Abstraction
+### P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
 
 **Class:** Portability / Ecosystem
 **Inspired by:** GitHub-specific env resolution in CLI and Action paths
@@ -143,6 +134,29 @@ attestation model per CI platform.
 **Implementation path:**
 Add `crates/common/src/scm.rs`, teach CLI entrypoints to consume it, and add
 fixture-based env tests for each provider.
+
+### P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
+
+**Class:** Infrastructure / Threat Intel Integrity
+**Inspired by:** `crates/common/src/wisdom.rs::resolve_kev_database`
+
+**Observation:**
+`.janitor/wisdom_manifest.json` is a diffable metadata snapshot for CI review.
+It does not contain package-ecosystem/version binding rules and cannot drive
+dependency KEV correlation on its own.
+
+**Proposal:**
+Split the manifest and archive responsibilities explicitly in the docs and
+sync pipeline so `wisdom_manifest.json` is never treated as a functional
+replacement for `wisdom.rkyv`.
+
+**Security impact:**
+Prevents CI and MCP operators from assuming KEV coverage exists when the
+binding archive is absent, corrupted, or replaced with manifest-only state.
+
+**Implementation path:**
+Clarify the contract in `update-wisdom`, the docs CDN bootstrap, and the MCP
+dependency-check surface so archive absence is surfaced immediately.
 
 ## P2 — Architecture / Ergonomics
 
@@ -237,3 +251,28 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 **Implementation path:**
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
+
+### P2-5: Governance Command Surface Drift
+
+**Class:** Operational Integrity
+**Inspired by:** `.agent_governance/commands/ciso-pulse.md`
+
+**Observation:**
+The direct-triage pivot removed CT numbering and the 10-count pulse gate from
+the live workflow, but `.agent_governance/commands/ciso-pulse.md` still
+documents the deleted `CT-` backlog model and the removed `grep -c "CT-"`
+release check.
+
+**Proposal:**
+Rewrite or remove the stale command surface so governance commands match the
+live direct-triage operating model and release behavior.
+
+**Security impact:**
+Prevents operator and agent drift where an obsolete governance command could
+reintroduce dead release gates or misclassify backlog work during incident
+response.
+
+**Implementation path:**
+Audit `.agent_governance/commands/ciso-pulse.md` and adjacent command docs;
+delete the obsolete pulse workflow or replace it with a direct-triage
+compaction command that reflects current release rules.
