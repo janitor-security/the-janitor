@@ -537,6 +537,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-uap-pipeline-integration-parse-forest-completion-v964" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — UAP Pipeline Integration &amp; Parse-Forest Completion (v9.6.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-parse-forest-integration-telemetry-hardening-v963" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)
@@ -738,6 +747,15 @@
   <a href="#2026-04-04-v962-git-exclusion-override-taint-spine-initialization-p0-1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — v9.6.2: Git Exclusion Override &amp; Taint Spine Initialization (P0-1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v964-uap-pipeline-integration-parse-forest-completion-p0-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.4: UAP Pipeline Integration &amp; Parse-Forest Completion (P0-1)
     </span>
   </a>
   
@@ -786,6 +804,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-04-uap-pipeline-integration-parse-forest-completion-v964" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — UAP Pipeline Integration &amp; Parse-Forest Completion (v9.6.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-04-parse-forest-integration-telemetry-hardening-v963" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)
@@ -992,6 +1019,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-04-v964-uap-pipeline-integration-parse-forest-completion-p0-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-04 — v9.6.4: UAP Pipeline Integration &amp; Parse-Forest Completion (P0-1)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1013,6 +1049,19 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-04-uap-pipeline-integration-parse-forest-completion-v964">2026-04-04 — UAP Pipeline Integration &amp; Parse-Forest Completion (v9.6.4)</h2>
+<p><strong>Directive:</strong> Fix the release pipeline to include <code>.agent_governance/</code> in the
+<code>git add</code> surface, complete P0-1 by migrating <code>find_java_slop</code>, <code>find_csharp_slop</code>,
+and <code>find_jsx_dangerous_html_slop</code> to consume cached trees via <code>ParsedUnit::ensure_tree()</code>,
+verify with crucible + <code>just audit</code>, and cut <code>v9.6.4</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.6.4</code>
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> <code>git add</code> now includes <code>.agent_governance/</code>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>find_java_slop</code>, <code>find_csharp_slop</code>, <code>find_jsx_dangerous_html_slop</code> migrated to <code>ParsedUnit</code>/<code>ensure_tree</code>; all Phase 4–7 detectors share cached CST
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P0-1 parse-forest phase marked complete; CT-010 filed for residual Phase 4–7 single-language detectors</p>
+<p><strong>Commit:</strong> <code>pending release commit</code></p>
 <hr />
 <h2 id="2026-04-04-parse-forest-integration-telemetry-hardening-v963">2026-04-04 — Parse-Forest Integration &amp; Telemetry Hardening (v9.6.3)</h2>
 <p><strong>Directive:</strong> Enforce autonomous telemetry updates in the UAP evolution
@@ -1392,6 +1441,16 @@ Surrender Index to quantify AI-introduced structural rot density.</p>
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.2</code></p>
 <p><strong>Status:</strong> P0-1 foundation COMPLETE. <code>just audit</code> ✅.</p>
+<hr />
+<h2 id="2026-04-04-v964-uap-pipeline-integration-parse-forest-completion-p0-1">2026-04-04 — v9.6.4: UAP Pipeline Integration &amp; Parse-Forest Completion (P0-1)</h2>
+<p><strong>Directive:</strong> Fix release pipeline to include <code>.agent_governance/</code> in <code>git add</code>; complete P0-1 parse-forest reuse by migrating all high-redundancy AST-heavy detectors to <code>ParsedUnit::ensure_tree()</code></p>
+<p><strong>Files modified:</strong>
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> recipe: <code>git add</code> now includes <code>.agent_governance/</code> directory so governance rule changes enter the release commit
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — 11 AST-heavy detectors migrated from <code>(eng, source: &amp;[u8])</code> to <code>(eng, parsed: &amp;ParsedUnit&lt;'_&gt;)</code> using <code>ensure_tree()</code>: <code>find_js_slop</code>, <code>find_python_sqli_slop</code>, <code>find_python_ssrf_slop</code>, <code>find_python_path_traversal_slop</code>, <code>find_java_slop</code>, <code>find_js_sqli_slop</code>, <code>find_js_ssrf_slop</code>, <code>find_js_path_traversal_slop</code>, <code>find_csharp_slop</code>, <code>find_prototype_merge_sink_slop</code>, <code>find_jsx_dangerous_html_slop</code>; 4 <code>#[cfg(test)]</code> byte-wrappers added; 3 test module aliases updated; <code>find_slop</code> call sites updated to pass <code>parsed</code>
+- <code>SOVEREIGN_BRIEFING.md</code> <em>(modified)</em> — <code>find_slop</code> signature updated to <code>(lang, &amp;ParsedUnit)</code> with P0-1 parse-forest note; stale <code>(lang, source)</code> reference corrected
+- <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.6.4</code></p>
+<p><strong>Commit:</strong> (see tag v9.6.4)</p>
+<p><strong>Status:</strong> P0-1 Phase 2 COMPLETE (Python 4→1 parse, JS 6→1 parse per file). Crucible 156/156 + 3/3. <code>just audit</code> ✅.</p>
 
 
 

@@ -528,9 +528,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
+  <a href="#p0-1-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Parse-Forest Reuse + Interprocedural Taint Spine
+      P0-1: Interprocedural Taint Spine
     </span>
   </a>
   
@@ -640,6 +640,30 @@
       Continuous Telemetry — 2026-04-04
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-04">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-010-phase-47-single-language-detectors-still-instantiate-own-parsers" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-010: Phase 4–7 Single-Language Detectors Still Instantiate Own Parsers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -717,9 +741,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-parse-forest-reuse-interprocedural-taint-spine" class="md-nav__link">
+  <a href="#p0-1-interprocedural-taint-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Parse-Forest Reuse + Interprocedural Taint Spine
+      P0-1: Interprocedural Taint Spine
     </span>
   </a>
   
@@ -832,6 +856,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#continuous-telemetry-2026-04-04_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Continuous Telemetry — 2026-04-04
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous Telemetry — 2026-04-04">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-010-phase-47-single-language-detectors-still-instantiate-own-parsers" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-010: Phase 4–7 Single-Language Detectors Still Instantiate Own Parsers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -855,22 +903,28 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-1-parse-forest-reuse-interprocedural-taint-spine">P0-1: Parse-Forest Reuse + Interprocedural Taint Spine</h3>
+<h3 id="p0-1-interprocedural-taint-spine">P0-1: Interprocedural Taint Spine</h3>
 <p><strong>Class:</strong> Detection Depth / Performance
 <strong>Inspired by:</strong> <code>crates/forge/src/slop_hunter.rs::find_slop</code></p>
 <p><strong>Observation:</strong>
-<code>slop_hunter.rs</code> reparses the same file for multiple detector phases and treats
-taint as statement-local rather than propagating through helper functions or
-module boundaries.</p>
+Parse-forest reuse is complete as of v9.6.4 — all major detectors (<code>find_java_slop</code>,
+<code>find_csharp_slop</code>, <code>find_jsx_dangerous_html_slop</code>, Python/JS/C gates) now share a
+cached <code>ParsedUnit</code> via <code>ensure_tree()</code>. Taint tracking remains statement-local;
+source-to-sink signal does not propagate through helper functions or module
+boundaries.</p>
 <p><strong>Proposal:</strong>
-Build a shared parse context per file and a lightweight taint graph that can
-propagate source-to-sink signal across local helpers and exported wrappers.</p>
+Build a lightweight taint graph on top of the existing <code>ParsedUnit</code>/<code>TaintExportRecord</code>
+foundation that propagates source-to-sink signal across local helpers and exported
+wrappers (3-hop depth).</p>
 <p><strong>Security impact:</strong>
 Raises true-positive depth on SSRF, SQLi, path traversal, and process-launch
-chains while cutting repeated parse overhead from the hot path.</p>
+chains — current detectors miss sinks that receive tainted values via one call level
+of indirection.</p>
 <p><strong>Implementation path:</strong>
-Refactor detector dispatch around shared <code>ParsedUnit</code> state plus optional
-cross-file taint summaries threaded from <code>PatchBouncer</code>.</p>
+Wire <code>TaintExportRecord</code> (already in <code>crates/common/src/taint.rs</code>) into
+<code>PatchBouncer</code>; implement 3-hop propagation in a new <code>taint_propagate.rs</code>;
+thread taint summaries into <code>find_python_slop_ast</code>, <code>find_java_slop</code>, and
+<code>find_js_sqli_slop</code>.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="p1-1-kms-hsm-key-sources-for-pqc-key">P1-1: KMS / HSM Key Sources for <code>--pqc-key</code></h3>
 <p><strong>Class:</strong> Compliance / Key Custody
@@ -1022,6 +1076,12 @@ classification helpers; replace <code>extract_patch_ext()</code> string returns 
   enforced by the release-surface parity gate.</li>
 <li>CT-009: P0-1 Foundation Laid — <code>TaintKind</code>, <code>TaintedParam</code>, <code>TaintExportRecord</code> in <code>crates/common/src/taint.rs</code>; <code>ParsedUnit&lt;'src&gt;</code> in <code>crates/forge/src/slop_hunter.rs</code>; foundational types for 3-hop cross-file taint propagation (v9.6.2)</li>
 </ul>
+<h2 id="continuous-telemetry-2026-04-04_1">Continuous Telemetry — 2026-04-04</h2>
+<h3 id="ct-010-phase-47-single-language-detectors-still-instantiate-own-parsers">CT-010: Phase 4–7 Single-Language Detectors Still Instantiate Own Parsers</h3>
+<p><strong>Found during:</strong> UAP Pipeline Integration &amp; Parse-Forest Completion (v9.6.4)
+<strong>Location:</strong> <code>crates/forge/src/slop_hunter.rs</code> — <code>find_go_slop</code>, <code>find_ruby_slop</code>, <code>find_bash_slop</code>, <code>find_php_slop</code>, <code>find_kotlin_slop</code>, <code>find_scala_slop</code>, <code>find_swift_slop</code>, <code>find_lua_slop</code>, <code>find_nix_slop</code>, <code>find_gdscript_slop</code>, <code>find_objc_slop</code>, <code>find_rust_slop</code>
+<strong>Issue:</strong> 12 single-language AST detectors (Phase 4–7) still create their own <code>tree_sitter::Parser::new()</code> instead of using <code>ParsedUnit::ensure_tree()</code>. No redundancy within a single call, but inconsistent with the P0-1 architecture and blocks future multi-phase detectors for those languages from sharing the cached tree.
+<strong>Suggested fix:</strong> Migrate each of the 12 functions from <code>(eng: &amp;QueryEngine, source: &amp;[u8])</code> to <code>(eng: &amp;QueryEngine, parsed: &amp;ParsedUnit&lt;'_&gt;)</code> using the same <code>ensure_tree</code> pattern established in v9.6.4. Add <code>_bytes_test</code> wrappers and update test aliases. Target: v9.6.5 or next forge session.</p>
 
 
 
