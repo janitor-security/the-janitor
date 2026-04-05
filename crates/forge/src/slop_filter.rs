@@ -1063,7 +1063,9 @@ impl PRBouncer for PatchBouncer {
             Some(tree.clone()),
             Some(cfg.language.clone()),
         );
+        crate::slop_hunter::set_current_wisdom_path(self.wisdom_path.as_deref());
         let mut raw_findings = crate::slop_hunter::find_slop(ext, &parsed_unit);
+        crate::slop_hunter::set_current_wisdom_path(None);
 
         // Intra-file taint spine (P0-1 Phase 2): for Go files, confirm
         // parameter→SQL-sink flows via taint_propagate::track_taint_go_sqli.

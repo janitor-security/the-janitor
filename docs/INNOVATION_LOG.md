@@ -7,32 +7,6 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-4: Deterministic Slopsquating Interceptor
-
-**Class:** AI Supply Chain Defense
-**Inspired by:** package hallucination drift observed in AI-authored import surfaces
-
-**Observation:**
-The engine can already flag zombie dependencies after manifests land, but it has
-no O(1) pre-resolution gate for LLM-hallucinated package namespaces at the AST
-import layer. That leaves a gap between the first fake import and later manifest
-or lockfile validation.
-
-**Proposal:**
-Implement an `rkyv`-backed Bloom filter of known LLM-hallucinated package
-namespaces and cross-reference it against AST import nodes, emitting
-`security:slopsquat_injection` as a critical bounce when a namespace matches.
-
-**Security impact:**
-Intercepts typo-free AI supply-chain injections before dependency resolution,
-shrinking the window where a fabricated package name can enter review or artifact
-generation.
-
-**Implementation path:**
-Add a compact namespace filter in `crates/common/src/wisdom.rs`, load it into
-`PatchBouncer`, and thread import-node lookups through `slop_hunter.rs` for
-Python, JS/TS, Rust, Go, and package-manager manifests.
-
 ### P0-5: Wasm BYOR (Bring Your Own Rule)
 
 **Class:** Enterprise Governance
@@ -198,3 +172,27 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 **Implementation path:**
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
+
+### P2-5: Signed Wisdom Feed Provenance
+
+**Class:** Threat Intel Supply Integrity
+**Inspired by:** slopsquat seed distribution now depends on unsigned archive transport
+
+**Observation:**
+`update-wisdom` can fetch a structurally valid `wisdom.rkyv`, but the archive
+still lacks an authenticated provenance envelope. A CDN or mirror compromise can
+swap the Bloom filter or KEV rules without tripping semantic validation.
+
+**Proposal:**
+Add detached-signature verification for `wisdom.rkyv` plus manifest-level hash
+pinning so threat-intel updates are rejected unless the archive hash and signer
+identity match policy.
+
+**Security impact:**
+Prevents adversarial replacement of slopsquat seeds or KEV rules and gives CI a
+cryptographically provable trust chain for threat intelligence ingestion.
+
+**Implementation path:**
+Extend `crates/common/src/wisdom.rs` with signed manifest metadata, publish
+`.sig` artifacts under `docs/v1/`, and hard-fail `update-wisdom --ci-mode` when
+signature verification fails.

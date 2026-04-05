@@ -3993,6 +3993,20 @@ fn cmd_update_wisdom_with_urls(
         );
     }
 
+    let mut wisdom = common::wisdom::load_wisdom_set(&wisdom_path).unwrap_or_default();
+    wisdom.slopsquat_filter = common::bloom::SlopsquatFilter::from_seed_corpus([
+        "py-react-vsc",
+        "django-tailwind-fast",
+        "node-express-secure-template",
+    ]);
+    wisdom.sort();
+    let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {
+        anyhow::anyhow!("update-wisdom: serializing slopsquat-seeded archive failed: {e}")
+    })?;
+    std::fs::write(&wisdom_path, wisdom_bytes.as_slice())
+        .with_context(|| format!("writing {}", wisdom_path.display()))?;
+    println!("\u{1f6e1}\u{fe0f} Slopsquat seed corpus installed.");
+
     Ok(())
 }
 

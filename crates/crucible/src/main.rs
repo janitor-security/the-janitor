@@ -1525,6 +1525,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::bloom::SlopsquatFilter;
     use common::deps::DependencyEcosystem;
     use common::wisdom::{KevDependencyRule, WisdomSet};
     use std::fs;
@@ -1603,6 +1604,234 @@ index 1111111..2222222 100644
         assert!(
             score.antipattern_score >= 150,
             "Crucible: KEV dependency fixture must contribute at least 150 points"
+        );
+    }
+
+    #[test]
+    fn slopsquat_python_fixture_intercepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/app.py b/app.py\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/app.py\n\
+                     +++ b/app.py\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +import py_react_vsc\n\
+                     +print('boom')\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: Python slopsquat fixture was not surfaced in antipattern details"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: Python slopsquat fixture must contribute at least 150 points"
+        );
+    }
+
+    #[test]
+    fn slopsquat_python_fixture_safe() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/app.py b/app.py\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/app.py\n\
+                     +++ b/app.py\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +import requests\n\
+                     +print('safe')\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: safe Python import must not trigger slopsquat detection"
+        );
+    }
+
+    #[test]
+    fn slopsquat_javascript_fixture_intercepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/index.js b/index.js\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/index.js\n\
+                     +++ b/index.js\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +const tpl = require('node-express-secure-template');\n\
+                     +console.log(tpl);\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: JavaScript slopsquat fixture was not surfaced in antipattern details"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: JavaScript slopsquat fixture must contribute at least 150 points"
+        );
+    }
+
+    #[test]
+    fn slopsquat_javascript_fixture_safe() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/index.js b/index.js\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/index.js\n\
+                     +++ b/index.js\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +const express = require('express');\n\
+                     +console.log(express);\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: safe JavaScript import must not trigger slopsquat detection"
+        );
+    }
+
+    #[test]
+    fn slopsquat_rust_fixture_intercepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/src/lib.rs b/src/lib.rs\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/src/lib.rs\n\
+                     +++ b/src/lib.rs\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +extern crate django_tailwind_fast;\n\
+                     +pub fn marker() {}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: Rust slopsquat fixture was not surfaced in antipattern details"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: Rust slopsquat fixture must contribute at least 150 points"
+        );
+    }
+
+    #[test]
+    fn slopsquat_rust_fixture_safe() {
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
+            "py-react-vsc",
+            "django-tailwind-fast",
+            "node-express-secure-template",
+        ]);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let patch = "diff --git a/src/lib.rs b/src/lib.rs\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/src/lib.rs\n\
+                     +++ b/src/lib.rs\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +use serde::Serialize;\n\
+                     +pub fn marker() {}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:slopsquat_injection")),
+            "Crucible: safe Rust import must not trigger slopsquat detection"
         );
     }
 

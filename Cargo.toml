@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "9.9.4"
+version = "9.9.5"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -35,6 +35,8 @@ hmac = "0.12"
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
 bytecheck = { version = "0.8", default-features = false }
 thiserror = "2.0"
+bloom = "0.3.2"
+bitvec = "1.0"
 
 # Parsing
 tree-sitter = "0.26"

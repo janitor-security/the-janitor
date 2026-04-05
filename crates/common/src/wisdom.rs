@@ -1,3 +1,4 @@
+use crate::bloom::SlopsquatFilter;
 use crate::deps::DependencyEcosystem;
 use memmap2::Mmap;
 use rkyv::bytecheck::CheckBytes;
@@ -96,6 +97,8 @@ pub struct WisdomSet {
     pub meta_patterns: MetaPattern,
     #[serde(default)]
     pub kev_dependency_rules: Vec<KevDependencyRule>,
+    #[serde(default)]
+    pub slopsquat_filter: SlopsquatFilter,
 }
 
 #[derive(
@@ -238,7 +241,18 @@ pub fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
         immortality_rules: legacy.immortality_rules,
         meta_patterns: legacy.meta_patterns,
         kev_dependency_rules: Vec::new(),
+        slopsquat_filter: SlopsquatFilter::default(),
     })
+}
+
+pub fn slopsquat_hit(name: &str, wisdom_db: &Path) -> bool {
+    if name.trim().is_empty() {
+        return false;
+    }
+    let Some(wisdom) = load_wisdom_set(wisdom_db) else {
+        return false;
+    };
+    wisdom.slopsquat_filter.probably_contains(name)
 }
 
 /// Resolve and validate the KEV dependency database under `janitor_dir`.

@@ -1,3 +1,4 @@
+pub mod bloom;
 pub mod deps;
 pub mod physarum;
 pub mod policy;

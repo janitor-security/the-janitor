@@ -5,6 +5,30 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — The Slopsquatting Interceptor (v9.9.5)
+
+**Directive:** Build the deterministic Bloom-backed slopsquatting interceptor,
+seed the wisdom archive with hallucinated package names, add Crucible true
+positive / true negative fixtures for Python, JavaScript, and Rust, compact the
+innovation log, and release `v9.9.5`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.5`; `bloom` and `bitvec` added as workspace dependencies
+- `crates/common/Cargo.toml` *(modified)* — wired `bloom` and `bitvec` into the common crate
+- `crates/common/src/lib.rs` *(modified)* — registered the new Bloom filter module
+- `crates/common/src/bloom.rs` *(created)* — added deterministic `SlopsquatFilter` with rkyv-compatible storage and unit tests
+- `crates/common/src/wisdom.rs` *(modified)* — extended `WisdomSet` with `slopsquat_filter` and added slopsquat lookup support
+- `crates/cli/src/main.rs` *(modified)* — `update-wisdom` now seeds the slopsquat corpus into `wisdom.rkyv`
+- `crates/forge/src/slop_filter.rs` *(modified)* — threads workspace wisdom path into `slop_hunter` for import-time slopsquat checks
+- `crates/forge/src/slop_hunter.rs` *(modified)* — added Python, JS/TS, and Rust AST import interceptors that emit `security:slopsquat_injection`
+- `crates/crucible/src/main.rs` *(modified)* — added deterministic TP/TN fixtures for seeded slopsquat namespaces across Python, JavaScript, and Rust
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-4`; appended `P2-5` signed wisdom provenance follow-up
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.5`
+
+---
+
 ## 2026-04-05 — Fortune 500 Synchronization Strike (v9.9.4)
 
 **Directive:** Full codebase audit + documentation parity enforcement. Expose

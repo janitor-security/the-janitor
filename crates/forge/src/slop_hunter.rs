@@ -57,6 +57,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::ControlFlow;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -412,6 +413,78 @@ impl QueryEngine {
 }
 
 static ENGINE: OnceLock<Option<QueryEngine>> = OnceLock::new();
+thread_local! {
+    static CURRENT_WISDOM_PATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+pub fn set_current_wisdom_path(path: Option<&Path>) {
+    CURRENT_WISDOM_PATH.with(|slot| {
+        *slot.borrow_mut() = path.map(Path::to_path_buf);
+    });
+}
+
+fn current_wisdom_path() -> Option<PathBuf> {
+    CURRENT_WISDOM_PATH.with(|slot| slot.borrow().clone())
+}
+
+fn slopsquat_wisdom_hit(name: &str) -> bool {
+    current_wisdom_path()
+        .as_deref()
+        .is_some_and(|path| common::wisdom::slopsquat_hit(name, path))
+}
+
+fn js_package_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches(['"', '\'', '`']);
+    if trimmed.is_empty() || trimmed.starts_with('.') {
+        return None;
+    }
+    let mut parts = trimmed.split('/');
+    let first = parts.next()?;
+    if first.starts_with('@') {
+        let second = parts.next()?;
+        Some(format!("{first}/{second}"))
+    } else {
+        Some(first.to_string())
+    }
+}
+
+fn python_module_name(raw: &str) -> Option<String> {
+    raw.trim()
+        .split('.')
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn rust_crate_name(raw: &str) -> Option<String> {
+    let root = raw
+        .trim()
+        .split([':', ';', '{', ' '])
+        .find(|seg| !seg.is_empty())?;
+    match root {
+        "crate" | "self" | "super" => None,
+        _ => Some(root.to_string()),
+    }
+}
+
+fn maybe_push_slopsquat_finding(
+    package_name: &str,
+    node: Node<'_>,
+    findings: &mut Vec<SlopFinding>,
+) {
+    if slopsquat_wisdom_hit(package_name) {
+        findings.push(SlopFinding {
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
+            description: format!(
+                "security:slopsquat_injection — imported package `{package_name}` matches a known hallucinated supply-chain namespace"
+            ),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::KevCritical,
+        });
+    }
+}
 
 fn engine() -> Option<&'static QueryEngine> {
     ENGINE.get_or_init(|| QueryEngine::new().ok()).as_ref()
@@ -442,7 +515,11 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
         "hcl" | "tf" => find_hcl_slop_ast(eng, source),
         // Phase 7 R&D: Rust unsafe transmute + raw pointer dereference AST walk
-        "rs" => find_rust_slop(eng, parsed),
+        "rs" => {
+            let mut f = find_rust_slop(eng, parsed);
+            f.extend(find_rust_slopsquat_imports(eng, parsed));
+            f
+        }
         // Phase 7 R&D: GLSL dangerous extension byte scan
         "glsl" | "vert" | "frag" => find_glsl_slop(source),
         "py" => {
@@ -453,6 +530,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_python_path_traversal_slop(eng, parsed));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
             f.extend(find_python_slop_ast(eng, parsed));
+            f.extend(find_python_slopsquat_imports(eng, parsed));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -467,6 +545,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
             f.extend(find_jsx_dangerous_html_slop(eng, parsed));
+            f.extend(find_js_slopsquat_imports(eng, parsed));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -1194,6 +1273,63 @@ fn find_js_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> 
     let mut findings = Vec::new();
     find_inner_html_assignments(tree.root_node(), source, &mut findings);
     findings
+}
+
+fn find_js_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if current_wisdom_path().is_none()
+        || !(source.windows(6).any(|w| w == b"import")
+            || source.windows(8).any(|w| w == b"require("))
+    {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let mut findings = Vec::new();
+    walk_js_slopsquat_imports(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn walk_js_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    match node.kind() {
+        "import_statement" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(spec) = text
+                    .split(" from ")
+                    .nth(1)
+                    .or_else(|| text.strip_prefix("import "))
+                    .map(|s| s.trim().trim_end_matches(';'))
+                {
+                    if let Some(package) = js_package_name(spec) {
+                        maybe_push_slopsquat_finding(&package, node, findings);
+                    }
+                }
+            }
+        }
+        "call_expression" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(arg) = text
+                    .strip_prefix("require(")
+                    .map(|s| s.trim_end_matches(')').trim())
+                {
+                    if let Some(package) = js_package_name(arg) {
+                        maybe_push_slopsquat_finding(&package, node, findings);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_js_slopsquat_imports(child, source, findings);
+    }
 }
 
 /// Walk the JS/TS AST looking for `assignment_expression` where the left-hand
@@ -2093,6 +2229,53 @@ fn find_python_slop_ast(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopF
     let mut findings = Vec::new();
     find_python_danger_calls(tree.root_node(), source, &mut findings, false);
     findings
+}
+
+fn find_python_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if current_wisdom_path().is_none() || !source.windows(6).any(|w| w == b"import") {
+        return Vec::new();
+    }
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+    let mut findings = Vec::new();
+    walk_python_slopsquat_imports(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn walk_python_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    match node.kind() {
+        "import_statement" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(body) = text.strip_prefix("import ") {
+                    for segment in body.split(',') {
+                        let import_name = segment.split(" as ").next().unwrap_or("").trim();
+                        if let Some(package) = python_module_name(import_name) {
+                            maybe_push_slopsquat_finding(&package, node, findings);
+                        }
+                    }
+                }
+            }
+        }
+        "import_from_statement" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(rest) = text.strip_prefix("from ") {
+                    let module = rest.split(" import ").next().unwrap_or("").trim();
+                    if let Some(package) = python_module_name(module) {
+                        maybe_push_slopsquat_finding(&package, node, findings);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_python_slopsquat_imports(child, source, findings);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -7158,6 +7341,61 @@ fn find_rust_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding
     let mut findings = Vec::new();
     find_rust_danger_nodes(tree.root_node(), source, &mut findings, false, false);
     findings
+}
+
+fn find_rust_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if current_wisdom_path().is_none()
+        || !(source.windows(4).any(|w| w == b"use ")
+            || source.windows(12).any(|w| w == b"extern crate"))
+    {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.rust_lang.clone(), "rs") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let mut findings = Vec::new();
+    walk_rust_slopsquat_imports(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn walk_rust_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    match node.kind() {
+        "use_declaration" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(raw) = text.strip_prefix("use ") {
+                    if let Some(crate_name) = rust_crate_name(raw) {
+                        maybe_push_slopsquat_finding(&crate_name, node, findings);
+                    }
+                }
+            }
+        }
+        "extern_crate_declaration" => {
+            if let Ok(text) = node.utf8_text(source) {
+                if let Some(raw) = text.strip_prefix("extern crate ") {
+                    let crate_name = raw
+                        .split(" as ")
+                        .next()
+                        .unwrap_or("")
+                        .trim_end_matches(';')
+                        .trim();
+                    if let Some(crate_name) = rust_crate_name(crate_name) {
+                        maybe_push_slopsquat_finding(&crate_name, node, findings);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_rust_slopsquat_imports(child, source, findings);
+    }
 }
 
 fn find_rust_danger_nodes(
