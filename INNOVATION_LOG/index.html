@@ -560,15 +560,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#continuous-telemetry-2026-04-04" class="md-nav__link">
-    <span class="md-ellipsis">
-      Continuous Telemetry — 2026-04-04
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p1-compliance-integration" class="md-nav__link">
     <span class="md-ellipsis">
       P1 — Compliance / Integration
@@ -588,9 +579,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-2-scm-context-abstraction" class="md-nav__link">
+  <a href="#p1-2-scm-context-abstraction-completed-v981" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: SCM Context Abstraction
+      P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
     </span>
   </a>
   
@@ -642,6 +642,15 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-governance-command-surface-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Governance Command Surface Drift
     </span>
   </a>
   
@@ -758,15 +767,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#continuous-telemetry-2026-04-04" class="md-nav__link">
-    <span class="md-ellipsis">
-      Continuous Telemetry — 2026-04-04
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p1-compliance-integration" class="md-nav__link">
     <span class="md-ellipsis">
       P1 — Compliance / Integration
@@ -786,9 +786,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-2-scm-context-abstraction" class="md-nav__link">
+  <a href="#p1-2-scm-context-abstraction-completed-v981" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: SCM Context Abstraction
+      P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
     </span>
   </a>
   
@@ -840,6 +849,15 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-governance-command-surface-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Governance Command Surface Drift
     </span>
   </a>
   
@@ -937,15 +955,6 @@ Nix, GDScript, ObjC, and Rust — same TP gains as the Python/Java/JS migration.
 Modify each of the 12 functions in <code>crates/forge/src/slop_hunter.rs</code>. Update
 <code>find_slop()</code> dispatch to pass <code>parsed</code> instead of <code>source</code>. Add
 <code>ParsedUnit::unparsed()</code> test wrappers for each migrated function.</p>
-<h2 id="continuous-telemetry-2026-04-04">Continuous Telemetry — 2026-04-04</h2>
-<ul>
-<li><code>CT-010: KEV Manifest Cannot Reconstruct Package Bindings</code> —
-  <code>.janitor/wisdom_manifest.json</code> is only a diffable CISA snapshot; it does not
-  contain package-ecosystem/version binding rules. Any CI or MCP path that
-  treats the manifest as equivalent to <code>wisdom.rkyv</code> becomes blind to KEV
-  dependency correlation. Suggested fix: fail closed whenever CI sees a
-  manifest without a verified <code>wisdom.rkyv</code> KEV database.</li>
-</ul>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="p1-1-kms-hsm-key-sources-for-pqc-key">P1-1: KMS / HSM Key Sources for <code>--pqc-key</code></h3>
 <p><strong>Class:</strong> Compliance / Key Custody
@@ -963,7 +972,7 @@ protocol or exposing raw private key bytes on runner disks.</p>
 <p><strong>Implementation path:</strong>
 Introduce a key-source abstraction and a thin <code>pqc-kms</code> integration crate for
 PKCS#11, AWS KMS, and Azure Key Vault backends.</p>
-<h3 id="p1-2-scm-context-abstraction">P1-2: SCM Context Abstraction</h3>
+<h3 id="p1-2-scm-context-abstraction-completed-v981">P1-2: SCM Context Abstraction [COMPLETED — v9.8.1]</h3>
 <p><strong>Class:</strong> Portability / Ecosystem
 <strong>Inspired by:</strong> GitHub-specific env resolution in CLI and Action paths</p>
 <p><strong>Observation:</strong>
@@ -979,6 +988,23 @@ attestation model per CI platform.</p>
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/scm.rs</code>, teach CLI entrypoints to consume it, and add
 fixture-based env tests for each provider.</p>
+<h3 id="p1-3-wisdom-manifest-is-metadata-not-kev-authority">P1-3: Wisdom Manifest Is Metadata, Not KEV Authority</h3>
+<p><strong>Class:</strong> Infrastructure / Threat Intel Integrity
+<strong>Inspired by:</strong> <code>crates/common/src/wisdom.rs::resolve_kev_database</code></p>
+<p><strong>Observation:</strong>
+<code>.janitor/wisdom_manifest.json</code> is a diffable metadata snapshot for CI review.
+It does not contain package-ecosystem/version binding rules and cannot drive
+dependency KEV correlation on its own.</p>
+<p><strong>Proposal:</strong>
+Split the manifest and archive responsibilities explicitly in the docs and
+sync pipeline so <code>wisdom_manifest.json</code> is never treated as a functional
+replacement for <code>wisdom.rkyv</code>.</p>
+<p><strong>Security impact:</strong>
+Prevents CI and MCP operators from assuming KEV coverage exists when the
+binding archive is absent, corrupted, or replaced with manifest-only state.</p>
+<p><strong>Implementation path:</strong>
+Clarify the contract in <code>update-wisdom</code>, the docs CDN bootstrap, and the MCP
+dependency-check surface so archive absence is surfaced immediately.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
 <p><strong>Class:</strong> Core Engine Enhancement
@@ -1048,6 +1074,25 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
+<h3 id="p2-5-governance-command-surface-drift">P2-5: Governance Command Surface Drift</h3>
+<p><strong>Class:</strong> Operational Integrity
+<strong>Inspired by:</strong> <code>.agent_governance/commands/ciso-pulse.md</code></p>
+<p><strong>Observation:</strong>
+The direct-triage pivot removed CT numbering and the 10-count pulse gate from
+the live workflow, but <code>.agent_governance/commands/ciso-pulse.md</code> still
+documents the deleted <code>CT-</code> backlog model and the removed <code>grep -c "CT-"</code>
+release check.</p>
+<p><strong>Proposal:</strong>
+Rewrite or remove the stale command surface so governance commands match the
+live direct-triage operating model and release behavior.</p>
+<p><strong>Security impact:</strong>
+Prevents operator and agent drift where an obsolete governance command could
+reintroduce dead release gates or misclassify backlog work during incident
+response.</p>
+<p><strong>Implementation path:</strong>
+Audit <code>.agent_governance/commands/ciso-pulse.md</code> and adjacent command docs;
+delete the obsolete pulse workflow or replace it with a direct-triage
+compaction command that reflects current release rules.</p>
 
 
 
