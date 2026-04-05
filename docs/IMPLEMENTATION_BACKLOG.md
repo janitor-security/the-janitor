@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — Cryptographic Provenance & Strategic Seeding (v9.9.3)
+
+**Directive:** Execute P1-4 key-custody provenance, harden docs deployment
+against `gh-pages` ref-lock races, seed the innovation log with three new P0
+architecture breakthroughs, and release `v9.9.3`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.3`
+- `crates/common/src/pqc.rs` *(modified)* — added stable custody labels for PQC key sources
+- `crates/cli/src/main.rs` *(modified)* — bounce log now records typed `pqc_key_source` from the parsed key source
+- `crates/cli/src/report.rs` *(modified)* — `BounceLogEntry` carries `pqc_key_source`; step summary renders `Key Custody: <type>`
+- `crates/cli/src/cbom.rs` *(modified)* — CycloneDX CBOM now emits `janitor:pqc_key_source` properties for deterministic attestation provenance
+- `justfile` *(modified)* — `fast-release` now delegates docs publication to `just deploy-docs`; `deploy-docs` retries `mkdocs gh-deploy --force` up to 3 times with 2-second backoff
+- `docs/INNOVATION_LOG.md` *(modified)* — `P1-4` removed as completed; seeded `P0-4`, `P0-5`, and `P0-6`
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.3`
+
+---
+
 ## 2026-04-05 — ESG Egress & Key Custody (v9.9.2)
 
 **Directive:** Surface the energy audit in public docs, harden version syncing,

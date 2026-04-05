@@ -31,6 +31,16 @@ impl PqcKeySource {
     pub fn requires_commercial_governor(&self) -> bool {
         !matches!(self, Self::File(_))
     }
+
+    /// Stable custody label written to bounce logs and CBOM properties.
+    pub fn custody_label(&self) -> &'static str {
+        match self {
+            Self::File(_) => "filesystem",
+            Self::AwsKmsArn(_) => "aws-kms",
+            Self::AzureKeyVaultUrl(_) => "azure-kv",
+            Self::Pkcs11Uri(_) => "pkcs11",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -64,5 +74,25 @@ mod tests {
         let src = PqcKeySource::parse("./mlksa.key");
         assert_eq!(src, PqcKeySource::File(PathBuf::from("./mlksa.key")));
         assert!(!src.requires_commercial_governor());
+    }
+
+    #[test]
+    fn custody_labels_are_stable() {
+        assert_eq!(
+            PqcKeySource::parse("./mlksa.key").custody_label(),
+            "filesystem"
+        );
+        assert_eq!(
+            PqcKeySource::parse("arn:aws:kms:us-east-1:123456789012:key/abc").custody_label(),
+            "aws-kms"
+        );
+        assert_eq!(
+            PqcKeySource::parse("https://corp.vault.azure.net/keys/janitor/main").custody_label(),
+            "azure-kv"
+        );
+        assert_eq!(
+            PqcKeySource::parse("pkcs11:token=janitor;object=ml-dsa").custody_label(),
+            "pkcs11"
+        );
     }
 }

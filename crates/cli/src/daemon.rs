@@ -416,6 +416,7 @@ pub mod unix {
                             provenance: crate::report::Provenance::default(),
                             governor_status: None,
                             pqc_sig: None,
+                            pqc_key_source: None,
                             cognition_surrender_index: 0.0,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);

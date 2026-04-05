@@ -192,6 +192,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         provenance: Provenance::default(),
         governor_status: None,
         pqc_sig: None,
+        pqc_key_source: None,
         cognition_surrender_index: 0.0,
     };
 
@@ -495,6 +496,13 @@ pub struct BounceLogEntry {
     /// the chain-of-custody mechanism for this entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pqc_sig: Option<String>,
+
+    /// Typed custody source for the PQC attestation key.
+    ///
+    /// Present when `--pqc-key` was supplied. Values are constrained to:
+    /// `filesystem`, `aws-kms`, `azure-kv`, or `pkcs11`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pqc_key_source: Option<String>,
 
     /// Structural rot density attributable to agentic authorship.
     ///
@@ -2721,6 +2729,11 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         "**TEI: ${per_pr_tei} · Energy Reclaimed: {:.1} kWh**\n\n",
         entry.ci_energy_saved_kwh
     ));
+    if let Some(source) = entry.pqc_key_source.as_deref() {
+        out.push_str("**Key Custody:** `");
+        out.push_str(source);
+        out.push_str("`\n\n");
+    }
 
     // ── Integrity Radar ────────────────────────────────────────────────────────
     out.push_str("### Integrity Radar\n\n");
@@ -3010,6 +3023,7 @@ mod tests {
             },
             governor_status: None,
             pqc_sig: None,
+            pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3055,6 +3069,18 @@ mod tests {
             output.contains("🔴"),
             "critical entry must show red indicator"
         );
+    }
+
+    #[test]
+    fn test_render_step_summary_shows_key_custody() {
+        let mut entry = make_clean_entry();
+        entry.pqc_key_source = Some("aws-kms".to_string());
+        let output = render_step_summary(&entry);
+        assert!(
+            output.contains("Key Custody"),
+            "must render key custody header"
+        );
+        assert!(output.contains("aws-kms"), "must render custody value");
     }
 
     #[test]
@@ -3126,6 +3152,7 @@ mod webhook_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3194,6 +3221,7 @@ mod soft_fail_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }

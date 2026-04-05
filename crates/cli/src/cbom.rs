@@ -67,6 +67,7 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
                     }
                 ],
                 "description": description,
+                "properties": cbom_entry_properties(e),
                 "affects": [
                     {
                         "ref": affects_ref
@@ -150,6 +151,7 @@ pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String 
                 "severity": severity,
                 "method": "other"
             }],
+            "properties": cbom_entry_properties(entry),
             "description": description,
             "affects": [{ "ref": affects_ref }]
         }]
@@ -168,6 +170,17 @@ fn severity_for_entry(e: &BounceLogEntry) -> &'static str {
     } else {
         "none"
     }
+}
+
+fn cbom_entry_properties(entry: &BounceLogEntry) -> Vec<Value> {
+    let mut props = Vec::new();
+    if let Some(source) = entry.pqc_key_source.as_deref() {
+        props.push(json!({
+            "name": "janitor:pqc_key_source",
+            "value": source
+        }));
+    }
+    props
 }
 
 #[cfg(test)]
@@ -203,6 +216,7 @@ mod tests {
             provenance: crate::report::Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -245,5 +259,21 @@ mod tests {
         let out = render_cbom(&[entry], "owner/repo");
         let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert_eq!(parsed["vulnerabilities"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_cbom_includes_pqc_key_source_property() {
+        let mut entry = make_entry(7, 50, vec!["security:compiled_payload_anomaly".to_string()]);
+        entry.pqc_key_source = Some("filesystem".to_string());
+        let out = render_cbom_for_entry(&entry, "owner/repo");
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(
+            parsed["vulnerabilities"][0]["properties"][0]["name"],
+            "janitor:pqc_key_source"
+        );
+        assert_eq!(
+            parsed["vulnerabilities"][0]["properties"][0]["value"],
+            "filesystem"
+        );
     }
 }

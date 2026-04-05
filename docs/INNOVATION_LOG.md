@@ -7,6 +7,79 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
+### P0-4: Deterministic Slopsquating Interceptor
+
+**Class:** AI Supply Chain Defense
+**Inspired by:** package hallucination drift observed in AI-authored import surfaces
+
+**Observation:**
+The engine can already flag zombie dependencies after manifests land, but it has
+no O(1) pre-resolution gate for LLM-hallucinated package namespaces at the AST
+import layer. That leaves a gap between the first fake import and later manifest
+or lockfile validation.
+
+**Proposal:**
+Implement an `rkyv`-backed Bloom filter of known LLM-hallucinated package
+namespaces and cross-reference it against AST import nodes, emitting
+`security:slopsquat_injection` as a critical bounce when a namespace matches.
+
+**Security impact:**
+Intercepts typo-free AI supply-chain injections before dependency resolution,
+shrinking the window where a fabricated package name can enter review or artifact
+generation.
+
+**Implementation path:**
+Add a compact namespace filter in `crates/common/src/wisdom.rs`, load it into
+`PatchBouncer`, and thread import-node lookups through `slop_hunter.rs` for
+Python, JS/TS, Rust, Go, and package-manager manifests.
+
+### P0-5: Wasm BYOR (Bring Your Own Rule)
+
+**Class:** Enterprise Governance
+**Inspired by:** repeated customer demand for proprietary detector logic without forks
+
+**Observation:**
+Enterprises that need private AST rules must currently fork the engine or wait
+for upstream additions. That creates governance drift, slows adoption, and makes
+customer-specific policy impossible to ship without source divergence.
+
+**Proposal:**
+Integrate a lightweight WebAssembly runtime so enterprises can compile
+proprietary AST rules into `.wasm` modules and mount them via
+`janitor bounce --wasm-rules ./corp.wasm`, enabling zero-fork custom governance.
+
+**Security impact:**
+Allows closed-world policy enforcement on sovereign infrastructure without
+exposing proprietary heuristics or weakening the deterministic core engine.
+
+**Implementation path:**
+Add a sandboxed Wasm rule host in `crates/forge`, define a stable ABI for
+serialized findings and parsed-node views, and expose module loading through
+`crates/cli/src/main.rs` plus policy controls in `crates/common/src/policy.rs`.
+
+### P0-6: FIPS 205 (SLH-DSA) Stateless Signatures
+
+**Class:** Post-Quantum Cryptography
+**Inspired by:** long-horizon CBOM permanence beyond stateful key-management assumptions
+
+**Observation:**
+The current CBOM attestation path relies solely on ML-DSA-65. That is strong,
+but it does not offer a hash-based stateless companion for environments that
+want absolute post-quantum permanence and diversity against lattice-family risk.
+
+**Proposal:**
+Implement the SLH-DSA hash-based signature scheme as a companion to ML-DSA-65 so
+CBOMs can optionally carry a second, stateless FIPS 205 signature.
+
+**Security impact:**
+Introduces cryptographic diversity and immutable long-term verification paths for
+artifact attestations that may need to survive decades of compliance retention.
+
+**Implementation path:**
+Add a parallel signing backend in `crates/common/src/pqc.rs`, extend the CBOM
+envelope to carry dual-signature metadata, and update `verify-cbom` to validate
+ML-DSA, SLH-DSA, or both under explicit policy.
+
 ## P1 — Compliance / Integration
 
 ### P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
@@ -31,33 +104,6 @@ binding archive is absent, corrupted, or replaced with manifest-only state.
 **Implementation path:**
 Clarify the contract in `update-wisdom`, the docs CDN bootstrap, and the MCP
 dependency-check surface so archive absence is surfaced immediately.
-
-### P1-4: Attestation Key Provenance Envelope
-
-**Class:** Compliance / Attestation Forensics
-**Inspired by:** `crates/common/src/pqc.rs` and the `--pqc-key` source split
-
-**Observation:**
-The bounce log currently records only `pqc_sig`. Once enterprise key custody is
-enabled, auditors will need to distinguish whether a signature was produced by a
-raw on-disk key, AWS KMS, Azure Key Vault, or PKCS#11 hardware without reading
-runner-local configuration.
-
-**Proposal:**
-Add a typed `pqc_key_source` provenance field to `BounceLogEntry`, Step Summary,
-and CBOM output. Record the source class (`file`, `aws_kms`, `azure_key_vault`,
-`pkcs11`) plus a redacted locator hash so custody mode is reviewable without
-leaking key identifiers.
-
-**Security impact:**
-Closes the auditability gap between "signature present" and "signature produced
-under compliant key custody," which is mandatory for regulated procurement and
-post-incident attestation review.
-
-**Implementation path:**
-Extend `crates/common/src/pqc.rs`, `crates/cli/src/report.rs`,
-`crates/cli/src/cbom.rs`, and the Governor report envelope to persist typed
-attestation-key provenance alongside `pqc_sig`.
 
 ## P2 — Architecture / Ergonomics
 

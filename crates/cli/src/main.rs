@@ -838,6 +838,7 @@ async fn main() -> anyhow::Result<()> {
                             provenance: report::Provenance::default(),
                             governor_status: None,
                             pqc_sig: None,
+                            pqc_key_source: None,
                             cognition_surrender_index: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
@@ -3231,6 +3232,7 @@ probable AI context-collapse (hallucinated function reference)"
         governor_status: None,
         // pqc_sig set by --pqc-key signing block below (if key path provided).
         pqc_sig: None,
+        pqc_key_source: None,
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
             let ap: f64 = if score.agentic_origin_penalty > 0 {
@@ -3260,6 +3262,7 @@ probable AI context-collapse (hallucinated function reference)"
         use fips204::traits::{SerDes, Signer};
 
         let key_source = PqcKeySource::parse(key_source_raw);
+        log_entry.pqc_key_source = Some(key_source.custody_label().to_string());
         if key_source.requires_commercial_governor() {
             anyhow::bail!(
                 "Enterprise KMS integration requires the `janitor-gov` commercial binary. Contact sales@thejanitor.app."
@@ -4385,6 +4388,7 @@ mod pqc_signing_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }

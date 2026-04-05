@@ -115,7 +115,7 @@ fast-release version: sync-versions
 	git push origin HEAD:main "v{{version}}"
 	git push origin "v${MAJOR}" --force
 	gh release create v{{version}} --generate-notes --title "The Janitor v{{version}}"
-	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
+	just deploy-docs
 	echo "💀 Release v{{version}} deployed."
 
 # 5. MULTI-REPO GAUNTLET
@@ -212,7 +212,18 @@ test-strike-pipeline:
 
 # 7. DOCUMENTATION
 deploy-docs:
-	uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force
+	#!/usr/bin/env bash
+	set -euo pipefail
+	for attempt in 1 2 3; do
+	    if uv run --with "mkdocs-material<9.6" --with "mkdocs<2" mkdocs gh-deploy --force; then
+	        exit 0
+	    fi
+	    if [[ "${attempt}" -eq 3 ]]; then
+	        exit 1
+	    fi
+	    echo "warning: gh-pages deploy race detected; retrying in 2s (attempt ${attempt}/3 failed)" >&2
+	    sleep 2
+	done
 
 # 8. LOCAL BRANCH INTEGRITY CHECK
 #
