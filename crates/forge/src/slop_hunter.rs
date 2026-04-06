@@ -530,6 +530,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_python_path_traversal_slop(eng, parsed));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
             f.extend(find_python_slop_ast(eng, parsed));
+            f.extend(find_python_phantom_payload_slop(eng, parsed));
             f.extend(find_python_slopsquat_imports(eng, parsed));
             f
         }
@@ -545,6 +546,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
             f.extend(find_jsx_dangerous_html_slop(eng, parsed));
+            f.extend(find_js_phantom_payload_slop(eng, parsed));
             f.extend(find_js_slopsquat_imports(eng, parsed));
             f
         }
@@ -554,6 +556,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_java_slop_fast(source));
             // Phase 2 R&D: method_invocation AST walk (deser + JNDI + runtime exec)
             f.extend(find_java_slop(eng, parsed));
+            f.extend(find_java_phantom_payload_slop(eng, parsed));
             f
         }
         "go" => {
@@ -1013,6 +1016,7 @@ fn find_c_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
     };
     let mut findings = Vec::new();
     find_banned_c_calls(tree.root_node(), source, &mut findings);
+    find_dead_branch_payloads(tree.root_node(), source, &mut findings);
     findings
 }
 
@@ -1292,6 +1296,21 @@ fn find_js_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<
 
     let mut findings = Vec::new();
     walk_js_slopsquat_imports(tree.root_node(), source, &mut findings);
+    findings
+}
+
+fn find_js_phantom_payload_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if !source.windows(2).any(|w| w == b"if") {
+        return Vec::new();
+    }
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+    let mut findings = Vec::new();
+    find_dead_branch_payloads(tree.root_node(), source, &mut findings);
     findings
 }
 
@@ -2246,6 +2265,24 @@ fn find_python_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> 
     findings
 }
 
+fn find_python_phantom_payload_slop(
+    eng: &QueryEngine,
+    parsed: &ParsedUnit<'_>,
+) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if !source.windows(2).any(|w| w == b"if") {
+        return Vec::new();
+    }
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+    let mut findings = Vec::new();
+    find_dead_branch_payloads(tree.root_node(), source, &mut findings);
+    findings
+}
+
 fn walk_python_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
     match node.kind() {
         "import_statement" => {
@@ -2339,6 +2376,21 @@ fn find_java_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding
         false,
         &mut findings,
     );
+    findings
+}
+
+fn find_java_phantom_payload_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if !source.windows(2).any(|w| w == b"if") {
+        return Vec::new();
+    }
+    let tree = match parsed.ensure_tree(eng.java_lang.clone(), "java") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+    let mut findings = Vec::new();
+    find_dead_branch_payloads(tree.root_node(), source, &mut findings);
     findings
 }
 
@@ -4692,6 +4744,118 @@ pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
     findings
 }
 
+fn find_dead_branch_payloads(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "if_statement" {
+        if let Some(condition) = node.child_by_field_name("condition") {
+            if branch_condition_is_statically_false(condition, source) {
+                if let Some(consequence) = find_if_consequence_node(node, condition) {
+                    if let Some(reason) = dead_branch_payload_reason(consequence, source) {
+                        findings.push(SlopFinding {
+                            start_byte: consequence.start_byte(),
+                            end_byte: consequence.end_byte(),
+                            description: format!(
+                                "security:phantom_payload_evasion — statically unreachable branch contains an anomalous payload ({reason}); adversarial logic is likely being staged behind a constant-false guard"
+                            ),
+                            domain: DOMAIN_FIRST_PARTY,
+                            severity: Severity::KevCritical,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_dead_branch_payloads(child, source, findings);
+    }
+}
+
+fn branch_condition_is_statically_false(node: Node<'_>, source: &[u8]) -> bool {
+    let Ok(raw) = node.utf8_text(source) else {
+        return false;
+    };
+    let mut normalized: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
+    while normalized.starts_with('(') && normalized.ends_with(')') && normalized.len() > 2 {
+        normalized = normalized[1..normalized.len() - 1].to_string();
+    }
+    matches!(
+        normalized.as_str(),
+        "false" | "False" | "0" | "1==0" | "0==1" | "1<0" | "0>1" | "!true" | "notTrue"
+    )
+}
+
+fn find_if_consequence_node<'a>(node: Node<'a>, condition: Node<'a>) -> Option<Node<'a>> {
+    node.child_by_field_name("consequence").or_else(|| {
+        let mut cursor = node.walk();
+        let consequence = node.children(&mut cursor).find(|child| {
+            child.start_byte() >= condition.end_byte()
+                && !matches!(child.kind(), ")" | "else" | "else_clause")
+                && matches!(
+                    child.kind(),
+                    "statement_block"
+                        | "block"
+                        | "compound_statement"
+                        | "suite"
+                        | "expression_statement"
+                )
+        });
+        consequence
+    })
+}
+
+fn dead_branch_payload_reason(node: Node<'_>, source: &[u8]) -> Option<String> {
+    let bytes = source.get(node.start_byte()..node.end_byte())?;
+    if let Some((entropy, len)) = suspicious_dead_branch_string_literal(bytes) {
+        return Some(format!(
+            "dense string literal ({entropy:.2} bits/symbol, {len} chars)"
+        ));
+    }
+    if bytes.len() >= 256 {
+        let ratio = check_entropy(bytes);
+        if ratio >= 0.92 {
+            return Some(format!(
+                "high-entropy payload block (compression ratio {ratio:.2})"
+            ));
+        }
+    }
+    None
+}
+
+fn suspicious_dead_branch_string_literal(bytes: &[u8]) -> Option<(f64, usize)> {
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let quote = bytes[i];
+        if matches!(quote, b'\'' | b'"' | b'`') {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() {
+                if bytes[j] == quote && (j == start || bytes[j - 1] != b'\\') {
+                    let inner = &bytes[start..j];
+                    let dense = inner
+                        .iter()
+                        .filter(|&&b| {
+                            b.is_ascii_alphanumeric()
+                                || matches!(b, b'+' | b'/' | b'=' | b'_' | b'-')
+                        })
+                        .count();
+                    if inner.len() >= 40 && dense * 100 / inner.len() >= 85 {
+                        let entropy = shannon_entropy(inner);
+                        if entropy > 4.5 {
+                            return Some((entropy, inner.len()));
+                        }
+                    }
+                    i = j;
+                    break;
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
 #[cfg(test)]
 fn find_slop_bytes(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     let parsed = ParsedUnit::unparsed(source);
@@ -4710,6 +4874,13 @@ fn find_java_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
     let parsed = ParsedUnit::unparsed(source);
     let eng = engine().expect("QueryEngine must initialise in tests");
     find_java_slop(eng, &parsed)
+}
+
+#[cfg(test)]
+fn find_js_phantom_payload_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    let eng = engine().expect("QueryEngine must initialise in tests");
+    find_js_phantom_payload_slop(eng, &parsed)
 }
 
 #[cfg(test)]
@@ -4735,6 +4906,7 @@ fn find_jsx_dangerous_html_slop_bytes_test(source: &[u8]) -> Vec<SlopFinding> {
 
 #[cfg(test)]
 mod tests {
+    use super::find_js_phantom_payload_bytes_test as find_js_phantom_payload;
     use super::find_slop_bytes as find_slop;
     use super::*;
 
@@ -4776,6 +4948,28 @@ mod tests {
         let src = b"rm -rf $TARGET_DIR\n";
         let findings = find_slop("sh", src);
         assert!(findings.is_empty(), "Bash unquoted-var rule removed v7.6.0");
+    }
+
+    #[test]
+    fn test_js_dead_branch_high_entropy_payload_fires() {
+        let src = br#"if (false) { const blob = "Qz9Lm4Nk8Vh2Yr7Pw1Sd6Tf0Ua3Xe8Bj5Kp9Rv2Cm7Hs8Wq4Zd1Jn6Mx0Kb3Yt5P"; }"#;
+        let findings = find_js_phantom_payload(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("security:phantom_payload_evasion")),
+            "constant-false branch with dense payload must fire phantom payload detection"
+        );
+    }
+
+    #[test]
+    fn test_js_dead_branch_debug_code_stays_silent() {
+        let src = br#"if (false) { console.log("debug"); }"#;
+        let findings = find_js_phantom_payload(src);
+        assert!(
+            findings.is_empty(),
+            "ordinary dead debug branches must not trigger phantom payload detection"
+        );
     }
 
     // ── C++ regression guard (rule removed v7.1.11) ───────────────────────

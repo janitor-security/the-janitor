@@ -5,6 +5,21 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Phantom Payload Interception (v9.9.9)
+
+**Directive:** Execute `P0-8` by detecting anomalous payloads hidden inside
+statically unreachable branches, prove the rule with Crucible fixtures,
+autonomously seed the next structural breakthrough, and release `v9.9.9`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.9`
+- `crates/forge/src/slop_hunter.rs` *(modified)* — added dead-branch AST walk, constant-false branch recognition, dense-literal anomaly scoring, and `security:phantom_payload_evasion` at `Severity::KevCritical`
+- `crates/crucible/src/main.rs` *(modified)* — added true-positive and true-negative fixtures for dead-branch payload smuggling
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-8`; seeded `P0-9` Deterministic Deobfuscation Spine
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.9`
+
 ## 2026-04-06 — Sovereign Transparency Log & Non-Repudiation (v9.9.8)
 
 **Directive:** Execute `P0-7` by adding an append-only Blake3 transparency log

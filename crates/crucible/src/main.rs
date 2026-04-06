@@ -457,6 +457,20 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+    Entry {
+        name: "JS/dead branch payload — INTERCEPT",
+        lang: "js",
+        source: b"if (false) { const blob = \"Qz9Lm4Nk8Vh2Yr7Pw1Sd6Tf0Ua3Xe8Bj5Kp9Rv2Cm7Hs8Wq4Zd1Jn6Mx0Kb3Yt5P\"; }\n",
+        must_intercept: true,
+        desc_fragment: Some("phantom_payload_evasion"),
+    },
+    Entry {
+        name: "JS/dead branch debug code — SAFE",
+        lang: "js",
+        source: b"if (false) { console.log(\"debug\"); }\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 
     // ── Supply Chain Integrity ────────────────────────────────────────────
     Entry {

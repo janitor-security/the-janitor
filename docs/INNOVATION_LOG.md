@@ -7,29 +7,29 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-8: Phantom Payload Interception
+### P0-9: Deterministic Deobfuscation Spine
 
 **Class:** AI Evasion Defense
 
 **Observation:**
-Adversarial AI agents are hiding malicious logic inside mathematically
-unreachable AST paths such as `if (1 == 0) { ... }`, dead `switch` arms, and
-constant-false guard rails to bypass dynamic analysis and human review.
+Agentic payloads are shifting from plain dead branches to staged decoding chains:
+base64 fragments, hex arrays, XOR loops, and concatenated literals that only
+become malicious after a small local transform. Our current detectors see the
+sink, but not the normalized payload that explains intent.
 
 **Proposal:**
-Implement a structural reachability pass over our AST layer. Any unreachable
-branch containing high-entropy payloads, shell execution, credential exfiltration,
-or other critical sinks should emit `security:phantom_payload_evasion` at
-critical severity.
+Add a zero-upload deobfuscation spine that normalizes base64, hex, gzip, XOR,
+and literal-concatenation chains into a bounded intermediate buffer before
+re-feeding the result into `slop_hunter`, `binary_hunter`, and LotL scanners.
 
 **Security impact:**
-Disarms the primary technique agentic swarms use to smuggle dormant exploits
-into production codebases without surfacing in runtime-driven review paths.
+Collapses a major AI evasion class by turning staged payload assembly back into
+plain analyzable content before the exploit reaches its sink.
 
 **Implementation path:**
-Extend `crates/forge/src/slop_hunter.rs` with language-specific constant-folding
-for branch predicates, then route dead-branch sink analysis through the existing
-critical finding path.
+Add `crates/forge/src/deobfuscate.rs` with deterministic decode passes and
+budget caps; thread normalized views into JS/Python/Bash/PowerShell-adjacent
+detectors without violating the 8GB Law.
 
 ## P1 — Compliance / Integration
 
