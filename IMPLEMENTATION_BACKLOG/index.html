@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)
@@ -1025,6 +1034,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)
@@ -1424,6 +1442,31 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913">2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)</h2>
+<p><strong>Directive:</strong> Execute <code>P1-1</code> by having <code>janitor-gov</code> countersign a compact
+decision receipt covering policy, Wisdom feed, transparency anchor, and CBOM
+signature lineage; execute <code>P2-2</code> by adding a dedicated grammar stress fuzzer
+crate and harvested exhaustion fixture directory; verify the full workspace and
+release <code>v9.9.13</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.13</code>; added <code>libfuzzer-sys</code>
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — added <code>ed25519-dalek</code> for shared receipt signing / verification
+- <code>crates/common/src/lib.rs</code> <em>(modified)</em> — exported the new <code>receipt</code> module
+- <code>crates/common/src/receipt.rs</code> <em>(new)</em> — added <code>DecisionReceipt</code>, <code>SignedDecisionReceipt</code>, embedded Governor verifying key, and receipt verification helpers
+- <code>crates/gov/Cargo.toml</code> <em>(modified)</em> — wired <code>common</code> and <code>ed25519-dalek</code> into <code>janitor-gov</code>
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em> — <code>/v1/report</code> now emits signed decision receipts alongside inclusion proofs; added Governor receipt tests
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>BounceLogEntry</code> now carries <code>decision_receipt</code>; Governor client parses countersigned receipts; step summary surfaces sealed receipt anchors
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — CycloneDX v1.6 metadata and entry properties now embed Governor-sealed receipt payloads/signatures while preserving deterministic signing surfaces
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — bounce flow persists Governor receipt envelopes; <code>verify-cbom</code> now cryptographically verifies the receipt against the embedded Governor public key
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — auxiliary bounce-log constructor updated for receipt-schema parity
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — git-native bounce-log constructors updated for receipt-schema parity
+- <code>crates/fuzz/Cargo.toml</code> <em>(new)</em> — introduced the dedicated grammar stress fuzz crate
+- <code>crates/fuzz/src/lib.rs</code> <em>(new)</em> — added bounded parser-budget helpers for C++, Python, and JavaScript stress evaluation
+- <code>crates/fuzz/fuzz_targets/ast_bomb.rs</code> <em>(new)</em> — added the first AST-bomb fuzz target
+- <code>crates/crucible/fixtures/exhaustion/.gitkeep</code> <em>(new)</em> — created the governed exhaustion-fixture corpus root
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P1-1</code> / <code>P2-2</code>; seeded <code>P1-1</code> Replayable Decision Capsules and <code>P2-5</code> Exhaustion Corpus Promotion Pipeline
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.13</code></p>
 <h2 id="2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912">2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)</h2>
 <p><strong>Directive:</strong> Bind every bounce decision to a cryptographically identified
 Wisdom feed receipt, thread that provenance through the CBOM and verifier,

@@ -605,9 +605,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-governor-sealed-decision-receipts" class="md-nav__link">
+  <a href="#p1-1-replayable-decision-capsules" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Governor-Sealed Decision Receipts
+      P1-1: Replayable Decision Capsules
     </span>
   </a>
   
@@ -629,15 +629,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-2-grammar-stress-fuzzer" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: Grammar Stress Fuzzer
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p2-3-release-surface-parity-gate" class="md-nav__link">
     <span class="md-ellipsis">
       P2-3: Release Surface Parity Gate
@@ -650,6 +641,15 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -743,9 +743,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-governor-sealed-decision-receipts" class="md-nav__link">
+  <a href="#p1-1-replayable-decision-capsules" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Governor-Sealed Decision Receipts
+      P1-1: Replayable Decision Capsules
     </span>
   </a>
   
@@ -767,15 +767,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-2-grammar-stress-fuzzer" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: Grammar Stress Fuzzer
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p2-3-release-surface-parity-gate" class="md-nav__link">
     <span class="md-ellipsis">
       P2-3: Release Surface Parity Gate
@@ -788,6 +779,15 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -822,43 +822,27 @@ ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-1-governor-sealed-decision-receipts">P1-1: Governor-Sealed Decision Receipts</h3>
-<p><strong>Class:</strong> Enterprise Audit Evidence</p>
+<h3 id="p1-1-replayable-decision-capsules">P1-1: Replayable Decision Capsules</h3>
+<p><strong>Class:</strong> Enterprise Forensics / Audit Replay</p>
 <p><strong>Observation:</strong>
-The bounce log now binds policy hash, threat-intel receipt, transparency anchor,
-and PQC signatures, but the evidence is still assembled client-side across
-multiple fields. Regulated buyers still lack a single countersigned receipt that
-proves the exact policy, intel snapshot, binary version, and decision outcome as
-one immutable object.</p>
+Governor-sealed receipts now prove what decision was made, but they do not yet
+carry a deterministic replay capsule that lets an external auditor re-run the
+decision math over the exact semantic mutation set, policy digest, and threat
+intel snapshot without reconstructing state by hand.</p>
 <p><strong>Proposal:</strong>
-Have <code>janitor-gov</code> emit a countersigned <code>DecisionReceipt</code> envelope that seals
-<code>policy_hash</code>, <code>wisdom_hash</code>, <code>commit_sha</code>, <code>repo_slug</code>, <code>slop_score</code>,
-transparency anchor, and CBOM signature digests under a Governor-controlled
-attestation key. Store that receipt in bounce logs, CBOM metadata, and offline
-verification output.</p>
+Define a compact replay capsule format containing the semantic CST mutation
+roots, <code>policy_hash</code>, <code>wisdom_hash</code>, CBOM digest, and normalized score vector.
+Have <code>janitor-gov</code> countersign that capsule and add a <code>janitor replay-receipt</code>
+path that deterministically re-derives the decision from the sealed evidence
+bundle.</p>
 <p><strong>Security impact:</strong>
-Eliminates evidentiary recomposition gaps and gives auditors a single
-non-repudiable artifact for every enforcement decision.</p>
+Turns enforcement evidence from “signed verdict” into independently replayable
+proof, closing the last auditor objection around deterministic reenactment.</p>
 <p><strong>Implementation path:</strong>
-Define a receipt schema in <code>common</code>, sign it in <code>crates/gov</code>, embed it in
-<code>BounceLogEntry</code> and CycloneDX metadata, and extend <code>verify-cbom</code> with receipt
-verification against the Governor public key.</p>
+Extend <code>DecisionReceipt</code> with a replay capsule hash, add a capsule serializer in
+<code>common</code>, persist capsules next to bounce logs, and teach <code>verify-cbom</code> /
+<code>replay-receipt</code> to recompute the slop score from the sealed payload.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
-<h3 id="p2-2-grammar-stress-fuzzer">P2-2: Grammar Stress Fuzzer</h3>
-<p><strong>Class:</strong> Defensive Hardening / Fuzzing
-<strong>Inspired by:</strong> Parse-budget exhaustion risk and AST bomb classes</p>
-<p><strong>Observation:</strong>
-The engine now has deep-scan retry logic, but there is still no systematic
-corpus generation for grammar-specific worst-case parse behavior.</p>
-<p><strong>Proposal:</strong>
-Build nightly fuzz targets per grammar that record timeout-inducing inputs into
-Crucible fixtures for permanent regression coverage.</p>
-<p><strong>Security impact:</strong>
-Turns parser-exhaustion failures into harvested adversarial corpora before
-attackers can weaponize them in CI.</p>
-<p><strong>Implementation path:</strong>
-Add <code>crates/fuzz</code> targets and promote timeout reproducers into
-<code>crates/crucible/fixtures/exhaustion/</code>.</p>
 <h3 id="p2-3-release-surface-parity-gate">P2-3: Release Surface Parity Gate</h3>
 <p><strong>Class:</strong> Defensive Hardening
 <strong>Inspired by:</strong> <code>justfile</code> and release command drift across operator surfaces</p>
@@ -896,6 +880,25 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
+<h3 id="p2-5-exhaustion-corpus-promotion-pipeline">P2-5: Exhaustion Corpus Promotion Pipeline</h3>
+<p><strong>Class:</strong> Defensive Hardening / Fuzzing Operations
+<strong>Inspired by:</strong> <code>crates/fuzz</code> and harvested AST-bomb regressions</p>
+<p><strong>Observation:</strong>
+The workspace now compiles a grammar stress fuzzer, but there is still no
+governed promotion pipeline that minimizes interesting crashes/timeouts and
+upgrades them into permanent, signed Crucible fixtures.</p>
+<p><strong>Proposal:</strong>
+Build a corpus promotion tool that minimizes libFuzzer artifacts, annotates them
+with grammar + elapsed parse budget metadata, and emits deterministic exhaustion
+fixtures under <code>crates/crucible/fixtures/exhaustion/</code> with matching regression
+tests.</p>
+<p><strong>Security impact:</strong>
+Converts ephemeral fuzz discoveries into durable parser-hardening evidence and
+prevents regression drift on algorithmic-complexity exploits.</p>
+<p><strong>Implementation path:</strong>
+Add a <code>tools/promote-fuzz-corpus</code> binary, a manifest format for harvested
+payloads, and a <code>just promote-fuzz</code> command that regenerates Crucible
+exhaustion tests from minimized artifacts.</p>
 
 
 
