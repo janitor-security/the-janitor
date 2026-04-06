@@ -596,9 +596,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-9-deterministic-deobfuscation-spine" class="md-nav__link">
+  <a href="#p0-10-sink-context-constant-folding-core" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-9: Deterministic Deobfuscation Spine
+      P0-10: Sink-Context Constant Folding Core
     </span>
   </a>
   
@@ -615,21 +615,6 @@
       P1 — Compliance / Integration
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -767,9 +752,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-9-deterministic-deobfuscation-spine" class="md-nav__link">
+  <a href="#p0-10-sink-context-constant-folding-core" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-9: Deterministic Deobfuscation Spine
+      P0-10: Sink-Context Constant Folding Core
     </span>
   </a>
   
@@ -786,21 +771,6 @@
       P1 — Compliance / Integration
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-3-wisdom-manifest-is-metadata-not-kev-authority" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -887,42 +857,29 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-9-deterministic-deobfuscation-spine">P0-9: Deterministic Deobfuscation Spine</h3>
+<h3 id="p0-10-sink-context-constant-folding-core">P0-10: Sink-Context Constant Folding Core</h3>
 <p><strong>Class:</strong> AI Evasion Defense</p>
 <p><strong>Observation:</strong>
-Agentic payloads are shifting from plain dead branches to staged decoding chains:
-base64 fragments, hex arrays, XOR loops, and concatenated literals that only
-become malicious after a small local transform. Our current detectors see the
-sink, but not the normalized payload that explains intent.</p>
+The new deobfuscation spine catches staged byte transforms, but structurally
+false branches and sink arguments still rely on hand-coded constant cases such
+as <code>false</code>, <code>0</code>, and <code>1 == 0</code>. Adversarial agents can pivot to slightly richer
+constant expressions (<code>1 - 1</code>, <code>"a" + "b"</code>, <code>"Yw==" * 2</code>-style builders, or
+enum-backed booleans) and stay below the current fold horizon.</p>
 <p><strong>Proposal:</strong>
-Add a zero-upload deobfuscation spine that normalizes base64, hex, gzip, XOR,
-and literal-concatenation chains into a bounded intermediate buffer before
-re-feeding the result into <code>slop_hunter</code>, <code>binary_hunter</code>, and LotL scanners.</p>
+Add a bounded, language-agnostic constant-folding core that evaluates small AST
+expression DAGs into literals before detector dispatch. The fold engine should
+support booleans, integer comparisons, string concatenation, and decoder-wrapper
+argument reduction, then feed the normalized result into dead-branch detection,
+deobfuscation, and sink scoring.</p>
 <p><strong>Security impact:</strong>
-Collapses a major AI evasion class by turning staged payload assembly back into
-plain analyzable content before the exploit reaches its sink.</p>
+Closes the next evasion tier by collapsing disguised-but-deterministic control
+flow and payload assembly before attackers can hide behind shallow expression
+noise.</p>
 <p><strong>Implementation path:</strong>
-Add <code>crates/forge/src/deobfuscate.rs</code> with deterministic decode passes and
-budget caps; thread normalized views into JS/Python/Bash/PowerShell-adjacent
-detectors without violating the 8GB Law.</p>
+Add <code>crates/forge/src/const_fold.rs</code>; define a byte/operation budget per folded
+expression; thread folded values into <code>find_dead_branch_payloads</code>, sink
+deobfuscation, and reachability checks without introducing unbounded recursion.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-3-wisdom-manifest-is-metadata-not-kev-authority">P1-3: Wisdom Manifest Is Metadata, Not KEV Authority</h3>
-<p><strong>Class:</strong> Infrastructure / Threat Intel Integrity
-<strong>Inspired by:</strong> <code>crates/common/src/wisdom.rs::resolve_kev_database</code></p>
-<p><strong>Observation:</strong>
-<code>.janitor/wisdom_manifest.json</code> is a diffable metadata snapshot for CI review.
-It does not contain package-ecosystem/version binding rules and cannot drive
-dependency KEV correlation on its own.</p>
-<p><strong>Proposal:</strong>
-Split the manifest and archive responsibilities explicitly in the docs and
-sync pipeline so <code>wisdom_manifest.json</code> is never treated as a functional
-replacement for <code>wisdom.rkyv</code>.</p>
-<p><strong>Security impact:</strong>
-Prevents CI and MCP operators from assuming KEV coverage exists when the
-binding archive is absent, corrupted, or replaced with manifest-only state.</p>
-<p><strong>Implementation path:</strong>
-Clarify the contract in <code>update-wisdom</code>, the docs CDN bootstrap, and the MCP
-dependency-check surface so archive absence is surfaced immediately.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
 <p><strong>Class:</strong> Core Engine Enhancement
