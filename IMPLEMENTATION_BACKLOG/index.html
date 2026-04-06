@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)
@@ -1016,6 +1025,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)
@@ -1406,6 +1424,28 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-06-threat-intel-receipts-semantic-cst-diffing-v9912">2026-04-06 — Threat Intel Receipts &amp; Semantic CST Diffing (v9.9.12)</h2>
+<p><strong>Directive:</strong> Bind every bounce decision to a cryptographically identified
+Wisdom feed receipt, thread that provenance through the CBOM and verifier,
+replace line-based patch reasoning with semantic CST subtree extraction,
+prove whitespace-padded payload interception in Crucible, autonomously seed the
+next roadmap item, and release <code>v9.9.12</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.12</code>
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — added <code>serde_json</code> for feed-receipt parsing
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — added feed-receipt loader metadata, normalized signature handling, and receipt-aware archive loading
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>update-wisdom</code> now persists detached signature + receipt metadata; bounce logs capture feed provenance; <code>verify-cbom</code> now prints intelligence provenance
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — added <code>wisdom_hash</code> / <code>wisdom_signature</code> to <code>BounceLogEntry</code>; step summary now surfaces feed provenance
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — mapped feed provenance into CycloneDX v1.6 metadata and entry properties
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — auxiliary bounce-log constructor updated for feed-provenance schema parity
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — git-native bounce-log constructors updated for feed-provenance schema parity
+- <code>crates/forge/src/lib.rs</code> <em>(modified)</em> — exported the new <code>cst_diff</code> module
+- <code>crates/forge/src/cst_diff.rs</code> <em>(new)</em> — added subtree-local semantic diff extraction over added patch line ranges
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>PatchBouncer</code> now resolves semantic subtrees and runs structural hashing / slop hunting over those slices instead of whole added diff text
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added whitespace-padded semantic-diff interception proof
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P1-1</code> and <code>P2-1</code>; seeded new <code>P1-1</code> Governor-Sealed Decision Receipts
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.12</code></p>
 <h2 id="2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911">2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)</h2>
 <p><strong>Directive:</strong> Add detached Ed25519 verification for <code>wisdom.rkyv</code> transport,
 introduce the bounded string-concatenation fold core for sink-adjacent payloads,

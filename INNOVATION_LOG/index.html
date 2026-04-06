@@ -605,9 +605,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-governor-signed-threat-intel-receipts" class="md-nav__link">
+  <a href="#p1-1-governor-sealed-decision-receipts" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Governor-Signed Threat Intel Receipts
+      P1-1: Governor-Sealed Decision Receipts
     </span>
   </a>
   
@@ -627,15 +627,6 @@
   
     <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-semantic-cst-diff-engine" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Semantic CST Diff Engine
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p2-2-grammar-stress-fuzzer" class="md-nav__link">
@@ -752,9 +743,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-governor-signed-threat-intel-receipts" class="md-nav__link">
+  <a href="#p1-1-governor-sealed-decision-receipts" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Governor-Signed Threat Intel Receipts
+      P1-1: Governor-Sealed Decision Receipts
     </span>
   </a>
   
@@ -774,15 +765,6 @@
   
     <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-semantic-cst-diff-engine" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Semantic CST Diff Engine
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p2-2-grammar-stress-fuzzer" class="md-nav__link">
@@ -840,40 +822,28 @@ ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-1-governor-signed-threat-intel-receipts">P1-1: Governor-Signed Threat Intel Receipts</h3>
-<p><strong>Class:</strong> Commercial Trust / Threat Intel Governance</p>
+<h3 id="p1-1-governor-sealed-decision-receipts">P1-1: Governor-Sealed Decision Receipts</h3>
+<p><strong>Class:</strong> Enterprise Audit Evidence</p>
 <p><strong>Observation:</strong>
-Detached signature verification closes archive tampering in transit, but the
-operator still cannot prove <em>which</em> signed feed version was active for a given
-bounce result or customer receipt. Feed trust is local-state correct but not yet
-attestation-visible.</p>
+The bounce log now binds policy hash, threat-intel receipt, transparency anchor,
+and PQC signatures, but the evidence is still assembled client-side across
+multiple fields. Regulated buyers still lack a single countersigned receipt that
+proves the exact policy, intel snapshot, binary version, and decision outcome as
+one immutable object.</p>
 <p><strong>Proposal:</strong>
-Emit the verified Wisdom feed hash, signature fingerprint, and receipt metadata
-into Governor receipts, CBOMs, and bounce logs so every enforcement decision is
-bound to a cryptographically identified threat-intel snapshot.</p>
+Have <code>janitor-gov</code> emit a countersigned <code>DecisionReceipt</code> envelope that seals
+<code>policy_hash</code>, <code>wisdom_hash</code>, <code>commit_sha</code>, <code>repo_slug</code>, <code>slop_score</code>,
+transparency anchor, and CBOM signature digests under a Governor-controlled
+attestation key. Store that receipt in bounce logs, CBOM metadata, and offline
+verification output.</p>
 <p><strong>Security impact:</strong>
-Prevents evidentiary drift where a finding can be challenged as having been made
-against an unknown or unverifiable intel corpus.</p>
+Eliminates evidentiary recomposition gaps and gives auditors a single
+non-repudiable artifact for every enforcement decision.</p>
 <p><strong>Implementation path:</strong>
-Extend <code>common::wisdom</code> with feed provenance metadata, thread it through
-<code>BounceLogEntry</code>, Governor inclusion receipts, and exported CBOM properties.</p>
+Define a receipt schema in <code>common</code>, sign it in <code>crates/gov</code>, embed it in
+<code>BounceLogEntry</code> and CycloneDX metadata, and extend <code>verify-cbom</code> with receipt
+verification against the Governor public key.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
-<h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
-<p><strong>Class:</strong> Core Engine Enhancement
-<strong>Inspired by:</strong> Diff-surface false negatives in current line-based bounce flow</p>
-<p><strong>Observation:</strong>
-Line-level unified diffs lose structural intent. Semantically equivalent edits
-hash differently, and whitespace or formatting churn can obscure the true
-changed subtrees.</p>
-<p><strong>Proposal:</strong>
-Add an incremental CST diff engine that feeds only changed subtrees into the
-detectors and clone heuristics.</p>
-<p><strong>Security impact:</strong>
-Improves precision, reduces whitespace-padding evasion, and enables more
-granular gating on large files.</p>
-<p><strong>Implementation path:</strong>
-Introduce <code>crates/forge/src/cst_diff.rs</code> and wire an optional subtree-based
-path into <code>PatchBouncer</code>.</p>
 <h3 id="p2-2-grammar-stress-fuzzer">P2-2: Grammar Stress Fuzzer</h3>
 <p><strong>Class:</strong> Defensive Hardening / Fuzzing
 <strong>Inspired by:</strong> Parse-budget exhaustion risk and AST bomb classes</p>
