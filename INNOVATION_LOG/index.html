@@ -592,21 +592,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-10-sink-context-constant-folding-core" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-10: Sink-Context Constant Folding Core
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -615,6 +600,21 @@
       P1 — Compliance / Integration
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-1-governor-signed-threat-intel-receipts" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-1: Governor-Signed Threat Intel Receipts
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -659,15 +659,6 @@
   <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
       P2-4: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-5-signed-wisdom-feed-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Signed Wisdom Feed Provenance
     </span>
   </a>
   
@@ -748,21 +739,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-10-sink-context-constant-folding-core" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-10: Sink-Context Constant Folding Core
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -771,6 +747,21 @@
       P1 — Compliance / Integration
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-1-governor-signed-threat-intel-receipts" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-1: Governor-Signed Threat Intel Receipts
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -820,15 +811,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p2-5-signed-wisdom-feed-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Signed Wisdom Feed Provenance
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -857,29 +839,24 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-10-sink-context-constant-folding-core">P0-10: Sink-Context Constant Folding Core</h3>
-<p><strong>Class:</strong> AI Evasion Defense</p>
-<p><strong>Observation:</strong>
-The new deobfuscation spine catches staged byte transforms, but structurally
-false branches and sink arguments still rely on hand-coded constant cases such
-as <code>false</code>, <code>0</code>, and <code>1 == 0</code>. Adversarial agents can pivot to slightly richer
-constant expressions (<code>1 - 1</code>, <code>"a" + "b"</code>, <code>"Yw==" * 2</code>-style builders, or
-enum-backed booleans) and stay below the current fold horizon.</p>
-<p><strong>Proposal:</strong>
-Add a bounded, language-agnostic constant-folding core that evaluates small AST
-expression DAGs into literals before detector dispatch. The fold engine should
-support booleans, integer comparisons, string concatenation, and decoder-wrapper
-argument reduction, then feed the normalized result into dead-branch detection,
-deobfuscation, and sink scoring.</p>
-<p><strong>Security impact:</strong>
-Closes the next evasion tier by collapsing disguised-but-deterministic control
-flow and payload assembly before attackers can hide behind shallow expression
-noise.</p>
-<p><strong>Implementation path:</strong>
-Add <code>crates/forge/src/const_fold.rs</code>; define a byte/operation budget per folded
-expression; thread folded values into <code>find_dead_branch_payloads</code>, sink
-deobfuscation, and reachability checks without introducing unbounded recursion.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
+<h3 id="p1-1-governor-signed-threat-intel-receipts">P1-1: Governor-Signed Threat Intel Receipts</h3>
+<p><strong>Class:</strong> Commercial Trust / Threat Intel Governance</p>
+<p><strong>Observation:</strong>
+Detached signature verification closes archive tampering in transit, but the
+operator still cannot prove <em>which</em> signed feed version was active for a given
+bounce result or customer receipt. Feed trust is local-state correct but not yet
+attestation-visible.</p>
+<p><strong>Proposal:</strong>
+Emit the verified Wisdom feed hash, signature fingerprint, and receipt metadata
+into Governor receipts, CBOMs, and bounce logs so every enforcement decision is
+bound to a cryptographically identified threat-intel snapshot.</p>
+<p><strong>Security impact:</strong>
+Prevents evidentiary drift where a finding can be challenged as having been made
+against an unknown or unverifiable intel corpus.</p>
+<p><strong>Implementation path:</strong>
+Extend <code>common::wisdom</code> with feed provenance metadata, thread it through
+<code>BounceLogEntry</code>, Governor inclusion receipts, and exported CBOM properties.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-semantic-cst-diff-engine">P2-1: Semantic CST Diff Engine</h3>
 <p><strong>Class:</strong> Core Engine Enhancement
@@ -949,24 +926,6 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
-<h3 id="p2-5-signed-wisdom-feed-provenance">P2-5: Signed Wisdom Feed Provenance</h3>
-<p><strong>Class:</strong> Threat Intel Supply Integrity
-<strong>Inspired by:</strong> slopsquat seed distribution now depends on unsigned archive transport</p>
-<p><strong>Observation:</strong>
-<code>update-wisdom</code> can fetch a structurally valid <code>wisdom.rkyv</code>, but the archive
-still lacks an authenticated provenance envelope. A CDN or mirror compromise can
-swap the Bloom filter or KEV rules without tripping semantic validation.</p>
-<p><strong>Proposal:</strong>
-Add detached-signature verification for <code>wisdom.rkyv</code> plus manifest-level hash
-pinning so threat-intel updates are rejected unless the archive hash and signer
-identity match policy.</p>
-<p><strong>Security impact:</strong>
-Prevents adversarial replacement of slopsquat seeds or KEV rules and gives CI a
-cryptographically provable trust chain for threat intelligence ingestion.</p>
-<p><strong>Implementation path:</strong>
-Extend <code>crates/common/src/wisdom.rs</code> with signed manifest metadata, publish
-<code>.sig</code> artifacts under <code>docs/v1/</code>, and hard-fail <code>update-wisdom --ci-mode</code> when
-signature verification fails.</p>
 
 
 

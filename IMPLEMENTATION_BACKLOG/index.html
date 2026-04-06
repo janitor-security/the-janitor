@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-dag-inversion-dual-strike-deobfuscation-v9910" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — DAG Inversion &amp; Dual-Strike Deobfuscation (v9.9.10)
@@ -1007,6 +1016,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-dag-inversion-dual-strike-deobfuscation-v9910" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — DAG Inversion &amp; Dual-Strike Deobfuscation (v9.9.10)
@@ -1388,6 +1406,22 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-06-cryptographic-intel-provenance-constant-folding-core-v9911">2026-04-06 — Cryptographic Intel Provenance &amp; Constant Folding Core (v9.9.11)</h2>
+<p><strong>Directive:</strong> Add detached Ed25519 verification for <code>wisdom.rkyv</code> transport,
+introduce the bounded string-concatenation fold core for sink-adjacent payloads,
+prove fragmented payload interception in Crucible, autonomously seed the next
+roadmap item, and release <code>v9.9.11</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.11</code>; added workspace <code>ed25519-dalek</code>
+- <code>crates/cli/Cargo.toml</code> <em>(modified)</em> — wired <code>ed25519-dalek</code> into the CLI for detached Wisdom verification
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>update-wisdom</code> now fetches <code>wisdom.rkyv.sig</code>, verifies the archive before disk write, and fails closed on signature absence or mismatch
+- <code>crates/forge/src/lib.rs</code> <em>(modified)</em> — exported the new <code>fold</code> module
+- <code>crates/forge/src/fold.rs</code> <em>(new)</em> — added bounded AST string-concatenation folding for sink arguments
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — routed sink arguments through <code>fold_string_concat</code> before deobfuscation
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added fragmented base64 concat true-positive fixture
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P0-10</code> and <code>P2-5</code>; seeded <code>P1-1</code> Governor-Signed Threat Intel Receipts
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.11</code></p>
 <h2 id="2026-04-06-dag-inversion-dual-strike-deobfuscation-v9910">2026-04-06 — DAG Inversion &amp; Dual-Strike Deobfuscation (v9.9.10)</h2>
 <p><strong>Directive:</strong> Invert the release DAG into <code>pre-flight → sync → audit → publish</code>,
 add the bounded deobfuscation spine for staged sink payloads, harden Wisdom
