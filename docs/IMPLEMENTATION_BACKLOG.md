@@ -5,6 +5,28 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — DAG Inversion & Dual-Strike Deobfuscation (v9.9.10)
+
+**Directive:** Invert the release DAG into `pre-flight → sync → audit → publish`,
+add the bounded deobfuscation spine for staged sink payloads, harden Wisdom
+integrity so `wisdom_manifest.json` can never clear KEV checks on its own,
+prove the new intercept in Crucible, and release `v9.9.10`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.10`
+- `justfile` *(modified)* — inverted `fast-release` into pre-flight GPG gate, version sync, audit, then publish; removed the redundant outer audit edge from `release`
+- `crates/forge/Cargo.toml` *(modified)* — wired `base64` into Forge for bounded sink deobfuscation
+- `crates/forge/src/lib.rs` *(modified)* — exported the new `deobfuscate` module
+- `crates/forge/src/deobfuscate.rs` *(new)* — added bounded base64 / hex / concatenated-literal normalization with 4 KiB caps
+- `crates/forge/src/slop_hunter.rs` *(modified)* — routed normalized sink payloads through JS, Python, and Java execution sinks; added `security:obfuscated_payload_execution`
+- `crates/common/src/wisdom.rs` *(modified)* — added authoritative archive validation and clarified manifest-vs-archive authority
+- `crates/cli/src/main.rs` *(modified)* — converted `update-wisdom --ci-mode` from fail-open bootstrap to fail-closed archive validation
+- `crates/crucible/src/main.rs` *(modified)* — added `eval(atob(...))` true-positive fixture
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-9` and `P1-3`; seeded `P0-10` Sink-Context Constant Folding Core
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.10`
+
 ## 2026-04-06 — Phantom Payload Interception (v9.9.9)
 
 **Directive:** Execute `P0-8` by detecting anomalous payloads hidden inside

@@ -64,6 +64,7 @@ use std::time::Instant;
 use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
 use tree_sitter::{Language, Node};
 
+use crate::deobfuscate::normalize_payload;
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
 
 // ---------------------------------------------------------------------------
@@ -546,6 +547,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
             f.extend(find_jsx_dangerous_html_slop(eng, parsed));
+            f.extend(find_js_deobfuscated_sink_payloads(eng, parsed));
             f.extend(find_js_phantom_payload_slop(eng, parsed));
             f.extend(find_js_slopsquat_imports(eng, parsed));
             f
@@ -1299,6 +1301,29 @@ fn find_js_slopsquat_imports(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<
     findings
 }
 
+fn find_js_deobfuscated_sink_payloads(
+    eng: &QueryEngine,
+    parsed: &ParsedUnit<'_>,
+) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if !(source.windows(5).any(|w| w == b"eval(")
+        || source.windows(5).any(|w| w == b"exec(")
+        || source.windows(5).any(|w| w == b"atob("))
+    {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let mut findings = Vec::new();
+    find_js_deobfuscated_sinks(tree.root_node(), source, &mut findings);
+    findings
+}
+
 fn find_js_phantom_payload_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     let source = parsed.source;
     if !source.windows(2).any(|w| w == b"if") {
@@ -1312,6 +1337,32 @@ fn find_js_phantom_payload_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> V
     let mut findings = Vec::new();
     find_dead_branch_payloads(tree.root_node(), source, &mut findings);
     findings
+}
+
+fn find_js_deobfuscated_sinks(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    if node.kind() == "call_expression" {
+        let callee = node
+            .child_by_field_name("function")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        if matches!(callee, "eval" | "exec") {
+            if let Some(arguments) = node.child_by_field_name("arguments") {
+                if let Some(first_arg) = arguments.named_children(&mut arguments.walk()).next() {
+                    maybe_push_deobfuscated_sink_finding(
+                        &source[first_arg.start_byte()..first_arg.end_byte()],
+                        node,
+                        findings,
+                        &format!("JavaScript `{callee}`"),
+                    );
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_js_deobfuscated_sinks(child, source, findings);
+    }
 }
 
 fn walk_js_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
@@ -2204,6 +2255,20 @@ fn find_python_danger_calls(
                 if line_has_noqa(source, node.start_byte()) {
                     break;
                 }
+                if matches!(callee, "exec" | "eval") {
+                    if let Some(arguments) = node.child_by_field_name("arguments") {
+                        if let Some(first_arg) =
+                            arguments.named_children(&mut arguments.walk()).next()
+                        {
+                            maybe_push_deobfuscated_sink_finding(
+                                &source[first_arg.start_byte()..first_arg.end_byte()],
+                                node,
+                                findings,
+                                &format!("Python `{callee}`"),
+                            );
+                        }
+                    }
+                }
                 findings.push(SlopFinding {
                     start_byte: node.start_byte(),
                     end_byte: node.end_byte(),
@@ -2512,6 +2577,16 @@ fn find_java_danger_invocations(
                 // Fire when the receiver chain contains `getRuntime` — i.e. the
                 // pattern is `Runtime.getRuntime().exec(...)`.
                 if object_text.contains("getRuntime") {
+                    if let Some(args) = node.child_by_field_name("arguments") {
+                        if let Some(first_arg) = args.named_children(&mut args.walk()).next() {
+                            maybe_push_deobfuscated_sink_finding(
+                                &source[first_arg.start_byte()..first_arg.end_byte()],
+                                node,
+                                findings,
+                                "Java Runtime.exec",
+                            );
+                        }
+                    }
                     findings.push(SlopFinding {
                         start_byte: node.start_byte(),
                         end_byte: node.end_byte(),
@@ -2626,6 +2701,14 @@ fn find_java_danger_invocations(
         if type_text == "ProcessBuilder" {
             if let Some(args) = node.child_by_field_name("arguments") {
                 let first_arg = args.named_children(&mut args.walk()).next();
+                if let Some(first_arg) = first_arg {
+                    maybe_push_deobfuscated_sink_finding(
+                        &source[first_arg.start_byte()..first_arg.end_byte()],
+                        node,
+                        findings,
+                        "Java ProcessBuilder",
+                    );
+                }
                 if first_arg.is_some_and(|a| a.kind() != "string_literal") {
                     findings.push(SlopFinding {
                         start_byte: node.start_byte(),
@@ -4856,6 +4939,79 @@ fn suspicious_dead_branch_string_literal(bytes: &[u8]) -> Option<(f64, usize)> {
     None
 }
 
+fn maybe_push_deobfuscated_sink_finding(
+    raw: &[u8],
+    node: Node<'_>,
+    findings: &mut Vec<SlopFinding>,
+    sink_label: &str,
+) {
+    let Some(decoded) = normalize_payload(raw) else {
+        return;
+    };
+    let Some(reason) = suspicious_normalized_payload_reason(&decoded) else {
+        return;
+    };
+    findings.push(SlopFinding {
+        start_byte: node.start_byte(),
+        end_byte: node.end_byte(),
+        description: format!(
+            "security:obfuscated_payload_execution — {sink_label} consumes a staged payload that normalizes into {reason}; adversarial encoding is being used to smuggle executable logic through a sink"
+        ),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::KevCritical,
+    });
+}
+
+fn suspicious_normalized_payload_reason(decoded: &[u8]) -> Option<String> {
+    if decoded.is_empty() {
+        return None;
+    }
+
+    const CODE_MARKERS: &[&[u8]] = &[
+        b"console.log(",
+        b"require(",
+        b"process.",
+        b"child_process",
+        b"runtime.getruntime",
+        b"processbuilder",
+        b"os.system",
+        b"subprocess",
+        b"powershell",
+        b"/bin/sh",
+        b"/bin/bash",
+        b"curl ",
+        b"wget ",
+        b"eval(",
+        b"exec(",
+    ];
+
+    let lower = ascii_lower(decoded);
+    if let Some(marker) = CODE_MARKERS
+        .iter()
+        .find(|needle| lower.windows(needle.len()).any(|w| w == **needle))
+    {
+        let marker = std::str::from_utf8(marker).unwrap_or("executable code marker");
+        return Some(format!("decoded executable content marker `{marker}`"));
+    }
+
+    if let Some((entropy, len)) = suspicious_dead_branch_string_literal(decoded) {
+        return Some(format!(
+            "dense decoded string literal ({entropy:.2} bits/symbol, {len} chars)"
+        ));
+    }
+
+    if decoded.len() >= 256 {
+        let ratio = check_entropy(decoded);
+        if ratio >= 0.92 {
+            return Some(format!(
+                "high-entropy decoded payload block (compression ratio {ratio:.2})"
+            ));
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 fn find_slop_bytes(language: &str, source: &[u8]) -> Vec<SlopFinding> {
     let parsed = ParsedUnit::unparsed(source);
@@ -4969,6 +5125,18 @@ mod tests {
         assert!(
             findings.is_empty(),
             "ordinary dead debug branches must not trigger phantom payload detection"
+        );
+    }
+
+    #[test]
+    fn test_js_eval_atob_payload_fires() {
+        let src = br#"eval(atob("Y29uc29sZS5sb2coJ2hhY2tlZCcp"));"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings.iter().any(|f| f
+                .description
+                .contains("security:obfuscated_payload_execution")),
+            "eval(atob(...)) must fire obfuscated payload interception"
         );
     }
 

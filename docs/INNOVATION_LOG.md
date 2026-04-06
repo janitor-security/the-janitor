@@ -7,54 +7,35 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-9: Deterministic Deobfuscation Spine
+### P0-10: Sink-Context Constant Folding Core
 
 **Class:** AI Evasion Defense
 
 **Observation:**
-Agentic payloads are shifting from plain dead branches to staged decoding chains:
-base64 fragments, hex arrays, XOR loops, and concatenated literals that only
-become malicious after a small local transform. Our current detectors see the
-sink, but not the normalized payload that explains intent.
+The new deobfuscation spine catches staged byte transforms, but structurally
+false branches and sink arguments still rely on hand-coded constant cases such
+as `false`, `0`, and `1 == 0`. Adversarial agents can pivot to slightly richer
+constant expressions (`1 - 1`, `"a" + "b"`, `"Yw==" * 2`-style builders, or
+enum-backed booleans) and stay below the current fold horizon.
 
 **Proposal:**
-Add a zero-upload deobfuscation spine that normalizes base64, hex, gzip, XOR,
-and literal-concatenation chains into a bounded intermediate buffer before
-re-feeding the result into `slop_hunter`, `binary_hunter`, and LotL scanners.
+Add a bounded, language-agnostic constant-folding core that evaluates small AST
+expression DAGs into literals before detector dispatch. The fold engine should
+support booleans, integer comparisons, string concatenation, and decoder-wrapper
+argument reduction, then feed the normalized result into dead-branch detection,
+deobfuscation, and sink scoring.
 
 **Security impact:**
-Collapses a major AI evasion class by turning staged payload assembly back into
-plain analyzable content before the exploit reaches its sink.
+Closes the next evasion tier by collapsing disguised-but-deterministic control
+flow and payload assembly before attackers can hide behind shallow expression
+noise.
 
 **Implementation path:**
-Add `crates/forge/src/deobfuscate.rs` with deterministic decode passes and
-budget caps; thread normalized views into JS/Python/Bash/PowerShell-adjacent
-detectors without violating the 8GB Law.
+Add `crates/forge/src/const_fold.rs`; define a byte/operation budget per folded
+expression; thread folded values into `find_dead_branch_payloads`, sink
+deobfuscation, and reachability checks without introducing unbounded recursion.
 
 ## P1 — Compliance / Integration
-
-### P1-3: Wisdom Manifest Is Metadata, Not KEV Authority
-
-**Class:** Infrastructure / Threat Intel Integrity
-**Inspired by:** `crates/common/src/wisdom.rs::resolve_kev_database`
-
-**Observation:**
-`.janitor/wisdom_manifest.json` is a diffable metadata snapshot for CI review.
-It does not contain package-ecosystem/version binding rules and cannot drive
-dependency KEV correlation on its own.
-
-**Proposal:**
-Split the manifest and archive responsibilities explicitly in the docs and
-sync pipeline so `wisdom_manifest.json` is never treated as a functional
-replacement for `wisdom.rkyv`.
-
-**Security impact:**
-Prevents CI and MCP operators from assuming KEV coverage exists when the
-binding archive is absent, corrupted, or replaced with manifest-only state.
-
-**Implementation path:**
-Clarify the contract in `update-wisdom`, the docs CDN bootstrap, and the MCP
-dependency-check surface so archive absence is surfaced immediately.
 
 ## P2 — Architecture / Ergonomics
 

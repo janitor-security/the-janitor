@@ -94,7 +94,8 @@ pub fn check_kev_deps(lockfile: &[u8], wisdom_db: &Path) -> Vec<SlopFinding> {
 ///
 /// This fail-closed entrypoint is intended for CI and MCP callers that must not
 /// silently degrade to `kev_count = 0` when the KEV database is missing,
-/// malformed, or reduced to the JSON manifest alone.
+/// malformed, or reduced to the JSON manifest alone. `wisdom_manifest.json` is
+/// treated strictly as a diffable receipt and never as a substitute authority.
 pub fn check_kev_deps_required(
     lockfile: &[u8],
     janitor_dir: &Path,

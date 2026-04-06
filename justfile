@@ -69,9 +69,9 @@ auth-refresh:
 # Prerequisites: set [workspace.package].version in root Cargo.toml, then run:
 #   just release <X.Y.Z>   (bare version — recipe prepends 'v' for tags)
 #
-# Pipeline: audit → fast-release (build → strip → tag → push → gh release → deploy-docs)
+# Pipeline: fast-release (pre-flight → sync → audit → build/tag/push/release/deploy)
 #
-release version: audit
+release version:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚀 Initiating Release Sequence v{{version}}..."
@@ -95,13 +95,10 @@ sync-versions:
 # The AI release sequence (`.claude/commands/release.md`) calls `just audit` once
 # as Step 3, then calls `just fast-release` as Step 4 to avoid a redundant re-audit.
 #
-fast-release version: sync-versions
+fast-release version:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	echo "🚀 Initiating Fast Release Sequence v{{version}}..."
-	cargo build --release --workspace
-	strip target/release/janitor
-	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"
 	if [[ -n "${JANITOR_GPG_PASSPHRASE:-}" ]]; then
 	    PRESET_BIN="$(command -v gpg-preset-passphrase 2>/dev/null \
 	        || find /usr/lib/gnupg /usr/libexec/gnupg /opt/homebrew/libexec/gpg \
@@ -110,6 +107,15 @@ fast-release version: sync-versions
 	        printf '%s' "${JANITOR_GPG_PASSPHRASE}" | "${PRESET_BIN}" --preset EA20B816F8A1750EB737C4E776AE1CBD050A171E
 	    fi
 	fi
+	if ! printf 'janitor-release-preflight' | gpg --batch --yes --pinentry-mode error --clearsign --local-user 4D68C2E93C07B38131E1CD2C7643B04E9C8FE26F >/dev/null 2>&1; then
+	    echo "error: GPG signing key is locked; run gpg-unlock or export JANITOR_GPG_PASSPHRASE before just fast-release {{version}}" >&2
+	    exit 1
+	fi
+	just sync-versions
+	just audit
+	cargo build --release --workspace
+	strip target/release/janitor
+	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"
 	git tag -s v{{version}} -m "release v{{version}}"
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"

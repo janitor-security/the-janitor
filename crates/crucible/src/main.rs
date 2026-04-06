@@ -471,6 +471,13 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+    Entry {
+        name: "JS/eval atob payload — INTERCEPT",
+        lang: "js",
+        source: b"eval(atob(\"Y29uc29sZS5sb2coJ2hhY2tlZCcp\"));\n",
+        must_intercept: true,
+        desc_fragment: Some("obfuscated_payload_execution"),
+    },
 
     // ── Supply Chain Integrity ────────────────────────────────────────────
     Entry {

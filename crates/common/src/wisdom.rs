@@ -277,7 +277,18 @@ pub fn resolve_kev_database(janitor_dir: &Path) -> anyhow::Result<PathBuf> {
         }
     );
 
-    let wisdom = load_wisdom_set(&wisdom_path).ok_or_else(|| {
+    validate_wisdom_archive(&wisdom_path)?;
+
+    Ok(wisdom_path)
+}
+
+/// Validate a specific `wisdom.rkyv` archive path as authoritative KEV state.
+///
+/// This function exists so CI/bootstrap flows can fail closed on corrupt or
+/// rules-empty archives before downstream tools treat the adjacent JSON manifest
+/// as proof of usable dependency intelligence.
+pub fn validate_wisdom_archive(wisdom_path: &Path) -> anyhow::Result<WisdomSet> {
+    let wisdom = load_wisdom_set(wisdom_path).ok_or_else(|| {
         anyhow::anyhow!(
             "failed to deserialize KEV database at {}; file is missing, corrupt, or incompatible",
             wisdom_path.display()
@@ -290,7 +301,7 @@ pub fn resolve_kev_database(janitor_dir: &Path) -> anyhow::Result<PathBuf> {
         wisdom_path.display()
     );
 
-    Ok(wisdom_path)
+    Ok(wisdom)
 }
 
 fn parse_cargo_lock_dependencies(content: &str) -> Vec<ResolvedDependency> {
