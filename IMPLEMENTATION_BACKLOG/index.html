@@ -623,6 +623,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-permanence-the-operators-rosetta-stone-v997" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Permanence &amp; The Operator's Rosetta Stone (v9.9.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-fortune-500-synchronization-strike-v994" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — Fortune 500 Synchronization Strike (v9.9.4)
@@ -983,6 +992,15 @@
   <a href="#2026-04-05-the-slopsquatting-interceptor-v995" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — The Slopsquatting Interceptor (v9.9.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-permanence-the-operators-rosetta-stone-v997" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Permanence &amp; The Operator's Rosetta Stone (v9.9.7)
     </span>
   </a>
   
@@ -1426,6 +1444,25 @@ innovation log, and release <code>v9.9.5</code>.</p>
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P0-4</code>; appended <code>P2-5</code> signed wisdom provenance follow-up
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
 <p><strong>Commit:</strong> pending <code>just fast-release 9.9.5</code></p>
+<hr />
+<h2 id="2026-04-06-cryptographic-permanence-the-operators-rosetta-stone-v997">2026-04-06 — Cryptographic Permanence &amp; The Operator's Rosetta Stone (v9.9.7)</h2>
+<p><strong>Directive:</strong> Add the terminal-only <code>[SOVEREIGN TRANSLATION]</code> UAP section,
+implement SLH-DSA-SHAKE-192s as a stateless companion to ML-DSA-65, wire
+dual-signature custody into the bounce log and CycloneDX CBOM envelope, extend
+<code>verify-cbom</code> to validate both algorithms, and release <code>v9.9.7</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.7</code>; added <code>fips205 = "0.4.1"</code>
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — wired <code>fips204</code>, <code>fips205</code>, and <code>base64</code> into <code>common</code>
+- <code>.agent_governance/rules/response-format.md</code> <em>(modified)</em> — added mandatory terminal-only <code>[SOVEREIGN TRANSLATION]</code> section to the final UAP summary
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — added dual-signature key-bundle parsing, ML-DSA-65 + SLH-DSA signing helpers, and detached verification helpers
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — added <code>pqc_slh_sig</code> to <code>BounceLogEntry</code>; Step Summary now surfaces the active PQC signature suite
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — render path now embeds both detached signatures in exported CycloneDX properties while keeping the deterministic signing surface signature-free
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>janitor bounce --pqc-key</code> now emits dual signatures when a bundled SLH key is present; <code>verify-cbom</code> accepts <code>--slh-key</code> and reports both verification statuses
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — auxiliary bounce-log constructor updated for the new schema
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — git-native bounce-log constructors updated for the new schema
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P0-6</code>; added new active <code>P0-7</code> transparency-log proposal
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.7</code></p>
 <hr />
 <h2 id="2026-04-05-fortune-500-synchronization-strike-v994">2026-04-05 — Fortune 500 Synchronization Strike (v9.9.4)</h2>
 <p><strong>Directive:</strong> Full codebase audit + documentation parity enforcement. Expose
