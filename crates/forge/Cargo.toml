@@ -42,6 +42,8 @@ anyhow.workspace = true
 thiserror.workspace = true
 aho-corasick.workspace = true
 zstd = "0.13"
+wasmtime.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

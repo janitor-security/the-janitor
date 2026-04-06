@@ -5,13 +5,13 @@
 //! plugins) parse this instead of regex-matching human-readable prose strings,
 //! enabling deterministic pre-commit remediation and structured audit logging.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.
 ///
 /// Fields map to the `{ "id": "security:...", "file": "src/main.rs", "line": 42 }`
 /// envelope required by the P1-3 structured-findings mandate.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructuredFinding {
     /// Machine-readable finding identifier, e.g. `"security:command_injection"`,
     /// `"dead_symbol"`, or `"architecture:version_silo"`.

@@ -1846,6 +1846,33 @@ pub fn bounce_git(
 }
 
 // ---------------------------------------------------------------------------
+// BYOP Wasm rule execution
+// ---------------------------------------------------------------------------
+
+/// Execute BYOP (Bring Your Own Policy) Wasm rule modules against `src` bytes.
+///
+/// Instantiates a fresh [`crate::wasm_host::WasmHost`] for the given paths,
+/// runs each module against `src`, and returns the combined set of findings.
+/// Returns an empty vec immediately when `wasm_paths` is empty, imposing no
+/// runtime cost when no proprietary rules are configured.
+///
+/// Module load or compilation failures are logged to `stderr` and result in
+/// an empty vec — the bounce pipeline is never hard-blocked by a malformed
+/// custom rule.
+pub fn run_wasm_rules(wasm_paths: &[&str], src: &[u8]) -> Vec<common::slop::StructuredFinding> {
+    if wasm_paths.is_empty() {
+        return Vec::new();
+    }
+    match crate::wasm_host::WasmHost::new(wasm_paths) {
+        Ok(host) => host.run(src),
+        Err(e) => {
+            eprintln!("slop_filter: failed to initialise Wasm rule host: {e:#}");
+            Vec::new()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

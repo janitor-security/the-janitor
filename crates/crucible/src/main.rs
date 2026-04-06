@@ -1931,4 +1931,52 @@ index 1111111..2222222 100644
             "Crucible: cross_file_taint_sink must not fire for a function absent from the catalog"
         );
     }
+
+    // ---------------------------------------------------------------------------
+    // Wasm host-guest round-trip — proves BYOP sandbox is functional end-to-end
+    // ---------------------------------------------------------------------------
+
+    /// Loads the `mock_rule.wat` fixture via [`forge::wasm_host::WasmHost`],
+    /// executes it against synthetic source bytes, and asserts the full
+    /// host-guest pipeline: engine compilation → memory I/O → fuel enforcement →
+    /// JSON deserialisation → `StructuredFinding` round-trip.
+    ///
+    /// This test is the only authoritative proof that the Wasm sandbox compiles,
+    /// instantiates, and returns structured findings correctly.  Any regression
+    /// in the ABI (missing export, bad fuel config, malformed JSON) will surface
+    /// here before it reaches a customer environment.
+    #[test]
+    fn wasm_host_loop_roundtrip() {
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/mock_rule.wat");
+        let host = forge::wasm_host::WasmHost::new(&[fixture])
+            .expect("mock_rule.wat must compile without error");
+
+        // Execute against non-trivial source bytes to exercise the src write path.
+        let findings = host.run(b"fn main() { println!(\"hello\"); }");
+
+        assert_eq!(
+            findings.len(),
+            1,
+            "Wasm mock rule must emit exactly one finding"
+        );
+        assert_eq!(
+            findings[0].id, "security:proprietary_rule",
+            "finding id must match the mock fixture's static output"
+        );
+        assert_eq!(
+            findings[0].file, None,
+            "mock fixture must emit null file field"
+        );
+        assert_eq!(
+            findings[0].line, None,
+            "mock fixture must emit null line field"
+        );
+
+        // Verify empty source returns no findings (short-circuit guard).
+        let empty_findings = host.run(b"");
+        assert!(
+            empty_findings.is_empty(),
+            "empty source must yield no Wasm findings"
+        );
+    }
 }

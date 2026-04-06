@@ -7,30 +7,6 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-5: Wasm BYOR (Bring Your Own Rule)
-
-**Class:** Enterprise Governance
-**Inspired by:** repeated customer demand for proprietary detector logic without forks
-
-**Observation:**
-Enterprises that need private AST rules must currently fork the engine or wait
-for upstream additions. That creates governance drift, slows adoption, and makes
-customer-specific policy impossible to ship without source divergence.
-
-**Proposal:**
-Integrate a lightweight WebAssembly runtime so enterprises can compile
-proprietary AST rules into `.wasm` modules and mount them via
-`janitor bounce --wasm-rules ./corp.wasm`, enabling zero-fork custom governance.
-
-**Security impact:**
-Allows closed-world policy enforcement on sovereign infrastructure without
-exposing proprietary heuristics or weakening the deterministic core engine.
-
-**Implementation path:**
-Add a sandboxed Wasm rule host in `crates/forge`, define a stable ABI for
-serialized findings and parsed-node views, and expose module loading through
-`crates/cli/src/main.rs` plus policy controls in `crates/common/src/policy.rs`.
-
 ### P0-6: FIPS 205 (SLH-DSA) Stateless Signatures
 
 **Class:** Post-Quantum Cryptography

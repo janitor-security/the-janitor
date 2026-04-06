@@ -281,6 +281,17 @@ enum Commands {
         /// signing is the chain-of-custody mechanism for the entry.
         #[arg(long)]
         pqc_key: Option<String>,
+        /// Paths to BYOP (Bring Your Own Policy) Wasm rule modules.
+        ///
+        /// Each module is executed against the patch source bytes inside a
+        /// fuel- and memory-bounded sandbox (10 MiB RAM cap, 100 M fuel units).
+        /// Modules must implement the host-guest ABI: export `memory`,
+        /// `analyze(i32, i32) -> i32`, and `output_ptr() -> i32`.
+        ///
+        /// May be specified multiple times.  Merged with `wasm_rules` from
+        /// `janitor.toml` when both are present.
+        #[arg(long, value_name = "PATH")]
+        wasm_rules: Vec<String>,
     },
     /// Launch the Ratatui TUI dashboard from a saved symbol registry.
     Dashboard {
@@ -728,6 +739,7 @@ async fn main() -> anyhow::Result<()> {
             soft_fail,
             deep_scan,
             pqc_key,
+            wasm_rules,
         } => {
             // Clone owned values for spawn_blocking (required for 'static bound).
             let path = path.clone();
@@ -749,6 +761,7 @@ async fn main() -> anyhow::Result<()> {
             let soft_fail = *soft_fail;
             let deep_scan = *deep_scan;
             let pqc_key = pqc_key.clone();
+            let wasm_rules = wasm_rules.clone();
             let scm_context = common::scm::ScmContext::from_env();
 
             // Capture fields needed for the timeout failure payload before the
@@ -790,6 +803,7 @@ async fn main() -> anyhow::Result<()> {
                     soft_fail,
                     deep_scan,
                     pqc_key.as_deref(),
+                    &wasm_rules,
                 )
             });
 
@@ -2669,6 +2683,7 @@ fn cmd_bounce(
     soft_fail_flag: bool,
     deep_scan_flag: bool,
     pqc_key: Option<&str>,
+    wasm_rules_flag: &[String],
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -3002,6 +3017,29 @@ commit author attribution does not reflect actual code origin; \
 cross-reference GitHub Actor ID against commit author email and GPG signatures to verify provenance"
                     .to_string(),
             );
+        }
+    }
+
+    // BYOP Wasm rule execution — merge CLI flag paths with janitor.toml paths.
+    {
+        let mut effective_wasm_rules: Vec<String> = policy.wasm_rules.clone();
+        effective_wasm_rules.extend_from_slice(wasm_rules_flag);
+        if !effective_wasm_rules.is_empty() {
+            // Concatenate all bounce blobs as the analysis surface for Wasm rules.
+            let wasm_src: Vec<u8> = bounce_blobs
+                .values()
+                .flat_map(|v| v.iter().copied())
+                .collect();
+            let paths: Vec<&str> = effective_wasm_rules.iter().map(|s| s.as_str()).collect();
+            let wasm_findings = forge::slop_filter::run_wasm_rules(&paths, &wasm_src);
+            for f in &wasm_findings {
+                score
+                    .antipattern_details
+                    .push(format!("{} — proprietary Wasm rule", f.id));
+                score.antipatterns_found += 1;
+                score.antipattern_score = score.antipattern_score.saturating_add(50);
+            }
+            score.structured_findings.extend(wasm_findings);
         }
     }
 
@@ -4599,6 +4637,7 @@ mod governor_routing_tests {
             false,
             false,
             None,
+            &[],
         );
         assert!(result.is_ok(), "cmd_bounce should POST to custom governor");
 

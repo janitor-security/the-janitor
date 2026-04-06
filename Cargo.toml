@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "9.9.5"
+version = "9.9.6"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -98,6 +98,12 @@ base64 = "0.22"
 
 # Lock-free atomic reference counting
 arc-swap = "1.7"
+
+# Wasm sandbox — BYOP (Bring Your Own Policy) custom rule execution
+# Cranelift JIT + WAT text-format parsing. Default features retained so all
+# required runtime types are available; LTO in the release profile strips
+# unreachable code paths, controlling the final binary footprint.
+wasmtime = { version = "28", features = ["cranelift", "wat"] }
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
 git2 = "0.20"

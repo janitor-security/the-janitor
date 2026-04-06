@@ -337,6 +337,25 @@ pub struct JanitorPolicy {
     /// Default: `false`.
     #[serde(default)]
     pub soft_fail: bool,
+
+    /// Paths to BYOP (Bring Your Own Policy) Wasm rule modules.
+    ///
+    /// Each module is executed against the patch source bytes inside a
+    /// fuel- and memory-bounded sandbox (10 MiB RAM cap, 100 M fuel units).
+    /// Modules must export the host-guest ABI defined in
+    /// [`forge::wasm_host`]: `memory`, `analyze(i32, i32) -> i32`, and
+    /// `output_ptr() -> i32`.
+    ///
+    /// Findings emitted by Wasm modules are injected into the bounce result at
+    /// **Critical severity (50 pts each)** and appear in `antipattern_details`
+    /// alongside built-in detector output.
+    ///
+    /// Paths are relative to the repository root.  Overridden or supplemented
+    /// by the `--wasm-rules <PATH>` CLI flag.
+    ///
+    /// Default: `[]` (no proprietary rules).
+    #[serde(default)]
+    pub wasm_rules: Vec<String>,
 }
 
 impl Default for JanitorPolicy {
@@ -353,6 +372,7 @@ impl Default for JanitorPolicy {
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
             soft_fail: false,
+            wasm_rules: Vec::new(),
         }
     }
 }
@@ -631,6 +651,7 @@ mod tests {
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
             soft_fail: false,
+            wasm_rules: Vec::new(),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();

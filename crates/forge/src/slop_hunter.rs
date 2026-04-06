@@ -6020,7 +6020,6 @@ mod phase1_rd_tests {
 mod phase2_rd_tests {
     use super::find_java_slop_bytes_test as find_java_slop;
     use super::find_python_slop_ast_bytes_test as find_python_slop_ast_bytes;
-    use super::*;
 
     // ── Python dangerous-call AST walk ───────────────────────────────────────
 
@@ -6302,7 +6301,6 @@ mod phase3_rd_tests {
     use super::find_csharp_slop_bytes_test as find_csharp_slop;
     use super::find_prototype_merge_sink_slop_bytes_test as find_prototype_merge_sink_slop;
     use super::find_slop_bytes as find_slop;
-    use super::*;
 
     // ── C# AST walk (TypeNameHandling + BinaryFormatter) ─────────────────────
 

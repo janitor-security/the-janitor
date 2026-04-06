@@ -32,6 +32,7 @@ pub mod slop_filter;
 pub mod slop_hunter;
 pub mod taint_catalog;
 pub mod taint_propagate;
+pub mod wasm_host;
 
 use tree_sitter::Node;
 

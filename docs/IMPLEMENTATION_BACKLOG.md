@@ -5,6 +5,34 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-05 — Wasm BYOR & Market Weaponization (v9.9.6)
+
+**Directive:** Implement the BYOP Wasm sandboxed rule host (P0-5), eradicate
+unused `super::*` import warnings, add NPM Massacre case study to manifesto, and
+release `v9.9.6`.
+
+**Files modified:**
+
+| File | Action | Description |
+|------|--------|-------------|
+| `Cargo.toml` | modified | Added `wasmtime = "28"` workspace dep; bumped version to 9.9.6 |
+| `crates/forge/Cargo.toml` | modified | Added `wasmtime.workspace`, `serde_json.workspace` |
+| `crates/forge/src/lib.rs` | modified | Exposed `pub mod wasm_host` |
+| `crates/forge/src/wasm_host.rs` | created | `WasmHost`: fuel+memory-bounded Wasm sandbox; host-guest ABI |
+| `crates/forge/src/slop_filter.rs` | modified | Added `run_wasm_rules()` orchestration function |
+| `crates/forge/src/slop_hunter.rs` | modified | Removed two unused `super::*` imports (Part 1 warning debt) |
+| `crates/common/src/slop.rs` | modified | Added `Deserialize` to `StructuredFinding` for guest JSON parsing |
+| `crates/common/src/policy.rs` | modified | Added `wasm_rules: Vec<String>` to `JanitorPolicy` |
+| `crates/cli/src/main.rs` | modified | Added `--wasm-rules <PATH>` flag; threaded through `cmd_bounce` |
+| `crates/crucible/fixtures/mock_rule.wat` | created | WAT fixture: always emits `security:proprietary_rule` |
+| `crates/crucible/src/main.rs` | modified | Added `wasm_host_loop_roundtrip` Crucible test |
+| `docs/manifesto.md` | modified | Added "Case Study: The April 2026 NPM Massacre" section |
+| `docs/INNOVATION_LOG.md` | modified | Purged P0-5 (completed) |
+| `docs/index.md` | modified | Synced to v9.9.6 via `just sync-versions` |
+| `README.md` | modified | Synced to v9.9.6 via `just sync-versions` |
+
+---
+
 ## 2026-04-05 — The Slopsquatting Interceptor (v9.9.5)
 
 **Directive:** Build the deterministic Bloom-backed slopsquatting interceptor,
