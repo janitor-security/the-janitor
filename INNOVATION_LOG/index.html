@@ -596,9 +596,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-7-transparency-logged-attestation-witnesses" class="md-nav__link">
+  <a href="#p0-8-phantom-payload-interception" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-7: Transparency-Logged Attestation Witnesses
+      P0-8: Phantom Payload Interception
     </span>
   </a>
   
@@ -767,9 +767,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-7-transparency-logged-attestation-witnesses" class="md-nav__link">
+  <a href="#p0-8-phantom-payload-interception" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-7: Transparency-Logged Attestation Witnesses
+      P0-8: Phantom Payload Interception
     </span>
   </a>
   
@@ -887,27 +887,24 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="p0-7-transparency-logged-attestation-witnesses">P0-7: Transparency-Logged Attestation Witnesses</h3>
-<p><strong>Class:</strong> Cryptographic Supply-Chain Trust
-<strong>Inspired by:</strong> dual-signature CBOMs still rely on detached local storage without
-an inclusion-proof channel</p>
+<h3 id="p0-8-phantom-payload-interception">P0-8: Phantom Payload Interception</h3>
+<p><strong>Class:</strong> AI Evasion Defense</p>
 <p><strong>Observation:</strong>
-Janitor can now emit both ML-DSA-65 and SLH-DSA signatures, but the evidence
-still terminates at the local bounce log or exported CBOM. There is no
-append-only witness proving an attestation existed at a specific time and was
-not silently replaced later.</p>
+Adversarial AI agents are hiding malicious logic inside mathematically
+unreachable AST paths such as <code>if (1 == 0) { ... }</code>, dead <code>switch</code> arms, and
+constant-false guard rails to bypass dynamic analysis and human review.</p>
 <p><strong>Proposal:</strong>
-Add a Merkle transparency log for CBOM attestations. Each dual-signed CBOM gets
-an inclusion proof, tree head, and witness hash embedded in the Governor
-response envelope and exported alongside the CBOM.</p>
+Implement a structural reachability pass over our AST layer. Any unreachable
+branch containing high-entropy payloads, shell execution, credential exfiltration,
+or other critical sinks should emit <code>security:phantom_payload_evasion</code> at
+critical severity.</p>
 <p><strong>Security impact:</strong>
-Upgrades detached signatures into publicly auditable provenance. Attackers can
-no longer swap an old CBOM with a new one without leaving a detectable mismatch
-against the transparency log root.</p>
+Disarms the primary technique agentic swarms use to smuggle dormant exploits
+into production codebases without surfacing in runtime-driven review paths.</p>
 <p><strong>Implementation path:</strong>
-Add a compact append-only log in <code>crates/gov</code>, expose inclusion proofs via
-<code>/v1/report</code>, and extend <code>crates/cli/src/cbom.rs</code> plus <code>verify-cbom</code> to check
-tree-head integrity and witness membership.</p>
+Extend <code>crates/forge/src/slop_hunter.rs</code> with language-specific constant-folding
+for branch predicates, then route dead-branch sink analysis through the existing
+critical finding path.</p>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="p1-3-wisdom-manifest-is-metadata-not-kev-authority">P1-3: Wisdom Manifest Is Metadata, Not KEV Authority</h3>
 <p><strong>Class:</strong> Infrastructure / Threat Intel Integrity
