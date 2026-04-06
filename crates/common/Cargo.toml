@@ -29,6 +29,9 @@ dunce.workspace = true
 blake3.workspace = true
 bloom.workspace = true
 bitvec.workspace = true
+base64.workspace = true
+fips204.workspace = true
+fips205.workspace = true
 
 # System introspection (Physarum Protocol memory backpressure)
 sysinfo.workspace = true

@@ -1,6 +1,6 @@
 # Rule: Mandatory Response Format
 
-Every response to an operator directive MUST follow the four-section structure
+Every response to an operator directive MUST follow the five-section structure
 below. No other top-level structure is acceptable.
 
 ## The Law
@@ -10,12 +10,12 @@ tests, or patching), agents MAY use natural, concise status updates such as
 `Running tests...`, `Failed on line 12. Patching...`, or `Release push in
 progress.`  These interim updates must stay brief and operational.
 
-The four-section structure below is reserved strictly for the **final summary**
+The five-section structure below is reserved strictly for the **final summary**
 after the directive is complete and any requested `/release` has been triggered.
 Do **not** use it for intermediate execution updates.
 
 All final substantive summaries (implementation, release, audit, research) must
-be organized into the following four named sections, in order:
+be organized into the following five named sections, in order:
 
 ```
 ## [EXECUTION STATUS]
@@ -41,6 +41,14 @@ The single highest-priority actionable item from `docs/INNOVATION_LOG.md`.
 State: the P0/P1/P2 ID, the file to modify, the function to change, the exact
 command to begin, and the commercial justification. No vague "consider"
 language — name the action and quantify the TAM / TEI expansion unlocked.
+
+## [SOVEREIGN TRANSLATION]
+A terminal-only operator brief. Never write this section into markdown logs or
+backlog files. It must explain the implementation in layman's executive terms
+and explicitly answer:
+1. What did we just build?
+2. Why does the CISO care?
+3. How does this make money or crush competitors?
 ```
 
 ## Enforcement
@@ -54,6 +62,8 @@ language — name the action and quantify the TAM / TEI expansion unlocked.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
   `docs/INNOVATION_LOG.md` and state the commercial justification — it is not
   a free-form opinion.
+- The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
+  summaries and must remain terminal-only.
 
 ## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
 

@@ -57,6 +57,30 @@ innovation log, and release `v9.9.5`.
 
 ---
 
+## 2026-04-06 — Cryptographic Permanence & The Operator's Rosetta Stone (v9.9.7)
+
+**Directive:** Add the terminal-only `[SOVEREIGN TRANSLATION]` UAP section,
+implement SLH-DSA-SHAKE-192s as a stateless companion to ML-DSA-65, wire
+dual-signature custody into the bounce log and CycloneDX CBOM envelope, extend
+`verify-cbom` to validate both algorithms, and release `v9.9.7`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.7`; added `fips205 = "0.4.1"`
+- `crates/common/Cargo.toml` *(modified)* — wired `fips204`, `fips205`, and `base64` into `common`
+- `.agent_governance/rules/response-format.md` *(modified)* — added mandatory terminal-only `[SOVEREIGN TRANSLATION]` section to the final UAP summary
+- `crates/common/src/pqc.rs` *(modified)* — added dual-signature key-bundle parsing, ML-DSA-65 + SLH-DSA signing helpers, and detached verification helpers
+- `crates/cli/src/report.rs` *(modified)* — added `pqc_slh_sig` to `BounceLogEntry`; Step Summary now surfaces the active PQC signature suite
+- `crates/cli/src/cbom.rs` *(modified)* — render path now embeds both detached signatures in exported CycloneDX properties while keeping the deterministic signing surface signature-free
+- `crates/cli/src/main.rs` *(modified)* — `janitor bounce --pqc-key` now emits dual signatures when a bundled SLH key is present; `verify-cbom` accepts `--slh-key` and reports both verification statuses
+- `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for the new schema
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce-log constructors updated for the new schema
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-6`; added new active `P0-7` transparency-log proposal
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.7`
+
+---
+
 ## 2026-04-05 — Fortune 500 Synchronization Strike (v9.9.4)
 
 **Directive:** Full codebase audit + documentation parity enforcement. Expose

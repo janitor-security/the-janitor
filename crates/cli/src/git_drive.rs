@@ -566,6 +566,7 @@ fn bounce_one(
             provenance: crate::report::Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         });
@@ -662,6 +663,7 @@ fn bounce_one(
         },
         governor_status: None,
         pqc_sig: None,
+        pqc_slh_sig: None,
         pqc_key_source: None,
         cognition_surrender_index: 0.0,
     })

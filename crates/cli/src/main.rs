@@ -262,14 +262,15 @@ enum Commands {
         /// before emitting a `Severity::Exhaustion` finding.
         #[arg(long)]
         deep_scan: bool,
-        /// ML-DSA-65 attestation key source for BYOK local attestation
-        /// (FIPS 204 — Signature Sovereignty mode).
+        /// ML-DSA-65 / SLH-DSA attestation key source for BYOK local attestation
+        /// (FIPS 204 + FIPS 205 — Signature Sovereignty mode).
         ///
         /// When provided, the CLI signs the CycloneDX v1.6 CBOM for this bounce
-        /// result using the customer's locally-stored ML-DSA-65 private key.
-        /// The signature is embedded in the bounce log entry as `pqc_sig`
-        /// (base64-encoded, STANDARD alphabet) and is verifiable offline:
-        ///   `janitor verify-cbom --key <pub.key> <log.ndjson>`
+        /// result using the customer's locally-stored PQC private key material.
+        /// The ML-DSA-65 signature is embedded as `pqc_sig`; an optional
+        /// SLH-DSA-SHAKE-192s signature is embedded as `pqc_slh_sig`.
+        /// Verifiable offline via:
+        ///   `janitor verify-cbom --key <ml.pub> --slh-key <slh.pub> <log.ndjson>`
         ///
         /// Accepted forms:
         ///   - `./ml-dsa.key` (existing local file mode)
@@ -573,19 +574,22 @@ enum Commands {
         path: PathBuf,
     },
 
-    /// Verify ML-DSA-65 (FIPS 204) signatures in a bounce log or CBOM file.
+    /// Verify ML-DSA-65 and SLH-DSA signatures in a bounce log or CBOM file.
     ///
     /// Reads the file at `<path>` as newline-delimited JSON bounce log entries
-    /// (`.janitor/bounce_log.ndjson`).  For each entry carrying a `pqc_sig`
-    /// field, regenerates the deterministic CycloneDX v1.6 CBOM and verifies
-    /// the signature against the supplied ML-DSA-65 public key.
+    /// (`.janitor/bounce_log.ndjson`). For each entry carrying detached PQC
+    /// signatures, regenerates the deterministic CycloneDX v1.6 CBOM and
+    /// verifies the signature(s) against the supplied public key(s).
     ///
     /// Exits 0 when all signed entries verify successfully.
     /// Exits non-zero when any signature fails or the key is malformed.
     VerifyCbom {
         /// Path to the ML-DSA-65 public key file (1952 raw bytes, FIPS 204 ML-DSA-65).
         #[arg(long)]
-        key: PathBuf,
+        key: Option<PathBuf>,
+        /// Path to the SLH-DSA-SHAKE-192s public key file (48 raw bytes).
+        #[arg(long)]
+        slh_key: Option<PathBuf>,
         /// Path to a bounce log NDJSON file (e.g. `.janitor/bounce_log.ndjson`).
         path: PathBuf,
     },
@@ -852,6 +856,7 @@ async fn main() -> anyhow::Result<()> {
                             provenance: report::Provenance::default(),
                             governor_status: None,
                             pqc_sig: None,
+                            pqc_slh_sig: None,
                             pqc_key_source: None,
                             cognition_surrender_index: 0.0,
                         };
@@ -978,8 +983,8 @@ async fn main() -> anyhow::Result<()> {
             cmd_step_summary(path)?;
         }
 
-        Commands::VerifyCbom { key, path } => {
-            cmd_verify_cbom(key, path)?;
+        Commands::VerifyCbom { key, slh_key, path } => {
+            cmd_verify_cbom(key.as_deref(), slh_key.as_deref(), path)?;
         }
     }
 
@@ -3270,6 +3275,7 @@ probable AI context-collapse (hallucinated function reference)"
         governor_status: None,
         // pqc_sig set by --pqc-key signing block below (if key path provided).
         pqc_sig: None,
+        pqc_slh_sig: None,
         pqc_key_source: None,
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
@@ -3288,16 +3294,12 @@ probable AI context-collapse (hallucinated function reference)"
 
     // ── BYOK Local PQC Attestation (--pqc-key) ───────────────────────────────
     //
-    // When the operator supplies an ML-DSA-65 private key, sign the deterministic
-    // CycloneDX v1.6 CBOM for this entry directly on the runner.  The signature is
-    // embedded in the log entry (`pqc_sig`).  Governor POST is skipped — local BYOK
-    // signing is the chain-of-custody mechanism when Signature Sovereignty mode is
-    // active.
+    // When the operator supplies PQC private key material, sign the deterministic
+    // CycloneDX v1.6 CBOM for this entry directly on the runner. ML-DSA-65
+    // remains the baseline signature; a bundled SLH-DSA key adds a stateless
+    // companion signature for long-horizon verification.
     if let Some(key_source_raw) = pqc_key {
-        use base64::Engine as _;
         use common::pqc::PqcKeySource;
-        use fips204::ml_dsa_65;
-        use fips204::traits::{SerDes, Signer};
 
         let key_source = PqcKeySource::parse(key_source_raw);
         log_entry.pqc_key_source = Some(key_source.custody_label().to_string());
@@ -3310,21 +3312,10 @@ probable AI context-collapse (hallucinated function reference)"
             unreachable!("commercial key sources were handled above");
         };
 
-        let sk_bytes = std::fs::read(&key_path)
-            .with_context(|| format!("reading PQC private key: {}", key_path.display()))?;
-        // ML-DSA-65 private key is exactly 4032 bytes per FIPS 204.
-        let sk_array: [u8; 4032] = sk_bytes
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("ML-DSA-65 private key must be exactly 4032 bytes"))?;
-        let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk_array)
-            .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 private key: {e}"))?;
-
         let cbom_json = cbom::render_cbom_for_entry(&log_entry, &log_entry.repo_slug.clone());
-        let sig = sk
-            .try_sign(cbom_json.as_bytes(), b"janitor-cbom")
-            .map_err(|e| anyhow::anyhow!("ML-DSA-65 signing failed: {e}"))?;
-
-        log_entry.pqc_sig = Some(base64::engine::general_purpose::STANDARD.encode(sig.as_ref()));
+        let signatures = common::pqc::sign_cbom_dual_from_file(cbom_json.as_bytes(), &key_path)?;
+        log_entry.pqc_sig = signatures.ml_dsa_sig;
+        log_entry.pqc_slh_sig = signatures.slh_dsa_sig;
         log_entry.governor_status = Some("local_pqc".to_string());
 
         // Skip the Governor POST when BYOK signing is active.
@@ -3435,32 +3426,44 @@ fn cmd_pardon(symbol: &str, repo: &Path) -> anyhow::Result<()> {
 // verify-cbom
 // ---------------------------------------------------------------------------
 
-/// Verify ML-DSA-65 (FIPS 204) signatures stored in a bounce log NDJSON file.
+/// Verify ML-DSA-65 (FIPS 204) and SLH-DSA-SHAKE-192s (FIPS 205) signatures
+/// stored in a bounce log NDJSON file.
 ///
 /// Reads `log_path` as newline-delimited JSON [`report::BounceLogEntry`] records.
-/// For each entry whose `pqc_sig` field is present, this function:
+/// For each entry carrying a PQC signature, this function:
 ///
 /// 1. Re-derives the exact deterministic CycloneDX v1.6 CBOM bytes that were
 ///    signed at bounce time (via [`cbom::render_cbom_for_entry`]).
-/// 2. Base64-decodes `pqc_sig`.
-/// 3. Verifies the ML-DSA-65 signature using the public key loaded from `pub_key_path`.
+/// 2. Verifies the ML-DSA-65 signature when `pqc_sig` is present.
+/// 3. Verifies the SLH-DSA signature when `pqc_slh_sig` is present.
 ///
 /// Exits `Ok(())` iff every signed entry verifies successfully.
 /// Returns `Err` if any signature is invalid or the key is malformed.
-fn cmd_verify_cbom(pub_key_path: &Path, log_path: &Path) -> anyhow::Result<()> {
-    use base64::Engine as _;
-    use fips204::ml_dsa_65;
-    use fips204::traits::{SerDes, Verifier};
-
-    // Load ML-DSA-65 public key (1952 bytes per FIPS 204).
-    let pk_bytes_vec = std::fs::read(pub_key_path)
-        .with_context(|| format!("reading PQC public key: {}", pub_key_path.display()))?;
-    let pk_array: [u8; 1952] = pk_bytes_vec
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("ML-DSA-65 public key must be exactly 1952 bytes"))?;
-    let pk = ml_dsa_65::PublicKey::try_from_bytes(pk_array)
-        .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 public key: {e}"))?;
-
+fn cmd_verify_cbom(
+    ml_pub_key_path: Option<&Path>,
+    slh_pub_key_path: Option<&Path>,
+    log_path: &Path,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        ml_pub_key_path.is_some() || slh_pub_key_path.is_some(),
+        "verify-cbom requires --key, --slh-key, or both"
+    );
+    let ml_pub_key_bytes = if let Some(path) = ml_pub_key_path {
+        Some(
+            std::fs::read(path)
+                .with_context(|| format!("reading ML-DSA-65 public key: {}", path.display()))?,
+        )
+    } else {
+        None
+    };
+    let slh_pub_key_bytes = if let Some(path) = slh_pub_key_path {
+        Some(
+            std::fs::read(path)
+                .with_context(|| format!("reading SLH-DSA public key: {}", path.display()))?,
+        )
+    } else {
+        None
+    };
     let content = std::fs::read_to_string(log_path)
         .with_context(|| format!("reading log file: {}", log_path.display()))?;
 
@@ -3475,31 +3478,63 @@ fn cmd_verify_cbom(pub_key_path: &Path, log_path: &Path) -> anyhow::Result<()> {
         }
         match serde_json::from_str::<report::BounceLogEntry>(line) {
             Ok(entry) => {
+                let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
+                let pr = entry.pr_number.unwrap_or(0);
+                let mut statuses = Vec::new();
+                let mut entry_signed = false;
+                let mut entry_failed = false;
+
                 if let Some(ref sig_b64) = entry.pqc_sig {
-                    let sig_bytes = base64::engine::general_purpose::STANDARD
-                        .decode(sig_b64)
-                        .with_context(|| {
-                            format!("line {}: base64 decode of pqc_sig failed", line_no + 1)
-                        })?;
-                    let sig_array: [u8; ml_dsa_65::SIG_LEN] =
-                        sig_bytes.try_into().map_err(|_| {
-                            anyhow::anyhow!(
-                                "line {}: pqc_sig must decode to exactly {} bytes",
-                                line_no + 1,
-                                ml_dsa_65::SIG_LEN
-                            )
-                        })?;
-
-                    let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
-                    let valid = pk.verify(cbom_json.as_bytes(), &sig_array, b"janitor-cbom");
-
-                    let pr = entry.pr_number.unwrap_or(0);
-                    if valid {
-                        println!("PR #{pr}: SIGNATURE VALID");
-                        verified += 1;
+                    entry_signed = true;
+                    if let Some(pk) = ml_pub_key_bytes.as_deref() {
+                        let valid =
+                            common::pqc::verify_ml_dsa_signature(cbom_json.as_bytes(), pk, sig_b64)
+                                .with_context(|| {
+                                    format!("line {}: ML-DSA-65 verification failed", line_no + 1)
+                                })?;
+                        statuses.push(format!(
+                            "ML-DSA-65: {}",
+                            if valid { "VALID" } else { "INVALID" }
+                        ));
+                        entry_failed |= !valid;
                     } else {
-                        println!("PR #{pr}: SIGNATURE INVALID");
+                        statuses.push("ML-DSA-65: KEY-MISSING".to_string());
+                        entry_failed = true;
+                    }
+                } else {
+                    statuses.push("ML-DSA-65: UNSIGNED".to_string());
+                }
+
+                if let Some(ref sig_b64) = entry.pqc_slh_sig {
+                    entry_signed = true;
+                    if let Some(pk) = slh_pub_key_bytes.as_deref() {
+                        let valid = common::pqc::verify_slh_dsa_signature(
+                            cbom_json.as_bytes(),
+                            pk,
+                            sig_b64,
+                        )
+                        .with_context(|| {
+                            format!("line {}: SLH-DSA verification failed", line_no + 1)
+                        })?;
+                        statuses.push(format!(
+                            "SLH-DSA: {}",
+                            if valid { "VALID" } else { "INVALID" }
+                        ));
+                        entry_failed |= !valid;
+                    } else {
+                        statuses.push("SLH-DSA: KEY-MISSING".to_string());
+                        entry_failed = true;
+                    }
+                } else {
+                    statuses.push("SLH-DSA: UNSIGNED".to_string());
+                }
+
+                if entry_signed {
+                    println!("PR #{pr}: {}", statuses.join(", "));
+                    if entry_failed {
                         failed += 1;
+                    } else {
+                        verified += 1;
                     }
                 } else {
                     skipped += 1;
@@ -3515,7 +3550,7 @@ fn cmd_verify_cbom(pub_key_path: &Path, log_path: &Path) -> anyhow::Result<()> {
         "Verification complete — valid: {verified}, invalid: {failed}, unsigned/skipped: {skipped}"
     );
     if failed > 0 {
-        anyhow::bail!("{failed} entry/entries failed ML-DSA-65 signature verification");
+        anyhow::bail!("{failed} entry/entries failed PQC signature verification");
     }
     Ok(())
 }
@@ -4402,10 +4437,9 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
 mod pqc_signing_tests {
     use super::cbom;
     use crate::report::{BounceLogEntry, PrState, Provenance};
-    use base64::Engine as _;
     use common::pqc::PqcKeySource;
     use fips204::ml_dsa_65;
-    use fips204::traits::{KeyGen, Signer, Verifier};
+    use fips204::traits::{KeyGen, SerDes, Signer, Verifier};
 
     /// Construct a minimal BounceLogEntry for signing fixture use.
     fn make_pqc_entry(score: u32) -> BounceLogEntry {
@@ -4440,30 +4474,31 @@ mod pqc_signing_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
     }
 
-    /// End-to-end: generate keypair → sign CBOM → verify signature round-trip.
+    /// End-to-end wiring: generate an ML-DSA keypair and sign the deterministic CBOM.
+    ///
+    /// Full SLH-DSA cryptographic roundtrip coverage lives in `common::pqc`; this
+    /// CLI test stays lightweight so `just audit` remains bounded.
     #[test]
     fn sign_and_verify_roundtrip() {
-        let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("keygen must succeed");
+        use common::pqc::{sign_cbom_dual_from_keys, verify_ml_dsa_signature};
+
+        let (ml_pk, ml_sk) = ml_dsa_65::KG::try_keygen().expect("keygen must succeed");
         let entry = make_pqc_entry(50);
         let cbom_json = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
-
-        let sig = sk
-            .try_sign(cbom_json.as_bytes(), b"janitor-cbom")
-            .expect("signing must succeed");
-        let sig_b64 = base64::engine::general_purpose::STANDARD.encode(sig.as_ref());
-
-        // Round-trip: decode base64 and verify.
-        let sig_decoded = base64::engine::general_purpose::STANDARD
-            .decode(&sig_b64)
-            .expect("base64 decode must succeed");
-        let sig_array: [u8; ml_dsa_65::SIG_LEN] = sig_decoded
-            .try_into()
-            .expect("signature must be SIG_LEN bytes");
+        let signatures = sign_cbom_dual_from_keys(
+            cbom_json.as_bytes(),
+            &common::pqc::PqcPrivateKeyBundle {
+                ml_dsa: Some(ml_sk.into_bytes()),
+                slh_dsa: None,
+            },
+        )
+        .expect("dual signing must succeed");
 
         // Re-derive CBOM bytes identically.
         let cbom_json2 = cbom::render_cbom_for_entry(&entry, &entry.repo_slug);
@@ -4472,10 +4507,21 @@ mod pqc_signing_tests {
             "CBOM derivation must be deterministic"
         );
 
-        let valid = pk.verify(cbom_json2.as_bytes(), &sig_array, b"janitor-cbom");
         assert!(
-            valid,
-            "signature must verify against the original CBOM bytes"
+            signatures.slh_dsa_sig.is_none(),
+            "ML-only signing fixtures must not fabricate an SLH-DSA signature"
+        );
+        assert!(
+            verify_ml_dsa_signature(
+                cbom_json2.as_bytes(),
+                &ml_pk.into_bytes(),
+                signatures
+                    .ml_dsa_sig
+                    .as_deref()
+                    .expect("ML signature must be present"),
+            )
+            .expect("ML verification must succeed"),
+            "ML-DSA signature must verify against the original CBOM bytes"
         );
     }
 

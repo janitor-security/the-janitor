@@ -192,6 +192,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         provenance: Provenance::default(),
         governor_status: None,
         pqc_sig: None,
+        pqc_slh_sig: None,
         pqc_key_source: None,
         cognition_surrender_index: 0.0,
     };
@@ -496,6 +497,13 @@ pub struct BounceLogEntry {
     /// the chain-of-custody mechanism for this entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pqc_sig: Option<String>,
+
+    /// SLH-DSA-SHAKE-192s (FIPS 205) signature over the deterministic CBOM.
+    ///
+    /// Present when the supplied key bundle contained stateless SLH-DSA private
+    /// key material in addition to the ML-DSA-65 key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pqc_slh_sig: Option<String>,
 
     /// Typed custody source for the PQC attestation key.
     ///
@@ -2734,6 +2742,18 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         out.push_str(source);
         out.push_str("`\n\n");
     }
+    let mut pqc_signatures = Vec::new();
+    if entry.pqc_sig.is_some() {
+        pqc_signatures.push("ML-DSA-65");
+    }
+    if entry.pqc_slh_sig.is_some() {
+        pqc_signatures.push("SLH-DSA-SHAKE-192s");
+    }
+    if !pqc_signatures.is_empty() {
+        out.push_str("**PQC Signatures:** `");
+        out.push_str(&pqc_signatures.join(" + "));
+        out.push_str("`\n\n");
+    }
 
     // ── Integrity Radar ────────────────────────────────────────────────────────
     out.push_str("### Integrity Radar\n\n");
@@ -3023,6 +3043,7 @@ mod tests {
             },
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
@@ -3152,6 +3173,7 @@ mod webhook_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
@@ -3221,6 +3243,7 @@ mod soft_fail_tests {
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }

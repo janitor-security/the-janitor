@@ -7,28 +7,32 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-6: FIPS 205 (SLH-DSA) Stateless Signatures
+### P0-7: Transparency-Logged Attestation Witnesses
 
-**Class:** Post-Quantum Cryptography
-**Inspired by:** long-horizon CBOM permanence beyond stateful key-management assumptions
+**Class:** Cryptographic Supply-Chain Trust
+**Inspired by:** dual-signature CBOMs still rely on detached local storage without
+an inclusion-proof channel
 
 **Observation:**
-The current CBOM attestation path relies solely on ML-DSA-65. That is strong,
-but it does not offer a hash-based stateless companion for environments that
-want absolute post-quantum permanence and diversity against lattice-family risk.
+Janitor can now emit both ML-DSA-65 and SLH-DSA signatures, but the evidence
+still terminates at the local bounce log or exported CBOM. There is no
+append-only witness proving an attestation existed at a specific time and was
+not silently replaced later.
 
 **Proposal:**
-Implement the SLH-DSA hash-based signature scheme as a companion to ML-DSA-65 so
-CBOMs can optionally carry a second, stateless FIPS 205 signature.
+Add a Merkle transparency log for CBOM attestations. Each dual-signed CBOM gets
+an inclusion proof, tree head, and witness hash embedded in the Governor
+response envelope and exported alongside the CBOM.
 
 **Security impact:**
-Introduces cryptographic diversity and immutable long-term verification paths for
-artifact attestations that may need to survive decades of compliance retention.
+Upgrades detached signatures into publicly auditable provenance. Attackers can
+no longer swap an old CBOM with a new one without leaving a detectable mismatch
+against the transparency log root.
 
 **Implementation path:**
-Add a parallel signing backend in `crates/common/src/pqc.rs`, extend the CBOM
-envelope to carry dual-signature metadata, and update `verify-cbom` to validate
-ML-DSA, SLH-DSA, or both under explicit policy.
+Add a compact append-only log in `crates/gov`, expose inclusion proofs via
+`/v1/report`, and extend `crates/cli/src/cbom.rs` plus `verify-cbom` to check
+tree-head integrity and witness membership.
 
 ## P1 — Compliance / Integration
 

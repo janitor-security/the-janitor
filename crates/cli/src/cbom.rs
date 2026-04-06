@@ -67,7 +67,7 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
                     }
                 ],
                 "description": description,
-                "properties": cbom_entry_properties(e),
+                "properties": cbom_entry_properties(e, true),
                 "affects": [
                     {
                         "ref": affects_ref
@@ -113,7 +113,7 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
 ///
 /// The verifier (`janitor verify-cbom`) re-derives the exact same bytes by
 /// calling this function with the stored [`BounceLogEntry`] and repo slug,
-/// then checking the ML-DSA-65 signature stored in [`BounceLogEntry::pqc_sig`].
+/// then checking the detached PQC signatures stored in the bounce log entry.
 pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String {
     let pr_num = entry.pr_number.unwrap_or(0);
     let severity = severity_for_entry(entry);
@@ -151,7 +151,7 @@ pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String 
                 "severity": severity,
                 "method": "other"
             }],
-            "properties": cbom_entry_properties(entry),
+            "properties": cbom_entry_properties(entry, false),
             "description": description,
             "affects": [{ "ref": affects_ref }]
         }]
@@ -172,13 +172,27 @@ fn severity_for_entry(e: &BounceLogEntry) -> &'static str {
     }
 }
 
-fn cbom_entry_properties(entry: &BounceLogEntry) -> Vec<Value> {
+fn cbom_entry_properties(entry: &BounceLogEntry, include_signatures: bool) -> Vec<Value> {
     let mut props = Vec::new();
     if let Some(source) = entry.pqc_key_source.as_deref() {
         props.push(json!({
             "name": "janitor:pqc_key_source",
             "value": source
         }));
+    }
+    if include_signatures {
+        if let Some(sig) = entry.pqc_sig.as_deref() {
+            props.push(json!({
+                "name": "janitor:pqc_sig_ml_dsa_65",
+                "value": sig
+            }));
+        }
+        if let Some(sig) = entry.pqc_slh_sig.as_deref() {
+            props.push(json!({
+                "name": "janitor:pqc_sig_slh_dsa_shake_192s",
+                "value": sig
+            }));
+        }
     }
     props
 }
@@ -216,6 +230,7 @@ mod tests {
             provenance: crate::report::Provenance::default(),
             governor_status: None,
             pqc_sig: None,
+            pqc_slh_sig: None,
             pqc_key_source: None,
             cognition_surrender_index: 0.0,
         }
@@ -274,6 +289,30 @@ mod tests {
         assert_eq!(
             parsed["vulnerabilities"][0]["properties"][0]["value"],
             "filesystem"
+        );
+    }
+
+    #[test]
+    fn test_cbom_includes_dual_signature_properties() {
+        let mut entry = make_entry(7, 50, vec!["security:compiled_payload_anomaly".to_string()]);
+        entry.pqc_sig = Some("mlsig".to_string());
+        entry.pqc_slh_sig = Some("slhsig".to_string());
+        let out = render_cbom(&[entry], "owner/repo");
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let properties = parsed["vulnerabilities"][0]["properties"]
+            .as_array()
+            .expect("properties must be present");
+        assert!(
+            properties
+                .iter()
+                .any(|prop| prop["name"] == "janitor:pqc_sig_ml_dsa_65"),
+            "render_cbom must expose the ML-DSA-65 detached signature"
+        );
+        assert!(
+            properties
+                .iter()
+                .any(|prop| prop["name"] == "janitor:pqc_sig_slh_dsa_shake_192s"),
+            "render_cbom must expose the SLH-DSA detached signature"
         );
     }
 }
