@@ -99,7 +99,7 @@ fips205 = "0.4.1"
 base64 = "0.22"
 
 # Lock-free atomic reference counting
-arc-swap = "1.7"
+arc-swap = "1.9"
 
 # Wasm sandbox — BYOP (Bring Your Own Policy) custom rule execution
 # Cranelift JIT + WAT text-format parsing. Default features retained so all
