@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-wasm-byor-market-weaponization-v996" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Wasm BYOR &amp; Market Weaponization (v9.9.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-the-slopsquatting-interceptor-v995" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — The Slopsquatting Interceptor (v9.9.5)
@@ -962,6 +971,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-05-wasm-byor-market-weaponization-v996" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-05 — Wasm BYOR &amp; Market Weaponization (v9.9.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-05-the-slopsquatting-interceptor-v995" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — The Slopsquatting Interceptor (v9.9.5)
@@ -1297,6 +1315,98 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-05-wasm-byor-market-weaponization-v996">2026-04-05 — Wasm BYOR &amp; Market Weaponization (v9.9.6)</h2>
+<p><strong>Directive:</strong> Implement the BYOP Wasm sandboxed rule host (P0-5), eradicate
+unused <code>super::*</code> import warnings, add NPM Massacre case study to manifesto, and
+release <code>v9.9.6</code>.</p>
+<p><strong>Files modified:</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Action</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Cargo.toml</code></td>
+<td>modified</td>
+<td>Added <code>wasmtime = "28"</code> workspace dep; bumped version to 9.9.6</td>
+</tr>
+<tr>
+<td><code>crates/forge/Cargo.toml</code></td>
+<td>modified</td>
+<td>Added <code>wasmtime.workspace</code>, <code>serde_json.workspace</code></td>
+</tr>
+<tr>
+<td><code>crates/forge/src/lib.rs</code></td>
+<td>modified</td>
+<td>Exposed <code>pub mod wasm_host</code></td>
+</tr>
+<tr>
+<td><code>crates/forge/src/wasm_host.rs</code></td>
+<td>created</td>
+<td><code>WasmHost</code>: fuel+memory-bounded Wasm sandbox; host-guest ABI</td>
+</tr>
+<tr>
+<td><code>crates/forge/src/slop_filter.rs</code></td>
+<td>modified</td>
+<td>Added <code>run_wasm_rules()</code> orchestration function</td>
+</tr>
+<tr>
+<td><code>crates/forge/src/slop_hunter.rs</code></td>
+<td>modified</td>
+<td>Removed two unused <code>super::*</code> imports (Part 1 warning debt)</td>
+</tr>
+<tr>
+<td><code>crates/common/src/slop.rs</code></td>
+<td>modified</td>
+<td>Added <code>Deserialize</code> to <code>StructuredFinding</code> for guest JSON parsing</td>
+</tr>
+<tr>
+<td><code>crates/common/src/policy.rs</code></td>
+<td>modified</td>
+<td>Added <code>wasm_rules: Vec&lt;String&gt;</code> to <code>JanitorPolicy</code></td>
+</tr>
+<tr>
+<td><code>crates/cli/src/main.rs</code></td>
+<td>modified</td>
+<td>Added <code>--wasm-rules &lt;PATH&gt;</code> flag; threaded through <code>cmd_bounce</code></td>
+</tr>
+<tr>
+<td><code>crates/crucible/fixtures/mock_rule.wat</code></td>
+<td>created</td>
+<td>WAT fixture: always emits <code>security:proprietary_rule</code></td>
+</tr>
+<tr>
+<td><code>crates/crucible/src/main.rs</code></td>
+<td>modified</td>
+<td>Added <code>wasm_host_loop_roundtrip</code> Crucible test</td>
+</tr>
+<tr>
+<td><code>docs/manifesto.md</code></td>
+<td>modified</td>
+<td>Added "Case Study: The April 2026 NPM Massacre" section</td>
+</tr>
+<tr>
+<td><code>docs/INNOVATION_LOG.md</code></td>
+<td>modified</td>
+<td>Purged P0-5 (completed)</td>
+</tr>
+<tr>
+<td><code>docs/index.md</code></td>
+<td>modified</td>
+<td>Synced to v9.9.6 via <code>just sync-versions</code></td>
+</tr>
+<tr>
+<td><code>README.md</code></td>
+<td>modified</td>
+<td>Synced to v9.9.6 via <code>just sync-versions</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="2026-04-05-the-slopsquatting-interceptor-v995">2026-04-05 — The Slopsquatting Interceptor (v9.9.5)</h2>
 <p><strong>Directive:</strong> Build the deterministic Bloom-backed slopsquatting interceptor,

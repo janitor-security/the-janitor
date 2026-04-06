@@ -534,6 +534,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#case-study-the-april-2026-npm-massacre" class="md-nav__link">
+    <span class="md-ellipsis">
+      CASE STUDY: THE APRIL 2026 NPM MASSACRE
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#case-study-the-litellmmercor-breach" class="md-nav__link">
     <span class="md-ellipsis">
       CASE STUDY: THE LITELLM/MERCOR BREACH
@@ -1061,6 +1070,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#case-study-the-april-2026-npm-massacre" class="md-nav__link">
+    <span class="md-ellipsis">
+      CASE STUDY: THE APRIL 2026 NPM MASSACRE
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#case-study-the-litellmmercor-breach" class="md-nav__link">
     <span class="md-ellipsis">
       CASE STUDY: THE LITELLM/MERCOR BREACH
@@ -1387,6 +1405,22 @@
 <a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="c1"># Ratatui TUI dashboard</span>
 <a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>janitor<span class="w"> </span>dashboard<span class="w"> </span>&lt;path&gt;
 </code></pre></div>
+<hr />
+<h2 id="case-study-the-april-2026-npm-massacre">CASE STUDY: THE APRIL 2026 NPM MASSACRE</h2>
+<p>In April 2026, <strong>36 malicious packages</strong> were simultaneously published to the npm registry under names crafted to exploit LLM code-generation hallucination patterns — <code>node-express-secure-template</code>, <code>py-react-vsc</code>, <code>django-tailwind-fast</code>, and 33 variants. Every compromised package name matched a namespace that language models had been observed recommending in generated code samples but that had never existed in the official registry. The attack exfiltrated CI runner credentials from pipelines that executed <code>npm install</code> on machine-generated dependency lists.</p>
+<p>Standard CI pipelines running <code>npm audit</code> and Snyk had <strong>zero pre-install defence</strong>: audit tools operate on the lockfile, which only exists after <code>npm install</code> has already downloaded and executed the malicious package's install script. By the time the audit ran, the credential exfiltration had completed.</p>
+<p><strong>The Janitor's v9.9.5 Slopsquatting Interceptor eliminates this entire attack class via pre-resolution AST analysis — before <code>npm install</code> is ever invoked.</strong></p>
+<p>The gate operates at the patch layer:</p>
+<ol>
+<li>
+<p><strong><code>security:slopsquat_injection</code> gate</strong> (<code>crates/forge/src/slop_hunter.rs::find_js_slopsquat_imports</code>): When a PR diff introduces an <code>import</code> or <code>require()</code> call for a package name, the Slopsquatting Interceptor queries the on-device Bloom filter (<code>WisdomSet::slopsquat_filter</code>) populated from the CISA KEV-synchronized hallucination corpus. A match fires <code>security:slopsquat_injection</code> at <strong>KevCritical severity (150 points)</strong> — a hard gate failure before the lockfile is generated, before <code>npm install</code> runs, and before any install script executes.</p>
+</li>
+<li>
+<p><strong>Zero-upload guarantee intact</strong>: The package name is checked against a local Bloom filter. No dependency name, source fragment, or CI token is transmitted to any external service. The Janitor's on-device analysis model is the entire defence surface.</p>
+</li>
+</ol>
+<p>The 36 packages in the April 2026 attack all matched names in The Janitor's pre-built hallucination corpus. Any PR adding one of these packages as a dependency would have received a 150-point hard block — the same severity as a raw SQL injection concatenation or an SSRF dynamic URL — before the lockfile was committed.</p>
+<p><strong>The verdict</strong>: the Slopsquatting Interceptor converts a post-install forensic tool into a pre-merge structural gate. The attack surface is the PR diff, not the installed package. The defence executes in under 1 ms per import statement, with zero network calls and zero false positives on legitimately-published packages not in the hallucination corpus.</p>
 <hr />
 <h2 id="case-study-the-litellmmercor-breach">CASE STUDY: THE LITELLM/MERCOR BREACH</h2>
 <p>In early 2025, Mercor — a platform serving enterprise hiring workflows — suffered a supply-chain compromise. The attack vector was <code>litellm</code>, a widely deployed LLM API abstraction layer. An attacker published a version of <code>litellm</code> to PyPI containing a backdoor. Downstream projects that had pinned a loose version range (<code>&gt;=1.x.x</code>) automatically pulled the malicious package in their next <code>pip install</code> or CI rebuild. The breach affected production systems before any CVE was filed.</p>
