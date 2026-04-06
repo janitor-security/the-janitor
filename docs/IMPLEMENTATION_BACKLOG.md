@@ -5,6 +5,32 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Threat Intel Receipts & Semantic CST Diffing (v9.9.12)
+
+**Directive:** Bind every bounce decision to a cryptographically identified
+Wisdom feed receipt, thread that provenance through the CBOM and verifier,
+replace line-based patch reasoning with semantic CST subtree extraction,
+prove whitespace-padded payload interception in Crucible, autonomously seed the
+next roadmap item, and release `v9.9.12`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.12`
+- `crates/common/Cargo.toml` *(modified)* — added `serde_json` for feed-receipt parsing
+- `crates/common/src/wisdom.rs` *(modified)* — added feed-receipt loader metadata, normalized signature handling, and receipt-aware archive loading
+- `crates/cli/src/main.rs` *(modified)* — `update-wisdom` now persists detached signature + receipt metadata; bounce logs capture feed provenance; `verify-cbom` now prints intelligence provenance
+- `crates/cli/src/report.rs` *(modified)* — added `wisdom_hash` / `wisdom_signature` to `BounceLogEntry`; step summary now surfaces feed provenance
+- `crates/cli/src/cbom.rs` *(modified)* — mapped feed provenance into CycloneDX v1.6 metadata and entry properties
+- `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for feed-provenance schema parity
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce-log constructors updated for feed-provenance schema parity
+- `crates/forge/src/lib.rs` *(modified)* — exported the new `cst_diff` module
+- `crates/forge/src/cst_diff.rs` *(new)* — added subtree-local semantic diff extraction over added patch line ranges
+- `crates/forge/src/slop_filter.rs` *(modified)* — `PatchBouncer` now resolves semantic subtrees and runs structural hashing / slop hunting over those slices instead of whole added diff text
+- `crates/crucible/src/main.rs` *(modified)* — added whitespace-padded semantic-diff interception proof
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P1-1` and `P2-1`; seeded new `P1-1` Governor-Sealed Decision Receipts
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.12`
+
 ## 2026-04-06 — Cryptographic Intel Provenance & Constant Folding Core (v9.9.11)
 
 **Directive:** Add detached Ed25519 verification for `wisdom.rkyv` transport,

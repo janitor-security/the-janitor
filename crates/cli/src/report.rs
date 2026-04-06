@@ -201,6 +201,8 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         pqc_slh_sig: None,
         pqc_key_source: None,
         transparency_log: None,
+        wisdom_hash: None,
+        wisdom_signature: None,
         cognition_surrender_index: 0.0,
     };
 
@@ -525,6 +527,16 @@ pub struct BounceLogEntry {
     /// anchored its detached CBOM signature material in the Blake3 hash chain.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transparency_log: Option<InclusionProof>,
+
+    /// BLAKE3 hex digest of the verified Wisdom feed receipt that governed
+    /// this bounce result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wisdom_hash: Option<String>,
+
+    /// Detached Ed25519 signature string for the verified Wisdom feed receipt
+    /// that governed this bounce result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wisdom_signature: Option<String>,
 
     /// Structural rot density attributable to agentic authorship.
     ///
@@ -2773,6 +2785,11 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         out.push_str(&proof.sequence_index.to_string());
         out.push_str("`\n\n");
     }
+    if let Some(hash) = entry.wisdom_hash.as_deref() {
+        out.push_str("**Threat Intel Feed:** `");
+        out.push_str(hash);
+        out.push_str("`\n\n");
+    }
     let mut pqc_signatures = Vec::new();
     if entry.pqc_sig.is_some() {
         pqc_signatures.push("ML-DSA-65");
@@ -3077,6 +3094,8 @@ mod tests {
             pqc_slh_sig: None,
             pqc_key_source: None,
             transparency_log: None,
+            wisdom_hash: None,
+            wisdom_signature: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3208,6 +3227,8 @@ mod webhook_tests {
             pqc_slh_sig: None,
             pqc_key_source: None,
             transparency_log: None,
+            wisdom_hash: None,
+            wisdom_signature: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3279,6 +3300,8 @@ mod soft_fail_tests {
             pqc_slh_sig: None,
             pqc_key_source: None,
             transparency_log: None,
+            wisdom_hash: None,
+            wisdom_signature: None,
             cognition_surrender_index: 0.0,
         }
     }

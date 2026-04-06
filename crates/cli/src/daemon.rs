@@ -419,6 +419,8 @@ pub mod unix {
                             pqc_slh_sig: None,
                             pqc_key_source: None,
                             transparency_log: None,
+                            wisdom_hash: None,
+                            wisdom_signature: None,
                             cognition_surrender_index: 0.0,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);

@@ -1960,6 +1960,50 @@ index 1111111..2222222 100644
         );
     }
 
+    #[test]
+    fn semantic_cst_diff_whitespace_padded_payload_intercepted() {
+        let patch = "diff --git a/app.js b/app.js\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/app.js\n\
+                     +++ b/app.js\n\
+                     @@ -0,0 +1,24 @@\n\
+                     +function padded() {\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +  eval((\"Y29uc2\" + \"9sZS5\" + \"sb2co\" + \"J2hhY2tlZCcp\"));\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::default()
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:obfuscated_payload_execution")),
+            "Crucible: CST diff must isolate the padded malicious subtree and surface obfuscated payload execution"
+        );
+    }
+
     // ---------------------------------------------------------------------------
     // Wasm host-guest round-trip — proves BYOP sandbox is functional end-to-end
     // ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@
 
 pub mod agnostic_shield;
 pub mod brain;
+pub mod cst_diff;
 pub mod deobfuscate;
 pub mod fold;
 pub mod hashing;

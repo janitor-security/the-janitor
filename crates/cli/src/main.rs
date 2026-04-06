@@ -860,6 +860,8 @@ async fn main() -> anyhow::Result<()> {
                             pqc_slh_sig: None,
                             pqc_key_source: None,
                             transparency_log: None,
+                            wisdom_hash: None,
+                            wisdom_signature: None,
                             cognition_surrender_index: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
@@ -3215,6 +3217,8 @@ probable AI context-collapse (hallucinated function reference)"
         .unwrap_or(report::PrState::Open);
     let is_bot = policy.is_automation_account(author.unwrap_or(""));
     let slop_score_val = score.score();
+    let wisdom_receipt = common::wisdom::load_wisdom_with_receipt(&janitor_dir.join("wisdom.rkyv"))
+        .and_then(|loaded| loaded.receipt);
     let mut log_entry = report::BounceLogEntry {
         pr_number: resolved_pr_number,
         author: author.map(|s| s.to_owned()),
@@ -3280,6 +3284,8 @@ probable AI context-collapse (hallucinated function reference)"
         pqc_slh_sig: None,
         pqc_key_source: None,
         transparency_log: None,
+        wisdom_hash: wisdom_receipt.as_ref().map(|receipt| receipt.hash.clone()),
+        wisdom_signature: wisdom_receipt.map(|receipt| receipt.signature),
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
             let ap: f64 = if score.agentic_origin_penalty > 0 {
@@ -3533,6 +3539,12 @@ fn cmd_verify_cbom(
                             ", Transparency Log: Anchored at Index #{}",
                             proof.sequence_index
                         ));
+                    }
+                    if let Some(hash) = entry.wisdom_hash.as_deref() {
+                        line.push_str(&format!(", Wisdom Feed: {hash}"));
+                    }
+                    if let Some(signature) = entry.wisdom_signature.as_deref() {
+                        line.push_str(&format!(", Wisdom Sig: {signature}"));
                     }
                     println!("{line}");
                     if entry_failed {
@@ -4033,9 +4045,19 @@ fn cmd_update_wisdom_with_urls(
     verify_wisdom_signature(&bytes, &sig_bytes)
         .context("update-wisdom: detached wisdom signature verification failed")?;
 
+    let normalized_signature = common::wisdom::normalize_signature_string(&sig_bytes)
+        .ok_or_else(|| anyhow::anyhow!("update-wisdom: detached signature was empty"))?;
+    let verified_feed_hash = blake3::hash(&bytes).to_hex().to_string();
+
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &bytes)
         .with_context(|| format!("writing {}", wisdom_path.display()))?;
+    std::fs::write(
+        janitor_dir.join("wisdom.rkyv.sig"),
+        normalized_signature.as_bytes(),
+    )
+    .with_context(|| format!("writing {}", janitor_dir.join("wisdom.rkyv.sig").display()))?;
+    write_wisdom_receipt(&janitor_dir, &verified_feed_hash, &normalized_signature)?;
     if ci_mode {
         common::wisdom::validate_wisdom_archive(&wisdom_path).with_context(|| {
             format!(
@@ -4136,6 +4158,24 @@ fn write_wisdom_manifest(janitor_dir: &Path, manifest: &serde_json::Value) -> an
     })?;
     std::fs::write(&manifest_path, manifest_str.as_bytes())
         .with_context(|| format!("writing {}", manifest_path.display()))?;
+    Ok(())
+}
+
+fn write_wisdom_receipt(
+    janitor_dir: &Path,
+    wisdom_hash: &str,
+    wisdom_signature: &str,
+) -> anyhow::Result<()> {
+    let receipt_path = janitor_dir.join("wisdom.rkyv.receipt.json");
+    let receipt = serde_json::json!({
+        "wisdom_hash": wisdom_hash,
+        "wisdom_signature": wisdom_signature,
+        "recorded_at": utc_now_iso8601(),
+    });
+    let receipt_str = serde_json::to_string_pretty(&receipt)
+        .map_err(|e| anyhow::anyhow!("serializing wisdom receipt failed: {e}"))?;
+    std::fs::write(&receipt_path, receipt_str.as_bytes())
+        .with_context(|| format!("writing {}", receipt_path.display()))?;
     Ok(())
 }
 
@@ -4507,6 +4547,8 @@ mod pqc_signing_tests {
             pqc_slh_sig: None,
             pqc_key_source: None,
             transparency_log: None,
+            wisdom_hash: None,
+            wisdom_signature: None,
             cognition_surrender_index: 0.0,
         }
     }

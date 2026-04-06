@@ -177,6 +177,20 @@ fn cbom_metadata_properties(entries: &[BounceLogEntry]) -> Vec<Value> {
                 "value": proof.chained_hash
             }));
         }
+        if let Some(hash) = entry.wisdom_hash.as_deref() {
+            let pr = entry.pr_number.unwrap_or(0);
+            props.push(json!({
+                "name": format!("janitor:wisdom:pr:{pr}:hash"),
+                "value": hash
+            }));
+        }
+        if let Some(signature) = entry.wisdom_signature.as_deref() {
+            let pr = entry.pr_number.unwrap_or(0);
+            props.push(json!({
+                "name": format!("janitor:wisdom:pr:{pr}:signature"),
+                "value": signature
+            }));
+        }
     }
     props
 }
@@ -198,6 +212,18 @@ fn cbom_entry_properties(entry: &BounceLogEntry, include_signatures: bool) -> Ve
         props.push(json!({
             "name": "janitor:pqc_key_source",
             "value": source
+        }));
+    }
+    if let Some(hash) = entry.wisdom_hash.as_deref() {
+        props.push(json!({
+            "name": "janitor:wisdom_hash",
+            "value": hash
+        }));
+    }
+    if let Some(signature) = entry.wisdom_signature.as_deref() {
+        props.push(json!({
+            "name": "janitor:wisdom_signature",
+            "value": signature
         }));
     }
     if include_signatures {
@@ -253,6 +279,8 @@ mod tests {
             pqc_slh_sig: None,
             pqc_key_source: None,
             transparency_log: None,
+            wisdom_hash: None,
+            wisdom_signature: None,
             cognition_surrender_index: 0.0,
         }
     }

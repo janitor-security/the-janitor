@@ -1013,31 +1013,6 @@ impl PRBouncer for PatchBouncer {
         let query = Query::new(&cfg.language, cfg.query_src)
             .map_err(|e| anyhow::anyhow!("Query compile error for .{ext}: {e}"))?;
 
-        let mut cursor = tree_sitter::QueryCursor::new();
-        let mut matches = cursor.matches(&query, tree.root_node(), source);
-        let cap_names = query.capture_names();
-
-        // Collect (name, blake3_hash, simhash) triples for all added functions.
-        let mut fn_data: Vec<(String, u64, u64)> = Vec::new();
-        while let Some(m) = matches.next() {
-            let name_cap = m
-                .captures
-                .iter()
-                .find(|c| cap_names[c.index as usize] == "fn.name");
-            let body_cap = m
-                .captures
-                .iter()
-                .find(|c| cap_names[c.index as usize] == "fn.body");
-
-            if let (Some(name_c), Some(body_c)) = (name_cap, body_cap) {
-                if let Ok(name) = name_c.node.utf8_text(source) {
-                    let blake3 = crate::compute_structural_hash(body_c.node, source);
-                    let simhash = crate::hashing::compute_simhash(body_c.node, source);
-                    fn_data.push((name.to_string(), blake3, simhash));
-                }
-            }
-        }
-
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
         // fire regardless of domain.
@@ -1063,8 +1038,93 @@ impl PRBouncer for PatchBouncer {
             Some(tree.clone()),
             Some(cfg.language.clone()),
         );
+        let semantic_subtrees = crate::cst_diff::resolve_mutated_subtrees(
+            &parsed_unit,
+            &crate::cst_diff::added_line_ranges_from_patch(patch),
+        );
+        let mut semantic_roots: Vec<tree_sitter::Node<'_>> = Vec::new();
+        if semantic_subtrees.is_empty() {
+            semantic_roots.push(tree.root_node());
+        } else {
+            let root = tree.root_node();
+            for subtree in &semantic_subtrees {
+                if let Some(node) = root.descendant_for_byte_range(
+                    subtree.start_byte,
+                    subtree.end_byte.saturating_sub(1),
+                ) {
+                    semantic_roots.push(node);
+                }
+            }
+        }
+
+        let cap_names = query.capture_names();
+        let mut seen_bodies: HashSet<(usize, usize)> = HashSet::new();
+        let mut fn_data: Vec<(String, u64, u64)> = Vec::new();
+        let intersects_semantic_subtree = |body_start: usize, body_end: usize| {
+            semantic_subtrees
+                .iter()
+                .any(|subtree| body_start < subtree.end_byte && subtree.start_byte < body_end)
+        };
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(&query, tree.root_node(), source);
+        while let Some(m) = matches.next() {
+            let name_cap = m
+                .captures
+                .iter()
+                .find(|c| cap_names[c.index as usize] == "fn.name");
+            let body_cap = m
+                .captures
+                .iter()
+                .find(|c| cap_names[c.index as usize] == "fn.body");
+
+            if let (Some(name_c), Some(body_c)) = (name_cap, body_cap) {
+                let span = (body_c.node.start_byte(), body_c.node.end_byte());
+                if !semantic_subtrees.is_empty() && !intersects_semantic_subtree(span.0, span.1) {
+                    continue;
+                }
+                if !seen_bodies.insert(span) {
+                    continue;
+                }
+                if let Ok(name) = name_c.node.utf8_text(source) {
+                    let blake3 = crate::compute_structural_hash(body_c.node, source);
+                    let simhash = crate::hashing::compute_simhash(body_c.node, source);
+                    fn_data.push((name.to_string(), blake3, simhash));
+                }
+            }
+        }
+        if fn_data.is_empty() && !semantic_subtrees.is_empty() {
+            let mut cursor = tree_sitter::QueryCursor::new();
+            let mut matches = cursor.matches(&query, tree.root_node(), source);
+            while let Some(m) = matches.next() {
+                let name_cap = m
+                    .captures
+                    .iter()
+                    .find(|c| cap_names[c.index as usize] == "fn.name");
+                let body_cap = m
+                    .captures
+                    .iter()
+                    .find(|c| cap_names[c.index as usize] == "fn.body");
+
+                if let (Some(name_c), Some(body_c)) = (name_cap, body_cap) {
+                    let span = (body_c.node.start_byte(), body_c.node.end_byte());
+                    if !seen_bodies.insert(span) {
+                        continue;
+                    }
+                    if let Ok(name) = name_c.node.utf8_text(source) {
+                        let blake3 = crate::compute_structural_hash(body_c.node, source);
+                        let simhash = crate::hashing::compute_simhash(body_c.node, source);
+                        fn_data.push((name.to_string(), blake3, simhash));
+                    }
+                }
+            }
+        }
         crate::slop_hunter::set_current_wisdom_path(self.wisdom_path.as_deref());
-        let mut raw_findings = crate::slop_hunter::find_slop(ext, &parsed_unit);
+        let mut raw_findings = Vec::new();
+        for semantic_root in &semantic_roots {
+            let subtree_bytes = &source[semantic_root.start_byte()..semantic_root.end_byte()];
+            let subtree_unit = crate::slop_hunter::ParsedUnit::unparsed(subtree_bytes);
+            raw_findings.extend(crate::slop_hunter::find_slop(ext, &subtree_unit));
+        }
         crate::slop_hunter::set_current_wisdom_path(None);
 
         // Intra-file taint spine (P0-1 Phase 2): for Go files, confirm

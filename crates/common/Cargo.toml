@@ -11,6 +11,7 @@ rkyv = { version = "0.8", features = ["std", "bytecheck"] }
 bytecheck = { version = "0.8", default-features = false }
 
 serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
 toml.workspace = true
 semver.workspace = true
 

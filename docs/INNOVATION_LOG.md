@@ -9,52 +9,34 @@ ID epochs are purged during hard compaction.
 
 ## P1 — Compliance / Integration
 
-### P1-1: Governor-Signed Threat Intel Receipts
+### P1-1: Governor-Sealed Decision Receipts
 
-**Class:** Commercial Trust / Threat Intel Governance
+**Class:** Enterprise Audit Evidence
 
 **Observation:**
-Detached signature verification closes archive tampering in transit, but the
-operator still cannot prove *which* signed feed version was active for a given
-bounce result or customer receipt. Feed trust is local-state correct but not yet
-attestation-visible.
+The bounce log now binds policy hash, threat-intel receipt, transparency anchor,
+and PQC signatures, but the evidence is still assembled client-side across
+multiple fields. Regulated buyers still lack a single countersigned receipt that
+proves the exact policy, intel snapshot, binary version, and decision outcome as
+one immutable object.
 
 **Proposal:**
-Emit the verified Wisdom feed hash, signature fingerprint, and receipt metadata
-into Governor receipts, CBOMs, and bounce logs so every enforcement decision is
-bound to a cryptographically identified threat-intel snapshot.
+Have `janitor-gov` emit a countersigned `DecisionReceipt` envelope that seals
+`policy_hash`, `wisdom_hash`, `commit_sha`, `repo_slug`, `slop_score`,
+transparency anchor, and CBOM signature digests under a Governor-controlled
+attestation key. Store that receipt in bounce logs, CBOM metadata, and offline
+verification output.
 
 **Security impact:**
-Prevents evidentiary drift where a finding can be challenged as having been made
-against an unknown or unverifiable intel corpus.
+Eliminates evidentiary recomposition gaps and gives auditors a single
+non-repudiable artifact for every enforcement decision.
 
 **Implementation path:**
-Extend `common::wisdom` with feed provenance metadata, thread it through
-`BounceLogEntry`, Governor inclusion receipts, and exported CBOM properties.
+Define a receipt schema in `common`, sign it in `crates/gov`, embed it in
+`BounceLogEntry` and CycloneDX metadata, and extend `verify-cbom` with receipt
+verification against the Governor public key.
 
 ## P2 — Architecture / Ergonomics
-
-### P2-1: Semantic CST Diff Engine
-
-**Class:** Core Engine Enhancement
-**Inspired by:** Diff-surface false negatives in current line-based bounce flow
-
-**Observation:**
-Line-level unified diffs lose structural intent. Semantically equivalent edits
-hash differently, and whitespace or formatting churn can obscure the true
-changed subtrees.
-
-**Proposal:**
-Add an incremental CST diff engine that feeds only changed subtrees into the
-detectors and clone heuristics.
-
-**Security impact:**
-Improves precision, reduces whitespace-padding evasion, and enables more
-granular gating on large files.
-
-**Implementation path:**
-Introduce `crates/forge/src/cst_diff.rs` and wire an optional subtree-based
-path into `PatchBouncer`.
 
 ### P2-2: Grammar Stress Fuzzer
 

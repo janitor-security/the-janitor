@@ -1,12 +1,11 @@
 use crate::bloom::SlopsquatFilter;
 use crate::deps::DependencyEcosystem;
-use memmap2::Mmap;
+use base64::Engine as _;
 use rkyv::bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use semver::{Version, VersionReq};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::collections::HashSet;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 
 #[derive(
@@ -136,6 +135,18 @@ pub struct KevDependencyHit {
     pub summary: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WisdomFeedReceipt {
+    pub hash: String,
+    pub signature: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedWisdom {
+    pub set: WisdomSet,
+    pub receipt: Option<WisdomFeedReceipt>,
+}
+
 impl WisdomSet {
     pub fn sort(&mut self) {
         self.immortality_rules.sort();
@@ -228,14 +239,22 @@ pub fn find_kev_dependency_hits(lockfile: &[u8], wisdom_db: &Path) -> Vec<KevDep
 /// Returns `None` when the file is missing, corrupt, or not a supported
 /// archived Wisdom format.
 pub fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
-    let file = File::open(path).ok()?;
-    let mmap = unsafe { Mmap::map(&file).ok()? };
+    load_wisdom_with_receipt(path).map(|loaded| loaded.set)
+}
 
-    if let Ok(archived) = rkyv::access::<ArchivedWisdomSet, rkyv::rancor::Error>(&mmap[..]) {
+pub fn load_wisdom_with_receipt(path: &Path) -> Option<LoadedWisdom> {
+    let bytes = std::fs::read(path).ok()?;
+    let set = deserialize_wisdom_bytes(&bytes)?;
+    let receipt = load_wisdom_receipt(path, &bytes);
+    Some(LoadedWisdom { set, receipt })
+}
+
+fn deserialize_wisdom_bytes(bytes: &[u8]) -> Option<WisdomSet> {
+    if let Ok(archived) = rkyv::access::<ArchivedWisdomSet, rkyv::rancor::Error>(bytes) {
         return rkyv::deserialize::<WisdomSet, rkyv::rancor::Error>(archived).ok();
     }
 
-    let archived = rkyv::access::<ArchivedLegacyWisdomSet, rkyv::rancor::Error>(&mmap[..]).ok()?;
+    let archived = rkyv::access::<ArchivedLegacyWisdomSet, rkyv::rancor::Error>(bytes).ok()?;
     let legacy = rkyv::deserialize::<LegacyWisdomSet, rkyv::rancor::Error>(archived).ok()?;
     Some(WisdomSet {
         immortality_rules: legacy.immortality_rules,
@@ -243,6 +262,45 @@ pub fn load_wisdom_set(path: &Path) -> Option<WisdomSet> {
         kev_dependency_rules: Vec::new(),
         slopsquat_filter: SlopsquatFilter::default(),
     })
+}
+
+fn load_wisdom_receipt(path: &Path, bytes: &[u8]) -> Option<WisdomFeedReceipt> {
+    let receipt_path = path.with_extension("rkyv.receipt.json");
+    if let Ok(receipt_bytes) = std::fs::read(&receipt_path) {
+        if let Ok(receipt_json) = serde_json::from_slice::<serde_json::Value>(&receipt_bytes) {
+            let hash = receipt_json
+                .get("wisdom_hash")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned);
+            let signature = receipt_json
+                .get("wisdom_signature")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToOwned::to_owned);
+            if let (Some(hash), Some(signature)) = (hash, signature) {
+                return Some(WisdomFeedReceipt { hash, signature });
+            }
+        }
+    }
+
+    let sig_path = path.with_extension("rkyv.sig");
+    let sig_bytes = std::fs::read(sig_path).ok()?;
+    let signature = normalize_signature_string(&sig_bytes)?;
+    let hash = blake3::hash(bytes).to_hex().to_string();
+    Some(WisdomFeedReceipt { hash, signature })
+}
+
+pub fn normalize_signature_string(sig_bytes: &[u8]) -> Option<String> {
+    if let Ok(text) = std::str::from_utf8(sig_bytes) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    (!sig_bytes.is_empty()).then(|| base64::engine::general_purpose::STANDARD.encode(sig_bytes))
 }
 
 pub fn slopsquat_hit(name: &str, wisdom_db: &Path) -> bool {
