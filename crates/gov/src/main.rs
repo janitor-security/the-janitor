@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Provenance {
@@ -61,7 +62,17 @@ struct BounceLogEntry {
     #[serde(default)]
     pqc_sig: Option<String>,
     #[serde(default)]
+    pqc_slh_sig: Option<String>,
+    #[serde(default)]
+    transparency_log: Option<InclusionProof>,
+    #[serde(default)]
     cognition_surrender_index: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct InclusionProof {
+    sequence_index: u64,
+    chained_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,8 +94,40 @@ struct AnalysisTokenResponse<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 enum GovLogEvent {
-    Report { entry: Box<BounceLogEntry> },
-    AnalysisToken { request: AnalysisTokenRequest },
+    Report {
+        entry: Box<BounceLogEntry>,
+        inclusion_proof: InclusionProof,
+    },
+    AnalysisToken {
+        request: AnalysisTokenRequest,
+    },
+}
+
+#[derive(Debug, Default)]
+struct Blake3HashChain {
+    last_hash: [u8; 32],
+    next_index: u64,
+}
+
+impl Blake3HashChain {
+    fn append(&mut self, new_cbom_signature: &str) -> InclusionProof {
+        let mut payload = Vec::with_capacity(self.last_hash.len() + new_cbom_signature.len());
+        payload.extend_from_slice(&self.last_hash);
+        payload.extend_from_slice(new_cbom_signature.as_bytes());
+        let digest = blake3::hash(&payload);
+        self.last_hash = *digest.as_bytes();
+        let proof = InclusionProof {
+            sequence_index: self.next_index,
+            chained_hash: digest.to_hex().to_string(),
+        };
+        self.next_index = self.next_index.saturating_add(1);
+        proof
+    }
+}
+
+fn transparency_log() -> &'static Mutex<Blake3HashChain> {
+    static LOG: OnceLock<Mutex<Blake3HashChain>> = OnceLock::new();
+    LOG.get_or_init(|| Mutex::new(Blake3HashChain::default()))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -188,14 +231,28 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
     match (request.method.as_str(), request.path.as_str()) {
         ("POST", "/v1/report") => match serde_json::from_slice::<BounceLogEntry>(&request.body) {
             Ok(entry) => {
+                let signature_material = report_signature_material(&entry);
+                let proof = match transparency_log().lock() {
+                    Ok(mut chain) => chain.append(&signature_material),
+                    Err(err) => {
+                        return json_response(
+                            500,
+                            serde_json::json!({
+                                "error": format!("transparency log poisoned: {err}"),
+                            }),
+                        )
+                    }
+                };
                 emit_event(&GovLogEvent::Report {
                     entry: Box::new(entry),
+                    inclusion_proof: proof.clone(),
                 });
                 json_response(
                     200,
                     serde_json::json!({
                         "status": "accepted",
                         "mode": "stub",
+                        "inclusion_proof": proof,
                     }),
                 )
             }
@@ -250,6 +307,17 @@ fn emit_event(event: &GovLogEvent) {
     }
 }
 
+fn report_signature_material(entry: &BounceLogEntry) -> String {
+    let mut parts = Vec::new();
+    if let Some(sig) = entry.pqc_sig.as_deref() {
+        parts.push(sig);
+    }
+    if let Some(sig) = entry.pqc_slh_sig.as_deref() {
+        parts.push(sig);
+    }
+    parts.join("|")
+}
+
 fn json_response(status: u16, value: serde_json::Value) -> HttpResponse {
     let body =
         serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"error\":\"serialization\"}".to_vec());
@@ -272,4 +340,69 @@ fn write_http_response(stream: &mut TcpStream, status: u16, body: &[u8]) -> anyh
     stream.write_all(body).context("writing response body")?;
     stream.flush().context("flushing response")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_entry() -> BounceLogEntry {
+        BounceLogEntry {
+            pr_number: Some(42),
+            author: Some("security".to_string()),
+            timestamp: "2026-04-06T00:00:00Z".to_string(),
+            slop_score: 150,
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            unlinked_pr: 0,
+            antipatterns: vec!["security:compiled_payload_anomaly".to_string()],
+            comment_violations: vec![],
+            min_hashes: vec![],
+            zombie_deps: vec![],
+            state: "open".to_string(),
+            is_bot: false,
+            repo_slug: "owner/repo".to_string(),
+            suppressed_by_domain: 0,
+            collided_pr_numbers: vec![],
+            necrotic_flag: None,
+            commit_sha: "abc123".to_string(),
+            policy_hash: String::new(),
+            version_silos: vec![],
+            agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.1,
+            provenance: Provenance::default(),
+            governor_status: None,
+            pqc_sig: Some("mlsig".to_string()),
+            pqc_slh_sig: Some("slhsig".to_string()),
+            transparency_log: None,
+            cognition_surrender_index: 0.0,
+        }
+    }
+
+    #[test]
+    fn hash_chain_appends_deterministically() {
+        let mut chain = Blake3HashChain::default();
+        let first = chain.append("sig-a");
+        let second = chain.append("sig-b");
+        assert_eq!(first.sequence_index, 0);
+        assert_eq!(second.sequence_index, 1);
+        assert_ne!(first.chained_hash, second.chained_hash);
+    }
+
+    #[test]
+    fn report_route_returns_inclusion_proof() {
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/report".to_string(),
+            body: serde_json::to_vec(&make_entry()).expect("entry JSON must serialize"),
+        };
+        let response = route_request(&req);
+        assert_eq!(response.status, 200);
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.body).expect("response body must be JSON");
+        assert_eq!(body["status"], "accepted");
+        assert!(body["inclusion_proof"]["sequence_index"].as_u64().is_some());
+        assert!(body["inclusion_proof"]["chained_hash"].as_str().is_some());
+    }
 }

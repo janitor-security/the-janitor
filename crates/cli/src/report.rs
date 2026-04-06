@@ -32,6 +32,12 @@ use std::path::Path;
 pub const MINUTES_PER_TRIAGE: f64 = 12.0;
 pub const DEFAULT_GOVERNOR_URL: &str = "https://the-governor.fly.dev";
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InclusionProof {
+    pub sequence_index: u64,
+    pub chained_hash: String,
+}
+
 // ---------------------------------------------------------------------------
 // Categorical Billing — Threat Classification
 // ---------------------------------------------------------------------------
@@ -194,6 +200,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         pqc_sig: None,
         pqc_slh_sig: None,
         pqc_key_source: None,
+        transparency_log: None,
         cognition_surrender_index: 0.0,
     };
 
@@ -512,6 +519,13 @@ pub struct BounceLogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pqc_key_source: Option<String>,
 
+    /// Inclusion proof from the Governor's append-only transparency log.
+    ///
+    /// Present when the Governor accepted this signed bounce result and
+    /// anchored its detached CBOM signature material in the Blake3 hash chain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transparency_log: Option<InclusionProof>,
+
     /// Structural rot density attributable to agentic authorship.
     ///
     /// Formula: `slop_score as f64 / agentic_pct` when `agentic_pct > 0.0`,
@@ -766,7 +780,7 @@ pub fn post_bounce_result(
     governor_base_url: &str,
     token: &str,
     entry: &BounceLogEntry,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<InclusionProof> {
     let body = serde_json::to_string(entry)?;
     let report_url = governor_report_endpoint(governor_base_url);
     let result = ureq::post(&report_url)
@@ -774,9 +788,21 @@ pub fn post_bounce_result(
         .header("Content-Type", "application/json")
         .send(body.as_str());
     match result {
-        Ok(r) if r.status() == 200 || r.status() == 201 => {
+        Ok(mut r) if r.status() == 200 || r.status() == 201 => {
+            let response: serde_json::Value = r
+                .body_mut()
+                .read_json()
+                .map_err(|e| anyhow::anyhow!("Governor /v1/report response parse error: {e}"))?;
+            let proof = serde_json::from_value::<InclusionProof>(
+                response.get("inclusion_proof").cloned().ok_or_else(|| {
+                    anyhow::anyhow!("Governor /v1/report omitted inclusion_proof")
+                })?,
+            )
+            .map_err(|e| {
+                anyhow::anyhow!("Governor /v1/report returned invalid inclusion_proof: {e}")
+            })?;
             eprintln!("info: bounce result reported to Governor");
-            Ok(())
+            Ok(proof)
         }
         Ok(r) => {
             anyhow::bail!(
@@ -2742,6 +2768,11 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         out.push_str(source);
         out.push_str("`\n\n");
     }
+    if let Some(proof) = entry.transparency_log.as_ref() {
+        out.push_str("**Transparency Log:** `Anchored at Index #");
+        out.push_str(&proof.sequence_index.to_string());
+        out.push_str("`\n\n");
+    }
     let mut pqc_signatures = Vec::new();
     if entry.pqc_sig.is_some() {
         pqc_signatures.push("ML-DSA-65");
@@ -3045,6 +3076,7 @@ mod tests {
             pqc_sig: None,
             pqc_slh_sig: None,
             pqc_key_source: None,
+            transparency_log: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3175,6 +3207,7 @@ mod webhook_tests {
             pqc_sig: None,
             pqc_slh_sig: None,
             pqc_key_source: None,
+            transparency_log: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3245,6 +3278,7 @@ mod soft_fail_tests {
             pqc_sig: None,
             pqc_slh_sig: None,
             pqc_key_source: None,
+            transparency_log: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3267,7 +3301,7 @@ mod soft_fail_tests {
         let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = true;
         let handled: anyhow::Result<()> = match result {
-            Ok(()) => Ok(()),
+            Ok(_) => Ok(()),
             Err(_) if soft_fail => Ok(()), // soft-fail: degrade, do not propagate
             Err(e) => Err(e),
         };
@@ -3284,7 +3318,7 @@ mod soft_fail_tests {
         let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = false;
         let handled: anyhow::Result<()> = match result {
-            Ok(()) => Ok(()),
+            Ok(_) => Ok(()),
             Err(_) if soft_fail => Ok(()),
             Err(e) => Err(e),
         };
@@ -3305,5 +3339,41 @@ mod soft_fail_tests {
             resolve_governor_url(Some("http://127.0.0.1:4000/"), &policy),
             "http://127.0.0.1:4000"
         );
+    }
+
+    #[test]
+    fn post_bounce_result_parses_inclusion_proof() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = match TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("listener bind must succeed: {err}"),
+        };
+        let addr = listener.local_addr().expect("listener must expose address");
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept must succeed");
+            let mut buf = [0_u8; 2048];
+            let _ = stream.read(&mut buf);
+            let body = r#"{"status":"accepted","inclusion_proof":{"sequence_index":42,"chained_hash":"abc123"}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .expect("response write must succeed");
+        });
+
+        let proof = post_bounce_result(
+            &format!("http://{}", addr),
+            "fake-token",
+            &make_test_entry(),
+        )
+        .expect("governor proof must parse");
+
+        assert_eq!(proof.sequence_index, 42);
+        assert_eq!(proof.chained_hash, "abc123");
     }
 }

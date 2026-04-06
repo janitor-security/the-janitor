@@ -7,32 +7,29 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-7: Transparency-Logged Attestation Witnesses
+### P0-8: Phantom Payload Interception
 
-**Class:** Cryptographic Supply-Chain Trust
-**Inspired by:** dual-signature CBOMs still rely on detached local storage without
-an inclusion-proof channel
+**Class:** AI Evasion Defense
 
 **Observation:**
-Janitor can now emit both ML-DSA-65 and SLH-DSA signatures, but the evidence
-still terminates at the local bounce log or exported CBOM. There is no
-append-only witness proving an attestation existed at a specific time and was
-not silently replaced later.
+Adversarial AI agents are hiding malicious logic inside mathematically
+unreachable AST paths such as `if (1 == 0) { ... }`, dead `switch` arms, and
+constant-false guard rails to bypass dynamic analysis and human review.
 
 **Proposal:**
-Add a Merkle transparency log for CBOM attestations. Each dual-signed CBOM gets
-an inclusion proof, tree head, and witness hash embedded in the Governor
-response envelope and exported alongside the CBOM.
+Implement a structural reachability pass over our AST layer. Any unreachable
+branch containing high-entropy payloads, shell execution, credential exfiltration,
+or other critical sinks should emit `security:phantom_payload_evasion` at
+critical severity.
 
 **Security impact:**
-Upgrades detached signatures into publicly auditable provenance. Attackers can
-no longer swap an old CBOM with a new one without leaving a detectable mismatch
-against the transparency log root.
+Disarms the primary technique agentic swarms use to smuggle dormant exploits
+into production codebases without surfacing in runtime-driven review paths.
 
 **Implementation path:**
-Add a compact append-only log in `crates/gov`, expose inclusion proofs via
-`/v1/report`, and extend `crates/cli/src/cbom.rs` plus `verify-cbom` to check
-tree-head integrity and witness membership.
+Extend `crates/forge/src/slop_hunter.rs` with language-specific constant-folding
+for branch predicates, then route dead-branch sink analysis through the existing
+critical finding path.
 
 ## P1 — Compliance / Integration
 

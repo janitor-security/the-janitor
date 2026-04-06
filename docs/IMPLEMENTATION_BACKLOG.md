@@ -5,6 +5,28 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Sovereign Transparency Log & Non-Repudiation (v9.9.8)
+
+**Directive:** Execute `P0-7` by adding an append-only Blake3 transparency log
+to `janitor-gov`, anchor accepted signed bounce reports with inclusion proofs,
+embed those proofs into exported CBOM metadata, surface anchoring in
+`verify-cbom`, seed the next structural defense as `P0-8`, and release
+`v9.9.8`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.8`
+- `crates/gov/Cargo.toml` *(modified)* — wired `blake3` into the Governor crate
+- `crates/gov/src/main.rs` *(modified)* — added `Blake3HashChain`, `InclusionProof`, `/v1/report` anchoring, and Governor-side regression tests
+- `crates/cli/src/report.rs` *(modified)* — added `InclusionProof` to the bounce-log schema; Governor POST now parses and returns the transparency anchor; Step Summary now surfaces the anchor index
+- `crates/cli/src/cbom.rs` *(modified)* — exported CycloneDX metadata now carries per-PR transparency-log sequence indexes and chained hashes
+- `crates/cli/src/main.rs` *(modified)* — BYOK signing no longer short-circuits Governor anchoring; `verify-cbom` now reports transparency-log anchors
+- `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for transparency-log schema parity
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce-log constructors updated for transparency-log schema parity
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-7`; seeded `P0-8` Phantom Payload Interception
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.8`
+
 ## 2026-04-05 — Wasm BYOR & Market Weaponization (v9.9.6)
 
 **Directive:** Implement the BYOP Wasm sandboxed rule host (P0-5), eradicate

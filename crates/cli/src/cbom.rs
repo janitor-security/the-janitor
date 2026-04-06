@@ -91,6 +91,7 @@ pub fn render_cbom(entries: &[BounceLogEntry], repo_slug: &str) -> String {
                     "version": env!("CARGO_PKG_VERSION")
                 }
             ],
+            "properties": cbom_metadata_properties(entries),
             "component": {
                 "type": "application",
                 "name": repo_slug
@@ -134,6 +135,7 @@ pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String 
                 "name": "janitor",
                 "version": env!("CARGO_PKG_VERSION")
             }],
+            "properties": [],
             "component": {
                 "type": "application",
                 "name": repo_slug
@@ -159,6 +161,24 @@ pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String 
 
     // compact (not pretty) for byte-stable signing surface
     serde_json::to_string(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+fn cbom_metadata_properties(entries: &[BounceLogEntry]) -> Vec<Value> {
+    let mut props = Vec::new();
+    for entry in entries {
+        if let Some(proof) = entry.transparency_log.as_ref() {
+            let pr = entry.pr_number.unwrap_or(0);
+            props.push(json!({
+                "name": format!("janitor:transparency_log:pr:{pr}:sequence_index"),
+                "value": proof.sequence_index.to_string()
+            }));
+            props.push(json!({
+                "name": format!("janitor:transparency_log:pr:{pr}:chained_hash"),
+                "value": proof.chained_hash
+            }));
+        }
+    }
+    props
 }
 
 /// Map a bounce log entry to a CycloneDX severity string.
@@ -232,6 +252,7 @@ mod tests {
             pqc_sig: None,
             pqc_slh_sig: None,
             pqc_key_source: None,
+            transparency_log: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -314,5 +335,30 @@ mod tests {
                 .any(|prop| prop["name"] == "janitor:pqc_sig_slh_dsa_shake_192s"),
             "render_cbom must expose the SLH-DSA detached signature"
         );
+    }
+
+    #[test]
+    fn test_cbom_metadata_includes_transparency_anchor() {
+        let mut entry = make_entry(
+            7,
+            150,
+            vec!["security:compiled_payload_anomaly".to_string()],
+        );
+        entry.transparency_log = Some(crate::report::InclusionProof {
+            sequence_index: 42,
+            chained_hash: "abc123".to_string(),
+        });
+        let out = render_cbom(&[entry], "owner/repo");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&out).expect("CBOM output must be valid JSON");
+        let props = parsed["metadata"]["properties"]
+            .as_array()
+            .expect("metadata properties array must exist");
+        assert!(props.iter().any(|p| {
+            p["name"] == "janitor:transparency_log:pr:7:sequence_index" && p["value"] == "42"
+        }));
+        assert!(props.iter().any(|p| {
+            p["name"] == "janitor:transparency_log:pr:7:chained_hash" && p["value"] == "abc123"
+        }));
     }
 }

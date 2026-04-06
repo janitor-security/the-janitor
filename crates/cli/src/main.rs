@@ -858,6 +858,7 @@ async fn main() -> anyhow::Result<()> {
                             pqc_sig: None,
                             pqc_slh_sig: None,
                             pqc_key_source: None,
+                            transparency_log: None,
                             cognition_surrender_index: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
@@ -3277,6 +3278,7 @@ probable AI context-collapse (hallucinated function reference)"
         pqc_sig: None,
         pqc_slh_sig: None,
         pqc_key_source: None,
+        transparency_log: None,
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
             let ap: f64 = if score.agentic_origin_penalty > 0 {
@@ -3317,13 +3319,6 @@ probable AI context-collapse (hallucinated function reference)"
         log_entry.pqc_sig = signatures.ml_dsa_sig;
         log_entry.pqc_slh_sig = signatures.slh_dsa_sig;
         log_entry.governor_status = Some("local_pqc".to_string());
-
-        // Skip the Governor POST when BYOK signing is active.
-        report::append_bounce_log(&janitor_dir, &log_entry);
-        report::write_badge(&janitor_dir, log_entry.slop_score);
-        report::fire_webhook_if_configured(&log_entry, &policy);
-        report::send_heartbeat_if_due(&janitor_dir, &governor_url);
-        return Ok(());
     }
 
     // ── Architecture Inversion: POST result to Governor ───────────────────────
@@ -3351,7 +3346,8 @@ probable AI context-collapse (hallucinated function reference)"
         let is_critical = report::is_critical_threat(&log_entry);
         let post_result = report::post_bounce_result(&governor_url, token, &log_entry);
         match post_result {
-            Ok(()) => {
+            Ok(proof) => {
+                log_entry.transparency_log = Some(proof);
                 log_entry.governor_status = Some("ok".to_string());
             }
             Err(e) if soft_fail => {
@@ -3530,7 +3526,14 @@ fn cmd_verify_cbom(
                 }
 
                 if entry_signed {
-                    println!("PR #{pr}: {}", statuses.join(", "));
+                    let mut line = format!("PR #{pr}: {}", statuses.join(", "));
+                    if let Some(proof) = entry.transparency_log.as_ref() {
+                        line.push_str(&format!(
+                            ", Transparency Log: Anchored at Index #{}",
+                            proof.sequence_index
+                        ));
+                    }
+                    println!("{line}");
                     if entry_failed {
                         failed += 1;
                     } else {
@@ -4476,6 +4479,7 @@ mod pqc_signing_tests {
             pqc_sig: None,
             pqc_slh_sig: None,
             pqc_key_source: None,
+            transparency_log: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -4599,7 +4603,11 @@ mod governor_routing_tests {
 
     #[test]
     fn governor_url_routes_bounce_payload_to_custom_endpoint() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("listener bind must succeed");
+        let listener = match TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("listener bind must succeed: {err}"),
+        };
         let addr = listener.local_addr().expect("local addr must resolve");
         let (tx, rx) = mpsc::channel();
 
