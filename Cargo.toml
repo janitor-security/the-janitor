@@ -85,7 +85,7 @@ bumpalo = { version = "3", features = ["collections"] }
 # JSON / hashing utilities
 sha2 = "0.10"
 flate2 = "1.0"
-toml = "1.0"
+toml = "1.1"
 semver = "1.0"
 
 # HTTP client (sync, used for remote audit attestation)
