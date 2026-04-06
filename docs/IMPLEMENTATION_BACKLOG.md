@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Cryptographic Intel Provenance & Constant Folding Core (v9.9.11)
+
+**Directive:** Add detached Ed25519 verification for `wisdom.rkyv` transport,
+introduce the bounded string-concatenation fold core for sink-adjacent payloads,
+prove fragmented payload interception in Crucible, autonomously seed the next
+roadmap item, and release `v9.9.11`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.11`; added workspace `ed25519-dalek`
+- `crates/cli/Cargo.toml` *(modified)* — wired `ed25519-dalek` into the CLI for detached Wisdom verification
+- `crates/cli/src/main.rs` *(modified)* — `update-wisdom` now fetches `wisdom.rkyv.sig`, verifies the archive before disk write, and fails closed on signature absence or mismatch
+- `crates/forge/src/lib.rs` *(modified)* — exported the new `fold` module
+- `crates/forge/src/fold.rs` *(new)* — added bounded AST string-concatenation folding for sink arguments
+- `crates/forge/src/slop_hunter.rs` *(modified)* — routed sink arguments through `fold_string_concat` before deobfuscation
+- `crates/crucible/src/main.rs` *(modified)* — added fragmented base64 concat true-positive fixture
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P0-10` and `P2-5`; seeded `P1-1` Governor-Signed Threat Intel Receipts
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.11`
+
 ## 2026-04-06 — DAG Inversion & Dual-Strike Deobfuscation (v9.9.10)
 
 **Directive:** Invert the release DAG into `pre-flight → sync → audit → publish`,

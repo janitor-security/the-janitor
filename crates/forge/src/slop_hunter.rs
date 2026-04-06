@@ -65,6 +65,7 @@ use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
 use tree_sitter::{Language, Node};
 
 use crate::deobfuscate::normalize_payload;
+use crate::fold::fold_string_concat;
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
 
 // ---------------------------------------------------------------------------
@@ -1349,7 +1350,8 @@ fn find_js_deobfuscated_sinks(node: Node<'_>, source: &[u8], findings: &mut Vec<
             if let Some(arguments) = node.child_by_field_name("arguments") {
                 if let Some(first_arg) = arguments.named_children(&mut arguments.walk()).next() {
                     maybe_push_deobfuscated_sink_finding(
-                        &source[first_arg.start_byte()..first_arg.end_byte()],
+                        first_arg,
+                        source,
                         node,
                         findings,
                         &format!("JavaScript `{callee}`"),
@@ -2261,7 +2263,8 @@ fn find_python_danger_calls(
                             arguments.named_children(&mut arguments.walk()).next()
                         {
                             maybe_push_deobfuscated_sink_finding(
-                                &source[first_arg.start_byte()..first_arg.end_byte()],
+                                first_arg,
+                                source,
                                 node,
                                 findings,
                                 &format!("Python `{callee}`"),
@@ -2580,7 +2583,8 @@ fn find_java_danger_invocations(
                     if let Some(args) = node.child_by_field_name("arguments") {
                         if let Some(first_arg) = args.named_children(&mut args.walk()).next() {
                             maybe_push_deobfuscated_sink_finding(
-                                &source[first_arg.start_byte()..first_arg.end_byte()],
+                                first_arg,
+                                source,
                                 node,
                                 findings,
                                 "Java Runtime.exec",
@@ -2703,7 +2707,8 @@ fn find_java_danger_invocations(
                 let first_arg = args.named_children(&mut args.walk()).next();
                 if let Some(first_arg) = first_arg {
                     maybe_push_deobfuscated_sink_finding(
-                        &source[first_arg.start_byte()..first_arg.end_byte()],
+                        first_arg,
+                        source,
                         node,
                         findings,
                         "Java ProcessBuilder",
@@ -4940,12 +4945,16 @@ fn suspicious_dead_branch_string_literal(bytes: &[u8]) -> Option<(f64, usize)> {
 }
 
 fn maybe_push_deobfuscated_sink_finding(
-    raw: &[u8],
+    arg_node: Node<'_>,
+    source: &[u8],
     node: Node<'_>,
     findings: &mut Vec<SlopFinding>,
     sink_label: &str,
 ) {
-    let Some(decoded) = normalize_payload(raw) else {
+    let raw = &source[arg_node.start_byte()..arg_node.end_byte()];
+    let folded = fold_string_concat(arg_node, source);
+    let payload = folded.as_deref().map(str::as_bytes).unwrap_or(raw);
+    let Some(decoded) = normalize_payload(payload) else {
         return;
     };
     let Some(reason) = suspicious_normalized_payload_reason(&decoded) else {

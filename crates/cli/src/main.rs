@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -3957,6 +3958,7 @@ fn cmd_report(
 /// clear KEV dependency checks.
 fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
     const DEFAULT_WISDOM_URL: &str = "https://thejanitor.app/v1/wisdom.rkyv";
+    const DEFAULT_WISDOM_SIG_URL: &str = "https://thejanitor.app/v1/wisdom.rkyv.sig";
     const DEFAULT_CISA_KEV_URL: &str =
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 
@@ -3968,14 +3970,25 @@ fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
         .ok()
         .filter(|url| !url.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_CISA_KEV_URL.to_string());
+    let wisdom_sig_url = env::var("JANITOR_WISDOM_SIG_URL")
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_WISDOM_SIG_URL.to_string());
 
-    cmd_update_wisdom_with_urls(project_root, ci_mode, &wisdom_url, &kev_url)
+    cmd_update_wisdom_with_urls(
+        project_root,
+        ci_mode,
+        &wisdom_url,
+        &wisdom_sig_url,
+        &kev_url,
+    )
 }
 
 fn cmd_update_wisdom_with_urls(
     project_root: &Path,
     ci_mode: bool,
     wisdom_url: &str,
+    wisdom_sig_url: &str,
     kev_url: &str,
 ) -> anyhow::Result<()> {
     let janitor_dir = project_root.join(".janitor");
@@ -3999,6 +4012,26 @@ fn cmd_update_wisdom_with_urls(
     let bytes = response.body_mut().read_to_vec().map_err(|e| {
         anyhow::anyhow!("update-wisdom: reading response body from {wisdom_url} failed: {e}")
     })?;
+
+    let mut sig_response = match ureq::get(wisdom_sig_url).call() {
+        Ok(response) => response,
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "{}: GET {wisdom_sig_url} failed: {e}",
+                if ci_mode {
+                    "update-wisdom --ci-mode"
+                } else {
+                    "update-wisdom"
+                }
+            ));
+        }
+    };
+
+    let sig_bytes = sig_response.body_mut().read_to_vec().map_err(|e| {
+        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_sig_url} failed: {e}")
+    })?;
+    verify_wisdom_signature(&bytes, &sig_bytes)
+        .context("update-wisdom: detached wisdom signature verification failed")?;
 
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &bytes)
@@ -4725,6 +4758,7 @@ mod wisdom_sync_tests {
             &temp_root,
             true,
             "http://127.0.0.1:9/wisdom.rkyv",
+            "http://127.0.0.1:9/wisdom.rkyv.sig",
             "http://127.0.0.1:9/kev.json",
         )
         .expect_err("ci-mode must fail closed when wisdom.rkyv is unavailable");
@@ -4737,4 +4771,37 @@ mod wisdom_sync_tests {
             "failed ci-mode sync must not fabricate a wisdom archive"
         );
     }
+}
+
+const WISDOM_VERIFYING_KEY_BYTES: [u8; 32] = [
+    0x9c, 0x3e, 0x68, 0x22, 0xae, 0x35, 0x6e, 0x6e, 0x9a, 0x10, 0x7c, 0x43, 0x2b, 0x88, 0xd0, 0xa6,
+    0x00, 0x45, 0x8f, 0x72, 0x8c, 0xd2, 0x53, 0xc2, 0x81, 0x76, 0x82, 0x1b, 0x27, 0xc7, 0xab, 0x64,
+];
+
+fn verify_wisdom_signature(wisdom_bytes: &[u8], sig_bytes: &[u8]) -> anyhow::Result<()> {
+    use base64::Engine as _;
+
+    let verifying_key = VerifyingKey::from_bytes(&WISDOM_VERIFYING_KEY_BYTES)
+        .map_err(|e| anyhow::anyhow!("invalid embedded Wisdom verifying key: {e}"))?;
+
+    let decoded_sig = if sig_bytes.len() == 64 {
+        sig_bytes.to_vec()
+    } else {
+        let trimmed = std::str::from_utf8(sig_bytes).map(str::trim).map_err(|e| {
+            anyhow::anyhow!("wisdom signature must be raw 64-byte Ed25519 or base64 text: {e}")
+        })?;
+        base64::engine::general_purpose::STANDARD
+            .decode(trimmed)
+            .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(trimmed))
+            .map_err(|e| anyhow::anyhow!("failed to decode wisdom signature: {e}"))?
+    };
+
+    let sig_bytes: [u8; 64] = decoded_sig
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("wisdom signature must decode to exactly 64 bytes"))?;
+    let signature = Signature::from_bytes(&sig_bytes);
+    verifying_key
+        .verify(wisdom_bytes, &signature)
+        .map_err(|_| anyhow::anyhow!("wisdom archive signature mismatch"))
 }

@@ -478,6 +478,13 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: true,
         desc_fragment: Some("obfuscated_payload_execution"),
     },
+    Entry {
+        name: "JS/eval fragmented base64 concat — INTERCEPT",
+        lang: "js",
+        source: b"eval((\"Y29uc2\" + \"9sZS5\" + \"sb2co\" + \"J2hhY2tlZCcp\"));\n",
+        must_intercept: true,
+        desc_fragment: Some("obfuscated_payload_execution"),
+    },
 
     // ── Supply Chain Integrity ────────────────────────────────────────────
     Entry {

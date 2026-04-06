@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v9.9.10 — Parse-Forest Engine & Deterministic Structural Firewall. 23/23 grammar AST coverage (100%). Attosecond-grade integrity for the AI-assisted development economy.**
+**v9.9.11 — Parse-Forest Engine & Deterministic Structural Firewall. 23/23 grammar AST coverage (100%). Attosecond-grade integrity for the AI-assisted development economy.**
 
 ---
 

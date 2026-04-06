@@ -7,35 +7,30 @@ ID epochs are purged during hard compaction.
 
 ## P0 — Core Security
 
-### P0-10: Sink-Context Constant Folding Core
+## P1 — Compliance / Integration
 
-**Class:** AI Evasion Defense
+### P1-1: Governor-Signed Threat Intel Receipts
+
+**Class:** Commercial Trust / Threat Intel Governance
 
 **Observation:**
-The new deobfuscation spine catches staged byte transforms, but structurally
-false branches and sink arguments still rely on hand-coded constant cases such
-as `false`, `0`, and `1 == 0`. Adversarial agents can pivot to slightly richer
-constant expressions (`1 - 1`, `"a" + "b"`, `"Yw==" * 2`-style builders, or
-enum-backed booleans) and stay below the current fold horizon.
+Detached signature verification closes archive tampering in transit, but the
+operator still cannot prove *which* signed feed version was active for a given
+bounce result or customer receipt. Feed trust is local-state correct but not yet
+attestation-visible.
 
 **Proposal:**
-Add a bounded, language-agnostic constant-folding core that evaluates small AST
-expression DAGs into literals before detector dispatch. The fold engine should
-support booleans, integer comparisons, string concatenation, and decoder-wrapper
-argument reduction, then feed the normalized result into dead-branch detection,
-deobfuscation, and sink scoring.
+Emit the verified Wisdom feed hash, signature fingerprint, and receipt metadata
+into Governor receipts, CBOMs, and bounce logs so every enforcement decision is
+bound to a cryptographically identified threat-intel snapshot.
 
 **Security impact:**
-Closes the next evasion tier by collapsing disguised-but-deterministic control
-flow and payload assembly before attackers can hide behind shallow expression
-noise.
+Prevents evidentiary drift where a finding can be challenged as having been made
+against an unknown or unverifiable intel corpus.
 
 **Implementation path:**
-Add `crates/forge/src/const_fold.rs`; define a byte/operation budget per folded
-expression; thread folded values into `find_dead_branch_payloads`, sink
-deobfuscation, and reachability checks without introducing unbounded recursion.
-
-## P1 — Compliance / Integration
+Extend `common::wisdom` with feed provenance metadata, thread it through
+`BounceLogEntry`, Governor inclusion receipts, and exported CBOM properties.
 
 ## P2 — Architecture / Ergonomics
 
@@ -130,27 +125,3 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 **Implementation path:**
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
-
-### P2-5: Signed Wisdom Feed Provenance
-
-**Class:** Threat Intel Supply Integrity
-**Inspired by:** slopsquat seed distribution now depends on unsigned archive transport
-
-**Observation:**
-`update-wisdom` can fetch a structurally valid `wisdom.rkyv`, but the archive
-still lacks an authenticated provenance envelope. A CDN or mirror compromise can
-swap the Bloom filter or KEV rules without tripping semantic validation.
-
-**Proposal:**
-Add detached-signature verification for `wisdom.rkyv` plus manifest-level hash
-pinning so threat-intel updates are rejected unless the archive hash and signer
-identity match policy.
-
-**Security impact:**
-Prevents adversarial replacement of slopsquat seeds or KEV rules and gives CI a
-cryptographically provable trust chain for threat intelligence ingestion.
-
-**Implementation path:**
-Extend `crates/common/src/wisdom.rs` with signed manifest metadata, publish
-`.sig` artifacts under `docs/v1/`, and hard-fail `update-wisdom --ci-mode` when
-signature verification fails.

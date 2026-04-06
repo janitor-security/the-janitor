@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "9.9.10"
+version = "9.9.11"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -30,6 +30,7 @@ uuid = { version = "1.10", features = ["v4"] }
 # Cryptography
 blake3 = "1.5"
 hmac = "0.12"
+ed25519-dalek = "2.1"
 
 # Serialization (Zero-Copy)
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

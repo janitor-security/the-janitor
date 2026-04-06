@@ -24,6 +24,7 @@
 pub mod agnostic_shield;
 pub mod brain;
 pub mod deobfuscate;
+pub mod fold;
 pub mod hashing;
 pub mod metadata;
 pub mod migration_guard;
