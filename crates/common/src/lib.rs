@@ -3,6 +3,7 @@ pub mod deps;
 pub mod physarum;
 pub mod policy;
 pub mod pqc;
+pub mod receipt;
 pub mod registry;
 pub mod scm;
 pub mod slop;

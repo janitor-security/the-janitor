@@ -9,55 +9,33 @@ ID epochs are purged during hard compaction.
 
 ## P1 — Compliance / Integration
 
-### P1-1: Governor-Sealed Decision Receipts
+### P1-1: Replayable Decision Capsules
 
-**Class:** Enterprise Audit Evidence
+**Class:** Enterprise Forensics / Audit Replay
 
 **Observation:**
-The bounce log now binds policy hash, threat-intel receipt, transparency anchor,
-and PQC signatures, but the evidence is still assembled client-side across
-multiple fields. Regulated buyers still lack a single countersigned receipt that
-proves the exact policy, intel snapshot, binary version, and decision outcome as
-one immutable object.
+Governor-sealed receipts now prove what decision was made, but they do not yet
+carry a deterministic replay capsule that lets an external auditor re-run the
+decision math over the exact semantic mutation set, policy digest, and threat
+intel snapshot without reconstructing state by hand.
 
 **Proposal:**
-Have `janitor-gov` emit a countersigned `DecisionReceipt` envelope that seals
-`policy_hash`, `wisdom_hash`, `commit_sha`, `repo_slug`, `slop_score`,
-transparency anchor, and CBOM signature digests under a Governor-controlled
-attestation key. Store that receipt in bounce logs, CBOM metadata, and offline
-verification output.
+Define a compact replay capsule format containing the semantic CST mutation
+roots, `policy_hash`, `wisdom_hash`, CBOM digest, and normalized score vector.
+Have `janitor-gov` countersign that capsule and add a `janitor replay-receipt`
+path that deterministically re-derives the decision from the sealed evidence
+bundle.
 
 **Security impact:**
-Eliminates evidentiary recomposition gaps and gives auditors a single
-non-repudiable artifact for every enforcement decision.
+Turns enforcement evidence from “signed verdict” into independently replayable
+proof, closing the last auditor objection around deterministic reenactment.
 
 **Implementation path:**
-Define a receipt schema in `common`, sign it in `crates/gov`, embed it in
-`BounceLogEntry` and CycloneDX metadata, and extend `verify-cbom` with receipt
-verification against the Governor public key.
+Extend `DecisionReceipt` with a replay capsule hash, add a capsule serializer in
+`common`, persist capsules next to bounce logs, and teach `verify-cbom` /
+`replay-receipt` to recompute the slop score from the sealed payload.
 
 ## P2 — Architecture / Ergonomics
-
-### P2-2: Grammar Stress Fuzzer
-
-**Class:** Defensive Hardening / Fuzzing
-**Inspired by:** Parse-budget exhaustion risk and AST bomb classes
-
-**Observation:**
-The engine now has deep-scan retry logic, but there is still no systematic
-corpus generation for grammar-specific worst-case parse behavior.
-
-**Proposal:**
-Build nightly fuzz targets per grammar that record timeout-inducing inputs into
-Crucible fixtures for permanent regression coverage.
-
-**Security impact:**
-Turns parser-exhaustion failures into harvested adversarial corpora before
-attackers can weaponize them in CI.
-
-**Implementation path:**
-Add `crates/fuzz` targets and promote timeout reproducers into
-`crates/crucible/fixtures/exhaustion/`.
 
 ### P2-3: Release Surface Parity Gate
 
@@ -107,3 +85,28 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 **Implementation path:**
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
+
+### P2-5: Exhaustion Corpus Promotion Pipeline
+
+**Class:** Defensive Hardening / Fuzzing Operations
+**Inspired by:** `crates/fuzz` and harvested AST-bomb regressions
+
+**Observation:**
+The workspace now compiles a grammar stress fuzzer, but there is still no
+governed promotion pipeline that minimizes interesting crashes/timeouts and
+upgrades them into permanent, signed Crucible fixtures.
+
+**Proposal:**
+Build a corpus promotion tool that minimizes libFuzzer artifacts, annotates them
+with grammar + elapsed parse budget metadata, and emits deterministic exhaustion
+fixtures under `crates/crucible/fixtures/exhaustion/` with matching regression
+tests.
+
+**Security impact:**
+Converts ephemeral fuzz discoveries into durable parser-hardening evidence and
+prevents regression drift on algorithmic-complexity exploits.
+
+**Implementation path:**
+Add a `tools/promote-fuzz-corpus` binary, a manifest format for harvested
+payloads, and a `just promote-fuzz` command that regenerates Crucible
+exhaustion tests from minimized artifacts.

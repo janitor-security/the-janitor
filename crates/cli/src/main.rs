@@ -862,6 +862,7 @@ async fn main() -> anyhow::Result<()> {
                             transparency_log: None,
                             wisdom_hash: None,
                             wisdom_signature: None,
+                            decision_receipt: None,
                             cognition_surrender_index: 0.0,
                         };
                         // Best-effort POST — log if it fails but still exit non-zero.
@@ -3286,6 +3287,7 @@ probable AI context-collapse (hallucinated function reference)"
         transparency_log: None,
         wisdom_hash: wisdom_receipt.as_ref().map(|receipt| receipt.hash.clone()),
         wisdom_signature: wisdom_receipt.map(|receipt| receipt.signature),
+        decision_receipt: None,
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
             let ap: f64 = if score.agentic_origin_penalty > 0 {
@@ -3353,8 +3355,9 @@ probable AI context-collapse (hallucinated function reference)"
         let is_critical = report::is_critical_threat(&log_entry);
         let post_result = report::post_bounce_result(&governor_url, token, &log_entry);
         match post_result {
-            Ok(proof) => {
-                log_entry.transparency_log = Some(proof);
+            Ok(attestation) => {
+                log_entry.transparency_log = Some(attestation.inclusion_proof);
+                log_entry.decision_receipt = Some(attestation.decision_receipt);
                 log_entry.governor_status = Some("ok".to_string());
             }
             Err(e) if soft_fail => {
@@ -3447,10 +3450,6 @@ fn cmd_verify_cbom(
     slh_pub_key_path: Option<&Path>,
     log_path: &Path,
 ) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        ml_pub_key_path.is_some() || slh_pub_key_path.is_some(),
-        "verify-cbom requires --key, --slh-key, or both"
-    );
     let ml_pub_key_bytes = if let Some(path) = ml_pub_key_path {
         Some(
             std::fs::read(path)
@@ -3486,6 +3485,7 @@ fn cmd_verify_cbom(
                 let mut statuses = Vec::new();
                 let mut entry_signed = false;
                 let mut entry_failed = false;
+                let has_receipt = entry.decision_receipt.is_some();
 
                 if let Some(ref sig_b64) = entry.pqc_sig {
                     entry_signed = true;
@@ -3532,7 +3532,7 @@ fn cmd_verify_cbom(
                     statuses.push("SLH-DSA: UNSIGNED".to_string());
                 }
 
-                if entry_signed {
+                if entry_signed || has_receipt {
                     let mut line = format!("PR #{pr}: {}", statuses.join(", "));
                     if let Some(proof) = entry.transparency_log.as_ref() {
                         line.push_str(&format!(
@@ -3545,6 +3545,20 @@ fn cmd_verify_cbom(
                     }
                     if let Some(signature) = entry.wisdom_signature.as_deref() {
                         line.push_str(&format!(", Wisdom Sig: {signature}"));
+                    }
+                    if let Some(receipt) = entry.decision_receipt.as_ref() {
+                        receipt.verify().with_context(|| {
+                            format!(
+                                "line {}: Governor decision receipt verification failed",
+                                line_no + 1
+                            )
+                        })?;
+                        line.push_str(&format!(
+                            ", Governor Receipt: VALID ({})",
+                            receipt.receipt.transparency_anchor
+                        ));
+                    } else {
+                        line.push_str(", Governor Receipt: UNSIGNED");
                     }
                     println!("{line}");
                     if entry_failed {
@@ -4549,6 +4563,7 @@ mod pqc_signing_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
     }

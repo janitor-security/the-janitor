@@ -421,6 +421,7 @@ pub mod unix {
                             transparency_log: None,
                             wisdom_hash: None,
                             wisdom_signature: None,
+                            decision_receipt: None,
                             cognition_surrender_index: 0.0,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);

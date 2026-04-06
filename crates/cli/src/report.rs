@@ -38,6 +38,12 @@ pub struct InclusionProof {
     pub chained_hash: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GovernorAttestation {
+    pub inclusion_proof: InclusionProof,
+    pub decision_receipt: common::receipt::SignedDecisionReceipt,
+}
+
 // ---------------------------------------------------------------------------
 // Categorical Billing — Threat Classification
 // ---------------------------------------------------------------------------
@@ -203,6 +209,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         transparency_log: None,
         wisdom_hash: None,
         wisdom_signature: None,
+        decision_receipt: None,
         cognition_surrender_index: 0.0,
     };
 
@@ -538,6 +545,10 @@ pub struct BounceLogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wisdom_signature: Option<String>,
 
+    /// Governor countersigned decision receipt sealing the policy/intel/CBOM tuple.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_receipt: Option<common::receipt::SignedDecisionReceipt>,
+
     /// Structural rot density attributable to agentic authorship.
     ///
     /// Formula: `slop_score as f64 / agentic_pct` when `agentic_pct > 0.0`,
@@ -792,7 +803,7 @@ pub fn post_bounce_result(
     governor_base_url: &str,
     token: &str,
     entry: &BounceLogEntry,
-) -> anyhow::Result<InclusionProof> {
+) -> anyhow::Result<GovernorAttestation> {
     let body = serde_json::to_string(entry)?;
     let report_url = governor_report_endpoint(governor_base_url);
     let result = ureq::post(&report_url)
@@ -813,8 +824,20 @@ pub fn post_bounce_result(
             .map_err(|e| {
                 anyhow::anyhow!("Governor /v1/report returned invalid inclusion_proof: {e}")
             })?;
+            let decision_receipt =
+                serde_json::from_value::<common::receipt::SignedDecisionReceipt>(
+                    response.get("decision_receipt").cloned().ok_or_else(|| {
+                        anyhow::anyhow!("Governor /v1/report omitted decision_receipt")
+                    })?,
+                )
+                .map_err(|e| {
+                    anyhow::anyhow!("Governor /v1/report returned invalid decision_receipt: {e}")
+                })?;
             eprintln!("info: bounce result reported to Governor");
-            Ok(proof)
+            Ok(GovernorAttestation {
+                inclusion_proof: proof,
+                decision_receipt,
+            })
         }
         Ok(r) => {
             anyhow::bail!(
@@ -2790,6 +2813,11 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         out.push_str(hash);
         out.push_str("`\n\n");
     }
+    if let Some(receipt) = entry.decision_receipt.as_ref() {
+        out.push_str("**Governor Receipt:** `");
+        out.push_str(&receipt.receipt.transparency_anchor);
+        out.push_str("`\n\n");
+    }
     let mut pqc_signatures = Vec::new();
     if entry.pqc_sig.is_some() {
         pqc_signatures.push("ML-DSA-65");
@@ -3096,6 +3124,7 @@ mod tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3229,6 +3258,7 @@ mod webhook_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3302,6 +3332,7 @@ mod soft_fail_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
     }
@@ -3366,8 +3397,16 @@ mod soft_fail_tests {
 
     #[test]
     fn post_bounce_result_parses_inclusion_proof() {
+        use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
+        use ed25519_dalek::SigningKey;
         use std::io::{Read, Write};
         use std::net::TcpListener;
+
+        const TEST_GOVERNOR_SIGNING_KEY_SEED: [u8; 32] = [
+            0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64,
+            0x2c, 0x41, 0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22,
+            0x9a, 0xc4, 0xeb, 0xe5,
+        ];
 
         let listener = match TcpListener::bind("127.0.0.1:0") {
             Ok(listener) => listener,
@@ -3375,28 +3414,48 @@ mod soft_fail_tests {
             Err(err) => panic!("listener bind must succeed: {err}"),
         };
         let addr = listener.local_addr().expect("listener must expose address");
+        let signing_key = SigningKey::from_bytes(&TEST_GOVERNOR_SIGNING_KEY_SEED);
+        let decision_receipt = SignedDecisionReceipt::sign(
+            DecisionReceipt {
+                policy_hash: "policy".to_string(),
+                wisdom_hash: "wisdom".to_string(),
+                commit_sha: "deadbeef".to_string(),
+                repo_slug: "owner/repo".to_string(),
+                slop_score: 0,
+                transparency_anchor: "42:abc123".to_string(),
+                cbom_signature: "mlsig".to_string(),
+            },
+            &signing_key,
+        )
+        .expect("decision receipt must sign");
+        let response_body = serde_json::json!({
+            "status": "accepted",
+            "inclusion_proof": {"sequence_index": 42, "chained_hash": "abc123"},
+            "decision_receipt": decision_receipt,
+        })
+        .to_string();
         std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept must succeed");
             let mut buf = [0_u8; 2048];
             let _ = stream.read(&mut buf);
-            let body = r#"{"status":"accepted","inclusion_proof":{"sequence_index":42,"chained_hash":"abc123"}}"#;
             write!(
                 stream,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
+                response_body.len(),
+                response_body
             )
             .expect("response write must succeed");
         });
 
-        let proof = post_bounce_result(
+        let attestation = post_bounce_result(
             &format!("http://{}", addr),
             "fake-token",
             &make_test_entry(),
         )
         .expect("governor proof must parse");
 
-        assert_eq!(proof.sequence_index, 42);
-        assert_eq!(proof.chained_hash, "abc123");
+        assert_eq!(attestation.inclusion_proof.sequence_index, 42);
+        assert_eq!(attestation.inclusion_proof.chained_hash, "abc123");
+        attestation.decision_receipt.verify().unwrap();
     }
 }

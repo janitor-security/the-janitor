@@ -1,0 +1,20 @@
+[package]
+name = "janitor-fuzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "janitor_fuzz"
+path = "src/lib.rs"
+
+[dependencies]
+libfuzzer-sys.workspace = true
+polyglot = { path = "../polyglot" }
+tree-sitter.workspace = true
+tree-sitter-cpp.workspace = true
+tree-sitter-javascript.workspace = true
+tree-sitter-python.workspace = true
+

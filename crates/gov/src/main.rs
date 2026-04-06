@@ -1,4 +1,6 @@
 use anyhow::Context as _;
+use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -66,6 +68,10 @@ struct BounceLogEntry {
     #[serde(default)]
     transparency_log: Option<InclusionProof>,
     #[serde(default)]
+    wisdom_hash: Option<String>,
+    #[serde(default)]
+    decision_receipt: Option<SignedDecisionReceipt>,
+    #[serde(default)]
     cognition_surrender_index: f64,
 }
 
@@ -73,6 +79,14 @@ struct BounceLogEntry {
 struct InclusionProof {
     sequence_index: u64,
     chained_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ReportResponse {
+    status: String,
+    mode: String,
+    inclusion_proof: InclusionProof,
+    decision_receipt: SignedDecisionReceipt,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +142,34 @@ impl Blake3HashChain {
 fn transparency_log() -> &'static Mutex<Blake3HashChain> {
     static LOG: OnceLock<Mutex<Blake3HashChain>> = OnceLock::new();
     LOG.get_or_init(|| Mutex::new(Blake3HashChain::default()))
+}
+
+fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
+    static SIGNING_KEY: OnceLock<anyhow::Result<SigningKey>> = OnceLock::new();
+    SIGNING_KEY
+        .get_or_init(|| {
+            let seed_hex = std::env::var("JANITOR_GOV_SIGNING_KEY_HEX").map_err(|_| {
+                anyhow::anyhow!(
+                    "JANITOR_GOV_SIGNING_KEY_HEX is not set; janitor-gov cannot countersign decision receipts"
+                )
+            })?;
+            let trimmed = seed_hex.trim();
+            if trimmed.len() != 64 {
+                anyhow::bail!(
+                    "JANITOR_GOV_SIGNING_KEY_HEX must be exactly 64 hex characters (32-byte Ed25519 seed)"
+                );
+            }
+            let mut seed = [0u8; 32];
+            for (idx, chunk) in trimmed.as_bytes().chunks_exact(2).enumerate() {
+                let part = std::str::from_utf8(chunk)
+                    .map_err(|e| anyhow::anyhow!("invalid Governor key hex: {e}"))?;
+                seed[idx] = u8::from_str_radix(part, 16)
+                    .map_err(|e| anyhow::anyhow!("invalid Governor key hex: {e}"))?;
+            }
+            Ok(SigningKey::from_bytes(&seed))
+        })
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -243,16 +285,34 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
                         )
                     }
                 };
+                let decision_receipt = match build_signed_receipt(&entry, &proof) {
+                    Ok(receipt) => receipt,
+                    Err(err) => {
+                        return json_response(
+                            500,
+                            serde_json::json!({
+                                "error": format!("failed to sign decision receipt: {err}"),
+                            }),
+                        )
+                    }
+                };
                 emit_event(&GovLogEvent::Report {
                     entry: Box::new(entry),
                     inclusion_proof: proof.clone(),
                 });
                 json_response(
                     200,
-                    serde_json::json!({
-                        "status": "accepted",
-                        "mode": "stub",
-                        "inclusion_proof": proof,
+                    serde_json::to_value(ReportResponse {
+                        status: "accepted".to_string(),
+                        mode: "stub".to_string(),
+                        inclusion_proof: proof,
+                        decision_receipt,
+                    })
+                    .unwrap_or_else(|_| {
+                        serde_json::json!({
+                            "status": "accepted",
+                            "mode": "stub",
+                        })
                     }),
                 )
             }
@@ -300,6 +360,28 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
     }
 }
 
+fn build_signed_receipt(
+    entry: &BounceLogEntry,
+    proof: &InclusionProof,
+) -> anyhow::Result<SignedDecisionReceipt> {
+    let receipt = DecisionReceipt {
+        policy_hash: entry.policy_hash.clone(),
+        wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
+        commit_sha: entry.commit_sha.clone(),
+        repo_slug: entry.repo_slug.clone(),
+        slop_score: entry.slop_score,
+        transparency_anchor: format!("{}:{}", proof.sequence_index, proof.chained_hash),
+        cbom_signature: if let Some(sig) = entry.pqc_sig.as_deref() {
+            sig.to_string()
+        } else if let Some(sig) = entry.pqc_slh_sig.as_deref() {
+            sig.to_string()
+        } else {
+            String::new()
+        },
+    };
+    SignedDecisionReceipt::sign(receipt, governor_signing_key()?)
+}
+
 fn emit_event(event: &GovLogEvent) {
     match serde_json::to_string(event) {
         Ok(line) => println!("{line}"),
@@ -316,6 +398,87 @@ fn report_signature_material(entry: &BounceLogEntry) -> String {
         parts.push(sig);
     }
     parts.join("|")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_GOVERNOR_SIGNING_KEY_SEED: [u8; 32] = [
+        0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c,
+        0x41, 0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4,
+        0xeb, 0xe5,
+    ];
+
+    fn set_test_signing_key() {
+        let hex = TEST_GOVERNOR_SIGNING_KEY_SEED
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        std::env::set_var("JANITOR_GOV_SIGNING_KEY_HEX", hex);
+    }
+
+    fn sample_entry() -> BounceLogEntry {
+        BounceLogEntry {
+            pr_number: Some(7),
+            author: Some("agent".to_string()),
+            timestamp: "2026-04-06T00:00:00Z".to_string(),
+            slop_score: 150,
+            dead_symbols_added: 0,
+            logic_clones_found: 0,
+            zombie_symbols_added: 0,
+            unlinked_pr: 0,
+            antipatterns: vec!["security:test".to_string()],
+            comment_violations: vec![],
+            min_hashes: vec![],
+            zombie_deps: vec![],
+            state: "open".to_string(),
+            is_bot: false,
+            repo_slug: "owner/repo".to_string(),
+            suppressed_by_domain: 0,
+            collided_pr_numbers: vec![],
+            necrotic_flag: None,
+            commit_sha: "deadbeef".to_string(),
+            policy_hash: "policy".to_string(),
+            version_silos: vec![],
+            agentic_pct: 0.0,
+            ci_energy_saved_kwh: 0.1,
+            provenance: Provenance::default(),
+            governor_status: None,
+            pqc_sig: Some("mlsig".to_string()),
+            pqc_slh_sig: None,
+            transparency_log: None,
+            wisdom_hash: Some("wisdom".to_string()),
+            decision_receipt: None,
+            cognition_surrender_index: 0.0,
+        }
+    }
+
+    #[test]
+    fn hash_chain_appends_deterministically() {
+        let mut chain = Blake3HashChain::default();
+        let first = chain.append("sig-a");
+        let second = chain.append("sig-b");
+        assert_eq!(first.sequence_index, 0);
+        assert_eq!(second.sequence_index, 1);
+        assert_ne!(first.chained_hash, second.chained_hash);
+    }
+
+    #[test]
+    fn report_route_returns_inclusion_proof() {
+        set_test_signing_key();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/report".to_string(),
+            body: serde_json::to_vec(&sample_entry()).unwrap(),
+        };
+        let response = route_request(&request);
+        assert_eq!(response.status, 200);
+        let payload: ReportResponse = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(payload.inclusion_proof.sequence_index, 0);
+        payload.decision_receipt.verify().unwrap();
+        assert_eq!(payload.decision_receipt.receipt.repo_slug, "owner/repo");
+    }
 }
 
 fn json_response(status: u16, value: serde_json::Value) -> HttpResponse {
@@ -340,69 +503,4 @@ fn write_http_response(stream: &mut TcpStream, status: u16, body: &[u8]) -> anyh
     stream.write_all(body).context("writing response body")?;
     stream.flush().context("flushing response")?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_entry() -> BounceLogEntry {
-        BounceLogEntry {
-            pr_number: Some(42),
-            author: Some("security".to_string()),
-            timestamp: "2026-04-06T00:00:00Z".to_string(),
-            slop_score: 150,
-            dead_symbols_added: 0,
-            logic_clones_found: 0,
-            zombie_symbols_added: 0,
-            unlinked_pr: 0,
-            antipatterns: vec!["security:compiled_payload_anomaly".to_string()],
-            comment_violations: vec![],
-            min_hashes: vec![],
-            zombie_deps: vec![],
-            state: "open".to_string(),
-            is_bot: false,
-            repo_slug: "owner/repo".to_string(),
-            suppressed_by_domain: 0,
-            collided_pr_numbers: vec![],
-            necrotic_flag: None,
-            commit_sha: "abc123".to_string(),
-            policy_hash: String::new(),
-            version_silos: vec![],
-            agentic_pct: 0.0,
-            ci_energy_saved_kwh: 0.1,
-            provenance: Provenance::default(),
-            governor_status: None,
-            pqc_sig: Some("mlsig".to_string()),
-            pqc_slh_sig: Some("slhsig".to_string()),
-            transparency_log: None,
-            cognition_surrender_index: 0.0,
-        }
-    }
-
-    #[test]
-    fn hash_chain_appends_deterministically() {
-        let mut chain = Blake3HashChain::default();
-        let first = chain.append("sig-a");
-        let second = chain.append("sig-b");
-        assert_eq!(first.sequence_index, 0);
-        assert_eq!(second.sequence_index, 1);
-        assert_ne!(first.chained_hash, second.chained_hash);
-    }
-
-    #[test]
-    fn report_route_returns_inclusion_proof() {
-        let req = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/report".to_string(),
-            body: serde_json::to_vec(&make_entry()).expect("entry JSON must serialize"),
-        };
-        let response = route_request(&req);
-        assert_eq!(response.status, 200);
-        let body: serde_json::Value =
-            serde_json::from_slice(&response.body).expect("response body must be JSON");
-        assert_eq!(body["status"], "accepted");
-        assert!(body["inclusion_proof"]["sequence_index"].as_u64().is_some());
-        assert!(body["inclusion_proof"]["chained_hash"].as_str().is_some());
-    }
 }

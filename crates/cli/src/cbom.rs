@@ -191,6 +191,17 @@ fn cbom_metadata_properties(entries: &[BounceLogEntry]) -> Vec<Value> {
                 "value": signature
             }));
         }
+        if let Some(receipt) = entry.decision_receipt.as_ref() {
+            let pr = entry.pr_number.unwrap_or(0);
+            props.push(json!({
+                "name": format!("janitor:decision_receipt:pr:{pr}:payload"),
+                "value": serde_json::to_string(&receipt.receipt).unwrap_or_default()
+            }));
+            props.push(json!({
+                "name": format!("janitor:decision_receipt:pr:{pr}:signature"),
+                "value": receipt.signature
+            }));
+        }
     }
     props
 }
@@ -227,6 +238,16 @@ fn cbom_entry_properties(entry: &BounceLogEntry, include_signatures: bool) -> Ve
         }));
     }
     if include_signatures {
+        if let Some(receipt) = entry.decision_receipt.as_ref() {
+            props.push(json!({
+                "name": "janitor:decision_receipt",
+                "value": serde_json::to_string(&receipt.receipt).unwrap_or_default()
+            }));
+            props.push(json!({
+                "name": "janitor:decision_receipt_signature",
+                "value": receipt.signature
+            }));
+        }
         if let Some(sig) = entry.pqc_sig.as_deref() {
             props.push(json!({
                 "name": "janitor:pqc_sig_ml_dsa_65",
@@ -281,6 +302,7 @@ mod tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
     }

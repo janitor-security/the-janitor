@@ -5,6 +5,35 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Governor-Sealed Receipts & AST Fuzzing (v9.9.13)
+
+**Directive:** Execute `P1-1` by having `janitor-gov` countersign a compact
+decision receipt covering policy, Wisdom feed, transparency anchor, and CBOM
+signature lineage; execute `P2-2` by adding a dedicated grammar stress fuzzer
+crate and harvested exhaustion fixture directory; verify the full workspace and
+release `v9.9.13`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.13`; added `libfuzzer-sys`
+- `crates/common/Cargo.toml` *(modified)* — added `ed25519-dalek` for shared receipt signing / verification
+- `crates/common/src/lib.rs` *(modified)* — exported the new `receipt` module
+- `crates/common/src/receipt.rs` *(new)* — added `DecisionReceipt`, `SignedDecisionReceipt`, embedded Governor verifying key, and receipt verification helpers
+- `crates/gov/Cargo.toml` *(modified)* — wired `common` and `ed25519-dalek` into `janitor-gov`
+- `crates/gov/src/main.rs` *(modified)* — `/v1/report` now emits signed decision receipts alongside inclusion proofs; added Governor receipt tests
+- `crates/cli/src/report.rs` *(modified)* — `BounceLogEntry` now carries `decision_receipt`; Governor client parses countersigned receipts; step summary surfaces sealed receipt anchors
+- `crates/cli/src/cbom.rs` *(modified)* — CycloneDX v1.6 metadata and entry properties now embed Governor-sealed receipt payloads/signatures while preserving deterministic signing surfaces
+- `crates/cli/src/main.rs` *(modified)* — bounce flow persists Governor receipt envelopes; `verify-cbom` now cryptographically verifies the receipt against the embedded Governor public key
+- `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for receipt-schema parity
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce-log constructors updated for receipt-schema parity
+- `crates/fuzz/Cargo.toml` *(new)* — introduced the dedicated grammar stress fuzz crate
+- `crates/fuzz/src/lib.rs` *(new)* — added bounded parser-budget helpers for C++, Python, and JavaScript stress evaluation
+- `crates/fuzz/fuzz_targets/ast_bomb.rs` *(new)* — added the first AST-bomb fuzz target
+- `crates/crucible/fixtures/exhaustion/.gitkeep` *(new)* — created the governed exhaustion-fixture corpus root
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P1-1` / `P2-2`; seeded `P1-1` Replayable Decision Capsules and `P2-5` Exhaustion Corpus Promotion Pipeline
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.13`
+
 ## 2026-04-06 — Threat Intel Receipts & Semantic CST Diffing (v9.9.12)
 
 **Directive:** Bind every bounce decision to a cryptographically identified

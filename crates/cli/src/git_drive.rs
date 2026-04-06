@@ -571,6 +571,7 @@ fn bounce_one(
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            decision_receipt: None,
             cognition_surrender_index: 0.0,
         });
     }
@@ -671,6 +672,7 @@ fn bounce_one(
         transparency_log: None,
         wisdom_hash: None,
         wisdom_signature: None,
+        decision_receipt: None,
         cognition_surrender_index: 0.0,
     })
 }
