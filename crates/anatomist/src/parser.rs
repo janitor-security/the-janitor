@@ -31,7 +31,7 @@ const PATTERN_ASSIGNMENT: usize = 3; // Module-level assignments
 /// certain grammars. Aborting after 100 ms returns `None` from `parse()`, which
 /// the caller maps to `ParseFailure` — the file is skipped and the daemon
 /// continues processing the next blob.
-const PARSE_TIMEOUT_MICROS: u64 = 100_000;
+const PARSE_TIMEOUT_MICROS: u64 = 500_000;
 
 /// Static cache for the Python entity extraction query.
 static ENTITY_QUERY: OnceLock<Result<Query, String>> = OnceLock::new();

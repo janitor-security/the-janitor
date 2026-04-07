@@ -211,6 +211,13 @@ pub struct SlopScore {
     ///
     /// Does **not** contribute to [`Self::score()`].
     pub structured_findings: Vec<common::slop::StructuredFinding>,
+
+    /// Deterministic semantic mutation roots captured from the CST diff engine.
+    ///
+    /// Each root stores the language hint, raw subtree bytes, and BLAKE3 hash
+    /// so offline replay can verify the exact mutation surface that drove the
+    /// sealed decision capsule.
+    pub semantic_mutation_roots: Vec<common::receipt::CapsuleMutationRoot>,
 }
 
 impl SlopScore {
@@ -1120,6 +1127,17 @@ impl PRBouncer for PatchBouncer {
         }
         crate::slop_hunter::set_current_wisdom_path(self.wisdom_path.as_deref());
         let mut raw_findings = Vec::new();
+        let semantic_mutation_roots: Vec<common::receipt::CapsuleMutationRoot> = semantic_roots
+            .iter()
+            .map(|node| {
+                let subtree_bytes = source[node.start_byte()..node.end_byte()].to_vec();
+                common::receipt::CapsuleMutationRoot {
+                    language: ext.to_string(),
+                    hash: blake3::hash(&subtree_bytes).to_hex().to_string(),
+                    bytes: subtree_bytes,
+                }
+            })
+            .collect();
         for semantic_root in &semantic_roots {
             let subtree_bytes = &source[semantic_root.start_byte()..semantic_root.end_byte()];
             let subtree_unit = crate::slop_hunter::ParsedUnit::unparsed(subtree_bytes);
@@ -1508,6 +1526,7 @@ impl PRBouncer for PatchBouncer {
             antipattern_score,
             antipattern_details,
             structured_findings,
+            semantic_mutation_roots,
             suppressed_by_domain,
             necrotic_flag,
             ..SlopScore::default()
@@ -1899,6 +1918,9 @@ pub fn bounce_git(
             total
                 .structured_findings
                 .append(&mut score.structured_findings);
+            total
+                .semantic_mutation_roots
+                .append(&mut score.semantic_mutation_roots);
         }
     }
 

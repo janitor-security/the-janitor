@@ -209,6 +209,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         transparency_log: None,
         wisdom_hash: None,
         wisdom_signature: None,
+        capsule_hash: None,
         decision_receipt: None,
         cognition_surrender_index: 0.0,
     };
@@ -544,6 +545,10 @@ pub struct BounceLogEntry {
     /// that governed this bounce result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wisdom_signature: Option<String>,
+
+    /// BLAKE3 digest of the persisted replay capsule that governed the receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capsule_hash: Option<String>,
 
     /// Governor countersigned decision receipt sealing the policy/intel/CBOM tuple.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3124,6 +3129,7 @@ mod tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
@@ -3258,6 +3264,7 @@ mod webhook_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
@@ -3332,6 +3339,7 @@ mod soft_fail_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
@@ -3424,6 +3432,7 @@ mod soft_fail_tests {
                 slop_score: 0,
                 transparency_anchor: "42:abc123".to_string(),
                 cbom_signature: "mlsig".to_string(),
+                capsule_hash: "capsule".to_string(),
             },
             &signing_key,
         )

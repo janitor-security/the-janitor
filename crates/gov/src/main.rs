@@ -70,6 +70,8 @@ struct BounceLogEntry {
     #[serde(default)]
     wisdom_hash: Option<String>,
     #[serde(default)]
+    capsule_hash: Option<String>,
+    #[serde(default)]
     decision_receipt: Option<SignedDecisionReceipt>,
     #[serde(default)]
     cognition_surrender_index: f64,
@@ -378,6 +380,7 @@ fn build_signed_receipt(
         } else {
             String::new()
         },
+        capsule_hash: entry.capsule_hash.clone().unwrap_or_default(),
     };
     SignedDecisionReceipt::sign(receipt, governor_signing_key()?)
 }
@@ -449,6 +452,7 @@ mod tests {
             pqc_slh_sig: None,
             transparency_log: None,
             wisdom_hash: Some("wisdom".to_string()),
+            capsule_hash: Some("capsule".to_string()),
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }

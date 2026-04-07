@@ -9,61 +9,37 @@ ID epochs are purged during hard compaction.
 
 ## P1 — Compliance / Integration
 
-### P1-1: Replayable Decision Capsules
+### P1-1: Wasm Policy Module Provenance
 
-**Class:** Enterprise Forensics / Audit Replay
+**Class:** Enterprise Governance / Audit Provenance
 
 **Observation:**
-Governor-sealed receipts now prove what decision was made, but they do not yet
-carry a deterministic replay capsule that lets an external auditor re-run the
-decision math over the exact semantic mutation set, policy digest, and threat
-intel snapshot without reconstructing state by hand.
+Replay capsules now seal the decision math, but they still do not prove which
+private Wasm rule modules participated in the decision. Once enterprise BYOR
+rules are mounted, an auditor will need cryptographic evidence of the exact
+module hash, ABI version, and invocation order that influenced the final score.
 
 **Proposal:**
-Define a compact replay capsule format containing the semantic CST mutation
-roots, `policy_hash`, `wisdom_hash`, CBOM digest, and normalized score vector.
-Have `janitor-gov` countersign that capsule and add a `janitor replay-receipt`
-path that deterministically re-derives the decision from the sealed evidence
-bundle.
+Add a `WasmPolicyReceipt` envelope that records the BLAKE3 digest, declared
+rule ID, ABI version, and result vector for every loaded Wasm governance module.
+Bind those module receipts into the replay capsule, Governor decision receipt,
+and CBOM so offline verification can prove which private policies fired without
+revealing the module source.
 
 **Security impact:**
-Turns enforcement evidence from “signed verdict” into independently replayable
-proof, closing the last auditor objection around deterministic reenactment.
+Closes the last enterprise governance blind spot by turning opaque private-rule
+execution into sealed, replayable provenance rather than an unverifiable black
+box.
 
 **Implementation path:**
-Extend `DecisionReceipt` with a replay capsule hash, add a capsule serializer in
-`common`, persist capsules next to bounce logs, and teach `verify-cbom` /
-`replay-receipt` to recompute the slop score from the sealed payload.
+Introduce `crates/common/src/wasm_receipt.rs`, extend the Wasm host to emit
+deterministic per-module result digests, and thread those receipts through
+`DecisionCapsule`, `SignedDecisionReceipt`, `verify-cbom`, and
+`replay-receipt`.
 
 ## P2 — Architecture / Ergonomics
 
-### P2-3: Release Surface Parity Gate
-
-**Class:** Defensive Hardening
-**Inspired by:** `justfile` and release command drift across operator surfaces
-
-**Observation:**
-Documented release entrypoints can silently diverge from the actual linearized
-execution graph. The `v9.5.1` burn incident exposed a failure mode where
-unstaged-worktree reasoning published a tag for the previous `HEAD` rather than
-the staged payload.
-
-**Proposal:**
-Add a release-surface parity test that asserts all documented entrypoints resolve
-to the same `audit → fast-release` path, and prove the emitted commit/tag pair
-contains the audited payload.
-
-**Security impact:**
-Preserves symmetric-failure semantics while preventing redundant release work
-from masking regressions.
-
-**Implementation path:**
-Add a shell regression in `tools/tests/` that parses `justfile`,
-`.agent_governance/commands/release.md` for consistency. Add a second regression
-that stages a synthetic change, runs the recipe in fixture mode, and asserts a
-new commit is created before tag emission.
-
-### P2-4: Filename-Aware Surface Routing Spine
+### P2-1: Filename-Aware Surface Routing Spine
 
 **Class:** Core Engine Plumbing
 **Inspired by:** Extensionless security surfaces in P0-1 execution
@@ -86,7 +62,7 @@ authoritative routing layer for size limits, parser budgets, and domain policy.
 Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
 replace `extract_patch_ext()` string returns; update MCP serialization.
 
-### P2-5: Exhaustion Corpus Promotion Pipeline
+### P2-2: Exhaustion Corpus Promotion Pipeline
 
 **Class:** Defensive Hardening / Fuzzing Operations
 **Inspired by:** `crates/fuzz` and harvested AST-bomb regressions

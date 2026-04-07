@@ -594,6 +594,11 @@ enum Commands {
         /// Path to a bounce log NDJSON file (e.g. `.janitor/bounce_log.ndjson`).
         path: PathBuf,
     },
+    /// Replay a sealed decision capsule offline.
+    ReplayReceipt {
+        /// Path to a persisted `.capsule` envelope.
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -862,6 +867,7 @@ async fn main() -> anyhow::Result<()> {
                             transparency_log: None,
                             wisdom_hash: None,
                             wisdom_signature: None,
+                            capsule_hash: None,
                             decision_receipt: None,
                             cognition_surrender_index: 0.0,
                         };
@@ -990,6 +996,9 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::VerifyCbom { key, slh_key, path } => {
             cmd_verify_cbom(key.as_deref(), slh_key.as_deref(), path)?;
+        }
+        Commands::ReplayReceipt { path } => {
+            cmd_replay_receipt(path)?;
         }
     }
 
@@ -3229,16 +3238,16 @@ probable AI context-collapse (hallucinated function reference)"
         logic_clones_found: score.logic_clones_found,
         zombie_symbols_added: score.zombie_symbols_added,
         unlinked_pr: score.unlinked_pr,
-        antipatterns: score.antipattern_details,
-        comment_violations: score.comment_violation_details,
+        antipatterns: score.antipattern_details.clone(),
+        comment_violations: score.comment_violation_details.clone(),
         min_hashes: min_hashes_vec,
         zombie_deps,
         state: pr_state,
         is_bot,
         repo_slug: resolved_repo_slug.unwrap_or_default(),
         suppressed_by_domain: score.suppressed_by_domain,
-        collided_pr_numbers: score.collided_pr_numbers,
-        necrotic_flag: score.necrotic_flag,
+        collided_pr_numbers: score.collided_pr_numbers.clone(),
+        necrotic_flag: score.necrotic_flag.clone(),
         // Priority: --head-sha > --head > GITHUB_SHA env var.
         //
         // --head-sha is the canonical value supplied by the CI runner and MUST
@@ -3287,6 +3296,7 @@ probable AI context-collapse (hallucinated function reference)"
         transparency_log: None,
         wisdom_hash: wisdom_receipt.as_ref().map(|receipt| receipt.hash.clone()),
         wisdom_signature: wisdom_receipt.map(|receipt| receipt.signature),
+        capsule_hash: None,
         decision_receipt: None,
         // CSI = slop density per unit of agentic authorship.
         cognition_surrender_index: {
@@ -3302,6 +3312,8 @@ probable AI context-collapse (hallucinated function reference)"
             }
         },
     };
+    let decision_capsule = build_decision_capsule(&score, &log_entry)?;
+    log_entry.capsule_hash = Some(decision_capsule.hash()?);
 
     // ── BYOK Local PQC Attestation (--pqc-key) ───────────────────────────────
     //
@@ -3356,6 +3368,7 @@ probable AI context-collapse (hallucinated function reference)"
         let post_result = report::post_bounce_result(&governor_url, token, &log_entry);
         match post_result {
             Ok(attestation) => {
+                save_decision_capsule(&janitor_dir, &log_entry, &decision_capsule, &attestation)?;
                 log_entry.transparency_log = Some(attestation.inclusion_proof);
                 log_entry.decision_receipt = Some(attestation.decision_receipt);
                 log_entry.governor_status = Some("ok".to_string());
@@ -3395,6 +3408,51 @@ probable AI context-collapse (hallucinated function reference)"
     Ok(())
 }
 
+fn build_decision_capsule(
+    score: &forge::slop_filter::SlopScore,
+    entry: &report::BounceLogEntry,
+) -> anyhow::Result<common::receipt::DecisionCapsule> {
+    let cbom_json = cbom::render_cbom_for_entry(entry, &entry.repo_slug);
+    Ok(common::receipt::DecisionCapsule {
+        mutation_roots: score.semantic_mutation_roots.clone(),
+        policy_hash: entry.policy_hash.clone(),
+        wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
+        cbom_digest: blake3::hash(cbom_json.as_bytes()).to_hex().to_string(),
+        score_vector: common::receipt::DecisionScoreVector {
+            dead_symbols_added: score.dead_symbols_added,
+            logic_clones_found: score.logic_clones_found,
+            zombie_symbols_added: score.zombie_symbols_added,
+            antipattern_score: score.antipattern_score,
+            comment_violations: score.comment_violations,
+            unlinked_pr: score.unlinked_pr,
+            hallucinated_security_fix: score.hallucinated_security_fix,
+            agentic_origin_penalty: score.agentic_origin_penalty,
+            version_silo_count: score.version_silo_details.len() as u32,
+        },
+    })
+}
+
+fn decision_capsule_path(janitor_dir: &Path, entry: &report::BounceLogEntry) -> PathBuf {
+    let pr = entry.pr_number.unwrap_or(0);
+    let ts = entry.timestamp.replace(':', "-");
+    janitor_dir
+        .join("receipts")
+        .join(format!("pr-{pr}-{ts}.capsule"))
+}
+
+fn save_decision_capsule(
+    janitor_dir: &Path,
+    entry: &report::BounceLogEntry,
+    capsule: &common::receipt::DecisionCapsule,
+    attestation: &report::GovernorAttestation,
+) -> anyhow::Result<()> {
+    let sealed = common::receipt::SealedDecisionCapsule {
+        capsule: capsule.clone(),
+        receipt: attestation.decision_receipt.clone(),
+    };
+    sealed.save(&decision_capsule_path(janitor_dir, entry))
+}
+
 // ---------------------------------------------------------------------------
 // pardon
 // ---------------------------------------------------------------------------
@@ -3431,6 +3489,39 @@ fn cmd_pardon(symbol: &str, repo: &Path) -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 // verify-cbom
 // ---------------------------------------------------------------------------
+
+fn cmd_replay_receipt(capsule_path: &Path) -> anyhow::Result<()> {
+    let sealed = common::receipt::SealedDecisionCapsule::load(capsule_path)
+        .with_context(|| format!("loading replay capsule: {}", capsule_path.display()))?;
+    sealed.receipt.verify()?;
+    sealed.capsule.verify_roots()?;
+
+    let capsule_hash = sealed.capsule.hash()?;
+    if capsule_hash != sealed.receipt.receipt.capsule_hash {
+        anyhow::bail!(
+            "decision capsule hash mismatch: receipt sealed {}, replay computed {}",
+            sealed.receipt.receipt.capsule_hash,
+            capsule_hash
+        );
+    }
+
+    let replayed_score = sealed.capsule.score_vector.score();
+    if replayed_score != sealed.receipt.receipt.slop_score {
+        anyhow::bail!(
+            "replayed slop score mismatch: receipt sealed {}, replay derived {}",
+            sealed.receipt.receipt.slop_score,
+            replayed_score
+        );
+    }
+
+    println!(
+        "Replay verified — score {}, roots {}, anchor {}",
+        replayed_score,
+        sealed.capsule.mutation_roots.len(),
+        sealed.receipt.receipt.transparency_anchor
+    );
+    Ok(())
+}
 
 /// Verify ML-DSA-65 (FIPS 204) and SLH-DSA-SHAKE-192s (FIPS 205) signatures
 /// stored in a bounce log NDJSON file.
@@ -3545,6 +3636,9 @@ fn cmd_verify_cbom(
                     }
                     if let Some(signature) = entry.wisdom_signature.as_deref() {
                         line.push_str(&format!(", Wisdom Sig: {signature}"));
+                    }
+                    if let Some(hash) = entry.capsule_hash.as_deref() {
+                        line.push_str(&format!(", Capsule: {hash}"));
                     }
                     if let Some(receipt) = entry.decision_receipt.as_ref() {
                         receipt.verify().with_context(|| {
@@ -4563,6 +4657,7 @@ mod pqc_signing_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
@@ -4675,6 +4770,69 @@ mod pqc_signing_tests {
         assert!(aws.requires_commercial_governor());
         assert!(azure.requires_commercial_governor());
         assert!(pkcs11.requires_commercial_governor());
+    }
+}
+
+#[cfg(test)]
+mod replay_receipt_tests {
+    use super::cmd_replay_receipt;
+    use common::receipt::{
+        CapsuleMutationRoot, DecisionCapsule, DecisionReceipt, DecisionScoreVector,
+        SealedDecisionCapsule, SignedDecisionReceipt,
+    };
+    use ed25519_dalek::SigningKey;
+
+    const TEST_GOVERNOR_SIGNING_KEY_SEED: [u8; 32] = [
+        0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c,
+        0x41, 0x3e, 0x27, 0x23, 0x36, 0xd4, 0x26, 0x5c, 0x1b, 0xc4, 0x1c, 0x6c, 0x22, 0x9a, 0xc4,
+        0xeb, 0xe5,
+    ];
+
+    #[test]
+    fn replay_receipt_roundtrip_succeeds() {
+        let capsule = DecisionCapsule {
+            mutation_roots: vec![CapsuleMutationRoot {
+                language: "js".to_string(),
+                hash: blake3::hash(b"eval(atob(\"boom\"))").to_hex().to_string(),
+                bytes: b"eval(atob(\"boom\"))".to_vec(),
+            }],
+            policy_hash: "policy".to_string(),
+            wisdom_hash: "wisdom".to_string(),
+            cbom_digest: "cbom".to_string(),
+            score_vector: DecisionScoreVector {
+                antipattern_score: 150,
+                ..DecisionScoreVector::default()
+            },
+        };
+        let capsule_hash = capsule.hash().unwrap();
+        let signing_key = SigningKey::from_bytes(&TEST_GOVERNOR_SIGNING_KEY_SEED);
+        let receipt = SignedDecisionReceipt::sign(
+            DecisionReceipt {
+                policy_hash: "policy".to_string(),
+                wisdom_hash: "wisdom".to_string(),
+                commit_sha: "deadbeef".to_string(),
+                repo_slug: "owner/repo".to_string(),
+                slop_score: 150,
+                transparency_anchor: "7:abc".to_string(),
+                cbom_signature: "sig".to_string(),
+                capsule_hash,
+            },
+            &signing_key,
+        )
+        .unwrap();
+        let sealed = SealedDecisionCapsule { capsule, receipt };
+        let path = std::env::temp_dir().join(format!(
+            "janitor-replay-{}-{}.capsule",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        sealed.save(&path).unwrap();
+        let result = cmd_replay_receipt(&path);
+        let _ = std::fs::remove_file(&path);
+        result.unwrap();
     }
 }
 

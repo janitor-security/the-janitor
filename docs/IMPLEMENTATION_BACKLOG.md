@@ -5,6 +5,50 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Deterministic Audit Replay & Symmetric Release Parity (v9.9.14)
+
+**Directive:** Execute `P1-1` by sealing replayable decision capsules that can
+be verified offline against Governor-signed receipts, execute `P2-3` by adding
+a release-surface parity regression to `just audit`, verify the replay path and
+the governed release DAG, then release `v9.9.14`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.14`
+- `Cargo.lock` *(modified)* — lockfile refreshed for the `v9.9.14` release line
+- `crates/common/src/receipt.rs` *(modified)* — added `CapsuleMutationRoot`,
+  `DecisionScoreVector`, `DecisionCapsule`, `SealedDecisionCapsule`, capsule
+  hashing / checksum validation, and extended `DecisionReceipt` with
+  `capsule_hash`
+- `crates/forge/src/slop_filter.rs` *(modified)* — semantic CST mutation roots
+  now persist deterministic subtree bytes + BLAKE3 digests into `SlopScore` for
+  offline replay
+- `crates/cli/src/main.rs` *(modified)* — added `janitor replay-receipt
+  <CAPSULE_PATH>`, deterministic capsule construction, capsule persistence next
+  to bounce logs, and replay verification against Governor receipts
+- `crates/cli/src/report.rs` *(modified)* — `BounceLogEntry` now carries
+  `capsule_hash` for receipt / CBOM provenance
+- `crates/cli/src/cbom.rs` *(modified)* — embedded capsule hashes into the CBOM
+  metadata and signed entry properties without breaking deterministic pre-sign
+  rendering
+- `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce entry constructors
+  updated for capsule-hash schema parity
+- `crates/cli/src/git_drive.rs` *(modified)* — git-native bounce entry
+  constructors updated for capsule-hash schema parity
+- `crates/gov/src/main.rs` *(modified)* — Governor receipts now countersign the
+  replay `capsule_hash`
+- `crates/anatomist/src/parser.rs` *(modified)* — raised the bounded parse
+  timeout from 100 ms to 500 ms to eliminate false-negative entity extraction
+  under governed audit load
+- `justfile` *(modified)* — `audit` now enforces the release-surface parity gate
+- `tools/tests/test_release_parity.sh` *(new)* — validates
+  `.agent_governance/commands/release.md` and `justfile` stay locked to the same
+  `audit → fast-release` execution graph and bans `git add .` / `git commit -a`
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P1-1` / `P2-3`,
+  compacted active numbering, and seeded `P1-1` Wasm Policy Module Provenance
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.14`
+
 ## 2026-04-06 — Governor-Sealed Receipts & AST Fuzzing (v9.9.13)
 
 **Directive:** Execute `P1-1` by having `janitor-gov` countersign a compact

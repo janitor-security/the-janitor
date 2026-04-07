@@ -1,9 +1,9 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v9.9.13 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v9.9.14 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v9.9.13: Zero-Upload, FIPS 204 Compliant.*
+*Attested by The Janitor v9.9.14: Zero-Upload, FIPS 204 Compliant.*
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
