@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)
@@ -1070,6 +1079,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)
@@ -1513,6 +1531,16 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918">2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)</h2>
+<p><strong>Directive:</strong> Phase 1 — commercial/doc teardown; Phase 2 — red team gap audit; Phase 3 — cross-file taint spine extension (TS + Go).</p>
+<p><strong>Files modified:</strong>
+- <code>README.md</code> <em>(modified)</em> — fixed "12 grammars" → "23 grammars"; updated CBOM to CycloneDX v1.6 + Dual-PQC (ML-DSA-65 FIPS 204 + SLH-DSA FIPS 205); expanded Competitive Moat section with Air-Gap, Wasm BYOR, Slopsquatting, Replayable Decision Capsules moats; added <code>Sovereign / Air-Gap</code> pricing tier (Custom, starting $49,900/yr) with explicit feature list
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — filed CT-011 (P0: IntelTransferCapsule OOM/8GB Law), CT-012 (P0: symlink traversal in capsule import), CT-013 (P1: taint catalog unsigned), CT-014 (P1: member-expression call chains not detected), CT-015 (P1: Wasm fuel/memory pressure), CT-016 (P2: ByteLatticeAnalyzer UTF-16 false positives)
+- <code>crates/forge/src/taint_catalog.rs</code> <em>(modified)</em> — added <code>scan_ts()</code> (TypeScript cross-file taint, reuses JS literal check), <code>scan_go()</code> (Go bare-identifier + selector_expression callee detection), <code>has_nontrivial_arg_go()</code>, 7 new unit tests (TS true-positive/negative, Go bare/selector true-positive, Go true-negative/literal)
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — added <code>"ts"</code> and <code>"tsx"</code> to <code>lang_for_ext()</code> (routes through full tree-sitter parse path, enabling cross-file taint); updated cross-file taint dispatch to <code>"py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go"</code>
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added 4 Crucible fixtures: <code>cross_file_taint_typescript_intercepted</code>, <code>cross_file_taint_typescript_safe</code>, <code>cross_file_taint_go_intercepted</code>, <code>cross_file_taint_go_safe</code></p>
+<p><strong>Crucible:</strong> 19/19 SANCTUARY INTACT (4 new entries).</p>
 <hr />
 <h2 id="2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917">2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)</h2>
 <p><strong>Directive:</strong> P1-1 — Air-Gap Intel Transfer Capsules; P2-1 — Exhaustion Corpus
