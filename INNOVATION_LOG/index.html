@@ -592,30 +592,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-011-inteltransfercapsule-json-deserialization-no-size-guard-8gb-law-violation" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-011: IntelTransferCapsule JSON deserialization — no size guard (8GB Law violation)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-012-symlink-traversal-in-cmd_import_intel_capsule-path-canonicalization-missing" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-012: Symlink traversal in cmd_import_intel_capsule (path canonicalization missing)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -754,30 +730,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Core Security">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-011-inteltransfercapsule-json-deserialization-no-size-guard-8gb-law-violation" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-011: IntelTransferCapsule JSON deserialization — no size guard (8GB Law violation)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-012-symlink-traversal-in-cmd_import_intel_capsule-path-canonicalization-missing" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-012: Symlink traversal in cmd_import_intel_capsule (path canonicalization missing)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -869,29 +821,9 @@
 ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
-<h3 id="ct-011-inteltransfercapsule-json-deserialization-no-size-guard-8gb-law-violation">CT-011: IntelTransferCapsule JSON deserialization — no size guard (8GB Law violation)</h3>
-<p><strong>File:</strong> <code>crates/cli/src/main.rs::cmd_import_intel_capsule</code></p>
-<p><strong>Gap:</strong> <code>serde_json::from_slice(&amp;raw)</code> deserializes the full JSON payload before
-any size check. A crafted capsule with a multi-hundred-MB <code>wisdom_bytes</code> JSON array
-allocates the full payload on the heap before the BLAKE3 check fires. In an air-gap
-environment with limited RAM this is an OOM attack surface — a rogue USB capsule
-can DoS the import workstation.</p>
-<p><strong>Fix:</strong> Read the file size before deserializing; reject if <code>raw.len() &gt; 50 * 1024 * 1024</code>
-(50 MiB hard ceiling). The wisdom feed is never legitimately that large. Add a unit
-test asserting rejection at the threshold.</p>
-<p><strong>TEI:</strong> Prevents targeted DoS in IL5/IL6 import workflows. Sovereign tier blocker.</p>
-<hr />
-<h3 id="ct-012-symlink-traversal-in-cmd_import_intel_capsule-path-canonicalization-missing">CT-012: Symlink traversal in <code>cmd_import_intel_capsule</code> (path canonicalization missing)</h3>
-<p><strong>File:</strong> <code>crates/cli/src/main.rs::cmd_import_intel_capsule</code></p>
-<p><strong>Gap:</strong> The install path is constructed as <code>project_root.join(".janitor").join("wisdom.rkyv")</code>.
-If <code>.janitor</code> is a symlink (or if <code>project_root</code> is a symlink), <code>std::fs::write</code> follows it
-unconditionally, redirecting the wisdom write to an attacker-chosen location. A crafted
-capsule import targeting a repo where <code>.janitor/</code> is a symlink to <code>/etc/</code> could overwrite
-arbitrary system files if the CLI is run with elevated privileges.</p>
-<p><strong>Fix:</strong> Call <code>std::fs::canonicalize</code> on <code>janitor_dir</code> after <code>create_dir_all</code>, then verify
-the canonical path has <code>project_root</code> as a prefix before writing.</p>
-<p><strong>TEI:</strong> Prevents write-anywhere privilege escalation in CI/CD pipelines running as root.</p>
-<hr />
+<!-- CT-011 RESOLVED v9.9.19: 50 MiB size guard added to cmd_import_intel_capsule -->
+<!-- CT-012 RESOLVED v9.9.19: canonicalize + starts_with confinement check added -->
+
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
 <h3 id="ct-013-taint-catalog-unsigned-injection-via-janitor-directory-control">CT-013: Taint catalog unsigned — injection via <code>.janitor/</code> directory control</h3>
 <p><strong>File:</strong> <code>crates/forge/src/taint_catalog.rs::CatalogView::open</code></p>

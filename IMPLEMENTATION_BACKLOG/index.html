@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-air-gap-perimeter-hardening-v9919" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)
@@ -1079,6 +1088,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-air-gap-perimeter-hardening-v9919" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)
@@ -1531,6 +1549,14 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-air-gap-perimeter-hardening-v9919">2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)</h2>
+<p><strong>Directive:</strong> Execute CT-011 (OOM size guard) and CT-012 (symlink traversal confinement) in <code>cmd_import_intel_capsule</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — CT-011: <code>std::fs::metadata</code> size guard (50 MiB ceiling) fires before <code>std::fs::read</code>; CT-012: <code>std::fs::canonicalize</code> + <code>starts_with</code> confinement check after <code>create_dir_all</code>; 2 new unit tests (<code>size_guard_rejects_oversized_capsule</code>, <code>symlink_traversal_outside_root_is_rejected</code>)
+- <code>justfile</code> <em>(modified)</em> — <code>cargo test --workspace</code> now passes <code>-- --test-threads=1</code> to prevent WSL hypervisor OOM during CI
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-011 and CT-012 purged (RESOLVED v9.9.19)</p>
+<p><strong>Crucible:</strong> 19/19 SANCTUARY INTACT (no new entries required — hardening is in production import path, not a new detection rule).</p>
 <hr />
 <h2 id="2026-04-07-fortune-500-red-team-audit-multi-hop-taint-spine-v9918">2026-04-07 — Fortune 500 Red Team Audit &amp; Multi-Hop Taint Spine (v9.9.18)</h2>
 <p><strong>Directive:</strong> Phase 1 — commercial/doc teardown; Phase 2 — red team gap audit; Phase 3 — cross-file taint spine extension (TS + Go).</p>
