@@ -605,9 +605,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-replayable-decision-capsules" class="md-nav__link">
+  <a href="#p1-1-wasm-policy-module-provenance" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Replayable Decision Capsules
+      P1-1: Wasm Policy Module Provenance
     </span>
   </a>
   
@@ -629,27 +629,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-3-release-surface-parity-gate" class="md-nav__link">
+  <a href="#p2-1-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-3: Release Surface Parity Gate
+      P2-1: Filename-Aware Surface Routing Spine
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
+  <a href="#p2-2-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-4: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-5-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Exhaustion Corpus Promotion Pipeline
+      P2-2: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -743,9 +734,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-replayable-decision-capsules" class="md-nav__link">
+  <a href="#p1-1-wasm-policy-module-provenance" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Replayable Decision Capsules
+      P1-1: Wasm Policy Module Provenance
     </span>
   </a>
   
@@ -767,27 +758,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-3-release-surface-parity-gate" class="md-nav__link">
+  <a href="#p2-1-filename-aware-surface-routing-spine" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-3: Release Surface Parity Gate
+      P2-1: Filename-Aware Surface Routing Spine
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-4-filename-aware-surface-routing-spine" class="md-nav__link">
+  <a href="#p2-2-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-4: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-5-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-5: Exhaustion Corpus Promotion Pipeline
+      P2-2: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -822,48 +804,30 @@ ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-1-replayable-decision-capsules">P1-1: Replayable Decision Capsules</h3>
-<p><strong>Class:</strong> Enterprise Forensics / Audit Replay</p>
+<h3 id="p1-1-wasm-policy-module-provenance">P1-1: Wasm Policy Module Provenance</h3>
+<p><strong>Class:</strong> Enterprise Governance / Audit Provenance</p>
 <p><strong>Observation:</strong>
-Governor-sealed receipts now prove what decision was made, but they do not yet
-carry a deterministic replay capsule that lets an external auditor re-run the
-decision math over the exact semantic mutation set, policy digest, and threat
-intel snapshot without reconstructing state by hand.</p>
+Replay capsules now seal the decision math, but they still do not prove which
+private Wasm rule modules participated in the decision. Once enterprise BYOR
+rules are mounted, an auditor will need cryptographic evidence of the exact
+module hash, ABI version, and invocation order that influenced the final score.</p>
 <p><strong>Proposal:</strong>
-Define a compact replay capsule format containing the semantic CST mutation
-roots, <code>policy_hash</code>, <code>wisdom_hash</code>, CBOM digest, and normalized score vector.
-Have <code>janitor-gov</code> countersign that capsule and add a <code>janitor replay-receipt</code>
-path that deterministically re-derives the decision from the sealed evidence
-bundle.</p>
+Add a <code>WasmPolicyReceipt</code> envelope that records the BLAKE3 digest, declared
+rule ID, ABI version, and result vector for every loaded Wasm governance module.
+Bind those module receipts into the replay capsule, Governor decision receipt,
+and CBOM so offline verification can prove which private policies fired without
+revealing the module source.</p>
 <p><strong>Security impact:</strong>
-Turns enforcement evidence from “signed verdict” into independently replayable
-proof, closing the last auditor objection around deterministic reenactment.</p>
+Closes the last enterprise governance blind spot by turning opaque private-rule
+execution into sealed, replayable provenance rather than an unverifiable black
+box.</p>
 <p><strong>Implementation path:</strong>
-Extend <code>DecisionReceipt</code> with a replay capsule hash, add a capsule serializer in
-<code>common</code>, persist capsules next to bounce logs, and teach <code>verify-cbom</code> /
-<code>replay-receipt</code> to recompute the slop score from the sealed payload.</p>
+Introduce <code>crates/common/src/wasm_receipt.rs</code>, extend the Wasm host to emit
+deterministic per-module result digests, and thread those receipts through
+<code>DecisionCapsule</code>, <code>SignedDecisionReceipt</code>, <code>verify-cbom</code>, and
+<code>replay-receipt</code>.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
-<h3 id="p2-3-release-surface-parity-gate">P2-3: Release Surface Parity Gate</h3>
-<p><strong>Class:</strong> Defensive Hardening
-<strong>Inspired by:</strong> <code>justfile</code> and release command drift across operator surfaces</p>
-<p><strong>Observation:</strong>
-Documented release entrypoints can silently diverge from the actual linearized
-execution graph. The <code>v9.5.1</code> burn incident exposed a failure mode where
-unstaged-worktree reasoning published a tag for the previous <code>HEAD</code> rather than
-the staged payload.</p>
-<p><strong>Proposal:</strong>
-Add a release-surface parity test that asserts all documented entrypoints resolve
-to the same <code>audit → fast-release</code> path, and prove the emitted commit/tag pair
-contains the audited payload.</p>
-<p><strong>Security impact:</strong>
-Preserves symmetric-failure semantics while preventing redundant release work
-from masking regressions.</p>
-<p><strong>Implementation path:</strong>
-Add a shell regression in <code>tools/tests/</code> that parses <code>justfile</code>,
-<code>.agent_governance/commands/release.md</code> for consistency. Add a second regression
-that stages a synthetic change, runs the recipe in fixture mode, and asserts a
-new commit is created before tag emission.</p>
-<h3 id="p2-4-filename-aware-surface-routing-spine">P2-4: Filename-Aware Surface Routing Spine</h3>
+<h3 id="p2-1-filename-aware-surface-routing-spine">P2-1: Filename-Aware Surface Routing Spine</h3>
 <p><strong>Class:</strong> Core Engine Plumbing
 <strong>Inspired by:</strong> Extensionless security surfaces in P0-1 execution</p>
 <p><strong>Observation:</strong>
@@ -880,7 +844,7 @@ authoritative routing layer for size limits, parser budgets, and domain policy.<
 <p><strong>Implementation path:</strong>
 Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
 replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
-<h3 id="p2-5-exhaustion-corpus-promotion-pipeline">P2-5: Exhaustion Corpus Promotion Pipeline</h3>
+<h3 id="p2-2-exhaustion-corpus-promotion-pipeline">P2-2: Exhaustion Corpus Promotion Pipeline</h3>
 <p><strong>Class:</strong> Defensive Hardening / Fuzzing Operations
 <strong>Inspired by:</strong> <code>crates/fuzz</code> and harvested AST-bomb regressions</p>
 <p><strong>Observation:</strong>

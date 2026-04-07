@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-deterministic-audit-replay-symmetric-release-parity-v9914" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Deterministic Audit Replay &amp; Symmetric Release Parity (v9.9.14)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)
@@ -1034,6 +1043,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-deterministic-audit-replay-symmetric-release-parity-v9914" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Deterministic Audit Replay &amp; Symmetric Release Parity (v9.9.14)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)
@@ -1442,6 +1460,46 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-06-deterministic-audit-replay-symmetric-release-parity-v9914">2026-04-06 — Deterministic Audit Replay &amp; Symmetric Release Parity (v9.9.14)</h2>
+<p><strong>Directive:</strong> Execute <code>P1-1</code> by sealing replayable decision capsules that can
+be verified offline against Governor-signed receipts, execute <code>P2-3</code> by adding
+a release-surface parity regression to <code>just audit</code>, verify the replay path and
+the governed release DAG, then release <code>v9.9.14</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.14</code>
+- <code>Cargo.lock</code> <em>(modified)</em> — lockfile refreshed for the <code>v9.9.14</code> release line
+- <code>crates/common/src/receipt.rs</code> <em>(modified)</em> — added <code>CapsuleMutationRoot</code>,
+  <code>DecisionScoreVector</code>, <code>DecisionCapsule</code>, <code>SealedDecisionCapsule</code>, capsule
+  hashing / checksum validation, and extended <code>DecisionReceipt</code> with
+  <code>capsule_hash</code>
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — semantic CST mutation roots
+  now persist deterministic subtree bytes + BLAKE3 digests into <code>SlopScore</code> for
+  offline replay
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — added <code>janitor replay-receipt
+  &lt;CAPSULE_PATH&gt;</code>, deterministic capsule construction, capsule persistence next
+  to bounce logs, and replay verification against Governor receipts
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>BounceLogEntry</code> now carries
+  <code>capsule_hash</code> for receipt / CBOM provenance
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — embedded capsule hashes into the CBOM
+  metadata and signed entry properties without breaking deterministic pre-sign
+  rendering
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> — auxiliary bounce entry constructors
+  updated for capsule-hash schema parity
+- <code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — git-native bounce entry
+  constructors updated for capsule-hash schema parity
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em> — Governor receipts now countersign the
+  replay <code>capsule_hash</code>
+- <code>crates/anatomist/src/parser.rs</code> <em>(modified)</em> — raised the bounded parse
+  timeout from 100 ms to 500 ms to eliminate false-negative entity extraction
+  under governed audit load
+- <code>justfile</code> <em>(modified)</em> — <code>audit</code> now enforces the release-surface parity gate
+- <code>tools/tests/test_release_parity.sh</code> <em>(new)</em> — validates
+  <code>.agent_governance/commands/release.md</code> and <code>justfile</code> stay locked to the same
+  <code>audit → fast-release</code> execution graph and bans <code>git add .</code> / <code>git commit -a</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P1-1</code> / <code>P2-3</code>,
+  compacted active numbering, and seeded <code>P1-1</code> Wasm Policy Module Provenance
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.14</code></p>
 <h2 id="2026-04-06-governor-sealed-receipts-ast-fuzzing-v9913">2026-04-06 — Governor-Sealed Receipts &amp; AST Fuzzing (v9.9.13)</h2>
 <p><strong>Directive:</strong> Execute <code>P1-1</code> by having <code>janitor-gov</code> countersign a compact
 decision receipt covering policy, Wisdom feed, transparency anchor, and CBOM
