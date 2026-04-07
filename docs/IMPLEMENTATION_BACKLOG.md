@@ -5,6 +5,22 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Cryptographic Sealing & v10.0 Feature Freeze (v10.0.0-rc.1)
+
+**Directive:** CT-013 — bind BLAKE3 taint catalog hash into DecisionCapsule; bump workspace to 10.0.0-rc.1; feature freeze.
+
+**Files modified:**
+- `crates/forge/src/taint_catalog.rs` *(modified)* — CT-013: added `catalog_hash: String` field to `CatalogView`; computed `blake3::hash(&mmap[..])` at open time; exposed `catalog_hash()` accessor; added `catalog_hash_is_deterministic_and_content_sensitive` unit test
+- `crates/forge/src/slop_filter.rs` *(modified)* — added `taint_catalog_hash: Option<String>` field to `SlopScore`; capture hash from catalog at open site (line ~1154); thread into `final_score`
+- `crates/common/src/receipt.rs` *(modified)* — added `#[serde(default)] pub taint_catalog_hash: Option<String>` field to `DecisionCapsule`; updated test fixture
+- `crates/cli/src/main.rs` *(modified)* — propagated `score.taint_catalog_hash` into `DecisionCapsule` in `build_decision_capsule`; updated replay test fixture
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.1`
+- `docs/INNOVATION_LOG.md` *(modified)* — feature freeze banner added; CT-013 purged (RESOLVED); CT-014/CT-015/CT-016 marked "Deferred to v10.1"
+
+**Crucible:** 19/19 SANCTUARY INTACT (no new Crucible entries — provenance field is additive, existing fixtures use `..SlopScore::default()`).
+
+---
+
 ## 2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
 
 **Directive:** Execute CT-011 (OOM size guard) and CT-012 (symlink traversal confinement) in `cmd_import_intel_capsule`.

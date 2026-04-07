@@ -105,6 +105,18 @@ pub struct DecisionCapsule {
     pub cbom_digest: String,
     pub score_vector: DecisionScoreVector,
     pub wasm_policy_receipts: Vec<crate::wasm_receipt::WasmPolicyReceipt>,
+    /// BLAKE3 hex digest of `.janitor/taint_catalog.rkyv` at the moment the
+    /// bounce decision was sealed.
+    ///
+    /// `None` when no taint catalog was loaded (first run, catalog missing, or
+    /// cross-file analysis not triggered for the patched language).
+    ///
+    /// When present, downstream replay tooling can verify that the catalog state
+    /// used during detection matches the current on-disk archive — a
+    /// cryptographic proof that the taint catalog was not tampered between the
+    /// original bounce and the replay (CT-013).
+    #[serde(default)]
+    pub taint_catalog_hash: Option<String>,
 }
 
 impl DecisionCapsule {
@@ -333,6 +345,7 @@ pub mod tests {
             wisdom_hash: "wisdom".to_string(),
             cbom_digest: "cbom".to_string(),
             wasm_policy_receipts: Vec::new(),
+            taint_catalog_hash: None,
             score_vector: DecisionScoreVector {
                 antipattern_score: 150,
                 ..DecisionScoreVector::default()

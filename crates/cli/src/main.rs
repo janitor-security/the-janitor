@@ -3469,6 +3469,7 @@ fn build_decision_capsule(
         wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
         cbom_digest: blake3::hash(cbom_json.as_bytes()).to_hex().to_string(),
         wasm_policy_receipts: entry.wasm_policy_receipts.clone(),
+        taint_catalog_hash: score.taint_catalog_hash.clone(),
         score_vector: common::receipt::DecisionScoreVector {
             dead_symbols_added: score.dead_symbols_added,
             logic_clones_found: score.logic_clones_found,
@@ -4977,6 +4978,7 @@ mod replay_receipt_tests {
             wisdom_hash: "wisdom".to_string(),
             cbom_digest: "cbom".to_string(),
             wasm_policy_receipts: Vec::new(),
+            taint_catalog_hash: None,
             score_vector: DecisionScoreVector {
                 antipattern_score: 150,
                 ..DecisionScoreVector::default()

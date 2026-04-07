@@ -222,6 +222,13 @@ pub struct SlopScore {
 
     /// Deterministic provenance receipts for executed private Wasm governance modules.
     pub wasm_policy_receipts: Vec<common::wasm_receipt::WasmPolicyReceipt>,
+
+    /// BLAKE3 hex digest of `.janitor/taint_catalog.rkyv` at the time the cross-file
+    /// taint check ran, or `None` when no catalog was loaded for this patch.
+    ///
+    /// Propagated into [`common::receipt::DecisionCapsule::taint_catalog_hash`] so
+    /// replay tooling can verify catalog integrity (CT-013).
+    pub taint_catalog_hash: Option<String>,
 }
 
 impl SlopScore {
@@ -1151,9 +1158,14 @@ impl PRBouncer for PatchBouncer {
         // argument emits `security:cross_file_taint_sink` at KevCritical.
         // Fail-open: if the catalog does not exist or fails to load, this block
         // is silently skipped — existing per-language detectors remain active.
+        //
+        // CT-013: capture the catalog's BLAKE3 hash so the sealed DecisionCapsule
+        // can prove exactly which taint catalog state drove this decision.
+        let mut taint_catalog_hash: Option<String> = None;
         if matches!(ext, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go") {
             if let Some(catalog_path) = self.catalog_path.as_deref() {
                 if let Some(catalog) = crate::taint_catalog::CatalogView::open(catalog_path) {
+                    taint_catalog_hash = Some(catalog.catalog_hash().to_owned());
                     for sink in
                         crate::taint_catalog::scan_cross_file_sinks(ext, source, &tree, &catalog)
                     {
@@ -1510,6 +1522,7 @@ impl PRBouncer for PatchBouncer {
             semantic_mutation_roots,
             suppressed_by_domain,
             necrotic_flag,
+            taint_catalog_hash,
             ..SlopScore::default()
         };
         let patch_blobs = extract_patch_blobs(patch);

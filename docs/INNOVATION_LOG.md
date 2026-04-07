@@ -3,33 +3,19 @@
 Active architectural debt only. Completed work, resolved telemetry, and legacy
 ID epochs are purged during hard compaction.
 
+> **FEATURE FREEZE ACTIVE: v10.0.0 RELEASE CANDIDATE.**
+> Only P0 bug fixes and stability patches are permitted.
+> CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.
+
 ---
 
 ## P0 — Core Security
 
 <!-- CT-011 RESOLVED v9.9.19: 50 MiB size guard added to cmd_import_intel_capsule -->
 <!-- CT-012 RESOLVED v9.9.19: canonicalize + starts_with confinement check added -->
+<!-- CT-013 RESOLVED v10.0.0-rc.1: BLAKE3 catalog_hash bound into DecisionCapsule -->
 
-## P1 — Compliance / Integration
-
-### CT-013: Taint catalog unsigned — injection via `.janitor/` directory control
-
-**File:** `crates/forge/src/taint_catalog.rs::CatalogView::open`
-
-**Gap:** `.janitor/taint_catalog.rkyv` is a zero-copy mmap'd file with no signature
-or hash binding to the CBOM or wisdom archive. An attacker who can write to the repo
-root (e.g. via a compromised CI step or a path traversal in a dependency) can inject
-fake `TaintExportRecord` entries: either fabricating false-positive cross-file taint
-findings (alert fatigue) or marking all helpers as clean (detection blind spot).
-
-**Fix:** Chain a BLAKE3 hash of the taint catalog into the `DecisionCapsule` and
-verify it on load. Optionally sign the catalog with the same Ed25519 key used for
-wisdom verification.
-
-**TEI:** Hardens the cross-file taint spine against supply-chain poisoning. Enterprise
-audit requirement for SOC 2 Type II.
-
----
+## P1 — Compliance / Integration (Deferred to v10.1)
 
 ### CT-014: Cross-file taint — member-expression call chains not detected
 
@@ -75,7 +61,7 @@ or buggy rule modules. Sovereign tier quality gate.
 
 ---
 
-## P2 — Architecture / Ergonomics
+## P2 — Architecture / Ergonomics (Deferred to v10.1)
 
 ### CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files
 

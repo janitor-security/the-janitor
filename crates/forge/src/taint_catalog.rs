@@ -43,8 +43,15 @@ type ArchivedCatalog = rkyv::Archived<Vec<TaintExportRecord>>;
 ///
 /// The memory-mapped file is kept alive for the lifetime of this struct.
 /// All lookups scan the archived bytes linearly — O(N) but heap-allocation-free.
+///
+/// A BLAKE3 hash of the raw catalog bytes is computed at open time and stored
+/// so that callers can bind it into a [`common::receipt::DecisionCapsule`] for
+/// cryptographic provenance — proving exactly which taint catalog state was
+/// active when a bounce decision was sealed (CT-013).
 pub struct CatalogView {
     _mmap: Mmap,
+    /// BLAKE3 hex digest of the raw catalog bytes, computed at [`open`] time.
+    catalog_hash: String,
 }
 
 impl CatalogView {
@@ -64,7 +71,20 @@ impl CatalogView {
         }
         // Structural validation — rejects corrupt or truncated archives.
         rkyv::access::<ArchivedCatalog, rkyv::rancor::Error>(&mmap[..]).ok()?;
-        Some(Self { _mmap: mmap })
+        // CT-013: hash the raw catalog bytes so the decision capsule can seal this state.
+        let catalog_hash = blake3::hash(&mmap[..]).to_hex().to_string();
+        Some(Self {
+            _mmap: mmap,
+            catalog_hash,
+        })
+    }
+
+    /// BLAKE3 hex digest of the raw catalog bytes, computed at open time.
+    ///
+    /// Bind this into [`common::receipt::DecisionCapsule::taint_catalog_hash`]
+    /// to prove exactly which taint catalog state drove the bounce decision.
+    pub fn catalog_hash(&self) -> &str {
+        &self.catalog_hash
     }
 
     /// Returns a zero-copy reference to the archived record vec.
@@ -587,6 +607,40 @@ mod tests {
         assert!(!view.is_empty());
         assert!(view.has_sink("build_query"));
         assert!(!view.has_sink("unknown_fn"));
+    }
+
+    /// CT-013: catalog_hash() must return a deterministic BLAKE3 hex digest that
+    /// reflects the on-disk content.  Two opens of the same file yield the same
+    /// hash; a different catalog yields a different hash.
+    #[test]
+    fn catalog_hash_is_deterministic_and_content_sensitive() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("build_query", true)];
+        write_catalog(&path, &records).expect("write");
+
+        let view_a = CatalogView::open(&path).expect("open a");
+        let view_b = CatalogView::open(&path).expect("open b");
+        let hash_a = view_a.catalog_hash().to_owned();
+        let hash_b = view_b.catalog_hash().to_owned();
+
+        // Same file → same hash (deterministic).
+        assert_eq!(
+            hash_a, hash_b,
+            "same catalog file must yield identical hash"
+        );
+        // Hash is a 64-char hex BLAKE3 digest.
+        assert_eq!(hash_a.len(), 64, "BLAKE3 hex digest must be 64 characters");
+
+        // Different content → different hash.
+        let (_dir2, path2) = tmp_catalog_path();
+        let records2 = vec![make_record("other_sink", true)];
+        write_catalog(&path2, &records2).expect("write 2");
+        let view_c = CatalogView::open(&path2).expect("open c");
+        assert_ne!(
+            hash_a,
+            view_c.catalog_hash(),
+            "different catalog content must yield different hash"
+        );
     }
 
     #[test]
