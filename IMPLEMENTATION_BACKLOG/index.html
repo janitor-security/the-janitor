@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)
@@ -1124,6 +1133,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)
@@ -1621,6 +1639,20 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5">2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)</h2>
+<p><strong>Directive:</strong> Phase 1 — Confirm <code>DEFAULT_GOVERNOR_URL</code> integrity (no truncation); Phase 2 — Add <code>janitor sign-asset</code> subcommand; Phase 3 — Wire <code>fast-release</code> to sign and attach binary assets; Phase 4 — Gut <code>action.yml</code> of <code>cargo build</code>; replace with BLAKE3-verified binary download.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — CT-020: added <code>JANITOR_ASSET_CONTEXT = b"janitor-release-asset"</code>; added <code>pub fn sign_asset_hash_from_file(hash: &amp;[u8; 32], path: &amp;Path)</code> with domain-separated ML-DSA-65 + SLH-DSA-SHAKE-192s signing
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — CT-020: added hidden <code>SignAsset { file, pqc_key }</code> subcommand + <code>cmd_sign_asset</code> function (mmap file, BLAKE3 hash → <code>.b3</code>, optional PQC sign → <code>.sig</code>); 1 new test <code>sign_asset_produces_correct_blake3_hash</code>
+- <code>justfile</code> <em>(modified)</em> — CT-020: <code>fast-release</code> calls <code>./target/release/janitor sign-asset</code> after strip; <code>gh release create</code> attaches <code>janitor</code>, <code>janitor.b3</code>, and optionally <code>janitor.sig</code> as release assets
+- <code>action.yml</code> <em>(modified)</em> — CT-020: Steps 1–3 (cache, clone, cargo build) replaced with single BLAKE3-verified binary download step; cleanup updated to <code>/tmp/janitor-bin</code>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.5</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-020 resolved; P0-1 section purged; freeze banner updated</p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — no new Crucible entries (provenance tooling, not detectors).</p>
+<p><strong>Security posture delta:</strong>
+- CT-020 (SLSA Level 4): CI no longer builds from source — binary is downloaded from a pinned GitHub Release tag and BLAKE3-verified before execution. Supply-chain compromise of a Cargo dependency no longer affects the binary used in customer CI. Closes the final IL6/FedRAMP CISO objection regarding runner-side compilation.
+- <code>sign-asset</code> command: each release binary now ships with a BLAKE3 hash (<code>.b3</code>) and, when <code>JANITOR_PQC_KEY</code> is set, an ML-DSA-65 / SLH-DSA signature (<code>.sig</code>) for offline attestation.</p>
 <hr />
 <h2 id="2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4">2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)</h2>
 <p><strong>Directive:</strong> Phase 1 — Eradicate fail-open policy loading; Phase 2 — Wire pqc_enforced; Phase 3 — Sever cloud defaults; Phase 4 — Expand slopsquat corpus; Phase 5 — SLSA Level 4 roadmap entry.</p>
