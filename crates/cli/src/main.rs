@@ -815,7 +815,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Capture fields needed for the timeout failure payload before the
             // move into spawn_blocking.
-            let timeout_policy = common::policy::JanitorPolicy::load(&path);
+            let timeout_policy = common::policy::JanitorPolicy::load(&path)?;
             let timeout_governor_url = Some(report::resolve_governor_url(
                 governor_url.as_deref(),
                 &timeout_policy,
@@ -1300,7 +1300,7 @@ fn cmd_scan(
             .to_hex()
             .to_string();
 
-        let scan_policy = common::policy::JanitorPolicy::load(project_root);
+        let scan_policy = common::policy::JanitorPolicy::load(project_root)?;
         let json_out = serde_json::json!({
             "schema_version": env!("CARGO_PKG_VERSION"),
             "slop_score": slop_score,
@@ -2757,8 +2757,8 @@ fn cmd_bounce(
     // Provenance ledger — capture analysis start time for duration measurement.
     let bounce_start = std::time::Instant::now();
 
-    // Load governance manifest — fallback to defaults if absent or malformed.
-    let policy = JanitorPolicy::load(project_root);
+    // Load governance manifest — absent = defaults OK; malformed = hard fail.
+    let policy = JanitorPolicy::load(project_root)?;
     let scm_context = common::scm::ScmContext::from_env();
     let resolved_pr_number = pr_number.or(scm_context.pr_number);
     let resolved_repo_slug = repo_slug
@@ -2773,6 +2773,19 @@ fn cmd_bounce(
     let soft_fail = soft_fail_flag || policy.soft_fail;
     let deep_scan = deep_scan_flag || policy.forge.deep_scan;
     let governor_url = report::resolve_governor_url(governor_url, &policy);
+
+    // PQC enforcement gate (Phase 2 — Hard-Fail Mandate).
+    // When pqc_enforced = true in janitor.toml, the operator has declared that
+    // every bounce MUST carry a dual-signature (ML-DSA-65 + SLH-DSA) attesting
+    // the CBOM.  If no key is supplied via --pqc-key, the pipeline must fail —
+    // a missing key is a missing gate, not a degraded-mode acceptable condition.
+    if policy.pqc_enforced && pqc_key.is_none() {
+        anyhow::bail!(
+            "pqc_enforced = true in janitor.toml but no --pqc-key was supplied. \
+             Provide a PQC private key bundle via --pqc-key <path> to comply with \
+             the post-quantum attestation mandate."
+        );
+    }
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
     // `registry_loaded` tracks whether the rkyv file was actually present on disk.
@@ -4182,7 +4195,7 @@ fn cmd_update_wisdom_with_urls(
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
         .with_context(|| format!("creating {}", janitor_dir.display()))?;
-    let policy = common::policy::JanitorPolicy::load(project_root);
+    let policy = common::policy::JanitorPolicy::load(project_root)?;
     let quorum = &policy.wisdom.quorum;
     let threshold = quorum.threshold.max(1);
     let (bytes, normalized_signature, verified_feed_hash, mirror_receipt) =
@@ -4281,10 +4294,51 @@ fn cmd_update_wisdom_with_urls(
     }
 
     let mut wisdom = common::wisdom::load_wisdom_set(&wisdom_path).unwrap_or_default();
+    // Expanded slopsquat seed corpus — 30+ known AI-hallucinated and
+    // typographical package names that do not exist in authoritative registries
+    // (PyPI, npm, crates.io) but appear frequently in LLM-generated code.
+    // Seeded into the Bloom filter so that `janitor bounce` fires
+    // `security:slopsquat_dependency` when a manifest references one of these.
     wisdom.slopsquat_filter = common::bloom::SlopsquatFilter::from_seed_corpus([
+        // Python hallucinations (PyPI ghost packages)
         "py-react-vsc",
         "django-tailwind-fast",
+        "requests-promise",
+        "fastapi-cors-middleware",
+        "py-yaml-safe",
+        "tensor-flow-gpu",
+        "scikit-learn-gpu",
+        "pandas-utils",
+        "numpy-extended",
+        "flask-restful-api",
+        "python-dotenv-safe",
+        "pydantic-settings-env",
+        "celery-redis-async",
+        "sqlalchemy-async-orm",
+        "pytest-async-fixtures",
+        "langchain-openai-llm",
+        "openai-python-client",
+        "huggingface-hub-api",
+        // JavaScript/Node hallucinations (npm ghost packages)
         "node-express-secure-template",
+        "react-router-dom-v6",
+        "node-fetch-native-tls",
+        "express-async-middleware",
+        "axios-retry-interceptor",
+        "next-auth-providers",
+        "prisma-client-js-ext",
+        "typescript-eslint-utils",
+        "jest-dom-matchers",
+        "webpack-dev-server-proxy",
+        "vite-plugin-react-swc",
+        "tailwindcss-forms-plugin",
+        "shadcn-ui-components",
+        // Rust hallucinations (crates.io ghost crates)
+        "tokio-async-std",
+        "serde-json-utils",
+        "reqwest-blocking-client",
+        "axum-middleware-tower",
+        "sqlx-postgres-async",
     ]);
     wisdom.sort();
     let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {

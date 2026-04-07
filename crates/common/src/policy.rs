@@ -420,36 +420,31 @@ impl JanitorPolicy {
 
     /// Attempts to load `janitor.toml` from `repo_root`.
     ///
-    /// Returns the default policy when:
-    /// - `janitor.toml` does not exist (silent, expected case)
-    /// - the file cannot be read (emits a warning to stderr)
-    /// - the file contains invalid TOML or unknown fields (emits a warning)
+    /// Returns `Ok(default)` when `janitor.toml` does not exist — absence is
+    /// the expected case for repos that have not opted into explicit governance.
     ///
-    /// Policy load **never fails the bounce pipeline** — a malformed manifest
-    /// falls back to defaults rather than blocking CI.
-    pub fn load(repo_root: &Path) -> Self {
+    /// Returns `Err` (hard-fails the pipeline) when:
+    /// - `janitor.toml` exists but cannot be read (I/O error).
+    /// - `janitor.toml` exists but contains invalid TOML or unknown fields.
+    ///
+    /// **A broken policy is a broken gate.** Falling back to defaults on a
+    /// malformed manifest would silently disable operator-configured security
+    /// constraints — an unacceptable fail-open posture for a security tool.
+    pub fn load(repo_root: &Path) -> anyhow::Result<Self> {
         let path = repo_root.join("janitor.toml");
         if !path.exists() {
-            return Self::default();
+            return Ok(Self::default());
         }
-        let raw = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!(
-                    "warning: janitor.toml — failed to read {}: {}. Using defaults.",
-                    path.display(),
-                    e
-                );
-                return Self::default();
-            }
-        };
-        match toml::from_str::<Self>(&raw) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("warning: janitor.toml — parse error: {e}. Using defaults.");
-                Self::default()
-            }
-        }
+        let raw = std::fs::read_to_string(&path).map_err(|e| {
+            anyhow::anyhow!("janitor.toml — failed to read {}: {}", path.display(), e)
+        })?;
+        toml::from_str::<Self>(&raw).map_err(|e| {
+            anyhow::anyhow!(
+                "janitor.toml — parse error in {}: {}. Fix the manifest before running.",
+                path.display(),
+                e
+            )
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -850,7 +845,7 @@ mod tests {
     #[test]
     fn load_missing_file_returns_default() {
         let tmp = std::env::temp_dir().join("janitor_policy_missing_test");
-        let p = JanitorPolicy::load(&tmp);
+        let p = JanitorPolicy::load(&tmp).unwrap();
         assert_eq!(p, JanitorPolicy::default());
     }
 
@@ -863,13 +858,27 @@ mod tests {
             "min_slop_score = 200\nrequire_issue_link = true\n[forge]\ngovernor_url = \"http://127.0.0.1:4040\"\n",
         )
         .unwrap();
-        let p = JanitorPolicy::load(&dir);
+        let p = JanitorPolicy::load(&dir).unwrap();
         assert_eq!(p.min_slop_score, 200);
         assert!(p.require_issue_link);
         assert_eq!(
             p.forge.governor_url.as_deref(),
             Some("http://127.0.0.1:4040")
         );
+    }
+
+    #[test]
+    fn load_malformed_toml_returns_error() {
+        let dir = std::env::temp_dir().join("janitor_policy_malformed_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("janitor.toml"), "min_slop_score = [[[").unwrap();
+        let result = JanitorPolicy::load(&dir);
+        assert!(
+            result.is_err(),
+            "malformed janitor.toml must return an error"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("parse error"), "error must cite parse error");
     }
 
     // --- AgenticOrigin detection ---

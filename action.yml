@@ -22,6 +22,13 @@ inputs:
       (e.g. workflow_dispatch or scheduled runs).
     required: false
     default: ''
+  governor_url:
+    description: >
+      Base URL of your Sovereign Governor deployment.
+      The Janitor does not use a cloud default — you MUST configure your own
+      Governor endpoint.  Example: https://governor.your-org.internal
+      Contact sales@thejanitor.app to provision a hosted or self-hosted Governor.
+    required: true
 
 runs:
   using: 'composite'
@@ -90,9 +97,10 @@ runs:
         # If still absent or 0, call /v1/resolve-id to auto-resolve via the
         # Governor's App token — eliminates the "Wrong ID" support overhead.
         INSTALL_ID="${{ inputs.installation_id || github.event.installation.id || '0' }}"
+        GOVERNOR="${{ inputs.governor_url }}"
         if [ "${INSTALL_ID}" = "0" ] || [ -z "${INSTALL_ID}" ]; then
             RESOLVED=$(curl -sf -X POST \
-                https://the-governor.fly.dev/v1/resolve-id \
+                "${GOVERNOR}/v1/resolve-id" \
                 -H "Content-Type: application/json" \
                 -d "{\"repo_slug\":\"${{ github.repository }}\"}" \
                 | jq -r '.installation_id // 0')
@@ -109,14 +117,14 @@ runs:
           '{repo: $repo, pr: $pr, head_sha: $sha, installation_id: (if $id == "" then 0 else ($id | tonumber) end)}')
 
         ANALYSIS_TOKEN=$(curl -sf -X POST \
-          https://the-governor.fly.dev/v1/analysis-token \
+          "${GOVERNOR}/v1/analysis-token" \
           -H "Content-Type: application/json" \
           -d "$TOKEN_PAYLOAD" | jq -r '.token')
 
         "$JANITOR_BIN" bounce . \
           --patch         .janitor-pr.patch \
           --pr-number     "${{ github.event.pull_request.number }}" \
-          --report-url    https://the-governor.fly.dev/v1/report \
+          --report-url    "${GOVERNOR}/v1/report" \
           --analysis-token "$ANALYSIS_TOKEN" \
           --head-sha      "$HEAD_SHA" \
           ${{ inputs.deep_scan == 'true' && '--deep-scan' || '' }}

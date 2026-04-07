@@ -5,6 +5,29 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Hard-Fail Mandate & Air-Gap Enforcement (v10.0.0-rc.4)
+
+**Directive:** Phase 1 — Eradicate fail-open policy loading; Phase 2 — Wire pqc_enforced; Phase 3 — Sever cloud defaults; Phase 4 — Expand slopsquat corpus; Phase 5 — SLSA Level 4 roadmap entry.
+
+**Files modified:**
+- `crates/common/src/policy.rs` *(modified)* — CT-017: `JanitorPolicy::load()` signature changed from `Self` to `anyhow::Result<Self>`; malformed or unreadable `janitor.toml` now hard-fails with `Err` instead of warning + default; 1 new test `load_malformed_toml_returns_error`
+- `crates/cli/src/main.rs` *(modified)* — CT-017: all 4 `load()` call sites updated to `?`; CT-018: `pqc_enforced` gate wired — `bail!` if `pqc_enforced=true && pqc_key.is_none()`; Phase 4: slopsquat seed corpus expanded from 3 → 43 entries (Python/JS/Rust hallucinated package names)
+- `crates/cli/src/report.rs` *(modified)* — CT-019: `DEFAULT_GOVERNOR_URL` changed from `https://the-governor.fly.dev` to `http://127.0.0.1:8080`; `load()` call site updated to `?`
+- `action.yml` *(modified)* — CT-019: `governor_url` input added (required); all 3 hardcoded `the-governor.fly.dev` references replaced with `${{ inputs.governor_url }}`
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.4`
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-017/018/019 filed and resolved; CT-020 (SLSA Level 4) filed as P0-1 for v10.1
+
+**Crucible:** SANCTUARY INTACT — no new Crucible entries (hardening is in policy/CLI path, not detectors). All existing tests pass.
+
+**Security posture delta:**
+- CT-017: Fail-open governance eradicated — a broken `janitor.toml` is now a hard pipeline failure, not a silent downgrade to permissive defaults
+- CT-018: PQC attestation mandate enforced — `pqc_enforced=true` without a key is now a hard error, closing the fail-open PQC path
+- CT-019: Cloud reliance severed — zero unintentional egress to fly.dev; enterprises must configure their own Governor; `action.yml` now requires `governor_url` input
+- Slopsquat corpus: 3 → 43 seed entries; Python, npm, and crates.io hallucination patterns now seeded by default
+- SLSA Level 4 roadmap filed — FedRAMP/IL6 procurement path documented
+
+---
+
 ## 2026-04-07 — Pipeline Idempotency & Final RC Polish (v10.0.0-rc.3)
 
 **Directive:** Phase 1 — Idempotency governance rule; Phase 2 — fast-release idempotency guards; Phase 3 — CT-016 UTF-16 BOM false-positive fix.

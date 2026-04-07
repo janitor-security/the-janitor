@@ -30,7 +30,13 @@ use std::path::Path;
 ///
 /// Source: industry Workslop research (2026). See <https://builtin.com/articles/what-is-workslop>.
 pub const MINUTES_PER_TRIAGE: f64 = 12.0;
-pub const DEFAULT_GOVERNOR_URL: &str = "https://the-governor.fly.dev";
+/// Sovereign default: localhost only.
+///
+/// The Janitor does not phone home by default.  Enterprises MUST configure
+/// their own Governor endpoint via `[forge] governor_url` in `janitor.toml`
+/// or the `--report-url` CLI flag.  This default guarantees zero unintentional
+/// egress from air-gapped or regulated environments.
+pub const DEFAULT_GOVERNOR_URL: &str = "http://127.0.0.1:8080";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionProof {
@@ -150,7 +156,7 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
 pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
     use anyhow::Context as _;
 
-    let policy = common::policy::JanitorPolicy::load(repo);
+    let policy = common::policy::JanitorPolicy::load(repo)?;
     let cfg = &policy.webhook;
 
     if cfg.url.is_empty() {
