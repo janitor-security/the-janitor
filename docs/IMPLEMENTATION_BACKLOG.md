@@ -5,6 +5,31 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Air-Gap Intel Capsules & Fuzz Corpus Promotion Pipeline (v9.9.17)
+
+**Directive:** P1-1 — Air-Gap Intel Transfer Capsules; P2-1 — Exhaustion Corpus
+Promotion Pipeline.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.17`
+- `crates/common/src/wisdom.rs` *(modified)* — added `IntelTransferCapsule`
+  (rkyv + serde); added rkyv derives to `WisdomMirrorReceipt` so the capsule
+  can embed it
+- `crates/cli/src/main.rs` *(modified)* — added `ExportIntelCapsule` and
+  `ImportIntelCapsule` subcommands; added `cmd_export_intel_capsule` and
+  `cmd_import_intel_capsule` functions with BLAKE3 feed-hash verification and
+  Ed25519 signature offline check
+- `crates/crucible/src/main.rs` *(modified)* — added
+  `exhaustion_corpus_no_panic` regression test that dynamically reads
+  `fixtures/exhaustion/` and asserts no panic + 500 ms parse budget
+- `crates/crucible/fixtures/exhaustion/seed_deeply_nested_braces` *(new)* —
+  seed exhaustion fixture (deeply nested brace bomb)
+- `tools/promote_fuzz_corpus.sh` *(new)* — libFuzzer artifact promotion
+  script with `set -euo pipefail`, content-hash deduplication
+- `justfile` *(modified)* — added `promote-fuzz <artifact_dir>` recipe
+
+---
+
 ## 2026-04-06 — Cryptographic Quorum & Wasm Provenance (v9.9.16)
 
 **Directive:** Seal private Wasm-rule execution into replayable provenance,

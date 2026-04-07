@@ -141,7 +141,10 @@ pub struct WisdomFeedReceipt {
     pub signature: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Archive, Deserialize, Serialize, SerdeSerialize, SerdeDeserialize,
+)]
+#[rkyv(derive(Debug, PartialEq, Eq))]
 pub struct WisdomMirrorReceipt {
     pub threshold: usize,
     pub agreed_hash: String,
@@ -440,6 +443,38 @@ fn version_req_matches(range: &str, version: &Version) -> bool {
     VersionReq::parse(trimmed)
         .map(|req| req.matches(version))
         .unwrap_or(false)
+}
+
+/// A self-contained, cryptographically-auditable bundle of the wisdom feed and
+/// its chain-of-custody evidence.
+///
+/// Air-gapped operators use this type to carry threat intelligence across
+/// physical boundaries without losing the signatures and quorum receipts that
+/// prove provenance.  Every field is mandatory for offline verification:
+///
+/// - `wisdom_bytes`    — the raw `wisdom.rkyv` archive exactly as it left the feed.
+/// - `ed25519_signatures` — base64-encoded Ed25519 signature strings from
+///   the feed and any mirrors that contributed to the quorum.
+/// - `mirror_receipt`  — `Some(_)` when a quorum mirror run was completed; the
+///   agreed hash and accepted-mirror list are embedded verbatim.
+/// - `feed_hash`       — BLAKE3 hex digest of `wisdom_bytes`; the offline importer
+///   recomputes this and refuses to write if it disagrees.
+///
+/// Serialization: `serde_json` for transport (JSON file on removable media);
+/// `rkyv` available for future binary capsule envelopes.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Archive, Deserialize, Serialize, SerdeSerialize, SerdeDeserialize,
+)]
+#[rkyv(derive(Debug, PartialEq, Eq))]
+pub struct IntelTransferCapsule {
+    /// Raw bytes of the `wisdom.rkyv` archive.
+    pub wisdom_bytes: Vec<u8>,
+    /// Base64-encoded Ed25519 signature strings (at least one required).
+    pub ed25519_signatures: Vec<String>,
+    /// Quorum mirror receipt, if a mirror-consensus run was used.
+    pub mirror_receipt: Option<WisdomMirrorReceipt>,
+    /// BLAKE3 hex digest of `wisdom_bytes` as computed at export time.
+    pub feed_hash: String,
 }
 
 /// Wrapper for JSON (de)serialization of `immortality_rules.json` files.

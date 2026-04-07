@@ -599,6 +599,45 @@ enum Commands {
         /// Path to a persisted `.capsule` envelope.
         path: PathBuf,
     },
+
+    /// Package the locally-verified wisdom feed and its cryptographic receipts
+    /// into a portable `IntelTransferCapsule` JSON archive.
+    ///
+    /// Reads `.janitor/wisdom.rkyv`, the adjacent Ed25519 signature, and the
+    /// optional quorum mirror receipt.  Bundles everything into a single JSON
+    /// file whose BLAKE3 feed hash and signature set allow offline verification
+    /// by `janitor import-intel-capsule`.
+    ///
+    /// ## IL5/IL6 usage
+    /// ```sh
+    /// janitor export-intel-capsule /mnt/transfer/janitor-intel-20260406.capsule.json
+    /// # copy to removable media; import on the air-gapped node:
+    /// janitor import-intel-capsule /mnt/transfer/janitor-intel-20260406.capsule.json
+    /// ```
+    ExportIntelCapsule {
+        /// Destination path for the `.capsule.json` file.
+        out_path: PathBuf,
+        /// Project root containing `.janitor/wisdom.rkyv`.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
+
+    /// Parse an `IntelTransferCapsule` offline and install its contents.
+    ///
+    /// Verifies the embedded Ed25519 signature(s), recomputes the BLAKE3 feed
+    /// hash, and checks the mirror receipt (if present).  Only on full
+    /// verification success does it write the wisdom archive to
+    /// `.janitor/wisdom.rkyv` in the target project root.
+    ///
+    /// Fails non-zero on any cryptographic discrepancy — the target directory is
+    /// never modified if verification fails.
+    ImportIntelCapsule {
+        /// Path to the `.capsule.json` produced by `export-intel-capsule`.
+        in_path: PathBuf,
+        /// Project root where `.janitor/wisdom.rkyv` will be written.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1000,6 +1039,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::ReplayReceipt { path } => {
             cmd_replay_receipt(path)?;
+        }
+        Commands::ExportIntelCapsule { out_path, repo } => {
+            cmd_export_intel_capsule(repo, out_path)?;
+        }
+        Commands::ImportIntelCapsule { in_path, repo } => {
+            cmd_import_intel_capsule(in_path, repo)?;
         }
     }
 
@@ -5185,6 +5230,154 @@ const WISDOM_VERIFYING_KEY_BYTES: [u8; 32] = [
     0x9c, 0x3e, 0x68, 0x22, 0xae, 0x35, 0x6e, 0x6e, 0x9a, 0x10, 0x7c, 0x43, 0x2b, 0x88, 0xd0, 0xa6,
     0x00, 0x45, 0x8f, 0x72, 0x8c, 0xd2, 0x53, 0xc2, 0x81, 0x76, 0x82, 0x1b, 0x27, 0xc7, 0xab, 0x64,
 ];
+
+// ---------------------------------------------------------------------------
+// export-intel-capsule / import-intel-capsule
+// ---------------------------------------------------------------------------
+
+/// Package the locally-verified wisdom feed and its cryptographic evidence into
+/// a portable [`common::wisdom::IntelTransferCapsule`] JSON file.
+///
+/// Reads `.janitor/wisdom.rkyv` plus any adjacent `.rkyv.sig` / `.rkyv.receipt.json`
+/// / `.rkyv.mirror.json` files from `project_root` and serializes them into a
+/// single JSON archive at `out_path`.
+fn cmd_export_intel_capsule(project_root: &Path, out_path: &Path) -> anyhow::Result<()> {
+    let janitor_dir = project_root.join(".janitor");
+    let wisdom_path = janitor_dir.join("wisdom.rkyv");
+
+    let wisdom_bytes = std::fs::read(&wisdom_path)
+        .with_context(|| format!("reading {}", wisdom_path.display()))?;
+
+    let feed_hash = blake3::hash(&wisdom_bytes).to_hex().to_string();
+
+    // Collect all available Ed25519 signatures (receipt.json wins; .sig fallback).
+    let mut ed25519_signatures: Vec<String> = Vec::new();
+    let receipt_json_path = wisdom_path.with_extension("rkyv.receipt.json");
+    if let Ok(receipt_bytes) = std::fs::read(&receipt_json_path) {
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&receipt_bytes) {
+            if let Some(sig) = json
+                .get("wisdom_signature")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                ed25519_signatures.push(sig.to_owned());
+            }
+        }
+    }
+    // Fallback: raw .sig file.
+    if ed25519_signatures.is_empty() {
+        let sig_path = wisdom_path.with_extension("rkyv.sig");
+        if let Ok(sig_bytes) = std::fs::read(&sig_path) {
+            if let Some(sig) = common::wisdom::normalize_signature_string(&sig_bytes) {
+                ed25519_signatures.push(sig);
+            }
+        }
+    }
+
+    anyhow::ensure!(
+        !ed25519_signatures.is_empty(),
+        "no Ed25519 signature found for {}; run `janitor update-wisdom` first",
+        wisdom_path.display()
+    );
+
+    // Optional quorum mirror receipt.
+    let mirror_receipt_path = wisdom_path.with_extension("rkyv.mirror.json");
+    let mirror_receipt: Option<common::wisdom::WisdomMirrorReceipt> =
+        std::fs::read(&mirror_receipt_path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok());
+
+    let capsule = common::wisdom::IntelTransferCapsule {
+        wisdom_bytes,
+        ed25519_signatures,
+        mirror_receipt,
+        feed_hash,
+    };
+
+    let json =
+        serde_json::to_vec_pretty(&capsule).context("serializing IntelTransferCapsule to JSON")?;
+    std::fs::write(out_path, &json)
+        .with_context(|| format!("writing capsule to {}", out_path.display()))?;
+
+    println!(
+        "Intel capsule written: {} ({} bytes, hash {})",
+        out_path.display(),
+        json.len(),
+        capsule.feed_hash
+    );
+    Ok(())
+}
+
+/// Parse an [`common::wisdom::IntelTransferCapsule`] from `in_path`, verify all
+/// cryptographic evidence offline, and install the embedded wisdom archive.
+///
+/// Verification steps (all must pass; any failure is a hard abort):
+/// 1. BLAKE3 feed hash recomputed from embedded `wisdom_bytes` must match `feed_hash`.
+/// 2. At least one embedded Ed25519 signature must verify against the embedded
+///    `WISDOM_VERIFYING_KEY_BYTES`.
+/// 3. When a `mirror_receipt` is present its `agreed_hash` must also equal `feed_hash`.
+///
+/// Only after all checks pass is `.janitor/wisdom.rkyv` overwritten.
+fn cmd_import_intel_capsule(in_path: &Path, project_root: &Path) -> anyhow::Result<()> {
+    let raw =
+        std::fs::read(in_path).with_context(|| format!("reading capsule {}", in_path.display()))?;
+    let capsule: common::wisdom::IntelTransferCapsule =
+        serde_json::from_slice(&raw).context("deserializing IntelTransferCapsule")?;
+
+    // Step 1 — BLAKE3 hash integrity.
+    let recomputed_hash = blake3::hash(&capsule.wisdom_bytes).to_hex().to_string();
+    anyhow::ensure!(
+        recomputed_hash == capsule.feed_hash,
+        "feed hash mismatch: capsule claims {}, recomputed {}",
+        capsule.feed_hash,
+        recomputed_hash
+    );
+
+    // Step 2 — at least one Ed25519 signature must verify.
+    anyhow::ensure!(
+        !capsule.ed25519_signatures.is_empty(),
+        "capsule contains no Ed25519 signatures"
+    );
+    let mut sig_verified = false;
+    for sig_str in &capsule.ed25519_signatures {
+        if verify_wisdom_signature(&capsule.wisdom_bytes, sig_str.as_bytes()).is_ok() {
+            sig_verified = true;
+            break;
+        }
+    }
+    anyhow::ensure!(
+        sig_verified,
+        "none of the {} embedded Ed25519 signature(s) verified against the embedded public key",
+        capsule.ed25519_signatures.len()
+    );
+
+    // Step 3 — quorum mirror receipt cross-check.
+    if let Some(ref mr) = capsule.mirror_receipt {
+        anyhow::ensure!(
+            mr.agreed_hash == capsule.feed_hash,
+            "mirror receipt agreed_hash {} does not match capsule feed_hash {}",
+            mr.agreed_hash,
+            capsule.feed_hash
+        );
+    }
+
+    // All checks passed — install the archive.
+    let janitor_dir = project_root.join(".janitor");
+    std::fs::create_dir_all(&janitor_dir)
+        .with_context(|| format!("creating {}", janitor_dir.display()))?;
+    let wisdom_path = janitor_dir.join("wisdom.rkyv");
+    std::fs::write(&wisdom_path, &capsule.wisdom_bytes)
+        .with_context(|| format!("writing {}", wisdom_path.display()))?;
+
+    println!(
+        "Intel capsule verified and installed: {} ({} bytes, hash {})",
+        wisdom_path.display(),
+        capsule.wisdom_bytes.len(),
+        capsule.feed_hash
+    );
+    Ok(())
+}
 
 fn verify_wisdom_signature(wisdom_bytes: &[u8], sig_bytes: &[u8]) -> anyhow::Result<()> {
     use base64::Engine as _;

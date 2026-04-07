@@ -2032,6 +2032,71 @@ index 1111111..2222222 100644
     }
 
     // ---------------------------------------------------------------------------
+    // Exhaustion corpus regression — parser hardening against algorithmic bombs
+    // ---------------------------------------------------------------------------
+
+    /// Dynamic corpus loader: reads every file under
+    /// `crates/crucible/fixtures/exhaustion/` and asserts that feeding each
+    /// artifact to `find_slop` neither panics nor exceeds the 500 ms parse
+    /// budget hard-coded in `PARSER_TIMEOUT_MICROS`.
+    ///
+    /// Promoted artifacts land here via `tools/promote_fuzz_corpus.sh`.  The
+    /// test exercises the parse-with-timeout path so any algorithmic-complexity
+    /// regression surfaces immediately in `just audit` rather than requiring a
+    /// live fuzzer run.
+    #[test]
+    fn exhaustion_corpus_no_panic() {
+        use std::time::{Duration, Instant};
+
+        let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("fixtures")
+            .join("exhaustion");
+
+        let entries: Vec<_> = std::fs::read_dir(&fixture_dir)
+            .expect("fixtures/exhaustion/ must exist")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_file())
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n != ".gitkeep")
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        // The directory must contain at least the seed fixture added in v9.9.17.
+        assert!(
+            !entries.is_empty(),
+            "exhaustion corpus must contain at least one fixture"
+        );
+
+        let budget = Duration::from_millis(500);
+
+        for entry in &entries {
+            let path = entry.path();
+            let bytes = std::fs::read(&path).expect("fixture must be readable");
+
+            // Try the artifact as each major language the AST router handles.
+            for lang in &["rs", "py", "js", "ts", "go", "rb"] {
+                let start = Instant::now();
+                // ParsedUnit::unparsed hands raw bytes to the detector without
+                // pre-parsing; the exhaustion detectors request a parse on demand,
+                // exercising the timeout path.  find_slop must not panic regardless
+                // of input content.
+                let parsed = forge::slop_hunter::ParsedUnit::unparsed(&bytes);
+                let _ = find_slop(lang, &parsed);
+                let elapsed = start.elapsed();
+
+                assert!(
+                    elapsed < budget,
+                    "parser exceeded 500 ms budget on exhaustion fixture"
+                );
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
     // Wasm host-guest round-trip — proves BYOP sandbox is functional end-to-end
     // ---------------------------------------------------------------------------
 

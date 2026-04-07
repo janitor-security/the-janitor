@@ -193,6 +193,17 @@ hyper-gauntlet *ARGS:
 strike repo pr_limit='1000':
 	PR_LIMIT={{pr_limit}} ./tools/generate_client_package.sh {{repo}}
 
+# 6a. FUZZ CORPUS PROMOTION — minimize libFuzzer crash/timeout artifacts and
+#     install them as deterministic Crucible exhaustion fixtures.
+#
+# Usage:
+#   just promote-fuzz <ARTIFACT_DIR>
+#
+promote-fuzz artifact_dir:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	bash ./tools/promote_fuzz_corpus.sh "{{artifact_dir}}"
+
 # 6b. PUBLISH FORENSIC STRIKE — execute strike + publish evidence + update intelligence index
 #
 # Wraps publish_forensic_strike.sh.  Runs generate_client_package.sh internally,
