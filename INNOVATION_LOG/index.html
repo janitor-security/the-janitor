@@ -595,39 +595,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-compliance-integration-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — Compliance / Integration (Deferred to v10.1)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration (Deferred to v10.1)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-014-cross-file-taint-member-expression-call-chains-not-detected" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-014: Cross-file taint — member-expression call chains not detected
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-015-wasm-host-fuel-budget-allows-indirect-memory-pressure" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-015: Wasm host — fuel budget allows indirect memory pressure
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Architecture / Ergonomics (Deferred to v10.1)
@@ -724,39 +691,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-compliance-integration-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — Compliance / Integration (Deferred to v10.1)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration (Deferred to v10.1)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-014-cross-file-taint-member-expression-call-chains-not-detected" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-014: Cross-file taint — member-expression call chains not detected
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-015-wasm-host-fuel-budget-allows-indirect-memory-pressure" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-015: Wasm host — fuel budget allows indirect memory pressure
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Architecture / Ergonomics (Deferred to v10.1)
@@ -811,39 +745,9 @@ CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.</p>
 <!-- CT-011 RESOLVED v9.9.19: 50 MiB size guard added to cmd_import_intel_capsule -->
 <!-- CT-012 RESOLVED v9.9.19: canonicalize + starts_with confinement check added -->
 <!-- CT-013 RESOLVED v10.0.0-rc.1: BLAKE3 catalog_hash bound into DecisionCapsule -->
+<!-- CT-014 RESOLVED v10.0.0-rc.2: member_expression/attribute callee detection added to walk_js_calls, walk_ts_calls, walk_python_calls -->
+<!-- CT-015 RESOLVED v10.0.0-rc.2: epoch_interruption(true) + 100 ms timeout thread in wasm_host.rs -->
 
-<h2 id="p1-compliance-integration-deferred-to-v101">P1 — Compliance / Integration (Deferred to v10.1)</h2>
-<h3 id="ct-014-cross-file-taint-member-expression-call-chains-not-detected">CT-014: Cross-file taint — member-expression call chains not detected</h3>
-<p><strong>File:</strong> <code>crates/forge/src/taint_catalog.rs::walk_js_calls</code>, <code>walk_python_calls</code>,
-<code>walk_java_calls</code>, <code>walk_go_calls</code></p>
-<p><strong>Gap:</strong> All four language scanners check only direct-identifier callees
-(<code>identifier</code> node kind). Method call chains — <code>obj.dangerousSink(tainted)</code>,
-<code>self.db_helper(user_input)</code>, <code>this.queryRunner.execute(payload)</code> — produce
-<code>member_expression</code> / <code>attribute</code> / <code>selector_expression</code> function nodes, which
-the current code silently skips. A helper that is a class method (the common case
-in Java, Python, and TypeScript) is invisible to the cross-file detector.</p>
-<p><strong>Fix:</strong> Extend each language walker to also match <code>member_expression</code> (JS/TS),
-<code>attribute</code> (Python), and <code>selector_expression</code> (Go) function nodes, extracting the
-method name from the <code>property</code> / <code>attr</code> / <code>field</code> child and checking it against the
-catalog. Add true-positive Crucible fixtures covering <code>obj.sink(tainted)</code> patterns.</p>
-<p><strong>TEI:</strong> This gap covers the majority of real-world cross-file sink patterns in
-enterprise Java and TypeScript codebases. Fixing it expands the detectable attack
-surface by an estimated 3×.</p>
-<hr />
-<h3 id="ct-015-wasm-host-fuel-budget-allows-indirect-memory-pressure">CT-015: Wasm host — fuel budget allows indirect memory pressure</h3>
-<p><strong>File:</strong> <code>crates/forge/src/wasm_host.rs</code></p>
-<p><strong>Gap:</strong> The <code>WasmHost</code> enforces <code>memory_limit_bytes</code> as a linear-memory page ceiling
-and <code>fuel</code> as an instruction budget, but a guest that allocates near the memory ceiling
-within the fuel budget can cause host-side allocator fragmentation. On Linux this
-manifests as <code>MADV_DONTNEED</code> latency spikes rather than OOM — the host does not crash
-but scan latency becomes non-deterministic, violating the 500 ms Crucible budget.</p>
-<p><strong>Fix:</strong> Add a per-execution wall-clock timeout (100 ms) in <code>wasm_host.rs</code> alongside
-the fuel gate. The timeout fires via <code>wasmtime</code>'s epoch interruption mechanism, which
-does not require polling from the host thread. Add a Crucible test confirming that a
-tight-loop Wasm module times out within the wall-clock budget even if it stays within
-fuel.</p>
-<p><strong>TEI:</strong> Prevents BYOR governance modules from degrading CI scan latency on adversarial
-or buggy rule modules. Sovereign tier quality gate.</p>
 <hr />
 <h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
 <h3 id="ct-016-bytelatticeanalyzer-false-positives-on-utf-16-encoded-source-files">CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files</h3>

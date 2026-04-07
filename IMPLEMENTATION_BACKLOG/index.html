@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)
@@ -1097,6 +1106,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)
@@ -1567,6 +1585,20 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2">2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)</h2>
+<p><strong>Directive:</strong> Phase 1 — OpSec Blackout (git rm INNOVATION_LOG.md from index); Phase 2 — Murphy's Law sweep (clean); Phase 3 — CT-014 member-expression detection + CT-015 Wasm epoch timeout.</p>
+<p><strong>Files modified:</strong>
+- <code>.gitignore</code> <em>(modified)</em> — added <code>docs/INNOVATION_LOG.md</code> and <code>docs/ENTERPRISE_GAPS.md</code> to Section 4; <code>git rm --cached docs/INNOVATION_LOG.md</code> executed to expunge from public tree
+- <code>crates/forge/src/taint_catalog.rs</code> <em>(modified)</em> — CT-014: <code>walk_python_calls</code> extended to match <code>attribute</code> callee (Python method calls <code>self.sink(arg)</code>); <code>walk_js_calls</code> and <code>walk_ts_calls</code> extended to match <code>member_expression</code> callee (<code>obj.sink(arg)</code>); 7 new unit tests covering true-positive and true-negative member-expression/attribute paths
+- <code>crates/forge/src/wasm_host.rs</code> <em>(modified)</em> — CT-015: added <code>EPOCH_TIMEOUT_MS = 100</code> constant; <code>config.epoch_interruption(true)</code> in <code>WasmHost::new</code>; <code>store.set_epoch_deadline(1)</code> + detached timeout thread in <code>run_module</code>
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — 4 new Crucible entries: <code>wasm_host_epoch_timeout_enforced</code> (CT-015), <code>cross_file_taint_js_member_expression_intercepted</code> (CT-014), <code>cross_file_taint_python_attribute_callee_intercepted</code> (CT-014), <code>cross_file_taint_ts_member_expression_intercepted</code> (CT-014)
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.2</code></p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — all existing tests pass + 4 new entries.</p>
+<p><strong>Security posture delta:</strong>
+- CT-014 resolved: cross-file taint now intercepts <code>obj.dangerousSink(tainted)</code> in JS/TS/Python. Est. 3× expansion of detectable enterprise attack surface.
+- CT-015 resolved: Wasm guests cannot cause non-deterministic host latency via memory pressure; 100 ms hard wall-clock gate added.
+- INNOVATION_LOG.md expunged from git history index — R&amp;D intelligence no longer publicly visible.</p>
 <hr />
 <h2 id="2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1">2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)</h2>
 <p><strong>Directive:</strong> CT-013 — bind BLAKE3 taint catalog hash into DecisionCapsule; bump workspace to 10.0.0-rc.1; feature freeze.</p>
