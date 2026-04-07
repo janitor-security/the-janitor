@@ -595,6 +595,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#p0-1-enterprise-supply-chain-v101-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1 — Enterprise Supply Chain (v10.1 Target)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P0-1 — Enterprise Supply Chain (v10.1 Target)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-020-slsa-level-4-release-provenance-binary-action-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-020: SLSA Level 4 Release Provenance &amp; Binary Action Distribution
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Architecture / Ergonomics (Deferred to v10.1)
@@ -676,6 +700,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#p0-1-enterprise-supply-chain-v101-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1 — Enterprise Supply Chain (v10.1 Target)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P0-1 — Enterprise Supply Chain (v10.1 Target)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ct-020-slsa-level-4-release-provenance-binary-action-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      CT-020: SLSA Level 4 Release Provenance &amp; Binary Action Distribution
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Architecture / Ergonomics (Deferred to v10.1)
@@ -706,9 +754,8 @@
 <p>Active architectural debt only. Completed work, resolved telemetry, and legacy
 ID epochs are purged during hard compaction.</p>
 <blockquote>
-<p><strong>FEATURE FREEZE ACTIVE: v10.0.0 RELEASE CANDIDATE.</strong>
-Only P0 bug fixes and stability patches are permitted.
-CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.</p>
+<p><strong>FEATURE FREEZE LIFTED: v10.0.0-rc.4 breaking the freeze for Hard-Fail Mandate + SLSA P0.</strong>
+CT-016 and all prior CT constraints resolved. SLSA Level 4 filed as P0-1 for v10.1.</p>
 </blockquote>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
@@ -718,10 +765,51 @@ CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.</p>
 <!-- CT-014 RESOLVED v10.0.0-rc.2: member_expression/attribute callee detection added to walk_js_calls, walk_ts_calls, walk_python_calls -->
 <!-- CT-015 RESOLVED v10.0.0-rc.2: epoch_interruption(true) + 100 ms timeout thread in wasm_host.rs -->
 <!-- CT-016 RESOLVED v10.0.0-rc.3: UTF-16 LE/BE BOM guard added to ByteLatticeAnalyzer::classify; BOM-present files short-circuit to ProbableCode before null-byte check -->
+<!-- CT-017 RESOLVED v10.0.0-rc.4: JanitorPolicy::load() hard-fails on malformed janitor.toml (fail-open eradicated) -->
+<!-- CT-018 RESOLVED v10.0.0-rc.4: pqc_enforced=true now bails if --pqc-key absent; fail-open PQC path closed -->
+<!-- CT-019 RESOLVED v10.0.0-rc.4: DEFAULT_GOVERNOR_URL severed from fly.dev; set to http://127.0.0.1:8080; action.yml governor_url input required -->
 
 <hr />
+<h2 id="p0-1-enterprise-supply-chain-v101-target">P0-1 — Enterprise Supply Chain (v10.1 Target)</h2>
+<h3 id="ct-020-slsa-level-4-release-provenance-binary-action-distribution">CT-020: SLSA Level 4 Release Provenance &amp; Binary Action Distribution</h3>
+<p><strong>Class:</strong> Enterprise Supply Chain</p>
+<p><strong>Observation:</strong> The current <code>action.yml</code> builds The Janitor binary from source
+inside the GitHub Actions runner (<code>cargo build --manifest-path ...</code>). This
+violates SLSA Level 4 provenance requirements in two ways:</p>
+<ol>
+<li>
+<p><strong>Build reproducibility</strong>: The runner environment is not hermetically sealed.
+   Any transitive dependency, system library, or build tool that differs between
+   runs can silently produce a non-reproducible binary — defeating the provenance
+   chain entirely.</p>
+</li>
+<li>
+<p><strong>Compilation attack surface</strong>: A supply chain compromise of any Cargo
+   dependency resolved at build time (<code>cargo build</code> re-fetches from crates.io
+   unless the lockfile and cache both hit) can inject malicious code into the
+   binary that ends up auditing PRs. This is the exact attack the tool is
+   designed to detect in others.</p>
+</li>
+</ol>
+<p><strong>Proposal:</strong> Refactor the release pipeline to emit independently attested,
+pre-compiled binaries as GitHub Release assets:
+- The <code>just fast-release</code> recipe produces a stripped, <code>opt-level=z</code> binary.
+- Emit a BLAKE3 digest and an ML-DSA-65 signature for each binary asset.
+- Refactor <code>action.yml</code> to download the pre-compiled binary, verify its BLAKE3
+  digest against the signed release manifest, and execute it — eliminating the
+  <code>cargo build</code> step entirely.</p>
+<p><strong>Security impact:</strong> Closes the final IL6/FedRAMP CISO objection regarding
+runner-side compilation compromise. Binary provenance becomes fully attestable:
+the binary in CI is the exact artifact signed in the release pipeline, not a
+re-compilation that could have silently diverged. Enables SLSA Level 4
+compliance badge — a hard requirement for DoD and FedRAMP-High procurement.</p>
+<p><strong>TEI:</strong> Unblocks 3–5 enterprise procurement processes currently stalled on
+IL6/FedRAMP compliance. Each blocked enterprise represents $49,900–$249,000 ARR.
+Estimated pipeline value: $500K–$1M ARR. Build time savings: 2–4 min/CI run
+for downstream users — material for high-velocity repos.</p>
+<hr />
 <h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
-<!-- All CT-0xx constraints resolved. v10.0.0 GA candidate is clean. -->
+<!-- All CT-0xx constraints (CT-011 through CT-019) resolved. SLSA P0-1 filed above. -->
 
 
 

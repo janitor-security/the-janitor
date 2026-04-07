@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)
@@ -1115,6 +1124,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)
@@ -1603,6 +1621,23 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-hard-fail-mandate-air-gap-enforcement-v1000-rc4">2026-04-07 — Hard-Fail Mandate &amp; Air-Gap Enforcement (v10.0.0-rc.4)</h2>
+<p><strong>Directive:</strong> Phase 1 — Eradicate fail-open policy loading; Phase 2 — Wire pqc_enforced; Phase 3 — Sever cloud defaults; Phase 4 — Expand slopsquat corpus; Phase 5 — SLSA Level 4 roadmap entry.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — CT-017: <code>JanitorPolicy::load()</code> signature changed from <code>Self</code> to <code>anyhow::Result&lt;Self&gt;</code>; malformed or unreadable <code>janitor.toml</code> now hard-fails with <code>Err</code> instead of warning + default; 1 new test <code>load_malformed_toml_returns_error</code>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — CT-017: all 4 <code>load()</code> call sites updated to <code>?</code>; CT-018: <code>pqc_enforced</code> gate wired — <code>bail!</code> if <code>pqc_enforced=true &amp;&amp; pqc_key.is_none()</code>; Phase 4: slopsquat seed corpus expanded from 3 → 43 entries (Python/JS/Rust hallucinated package names)
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — CT-019: <code>DEFAULT_GOVERNOR_URL</code> changed from <code>https://the-governor.fly.dev</code> to <code>http://127.0.0.1:8080</code>; <code>load()</code> call site updated to <code>?</code>
+- <code>action.yml</code> <em>(modified)</em> — CT-019: <code>governor_url</code> input added (required); all 3 hardcoded <code>the-governor.fly.dev</code> references replaced with <code>${{ inputs.governor_url }}</code>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.4</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-017/018/019 filed and resolved; CT-020 (SLSA Level 4) filed as P0-1 for v10.1</p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — no new Crucible entries (hardening is in policy/CLI path, not detectors). All existing tests pass.</p>
+<p><strong>Security posture delta:</strong>
+- CT-017: Fail-open governance eradicated — a broken <code>janitor.toml</code> is now a hard pipeline failure, not a silent downgrade to permissive defaults
+- CT-018: PQC attestation mandate enforced — <code>pqc_enforced=true</code> without a key is now a hard error, closing the fail-open PQC path
+- CT-019: Cloud reliance severed — zero unintentional egress to fly.dev; enterprises must configure their own Governor; <code>action.yml</code> now requires <code>governor_url</code> input
+- Slopsquat corpus: 3 → 43 seed entries; Python, npm, and crates.io hallucination patterns now seeded by default
+- SLSA Level 4 roadmap filed — FedRAMP/IL6 procurement path documented</p>
 <hr />
 <h2 id="2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3">2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)</h2>
 <p><strong>Directive:</strong> Phase 1 — Idempotency governance rule; Phase 2 — fast-release idempotency guards; Phase 3 — CT-016 UTF-16 BOM false-positive fix.</p>
