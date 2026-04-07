@@ -5,6 +5,38 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Sovereign Hardening & Surface Expansion (v9.9.15)
+
+**Directive:** Revalidate signed Wisdom feed provenance, execute the
+filename-aware surface router across Forge and CLI paths, prove extensionless
+Dockerfile routing in Crucible, autonomously seed the next sovereign
+supply-chain proposal, and release `v9.9.15`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.15`
+- `Cargo.lock` *(modified)* — lockfile refreshed for the `v9.9.15` release line
+- `crates/common/src/lib.rs` *(modified)* — exported the new `surface` module
+- `crates/common/src/surface.rs` *(new)* — added authoritative `SurfaceKind`
+  classification for canonical filenames and extensions plus stable router /
+  telemetry labels
+- `crates/forge/src/slop_filter.rs` *(modified)* — replaced ad hoc
+  `extract_patch_ext()` routing with `SurfaceKind`; definitive text surfaces now
+  flow into `slop_hunter` instead of bypassing into the binary shield only;
+  semantic-null and hallucinated-fix paths now consume the same surface
+  authority
+- `crates/cli/src/git_drive.rs` *(modified)* — symbol hydration now resolves
+  file surfaces through the same authoritative classifier instead of raw
+  extension parsing
+- `crates/crucible/src/main.rs` *(modified)* — added an extensionless
+  `Dockerfile` patch regression proving `PatchBouncer` dispatches canonical
+  filenames into the detector engine
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed filename-aware
+  routing debt, compacted active P2 numbering, and seeded `P1-2`
+  Threshold-Signed Intel Mirror Quorum
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.15`
+
 ## 2026-04-06 — Deterministic Audit Replay & Symmetric Release Parity (v9.9.14)
 
 **Directive:** Execute `P1-1` by sealing replayable decision capsules that can

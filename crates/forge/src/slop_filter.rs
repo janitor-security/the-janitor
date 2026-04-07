@@ -49,6 +49,7 @@ use anyhow::Result;
 use tree_sitter::{Language, Query, StreamingIterator};
 
 use common::registry::SymbolRegistry;
+use common::surface::SurfaceKind;
 
 // ---------------------------------------------------------------------------
 // SlopScore
@@ -435,33 +436,20 @@ fn byte_offset_to_line(source: &[u8], offset: usize) -> u32 {
     source[..clamped].iter().filter(|&&b| b == b'\n').count() as u32 + 1
 }
 
-/// Extract the file extension from the `+++ b/<path>` line in a unified diff.
-///
-/// Returns `""` if no such header is found or the path has no extension.
-fn extract_patch_ext(patch: &str) -> &str {
+/// Extract the classified surface kind from the `+++ b/<path>` line in a unified diff.
+fn extract_patch_surface(patch: &str) -> SurfaceKind {
     for line in patch.lines() {
         if let Some(path) = line
             .strip_prefix("+++ b/")
             .or_else(|| line.strip_prefix("+++ "))
         {
-            // Strip query strings or trailing whitespace that some diff tools add.
             let path = path.trim();
-            let file_name = path.rsplit('/').next().unwrap_or(path);
-            match file_name {
-                "Dockerfile" => return "dockerfile",
-                "CMakeLists.txt" => return "cmake",
-                "BUILD" | "WORKSPACE" | "MODULE.bazel" => return "starlark",
-                _ => {}
-            }
-            if file_name.starts_with("BUILD.") {
-                return "starlark";
-            }
-            if let Some(dot_pos) = path.rfind('.') {
-                return &path[dot_pos + 1..];
+            if !path.is_empty() && path != "/dev/null" {
+                return SurfaceKind::from_path(Path::new(path));
             }
         }
     }
-    ""
+    SurfaceKind::Unknown
 }
 
 /// Extract the full file path from the `+++ b/<path>` line in a unified diff.
@@ -729,7 +717,8 @@ impl PRBouncer for PatchBouncer {
         }
 
         // Detect language from the +++ header extension.
-        let ext = extract_patch_ext(patch);
+        let surface = extract_patch_surface(patch);
+        let ext = surface.language_key();
 
         // Extract file path early — reused by the generated-asset bypass, the
         // None-arm AnomalousBlob guard, and domain routing in the Some arm.
@@ -774,24 +763,23 @@ impl PRBouncer for PatchBouncer {
         // The circuit breaker (64 KiB) is intentionally NOT applied here —
         // AhoCorasick is O(N) and fast; a 100 KiB YAML file embedding a stratum
         // URI must still be flagged even though it would exceed the tree-sitter limit.
-        let pre_lang_payload_findings: Vec<String> = {
-            let raw_added: String = patch
-                .lines()
-                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
-                .map(|l| &l[1..])
-                .collect::<Vec<_>>()
-                .join("\n");
-            if raw_added.trim().is_empty() {
-                vec![]
-            } else {
-                advanced_threats::binary_hunter::scan(raw_added.as_bytes())
-                    .into_iter()
-                    .map(|t| {
-                        let line = byte_offset_to_line(raw_added.as_bytes(), t.byte_offset);
-                        format!("{} (line={line})", t.description)
-                    })
-                    .collect()
-            }
+        let raw_added: String = patch
+            .lines()
+            .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+            .map(|l| &l[1..])
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let pre_lang_payload_findings: Vec<String> = if raw_added.trim().is_empty() {
+            vec![]
+        } else {
+            advanced_threats::binary_hunter::scan(raw_added.as_bytes())
+                .into_iter()
+                .map(|t| {
+                    let line = byte_offset_to_line(raw_added.as_bytes(), t.byte_offset);
+                    format!("{} (line={line})", t.description)
+                })
+                .collect()
         };
 
         let cfg = match lang_for_ext(ext) {
@@ -811,63 +799,38 @@ impl PRBouncer for PatchBouncer {
                 //     it is definitively source — never run the binary classifier.
                 //
                 // Keep in sync with `polyglot::LazyGrammarRegistry::get` arm list.
-                const SOURCE_TEXT_EXTS: &[&str] = &[
-                    // ── IaC / data formats ────────────────────────────────────
-                    "nix",
-                    "lock",
-                    "json",
-                    "toml",
-                    "yaml",
-                    "yml",
-                    "csv",
-                    "md",
-                    "rst",
-                    "xml",
-                    // ── Polyglot-known grammars not in lang_for_ext ───────────
-                    "ts",
-                    "tsx",
-                    "mjs",
-                    "cjs", // TypeScript / JS variants
-                    // "sh" | "bash" | "cmd" | "zsh" — now wired into lang_for_ext (Bash grammar)
-                    // "scala" — now wired into lang_for_ext (Scala grammar)
-                    "tf",
-                    "hcl", // Terraform / HCL
-                    "gd",  // GDScript
-                    "kt",
-                    "kts", // Kotlin
-                    // ── Explicitly whitelisted source extensions ──────────────
-                    "gradle", // Gradle build (Groovy/Kotlin DSL) — no grammar crate
-                    // "scala" moved to lang_for_ext
-                    "mod", // Go module files — tree-sitter-gomod (^0.20) incompatible with ts 0.26
-                    "go-version", // Go toolchain pin files
-                    "properties", // Java .properties config
-                    "env", // .env config files
-                    "bat",
-                    "ps1",
-                    // "cmd" moved to lang_for_ext (bash grammar covers Windows cmd-like scripts)
-                    "patch",            // Diff/patch files (text diffs, may contain hashes)
-                    "permitted-images", // Kubernetes allowed-image list files
-                    // ── Generated / snapshot text files ──────────────────────
-                    "snap", // Jest / insta snapshot files (serialised JS/Rust values)
-                    "svg",  // Scalable Vector Graphics (XML text)
-                    "map",  // Source map files (JSON text, high-entropy base64 chunks)
-                ];
-                if SOURCE_TEXT_EXTS.contains(&ext) {
-                    // Even though we have no grammar for this extension, the
-                    // binary_hunter scan must still surface any payload findings.
-                    if !pre_lang_payload_findings.is_empty() {
-                        let count = pre_lang_payload_findings.len() as u32;
-                        let mut score = SlopScore {
-                            antipatterns_found: count,
-                            antipattern_score: count * 50, // Critical tier
-                            antipattern_details: pre_lang_payload_findings,
-                            ..SlopScore::default()
-                        };
+                if surface.is_definitive_text() {
+                    if raw_added.trim().is_empty() {
+                        let mut score = SlopScore::default();
                         let patch_blobs = extract_patch_blobs(patch);
                         self.apply_kev_findings(&mut score, &patch_blobs);
                         return Ok(score);
                     }
-                    let mut score = SlopScore::default();
+
+                    let source = raw_added.as_bytes();
+                    let max_patch_bytes = if self.deep_scan {
+                        DEEP_SCAN_MAX_BYTES
+                    } else {
+                        DEFAULT_PATCH_MAX_BYTES
+                    };
+                    if source.len() > max_patch_bytes {
+                        return Ok(SlopScore::default());
+                    }
+
+                    let parsed = crate::slop_hunter::ParsedUnit::unparsed(source);
+                    let raw_findings = crate::slop_hunter::find_slop(ext, &parsed);
+                    let mut details = pre_lang_payload_findings;
+                    details.extend(raw_findings.iter().map(|f| f.description.clone()));
+                    let mut score = SlopScore {
+                        antipatterns_found: details.len() as u32,
+                        antipattern_score: ((details.len() - raw_findings.len()) as u32) * 50
+                            + raw_findings
+                                .iter()
+                                .map(|f| f.severity.points())
+                                .sum::<u32>(),
+                        antipattern_details: details,
+                        ..SlopScore::default()
+                    };
                     let patch_blobs = extract_patch_blobs(patch);
                     self.apply_kev_findings(&mut score, &patch_blobs);
                     return Ok(score);
@@ -922,12 +885,7 @@ impl PRBouncer for PatchBouncer {
         };
 
         // Reconstruct added source from `+` diff lines.
-        let added: String = patch
-            .lines()
-            .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
-            .map(|l| &l[1..]) // strip the leading '+'
-            .collect::<Vec<_>>()
-            .join("\n");
+        let added = raw_added;
 
         if added.trim().is_empty() {
             return Ok(SlopScore::default());
@@ -1566,13 +1524,8 @@ pub fn extract_all_patch_exts(patch: &str) -> Vec<String> {
             if path == "/dev/null" {
                 continue;
             }
-            // Take the last path component then its extension.
-            let filename = path.rsplit('/').next().unwrap_or(path);
-            let ext = filename
-                .rfind('.')
-                .map(|i| filename[i + 1..].to_string())
-                .unwrap_or_default(); // "" for files without extension
-            seen.insert(ext);
+            let surface = SurfaceKind::from_path(Path::new(path));
+            seen.insert(surface.telemetry_label());
         }
     }
     seen.into_iter().collect()
@@ -1740,8 +1693,8 @@ pub fn semantic_null_pr_check(repo_path: &Path, merge_base_sha: &str, pr_sha: &s
             Some(p) => p,
             None => continue,
         };
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let lang = match lang_for_ext_semantic(ext) {
+        let surface = SurfaceKind::from_path(path);
+        let lang = match lang_for_ext_semantic(surface.language_key()) {
             Some(l) => l,
             None => continue, // unsupported extension — skip
         };
@@ -2369,6 +2322,13 @@ mod tests {
         assert_eq!(exts, vec![""], "LICENSE has no extension → empty string");
     }
 
+    #[test]
+    fn test_extract_all_patch_exts_canonical_filename() {
+        let patch = "--- a/Dockerfile\n+++ b/Dockerfile\n@@ -1 +1 @@\n-old\n+new\n";
+        let exts = extract_all_patch_exts(patch);
+        assert_eq!(exts, vec!["dockerfile"]);
+    }
+
     // ── Compiled Payload Shield integration tests ─────────────────────────────
 
     #[test]
@@ -2431,11 +2391,23 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_patch_ext_b_prefix() {
-        assert_eq!(extract_patch_ext("+++ b/src/main.cpp\n"), "cpp");
-        assert_eq!(extract_patch_ext("+++ b/utils.py\n"), "py");
-        assert_eq!(extract_patch_ext("+++ b/service.cs\n"), "cs");
-        assert_eq!(extract_patch_ext("+++ b/shader.glsl\n"), "glsl");
+    fn test_extract_patch_surface_b_prefix() {
+        assert_eq!(
+            extract_patch_surface("+++ b/src/main.cpp\n"),
+            SurfaceKind::Cpp
+        );
+        assert_eq!(
+            extract_patch_surface("+++ b/utils.py\n"),
+            SurfaceKind::Python
+        );
+        assert_eq!(
+            extract_patch_surface("+++ b/service.cs\n"),
+            SurfaceKind::CSharp
+        );
+        assert_eq!(
+            extract_patch_surface("+++ b/Dockerfile\n"),
+            SurfaceKind::Dockerfile
+        );
     }
 
     #[test]

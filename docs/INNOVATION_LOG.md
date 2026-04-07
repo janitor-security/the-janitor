@@ -37,32 +37,34 @@ deterministic per-module result digests, and thread those receipts through
 `DecisionCapsule`, `SignedDecisionReceipt`, `verify-cbom`, and
 `replay-receipt`.
 
-## P2 — Architecture / Ergonomics
+### P1-2: Threshold-Signed Intel Mirror Quorum
 
-### P2-1: Filename-Aware Surface Routing Spine
-
-**Class:** Core Engine Plumbing
-**Inspired by:** Extensionless security surfaces in P0-1 execution
+**Class:** Sovereign Supply Chain / Feed Resilience
 
 **Observation:**
-Semantic routing still keys off file extensions alone. High-value build and
-control-plane files (`Dockerfile`, `CMakeLists.txt`, `BUILD`, `BUILD.bazel`,
-`WORKSPACE`, `MODULE.bazel`) carry semantics via canonical filename, not suffix.
+The Wisdom feed is now signature-verified, but it is still operationally
+anchored to a single CDN retrieval path. In a sanctions event, regional outage,
+or targeted routing disruption, enterprises will need mathematically equivalent
+feed acceptance from multiple mirrors without relaxing provenance guarantees.
 
 **Proposal:**
-Introduce a `SurfaceKind` classifier in `common` that resolves from
-`Path + shebang + diff metadata` to a stable semantic target. Thread it through
-`PatchBouncer`, `bounce_git`, `slop_hunter`, and the MCP response envelope.
+Introduce a mirror-quorum receipt flow where `update-wisdom` can fetch the same
+`wisdom.rkyv` plus detached signatures from multiple sovereign endpoints,
+require a threshold of matching BLAKE3 digests, and emit a compact mirror
+receipt proving which authorities agreed on the accepted archive.
 
 **Security impact:**
-Eliminates silent coverage gaps on extensionless build files and creates a single
-authoritative routing layer for size limits, parser budgets, and domain policy.
+Eliminates single-distribution trust assumptions while preserving strict
+fail-closed provenance under hostile network or geopolitical conditions.
 
 **Implementation path:**
-Add `crates/common/src/surface.rs` with `SurfaceKind` classification helpers;
-replace `extract_patch_ext()` string returns; update MCP serialization.
+Extend `JanitorPolicy` with a feed mirror set and quorum threshold, add a
+`WisdomMirrorReceipt` structure in `common`, and bind the accepted mirror set
+into `update-wisdom`, bounce logs, and CBOM metadata.
 
-### P2-2: Exhaustion Corpus Promotion Pipeline
+## P2 — Architecture / Ergonomics
+
+### P2-1: Exhaustion Corpus Promotion Pipeline
 
 **Class:** Defensive Hardening / Fuzzing Operations
 **Inspired by:** `crates/fuzz` and harvested AST-bomb regressions

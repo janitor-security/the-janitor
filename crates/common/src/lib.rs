@@ -7,6 +7,7 @@ pub mod receipt;
 pub mod registry;
 pub mod scm;
 pub mod slop;
+pub mod surface;
 pub mod taint;
 pub mod wisdom;
 
