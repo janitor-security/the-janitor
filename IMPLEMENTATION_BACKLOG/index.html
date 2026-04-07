@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)
@@ -1106,6 +1115,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)
@@ -1585,6 +1603,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-pipeline-idempotency-final-rc-polish-v1000-rc3">2026-04-07 — Pipeline Idempotency &amp; Final RC Polish (v10.0.0-rc.3)</h2>
+<p><strong>Directive:</strong> Phase 1 — Idempotency governance rule; Phase 2 — fast-release idempotency guards; Phase 3 — CT-016 UTF-16 BOM false-positive fix.</p>
+<p><strong>Files modified:</strong>
+- <code>.agent_governance/rules/idempotency.md</code> <em>(created)</em> — The Idempotency Law: all shell/just mutation steps must query target state before acting; protocol for Git tag and GitHub Release guards; 4 hard constraints
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code>: local + remote Git tag existence check before commit/tag/push (exits 0 cleanly if already released); <code>gh release view</code> pre-check before <code>gh release create</code>
+- <code>crates/forge/src/agnostic_shield.rs</code> <em>(modified)</em> — CT-016: UTF-16 LE/BE BOM guard added at top of <code>ByteLatticeAnalyzer::classify</code>; short-circuits to <code>ProbableCode</code> before null-byte check; 2 new unit tests (<code>test_utf16_le_bom_classifies_as_probable_code</code>, <code>test_utf16_be_bom_classifies_as_probable_code</code>)
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — 1 new Crucible entry: <code>utf16_bom_source_not_flagged_as_anomalous_blob</code> (CT-016 true-negative)
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.3</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-016 purged (resolved); P2 section now empty (all constraints resolved)</p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — all existing tests pass + 1 new CT-016 entry.</p>
+<p><strong>Security posture delta:</strong>
+- CT-016 resolved: Windows-adjacent repos (Azure SDK, MSVC headers, VB.NET) no longer generate false-positive Critical findings. Enterprise adoption unblocked.
+- Pipeline idempotency: re-running <code>just fast-release &lt;v&gt;</code> after a successful release now exits 0 cleanly instead of crashing. Double-triggers from automation no longer cause oncall pages.
+- All CT-0xx constraints (CT-011 through CT-016) fully resolved. v10.0.0 is GA-candidate clean.</p>
 <hr />
 <h2 id="2026-04-07-opsec-blackout-rc2-hotfix-v1000-rc2">2026-04-07 — OpSec Blackout &amp; RC.2 Hotfix (v10.0.0-rc.2)</h2>
 <p><strong>Directive:</strong> Phase 1 — OpSec Blackout (git rm INNOVATION_LOG.md from index); Phase 2 — Murphy's Law sweep (clean); Phase 3 — CT-014 member-expression detection + CT-015 Wasm epoch timeout.</p>

@@ -601,21 +601,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics (Deferred to v10.1)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-016-bytelatticeanalyzer-false-positives-on-utf-16-encoded-source-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -697,21 +682,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics (Deferred to v10.1)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-016-bytelatticeanalyzer-false-positives-on-utf-16-encoded-source-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -747,23 +717,11 @@ CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.</p>
 <!-- CT-013 RESOLVED v10.0.0-rc.1: BLAKE3 catalog_hash bound into DecisionCapsule -->
 <!-- CT-014 RESOLVED v10.0.0-rc.2: member_expression/attribute callee detection added to walk_js_calls, walk_ts_calls, walk_python_calls -->
 <!-- CT-015 RESOLVED v10.0.0-rc.2: epoch_interruption(true) + 100 ms timeout thread in wasm_host.rs -->
+<!-- CT-016 RESOLVED v10.0.0-rc.3: UTF-16 LE/BE BOM guard added to ByteLatticeAnalyzer::classify; BOM-present files short-circuit to ProbableCode before null-byte check -->
 
 <hr />
 <h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
-<h3 id="ct-016-bytelatticeanalyzer-false-positives-on-utf-16-encoded-source-files">CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files</h3>
-<p><strong>File:</strong> <code>crates/forge/src/agnostic_shield.rs::ByteLatticeAnalyzer::classify</code></p>
-<p><strong>Gap:</strong> <code>ByteLatticeAnalyzer</code> classifies by raw byte entropy. UTF-16 encoded source
-files (valid on Windows — some MSVC-generated headers, legacy VB.NET projects) have a
-BOM (<code>FF FE</code> or <code>FE FF</code>) and wide-char byte patterns that fall in the
-<code>AnomalousBlob</code> entropy band. These are legitimate source files, not payloads.
-The false positive adds 50 points and fires <code>AnomalousBlob</code> in the CBOM without a CVE
-or structural finding.</p>
-<p><strong>Fix:</strong> Detect UTF-16 LE/BE BOM at bytes 0–1 in <code>classify</code>. If found, transcode to
-UTF-8 before entropy analysis. Alternatively, classify BOM-present files as
-<code>ProbableCode</code> unconditionally — the BOM itself is proof of textual encoding intent.</p>
-<p><strong>TEI:</strong> Eliminates false positives on Windows-adjacent repos (Azure SDK, Windows
-drivers). Unblocks enterprise adoption in Windows-heavy shops currently seeing
-spurious Critical findings.</p>
+<!-- All CT-0xx constraints resolved. v10.0.0 GA candidate is clean. -->
 
 
 
