@@ -2054,27 +2054,32 @@ index 1111111..2222222 100644
         let findings = host.run(b"fn main() { println!(\"hello\"); }");
 
         assert_eq!(
-            findings.len(),
+            findings.findings.len(),
             1,
             "Wasm mock rule must emit exactly one finding"
         );
         assert_eq!(
-            findings[0].id, "security:proprietary_rule",
+            findings.findings[0].id, "security:proprietary_rule",
             "finding id must match the mock fixture's static output"
         );
         assert_eq!(
-            findings[0].file, None,
+            findings.findings[0].file, None,
             "mock fixture must emit null file field"
         );
         assert_eq!(
-            findings[0].line, None,
+            findings.findings[0].line, None,
             "mock fixture must emit null line field"
+        );
+        assert_eq!(
+            findings.receipts.len(),
+            1,
+            "Wasm mock rule must emit exactly one provenance receipt"
         );
 
         // Verify empty source returns no findings (short-circuit guard).
         let empty_findings = host.run(b"");
         assert!(
-            empty_findings.is_empty(),
+            empty_findings.findings.is_empty() && empty_findings.receipts.is_empty(),
             "empty source must yield no Wasm findings"
         );
     }

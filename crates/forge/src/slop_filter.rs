@@ -219,6 +219,9 @@ pub struct SlopScore {
     /// so offline replay can verify the exact mutation surface that drove the
     /// sealed decision capsule.
     pub semantic_mutation_roots: Vec<common::receipt::CapsuleMutationRoot>,
+
+    /// Deterministic provenance receipts for executed private Wasm governance modules.
+    pub wasm_policy_receipts: Vec<common::wasm_receipt::WasmPolicyReceipt>,
 }
 
 impl SlopScore {
@@ -1887,22 +1890,22 @@ pub fn bounce_git(
 /// Execute BYOP (Bring Your Own Policy) Wasm rule modules against `src` bytes.
 ///
 /// Instantiates a fresh [`crate::wasm_host::WasmHost`] for the given paths,
-/// runs each module against `src`, and returns the combined set of findings.
-/// Returns an empty vec immediately when `wasm_paths` is empty, imposing no
+/// runs each module against `src`, and returns the combined set of findings and
+/// deterministic per-module provenance receipts. Returns an empty result immediately when `wasm_paths` is empty, imposing no
 /// runtime cost when no proprietary rules are configured.
 ///
 /// Module load or compilation failures are logged to `stderr` and result in
 /// an empty vec — the bounce pipeline is never hard-blocked by a malformed
 /// custom rule.
-pub fn run_wasm_rules(wasm_paths: &[&str], src: &[u8]) -> Vec<common::slop::StructuredFinding> {
+pub fn run_wasm_rules(wasm_paths: &[&str], src: &[u8]) -> crate::wasm_host::WasmExecutionResult {
     if wasm_paths.is_empty() {
-        return Vec::new();
+        return crate::wasm_host::WasmExecutionResult::default();
     }
     match crate::wasm_host::WasmHost::new(wasm_paths) {
         Ok(host) => host.run(src),
         Err(e) => {
             eprintln!("slop_filter: failed to initialise Wasm rule host: {e:#}");
-            Vec::new()
+            crate::wasm_host::WasmExecutionResult::default()
         }
     }
 }

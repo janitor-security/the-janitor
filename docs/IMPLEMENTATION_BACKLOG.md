@@ -5,6 +5,50 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-06 — Cryptographic Quorum & Wasm Provenance (v9.9.16)
+
+**Directive:** Seal private Wasm-rule execution into replayable provenance,
+require threshold-signed Wisdom mirror consensus before feed overwrite,
+autonomously seed the next sovereign distribution debt item, and release
+`v9.9.16`.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped to `9.9.16`
+- `crates/common/src/lib.rs` *(modified)* — exported `wasm_receipt`
+- `crates/common/src/wasm_receipt.rs` *(new)* — added deterministic
+  `WasmPolicyReceipt` schema for module digest, rule ID, ABI version, and
+  result digest
+- `crates/common/src/receipt.rs` *(modified)* — threaded Wasm policy receipts
+  through `DecisionCapsule` and `DecisionReceipt`
+- `crates/common/src/policy.rs` *(modified)* — added `[wisdom.quorum]`
+  configuration with default threshold `1`
+- `crates/common/src/wisdom.rs` *(modified)* — added `WisdomMirrorReceipt` and
+  bound mirror provenance into `LoadedWisdom`
+- `crates/forge/src/wasm_host.rs` *(modified)* — Wasm host now emits
+  deterministic per-module provenance receipts alongside findings
+- `crates/forge/src/slop_filter.rs` *(modified)* — BYOR execution path now
+  returns findings plus receipts for downstream sealing
+- `crates/cli/src/main.rs` *(modified)* — bounce now seals Wasm receipts into
+  replay capsules; `verify-cbom` and `replay-receipt` validate them; 
+  `update-wisdom` now supports threshold mirror quorum with fail-closed
+  consensus selection and persisted mirror receipts
+- `crates/cli/src/report.rs` *(modified)* — `BounceLogEntry` and step summaries
+  now carry Wasm policy provenance
+- `crates/cli/src/cbom.rs` *(modified)* — CycloneDX metadata now serializes
+  Wasm policy receipts
+- `crates/cli/src/daemon.rs` *(modified)* and `crates/cli/src/git_drive.rs`
+  *(modified)* — synchronized auxiliary `BounceLogEntry` constructors with the
+  new provenance field
+- `crates/gov/src/main.rs` *(modified)* — Governor countersigned receipts now
+  bind sealed Wasm policy provenance
+- `crates/crucible/src/main.rs` *(modified)* — updated Wasm-host regression to
+  assert both findings and provenance receipt emission
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed `P1-1` and `P1-2`;
+  seeded `P1-1` Air-Gap Intel Transfer Capsules
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Commit:** pending `just fast-release 9.9.16`
+
 ## 2026-04-06 — Sovereign Hardening & Surface Expansion (v9.9.15)
 
 **Directive:** Revalidate signed Wisdom feed provenance, execute the

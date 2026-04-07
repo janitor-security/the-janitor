@@ -218,6 +218,35 @@ pub struct ForgeConfig {
     pub deep_scan: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct WisdomQuorumConfig {
+    pub mirrors: Vec<String>,
+    #[serde(default = "WisdomQuorumConfig::default_threshold")]
+    pub threshold: usize,
+}
+
+impl Default for WisdomQuorumConfig {
+    fn default() -> Self {
+        Self {
+            mirrors: Vec::new(),
+            threshold: Self::default_threshold(),
+        }
+    }
+}
+
+impl WisdomQuorumConfig {
+    fn default_threshold() -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct WisdomConfig {
+    pub quorum: WisdomQuorumConfig,
+}
+
 // ---------------------------------------------------------------------------
 // JanitorPolicy
 // ---------------------------------------------------------------------------
@@ -338,6 +367,12 @@ pub struct JanitorPolicy {
     #[serde(default)]
     pub soft_fail: bool,
 
+    /// Sovereign threat-intel distribution policy.
+    ///
+    /// Configure mirror quorum under `[wisdom.quorum]`.
+    #[serde(default)]
+    pub wisdom: WisdomConfig,
+
     /// Paths to BYOP (Bring Your Own Policy) Wasm rule modules.
     ///
     /// Each module is executed against the patch source bytes inside a
@@ -372,6 +407,7 @@ impl Default for JanitorPolicy {
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
             soft_fail: false,
+            wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
         }
     }
@@ -651,11 +687,19 @@ mod tests {
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
             soft_fail: false,
+            wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
         assert_eq!(original, deserialised);
+    }
+
+    #[test]
+    fn wisdom_quorum_defaults_to_threshold_one() {
+        let policy = JanitorPolicy::default();
+        assert_eq!(policy.wisdom.quorum.threshold, 1);
+        assert!(policy.wisdom.quorum.mirrors.is_empty());
     }
 
     #[test]

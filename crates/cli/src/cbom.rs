@@ -191,6 +191,25 @@ fn cbom_metadata_properties(entries: &[BounceLogEntry]) -> Vec<Value> {
                 "value": signature
             }));
         }
+        for (idx, receipt) in entry.wasm_policy_receipts.iter().enumerate() {
+            let pr = entry.pr_number.unwrap_or(0);
+            props.push(json!({
+                "name": format!("janitor:wasm_policy:pr:{pr}:{idx}:module_digest"),
+                "value": receipt.module_digest
+            }));
+            props.push(json!({
+                "name": format!("janitor:wasm_policy:pr:{pr}:{idx}:rule_id"),
+                "value": receipt.rule_id
+            }));
+            props.push(json!({
+                "name": format!("janitor:wasm_policy:pr:{pr}:{idx}:abi_version"),
+                "value": receipt.abi_version
+            }));
+            props.push(json!({
+                "name": format!("janitor:wasm_policy:pr:{pr}:{idx}:result_digest"),
+                "value": receipt.result_digest
+            }));
+        }
         if let Some(hash) = entry.capsule_hash.as_deref() {
             let pr = entry.pr_number.unwrap_or(0);
             props.push(json!({
@@ -242,6 +261,24 @@ fn cbom_entry_properties(entry: &BounceLogEntry, include_signatures: bool) -> Ve
         props.push(json!({
             "name": "janitor:wisdom_signature",
             "value": signature
+        }));
+    }
+    for (idx, receipt) in entry.wasm_policy_receipts.iter().enumerate() {
+        props.push(json!({
+            "name": format!("janitor:wasm_policy:{idx}:module_digest"),
+            "value": receipt.module_digest
+        }));
+        props.push(json!({
+            "name": format!("janitor:wasm_policy:{idx}:rule_id"),
+            "value": receipt.rule_id
+        }));
+        props.push(json!({
+            "name": format!("janitor:wasm_policy:{idx}:abi_version"),
+            "value": receipt.abi_version
+        }));
+        props.push(json!({
+            "name": format!("janitor:wasm_policy:{idx}:result_digest"),
+            "value": receipt.result_digest
         }));
     }
     if include_signatures {
@@ -315,6 +352,7 @@ mod tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            wasm_policy_receipts: Vec::new(),
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,

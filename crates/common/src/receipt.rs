@@ -104,6 +104,7 @@ pub struct DecisionCapsule {
     pub wisdom_hash: String,
     pub cbom_digest: String,
     pub score_vector: DecisionScoreVector,
+    pub wasm_policy_receipts: Vec<crate::wasm_receipt::WasmPolicyReceipt>,
 }
 
 impl DecisionCapsule {
@@ -158,6 +159,7 @@ pub struct DecisionReceipt {
     pub transparency_anchor: String,
     pub cbom_signature: String,
     pub capsule_hash: String,
+    pub wasm_policy_receipts: Vec<crate::wasm_receipt::WasmPolicyReceipt>,
 }
 
 /// Detached Governor signature envelope for a [`DecisionReceipt`].
@@ -298,6 +300,7 @@ pub mod tests {
             transparency_anchor: "42:abc123".to_string(),
             cbom_signature: "mlsig".to_string(),
             capsule_hash: "capsule".to_string(),
+            wasm_policy_receipts: Vec::new(),
         }
     }
 
@@ -329,6 +332,7 @@ pub mod tests {
             policy_hash: "policy".to_string(),
             wisdom_hash: "wisdom".to_string(),
             cbom_digest: "cbom".to_string(),
+            wasm_policy_receipts: Vec::new(),
             score_vector: DecisionScoreVector {
                 antipattern_score: 150,
                 ..DecisionScoreVector::default()

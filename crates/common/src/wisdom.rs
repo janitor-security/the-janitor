@@ -141,10 +141,18 @@ pub struct WisdomFeedReceipt {
     pub signature: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, SerdeSerialize, SerdeDeserialize)]
+pub struct WisdomMirrorReceipt {
+    pub threshold: usize,
+    pub agreed_hash: String,
+    pub accepted_mirrors: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedWisdom {
     pub set: WisdomSet,
     pub receipt: Option<WisdomFeedReceipt>,
+    pub mirror_receipt: Option<WisdomMirrorReceipt>,
 }
 
 impl WisdomSet {
@@ -246,7 +254,12 @@ pub fn load_wisdom_with_receipt(path: &Path) -> Option<LoadedWisdom> {
     let bytes = std::fs::read(path).ok()?;
     let set = deserialize_wisdom_bytes(&bytes)?;
     let receipt = load_wisdom_receipt(path, &bytes);
-    Some(LoadedWisdom { set, receipt })
+    let mirror_receipt = load_wisdom_mirror_receipt(path);
+    Some(LoadedWisdom {
+        set,
+        receipt,
+        mirror_receipt,
+    })
 }
 
 fn deserialize_wisdom_bytes(bytes: &[u8]) -> Option<WisdomSet> {
@@ -291,6 +304,12 @@ fn load_wisdom_receipt(path: &Path, bytes: &[u8]) -> Option<WisdomFeedReceipt> {
     let signature = normalize_signature_string(&sig_bytes)?;
     let hash = blake3::hash(bytes).to_hex().to_string();
     Some(WisdomFeedReceipt { hash, signature })
+}
+
+fn load_wisdom_mirror_receipt(path: &Path) -> Option<WisdomMirrorReceipt> {
+    let receipt_path = path.with_extension("rkyv.mirror.json");
+    let receipt_bytes = std::fs::read(receipt_path).ok()?;
+    serde_json::from_slice::<WisdomMirrorReceipt>(&receipt_bytes).ok()
 }
 
 pub fn normalize_signature_string(sig_bytes: &[u8]) -> Option<String> {

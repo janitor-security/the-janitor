@@ -867,6 +867,7 @@ async fn main() -> anyhow::Result<()> {
                             transparency_log: None,
                             wisdom_hash: None,
                             wisdom_signature: None,
+                            wasm_policy_receipts: Vec::new(),
                             capsule_hash: None,
                             decision_receipt: None,
                             cognition_surrender_index: 0.0,
@@ -3050,15 +3051,16 @@ cross-reference GitHub Actor ID against commit author email and GPG signatures t
                 .flat_map(|v| v.iter().copied())
                 .collect();
             let paths: Vec<&str> = effective_wasm_rules.iter().map(|s| s.as_str()).collect();
-            let wasm_findings = forge::slop_filter::run_wasm_rules(&paths, &wasm_src);
-            for f in &wasm_findings {
+            let wasm_result = forge::slop_filter::run_wasm_rules(&paths, &wasm_src);
+            for f in &wasm_result.findings {
                 score
                     .antipattern_details
                     .push(format!("{} — proprietary Wasm rule", f.id));
                 score.antipatterns_found += 1;
                 score.antipattern_score = score.antipattern_score.saturating_add(50);
             }
-            score.structured_findings.extend(wasm_findings);
+            score.structured_findings.extend(wasm_result.findings);
+            score.wasm_policy_receipts = wasm_result.receipts;
         }
     }
 
@@ -3227,8 +3229,10 @@ probable AI context-collapse (hallucinated function reference)"
         .unwrap_or(report::PrState::Open);
     let is_bot = policy.is_automation_account(author.unwrap_or(""));
     let slop_score_val = score.score();
-    let wisdom_receipt = common::wisdom::load_wisdom_with_receipt(&janitor_dir.join("wisdom.rkyv"))
-        .and_then(|loaded| loaded.receipt);
+    let loaded_wisdom = common::wisdom::load_wisdom_with_receipt(&janitor_dir.join("wisdom.rkyv"));
+    let wisdom_receipt = loaded_wisdom
+        .as_ref()
+        .and_then(|loaded| loaded.receipt.clone());
     let mut log_entry = report::BounceLogEntry {
         pr_number: resolved_pr_number,
         author: author.map(|s| s.to_owned()),
@@ -3296,6 +3300,7 @@ probable AI context-collapse (hallucinated function reference)"
         transparency_log: None,
         wisdom_hash: wisdom_receipt.as_ref().map(|receipt| receipt.hash.clone()),
         wisdom_signature: wisdom_receipt.map(|receipt| receipt.signature),
+        wasm_policy_receipts: score.wasm_policy_receipts.clone(),
         capsule_hash: None,
         decision_receipt: None,
         // CSI = slop density per unit of agentic authorship.
@@ -3418,6 +3423,7 @@ fn build_decision_capsule(
         policy_hash: entry.policy_hash.clone(),
         wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
         cbom_digest: blake3::hash(cbom_json.as_bytes()).to_hex().to_string(),
+        wasm_policy_receipts: entry.wasm_policy_receipts.clone(),
         score_vector: common::receipt::DecisionScoreVector {
             dead_symbols_added: score.dead_symbols_added,
             logic_clones_found: score.logic_clones_found,
@@ -3513,11 +3519,15 @@ fn cmd_replay_receipt(capsule_path: &Path) -> anyhow::Result<()> {
             replayed_score
         );
     }
+    if sealed.capsule.wasm_policy_receipts != sealed.receipt.receipt.wasm_policy_receipts {
+        anyhow::bail!("replayed Wasm policy receipts do not match the sealed Governor receipt");
+    }
 
     println!(
-        "Replay verified — score {}, roots {}, anchor {}",
+        "Replay verified — score {}, roots {}, wasm {}, anchor {}",
         replayed_score,
         sealed.capsule.mutation_roots.len(),
+        sealed.capsule.wasm_policy_receipts.len(),
         sealed.receipt.receipt.transparency_anchor
     );
     Ok(())
@@ -3637,6 +3647,12 @@ fn cmd_verify_cbom(
                     if let Some(signature) = entry.wisdom_signature.as_deref() {
                         line.push_str(&format!(", Wisdom Sig: {signature}"));
                     }
+                    if !entry.wasm_policy_receipts.is_empty() {
+                        line.push_str(&format!(
+                            ", Wasm Policies: {} sealed",
+                            entry.wasm_policy_receipts.len()
+                        ));
+                    }
                     if let Some(hash) = entry.capsule_hash.as_deref() {
                         line.push_str(&format!(", Capsule: {hash}"));
                     }
@@ -3651,6 +3667,12 @@ fn cmd_verify_cbom(
                             ", Governor Receipt: VALID ({})",
                             receipt.receipt.transparency_anchor
                         ));
+                        if receipt.receipt.wasm_policy_receipts != entry.wasm_policy_receipts {
+                            anyhow::bail!(
+                                "line {}: Governor receipt Wasm provenance does not match the bounce entry",
+                                line_no + 1
+                            );
+                        }
                     } else {
                         line.push_str(", Governor Receipt: UNSIGNED");
                     }
@@ -4114,48 +4136,24 @@ fn cmd_update_wisdom_with_urls(
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
         .with_context(|| format!("creating {}", janitor_dir.display()))?;
-
-    let mut response = match ureq::get(wisdom_url).call() {
-        Ok(response) => response,
-        Err(e) => {
-            return Err(anyhow::anyhow!(
-                "{}: GET {wisdom_url} failed: {e}",
+    let policy = common::policy::JanitorPolicy::load(project_root);
+    let quorum = &policy.wisdom.quorum;
+    let threshold = quorum.threshold.max(1);
+    let (bytes, normalized_signature, verified_feed_hash, mirror_receipt) =
+        if quorum.mirrors.is_empty() {
+            let fetched = fetch_verified_wisdom_payload(
+                wisdom_url,
+                wisdom_sig_url,
                 if ci_mode {
                     "update-wisdom --ci-mode"
                 } else {
                     "update-wisdom"
-                }
-            ));
-        }
-    };
-
-    let bytes = response.body_mut().read_to_vec().map_err(|e| {
-        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_url} failed: {e}")
-    })?;
-
-    let mut sig_response = match ureq::get(wisdom_sig_url).call() {
-        Ok(response) => response,
-        Err(e) => {
-            return Err(anyhow::anyhow!(
-                "{}: GET {wisdom_sig_url} failed: {e}",
-                if ci_mode {
-                    "update-wisdom --ci-mode"
-                } else {
-                    "update-wisdom"
-                }
-            ));
-        }
-    };
-
-    let sig_bytes = sig_response.body_mut().read_to_vec().map_err(|e| {
-        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_sig_url} failed: {e}")
-    })?;
-    verify_wisdom_signature(&bytes, &sig_bytes)
-        .context("update-wisdom: detached wisdom signature verification failed")?;
-
-    let normalized_signature = common::wisdom::normalize_signature_string(&sig_bytes)
-        .ok_or_else(|| anyhow::anyhow!("update-wisdom: detached signature was empty"))?;
-    let verified_feed_hash = blake3::hash(&bytes).to_hex().to_string();
+                },
+            )?;
+            (fetched.bytes, fetched.signature, fetched.hash, None)
+        } else {
+            fetch_verified_wisdom_quorum(quorum, threshold)?
+        };
 
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &bytes)
@@ -4166,6 +4164,9 @@ fn cmd_update_wisdom_with_urls(
     )
     .with_context(|| format!("writing {}", janitor_dir.join("wisdom.rkyv.sig").display()))?;
     write_wisdom_receipt(&janitor_dir, &verified_feed_hash, &normalized_signature)?;
+    if let Some(receipt) = mirror_receipt.as_ref() {
+        write_wisdom_mirror_receipt(&janitor_dir, receipt)?;
+    }
     if ci_mode {
         common::wisdom::validate_wisdom_archive(&wisdom_path).with_context(|| {
             format!(
@@ -4259,6 +4260,124 @@ fn cmd_update_wisdom_with_urls(
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct VerifiedWisdomPayload {
+    bytes: Vec<u8>,
+    signature: String,
+    hash: String,
+}
+
+fn select_wisdom_quorum_candidate(
+    threshold: usize,
+    candidates: Vec<(String, VerifiedWisdomPayload)>,
+) -> anyhow::Result<(
+    Vec<u8>,
+    String,
+    String,
+    Option<common::wisdom::WisdomMirrorReceipt>,
+)> {
+    use std::collections::BTreeMap;
+
+    let mut agreed: BTreeMap<String, Vec<(String, VerifiedWisdomPayload)>> = BTreeMap::new();
+    for (mirror, payload) in candidates {
+        agreed
+            .entry(payload.hash.clone())
+            .or_default()
+            .push((mirror, payload));
+    }
+
+    let Some((agreed_hash, matches)) = agreed.into_iter().max_by_key(|(_, v)| v.len()) else {
+        anyhow::bail!("update-wisdom --ci-mode: no valid signed Wisdom mirrors reached quorum");
+    };
+    if matches.len() < threshold {
+        anyhow::bail!(
+            "update-wisdom --ci-mode: Wisdom mirror quorum failed for hash {agreed_hash}; got {} valid mirrors, need {}",
+            matches.len(),
+            threshold
+        );
+    }
+
+    let accepted_mirrors: Vec<String> = matches
+        .iter()
+        .take(threshold)
+        .map(|(mirror, _)| mirror.clone())
+        .collect();
+    let canonical = matches.into_iter().next().ok_or_else(|| {
+        anyhow::anyhow!("update-wisdom --ci-mode: quorum candidate set was empty")
+    })?;
+    Ok((
+        canonical.1.bytes,
+        canonical.1.signature,
+        canonical.1.hash.clone(),
+        Some(common::wisdom::WisdomMirrorReceipt {
+            threshold,
+            agreed_hash,
+            accepted_mirrors,
+        }),
+    ))
+}
+
+fn fetch_verified_wisdom_payload(
+    wisdom_url: &str,
+    wisdom_sig_url: &str,
+    mode_label: &str,
+) -> anyhow::Result<VerifiedWisdomPayload> {
+    let mut response = ureq::get(wisdom_url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("{mode_label}: GET {wisdom_url} failed: {e}"))?;
+    let bytes = response.body_mut().read_to_vec().map_err(|e| {
+        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_url} failed: {e}")
+    })?;
+
+    let mut sig_response = ureq::get(wisdom_sig_url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("{mode_label}: GET {wisdom_sig_url} failed: {e}"))?;
+    let sig_bytes = sig_response.body_mut().read_to_vec().map_err(|e| {
+        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_sig_url} failed: {e}")
+    })?;
+
+    verify_wisdom_signature(&bytes, &sig_bytes)
+        .context("update-wisdom: detached wisdom signature verification failed")?;
+    let signature = common::wisdom::normalize_signature_string(&sig_bytes)
+        .ok_or_else(|| anyhow::anyhow!("update-wisdom: detached signature was empty"))?;
+    let hash = blake3::hash(&bytes).to_hex().to_string();
+    Ok(VerifiedWisdomPayload {
+        bytes,
+        signature,
+        hash,
+    })
+}
+
+fn fetch_verified_wisdom_quorum(
+    quorum: &common::policy::WisdomQuorumConfig,
+    threshold: usize,
+) -> anyhow::Result<(
+    Vec<u8>,
+    String,
+    String,
+    Option<common::wisdom::WisdomMirrorReceipt>,
+)> {
+    let mut candidates = Vec::new();
+    let mut last_error = String::new();
+    for mirror in &quorum.mirrors {
+        let base = mirror.trim_end_matches('/');
+        let wisdom_url = format!("{base}/v1/wisdom.rkyv");
+        let sig_url = format!("{base}/v1/wisdom.rkyv.sig");
+        match fetch_verified_wisdom_payload(&wisdom_url, &sig_url, "update-wisdom --ci-mode") {
+            Ok(payload) => candidates.push((mirror.clone(), payload)),
+            Err(err) => {
+                last_error = err.to_string();
+            }
+        }
+    }
+    if candidates.is_empty() {
+        anyhow::bail!(
+            "update-wisdom --ci-mode: no valid signed Wisdom mirrors reached quorum ({last_error})"
+        );
+    }
+    select_wisdom_quorum_candidate(threshold, candidates)
+}
+
 fn write_wisdom_manifest(janitor_dir: &Path, manifest: &serde_json::Value) -> anyhow::Result<()> {
     let manifest_path = janitor_dir.join("wisdom_manifest.json");
     let manifest_str = serde_json::to_string_pretty(manifest).map_err(|e| {
@@ -4283,6 +4402,18 @@ fn write_wisdom_receipt(
     let receipt_str = serde_json::to_string_pretty(&receipt)
         .map_err(|e| anyhow::anyhow!("serializing wisdom receipt failed: {e}"))?;
     std::fs::write(&receipt_path, receipt_str.as_bytes())
+        .with_context(|| format!("writing {}", receipt_path.display()))?;
+    Ok(())
+}
+
+fn write_wisdom_mirror_receipt(
+    janitor_dir: &Path,
+    receipt: &common::wisdom::WisdomMirrorReceipt,
+) -> anyhow::Result<()> {
+    let receipt_path = janitor_dir.join("wisdom.rkyv.mirror.json");
+    let body = serde_json::to_string_pretty(receipt)
+        .map_err(|e| anyhow::anyhow!("serializing wisdom mirror receipt failed: {e}"))?;
+    std::fs::write(&receipt_path, body.as_bytes())
         .with_context(|| format!("writing {}", receipt_path.display()))?;
     Ok(())
 }
@@ -4657,6 +4788,7 @@ mod pqc_signing_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            wasm_policy_receipts: Vec::new(),
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
@@ -4799,6 +4931,7 @@ mod replay_receipt_tests {
             policy_hash: "policy".to_string(),
             wisdom_hash: "wisdom".to_string(),
             cbom_digest: "cbom".to_string(),
+            wasm_policy_receipts: Vec::new(),
             score_vector: DecisionScoreVector {
                 antipattern_score: 150,
                 ..DecisionScoreVector::default()
@@ -4816,6 +4949,7 @@ mod replay_receipt_tests {
                 transparency_anchor: "7:abc".to_string(),
                 cbom_signature: "sig".to_string(),
                 capsule_hash,
+                wasm_policy_receipts: Vec::new(),
             },
             &signing_key,
         )
@@ -4960,7 +5094,9 @@ mod governor_routing_tests {
 
 #[cfg(test)]
 mod wisdom_sync_tests {
-    use super::cmd_update_wisdom_with_urls;
+    use super::{
+        cmd_update_wisdom_with_urls, select_wisdom_quorum_candidate, VerifiedWisdomPayload,
+    };
     use std::fs;
 
     #[test]
@@ -4984,6 +5120,63 @@ mod wisdom_sync_tests {
         assert!(
             !temp_root.join(".janitor").join("wisdom.rkyv").exists(),
             "failed ci-mode sync must not fabricate a wisdom archive"
+        );
+    }
+
+    #[test]
+    fn quorum_selection_accepts_matching_threshold() {
+        let payload = VerifiedWisdomPayload {
+            bytes: b"wisdom".to_vec(),
+            signature: "sig-a".to_string(),
+            hash: "hash-a".to_string(),
+        };
+        let result = select_wisdom_quorum_candidate(
+            2,
+            vec![
+                ("https://mirror-a.example".to_string(), payload.clone()),
+                ("https://mirror-b.example".to_string(), payload),
+            ],
+        )
+        .expect("matching mirrors must satisfy quorum");
+        assert_eq!(result.2, "hash-a");
+        assert_eq!(
+            result
+                .3
+                .as_ref()
+                .expect("mirror receipt must be present")
+                .accepted_mirrors
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn quorum_selection_fails_when_threshold_is_not_met() {
+        let result = select_wisdom_quorum_candidate(
+            2,
+            vec![
+                (
+                    "https://mirror-a.example".to_string(),
+                    VerifiedWisdomPayload {
+                        bytes: b"wisdom-a".to_vec(),
+                        signature: "sig-a".to_string(),
+                        hash: "hash-a".to_string(),
+                    },
+                ),
+                (
+                    "https://mirror-b.example".to_string(),
+                    VerifiedWisdomPayload {
+                        bytes: b"wisdom-b".to_vec(),
+                        signature: "sig-b".to_string(),
+                        hash: "hash-b".to_string(),
+                    },
+                ),
+            ],
+        )
+        .expect_err("split mirror hashes must fail quorum");
+        assert!(
+            result.to_string().contains("quorum failed"),
+            "quorum failure must be explicit"
         );
     }
 }

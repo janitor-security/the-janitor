@@ -209,6 +209,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         transparency_log: None,
         wisdom_hash: None,
         wisdom_signature: None,
+        wasm_policy_receipts: Vec::new(),
         capsule_hash: None,
         decision_receipt: None,
         cognition_surrender_index: 0.0,
@@ -545,6 +546,10 @@ pub struct BounceLogEntry {
     /// that governed this bounce result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wisdom_signature: Option<String>,
+
+    /// Deterministic provenance receipts for executed private Wasm policy modules.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wasm_policy_receipts: Vec<common::wasm_receipt::WasmPolicyReceipt>,
 
     /// BLAKE3 digest of the persisted replay capsule that governed the receipt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2818,6 +2823,11 @@ pub fn render_step_summary(entry: &BounceLogEntry) -> String {
         out.push_str(hash);
         out.push_str("`\n\n");
     }
+    if !entry.wasm_policy_receipts.is_empty() {
+        out.push_str("**Wasm Policy Modules:** `");
+        out.push_str(&entry.wasm_policy_receipts.len().to_string());
+        out.push_str(" sealed`\n\n");
+    }
     if let Some(receipt) = entry.decision_receipt.as_ref() {
         out.push_str("**Governor Receipt:** `");
         out.push_str(&receipt.receipt.transparency_anchor);
@@ -3129,6 +3139,7 @@ mod tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            wasm_policy_receipts: Vec::new(),
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
@@ -3264,6 +3275,7 @@ mod webhook_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            wasm_policy_receipts: Vec::new(),
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
@@ -3339,6 +3351,7 @@ mod soft_fail_tests {
             transparency_log: None,
             wisdom_hash: None,
             wisdom_signature: None,
+            wasm_policy_receipts: Vec::new(),
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
@@ -3407,7 +3420,7 @@ mod soft_fail_tests {
     fn post_bounce_result_parses_inclusion_proof() {
         use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
         use ed25519_dalek::SigningKey;
-        use std::io::{Read, Write};
+        use std::io::Read;
         use std::net::TcpListener;
 
         const TEST_GOVERNOR_SIGNING_KEY_SEED: [u8; 32] = [
@@ -3433,6 +3446,7 @@ mod soft_fail_tests {
                 transparency_anchor: "42:abc123".to_string(),
                 cbom_signature: "mlsig".to_string(),
                 capsule_hash: "capsule".to_string(),
+                wasm_policy_receipts: Vec::new(),
             },
             &signing_key,
         )
@@ -3454,6 +3468,8 @@ mod soft_fail_tests {
                 response_body
             )
             .expect("response write must succeed");
+            use std::io::Write as _;
+            stream.flush().expect("response flush must succeed");
         });
 
         let attestation = post_bounce_result(

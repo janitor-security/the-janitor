@@ -9,6 +9,7 @@ pub mod scm;
 pub mod slop;
 pub mod surface;
 pub mod taint;
+pub mod wasm_receipt;
 pub mod wisdom;
 
 use rkyv::bytecheck::CheckBytes;

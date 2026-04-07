@@ -27,6 +27,8 @@
 
 use anyhow::{Context, Result};
 use common::slop::StructuredFinding;
+use common::wasm_receipt::WasmPolicyReceipt;
+use std::path::Path;
 use wasmtime::{Config, Engine, Instance, Module, ResourceLimiter, Store, StoreLimitsBuilder};
 
 /// Source-bytes offset within the guest's linear memory (4 KiB).
@@ -40,6 +42,22 @@ const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
 
 /// Maximum Wasm fuel per `analyze` invocation (~100 M lightweight instructions).
 const FUEL_LIMIT: u64 = 100_000_000;
+const WASM_POLICY_ABI_VERSION: &str = "janitor.wasm_policy.v1";
+
+#[derive(Debug, Clone)]
+struct LoadedModule {
+    path: String,
+    rule_id: String,
+    abi_version: String,
+    module_digest: String,
+    module: Module,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WasmExecutionResult {
+    pub findings: Vec<StructuredFinding>,
+    pub receipts: Vec<WasmPolicyReceipt>,
+}
 
 /// Pre-compiled BYOP Wasm rule engine.
 ///
@@ -49,8 +67,7 @@ const FUEL_LIMIT: u64 = 100_000_000;
 /// faulting or fuel-exhausted module cannot affect subsequent invocations.
 pub struct WasmHost {
     engine: Engine,
-    /// (file-path, compiled-module) pairs; path retained for error messages.
-    modules: Vec<(String, Module)>,
+    modules: Vec<LoadedModule>,
 }
 
 impl WasmHost {
@@ -72,7 +89,19 @@ impl WasmHost {
                 std::fs::read(path).with_context(|| format!("reading Wasm rule module: {path}"))?;
             let module = Module::new(&engine, &bytes)
                 .with_context(|| format!("compiling Wasm rule module: {path}"))?;
-            modules.push(((*path).to_string(), module));
+            let rule_id = Path::new(path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .filter(|stem| !stem.is_empty())
+                .unwrap_or("unknown_rule")
+                .to_string();
+            modules.push(LoadedModule {
+                path: (*path).to_string(),
+                rule_id,
+                abi_version: WASM_POLICY_ABI_VERSION.to_string(),
+                module_digest: blake3::hash(&bytes).to_hex().to_string(),
+                module,
+            });
         }
         Ok(Self { engine, modules })
     }
@@ -86,20 +115,31 @@ impl WasmHost {
     /// the ABI contract logs an error to `stderr` and is skipped — the host
     /// never panics on adversarial guest behaviour.  Returns an empty vec
     /// when `src` is empty or no modules are loaded.
-    pub fn run(&self, src: &[u8]) -> Vec<StructuredFinding> {
+    pub fn run(&self, src: &[u8]) -> WasmExecutionResult {
         if self.modules.is_empty() || src.is_empty() {
-            return Vec::new();
+            return WasmExecutionResult::default();
         }
-        let mut all_findings = Vec::new();
-        for (path, module) in &self.modules {
-            match self.run_module(module, src) {
-                Ok(findings) => all_findings.extend(findings),
+        let mut result = WasmExecutionResult::default();
+        for loaded in &self.modules {
+            match self.run_module(&loaded.module, src) {
+                Ok(findings) => {
+                    let result_digest = serde_json::to_vec(&findings)
+                        .map(|payload| blake3::hash(&payload).to_hex().to_string())
+                        .unwrap_or_else(|_| blake3::hash(&[]).to_hex().to_string());
+                    result.findings.extend(findings);
+                    result.receipts.push(WasmPolicyReceipt {
+                        module_digest: loaded.module_digest.clone(),
+                        rule_id: loaded.rule_id.clone(),
+                        abi_version: loaded.abi_version.clone(),
+                        result_digest,
+                    });
+                }
                 Err(e) => {
-                    eprintln!("wasm_host: rule module '{path}' error: {e:#}");
+                    eprintln!("wasm_host: rule module '{}' error: {e:#}", loaded.path);
                 }
             }
         }
-        all_findings
+        result
     }
 
     fn run_module(&self, module: &Module, src: &[u8]) -> Result<Vec<StructuredFinding>> {
@@ -220,30 +260,55 @@ mod tests {
     #[test]
     fn test_empty_rules_returns_empty() {
         let host = WasmHost::new(&[]).unwrap();
-        let findings = host.run(b"fn foo() {}");
-        assert!(findings.is_empty(), "no modules must yield no findings");
+        let result = host.run(b"fn foo() {}");
+        assert!(
+            result.findings.is_empty(),
+            "no modules must yield no findings"
+        );
+        assert!(
+            result.receipts.is_empty(),
+            "no modules must yield no receipts"
+        );
     }
 
     #[test]
     fn test_empty_source_returns_empty() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
         let host = WasmHost::new(&[&path]).unwrap();
-        let findings = host.run(b"");
-        assert!(findings.is_empty(), "empty source must yield no findings");
+        let result = host.run(b"");
+        assert!(
+            result.findings.is_empty(),
+            "empty source must yield no findings"
+        );
+        assert!(
+            result.receipts.is_empty(),
+            "empty source must yield no receipts"
+        );
     }
 
     #[test]
     fn test_mock_rule_fires_on_source() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
         let host = WasmHost::new(&[&path]).unwrap();
-        let findings = host.run(b"fn foo() {}");
-        assert_eq!(findings.len(), 1, "mock rule must emit exactly one finding");
+        let result = host.run(b"fn foo() {}");
         assert_eq!(
-            findings[0].id, "security:test_rule",
+            result.findings.len(),
+            1,
+            "mock rule must emit exactly one finding"
+        );
+        assert_eq!(
+            result.receipts.len(),
+            1,
+            "mock rule must emit exactly one receipt"
+        );
+        assert_eq!(
+            result.findings[0].id, "security:test_rule",
             "finding id must match"
         );
-        assert_eq!(findings[0].file, None, "file must be None");
-        assert_eq!(findings[0].line, None, "line must be None");
+        assert_eq!(result.findings[0].file, None, "file must be None");
+        assert_eq!(result.findings[0].line, None, "line must be None");
+        assert!(!result.receipts[0].rule_id.is_empty());
+        assert_eq!(result.receipts[0].abi_version, WASM_POLICY_ABI_VERSION);
     }
 
     #[test]
@@ -260,10 +325,14 @@ mod tests {
         let (_tmp, path) = wat_to_tempfile(infinite_wat);
         let host = WasmHost::new(&[&path]).unwrap();
         // Must not hang — fuel exhaustion skips the module and returns empty.
-        let findings = host.run(b"int main() {}");
+        let result = host.run(b"int main() {}");
         assert!(
-            findings.is_empty(),
+            result.findings.is_empty(),
             "fuel-exhausted module must yield no findings"
+        );
+        assert!(
+            result.receipts.is_empty(),
+            "fuel-exhausted module must yield no receipts"
         );
     }
 }
