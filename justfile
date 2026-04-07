@@ -116,6 +116,10 @@ fast-release version:
 	just audit
 	cargo build --release --workspace
 	strip target/release/janitor
+	# SLSA Level 4: compute BLAKE3 hash (and optional ML-DSA-65 sig) for binary provenance.
+	# Produces target/release/janitor.b3 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.
+	./target/release/janitor sign-asset target/release/janitor \
+	    ${JANITOR_PQC_KEY:+--pqc-key "${JANITOR_PQC_KEY}"}
 	# Idempotency guard — check local and remote before any mutation (Law: idempotency.md).
 	if git rev-parse "v{{version}}" >/dev/null 2>&1 \
 	   || git ls-remote --tags origin "refs/tags/v{{version}}" | grep -q .; then
@@ -131,7 +135,12 @@ fast-release version:
 	if gh release view "v{{version}}" >/dev/null 2>&1; then
 	    echo "Idempotency guard: GitHub Release v{{version}} already exists. Skipping gh release create."
 	else
-	    gh release create v{{version}} --generate-notes --title "The Janitor v{{version}}"
+	    RELEASE_ASSETS=(target/release/janitor target/release/janitor.b3)
+	    [ -f target/release/janitor.sig ] && RELEASE_ASSETS+=(target/release/janitor.sig)
+	    gh release create v{{version}} \
+	        --generate-notes \
+	        --title "The Janitor v{{version}}" \
+	        "${RELEASE_ASSETS[@]}"
 	fi
 	just deploy-docs
 	echo "💀 Release v{{version}} deployed."

@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Syntax Rescue & SLSA Level 4 Provenance (v10.0.0-rc.5)
+
+**Directive:** Phase 1 — Confirm `DEFAULT_GOVERNOR_URL` integrity (no truncation); Phase 2 — Add `janitor sign-asset` subcommand; Phase 3 — Wire `fast-release` to sign and attach binary assets; Phase 4 — Gut `action.yml` of `cargo build`; replace with BLAKE3-verified binary download.
+
+**Files modified:**
+- `crates/common/src/pqc.rs` *(modified)* — CT-020: added `JANITOR_ASSET_CONTEXT = b"janitor-release-asset"`; added `pub fn sign_asset_hash_from_file(hash: &[u8; 32], path: &Path)` with domain-separated ML-DSA-65 + SLH-DSA-SHAKE-192s signing
+- `crates/cli/src/main.rs` *(modified)* — CT-020: added hidden `SignAsset { file, pqc_key }` subcommand + `cmd_sign_asset` function (mmap file, BLAKE3 hash → `.b3`, optional PQC sign → `.sig`); 1 new test `sign_asset_produces_correct_blake3_hash`
+- `justfile` *(modified)* — CT-020: `fast-release` calls `./target/release/janitor sign-asset` after strip; `gh release create` attaches `janitor`, `janitor.b3`, and optionally `janitor.sig` as release assets
+- `action.yml` *(modified)* — CT-020: Steps 1–3 (cache, clone, cargo build) replaced with single BLAKE3-verified binary download step; cleanup updated to `/tmp/janitor-bin`
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.5`
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-020 resolved; P0-1 section purged; freeze banner updated
+
+**Crucible:** SANCTUARY INTACT — no new Crucible entries (provenance tooling, not detectors).
+
+**Security posture delta:**
+- CT-020 (SLSA Level 4): CI no longer builds from source — binary is downloaded from a pinned GitHub Release tag and BLAKE3-verified before execution. Supply-chain compromise of a Cargo dependency no longer affects the binary used in customer CI. Closes the final IL6/FedRAMP CISO objection regarding runner-side compilation.
+- `sign-asset` command: each release binary now ships with a BLAKE3 hash (`.b3`) and, when `JANITOR_PQC_KEY` is set, an ML-DSA-65 / SLH-DSA signature (`.sig`) for offline attestation.
+
+---
+
 ## 2026-04-07 — Hard-Fail Mandate & Air-Gap Enforcement (v10.0.0-rc.4)
 
 **Directive:** Phase 1 — Eradicate fail-open policy loading; Phase 2 — Wire pqc_enforced; Phase 3 — Sever cloud defaults; Phase 4 — Expand slopsquat corpus; Phase 5 — SLSA Level 4 roadmap entry.

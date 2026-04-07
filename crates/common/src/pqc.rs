@@ -7,6 +7,11 @@ use fips205::traits::{SerDes as SlhSerDes, Signer as SlhSigner, Verifier as SlhV
 use std::path::{Path, PathBuf};
 
 pub const JANITOR_CBOM_CONTEXT: &[u8] = b"janitor-cbom";
+/// Domain-separation context for release-asset signatures.
+///
+/// Distinct from [`JANITOR_CBOM_CONTEXT`] so that a CBOM signature cannot be
+/// replayed against a release binary and vice versa.
+pub const JANITOR_ASSET_CONTEXT: &[u8] = b"janitor-release-asset";
 pub const ML_DSA_PRIVATE_KEY_LEN: usize = 4032;
 pub const ML_DSA_PUBLIC_KEY_LEN: usize = 1952;
 pub const SLH_DSA_PRIVATE_KEY_LEN: usize = slh_dsa_shake_192s::SK_LEN;
@@ -158,6 +163,54 @@ pub fn verify_slh_dsa_signature(
         )
     })?;
     Ok(pk.verify(cbom_bytes, &sig_array, JANITOR_CBOM_CONTEXT))
+}
+
+/// Sign a release-asset BLAKE3 hash using the PQC private key bundle at `path`.
+///
+/// `hash_bytes` is the 32-byte raw BLAKE3 digest of the release asset.
+/// Signing the hash rather than the raw binary keeps the operation fast
+/// regardless of asset size.
+///
+/// Writes no files; the caller is responsible for serialising the returned
+/// [`PqcSignatureBundle`] to disk as a `.sig` file.
+pub fn sign_asset_hash_from_file(
+    hash_bytes: &[u8; 32],
+    path: &Path,
+) -> anyhow::Result<PqcSignatureBundle> {
+    let key_bytes = std::fs::read(path)
+        .with_context(|| format!("reading PQC private key bundle: {}", path.display()))?;
+    let keys = private_key_bundle_from_bytes(&key_bytes)?;
+
+    let ml_dsa_sig = if let Some(sk_bytes) = keys.ml_dsa {
+        let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk_bytes)
+            .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 private key: {e}"))?;
+        let sig = sk
+            .try_sign(hash_bytes, JANITOR_ASSET_CONTEXT)
+            .map_err(|e| anyhow::anyhow!("ML-DSA-65 asset signing failed: {e}"))?;
+        Some(base64::engine::general_purpose::STANDARD.encode(sig.as_ref()))
+    } else {
+        None
+    };
+
+    let slh_dsa_sig = if let Some(sk_bytes) = keys.slh_dsa {
+        let sk = slh_dsa_shake_192s::PrivateKey::try_from_bytes(&sk_bytes)
+            .map_err(|e| anyhow::anyhow!("invalid {SLH_DSA_VARIANT} private key: {e}"))?;
+        let sig = sk
+            .try_sign(hash_bytes.as_ref(), JANITOR_ASSET_CONTEXT, true)
+            .map_err(|e| anyhow::anyhow!("{SLH_DSA_VARIANT} asset signing failed: {e}"))?;
+        Some(base64::engine::general_purpose::STANDARD.encode(sig))
+    } else {
+        None
+    };
+
+    if ml_dsa_sig.is_none() && slh_dsa_sig.is_none() {
+        bail!("PQC private key bundle contained no usable key material for asset signing");
+    }
+
+    Ok(PqcSignatureBundle {
+        ml_dsa_sig,
+        slh_dsa_sig,
+    })
 }
 
 fn private_key_bundle_from_bytes(bytes: &[u8]) -> anyhow::Result<PqcPrivateKeyBundle> {

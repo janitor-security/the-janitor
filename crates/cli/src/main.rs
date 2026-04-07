@@ -638,6 +638,25 @@ enum Commands {
         #[arg(long, default_value = ".")]
         repo: PathBuf,
     },
+
+    /// Compute the BLAKE3 hash of a release binary and optionally sign it with PQC keys.
+    ///
+    /// Writes `<file>.b3` — the hex-encoded BLAKE3 digest — always.
+    /// If `--pqc-key` is supplied, also writes `<file>.sig` — a JSON bundle
+    /// containing ML-DSA-65 and/or SLH-DSA-SHAKE-192s signatures over the hash.
+    ///
+    /// Used by `just fast-release` to produce SLSA Level 4 provenance artifacts
+    /// attached to each GitHub Release. Not listed in `--help` output.
+    #[command(hide = true)]
+    SignAsset {
+        /// Path to the release binary or other artifact to hash and sign.
+        file: PathBuf,
+        /// PQC private key bundle path (ML-DSA-65 or dual ML+SLH, FIPS 204/205).
+        ///
+        /// When omitted, only the BLAKE3 `.b3` hash file is written — no signature.
+        #[arg(long)]
+        pqc_key: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1045,6 +1064,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::ImportIntelCapsule { in_path, repo } => {
             cmd_import_intel_capsule(in_path, repo)?;
+        }
+        Commands::SignAsset { file, pqc_key } => {
+            cmd_sign_asset(file, pqc_key.as_deref())?;
         }
     }
 
@@ -5552,4 +5574,89 @@ fn verify_wisdom_signature(wisdom_bytes: &[u8], sig_bytes: &[u8]) -> anyhow::Res
     verifying_key
         .verify(wisdom_bytes, &signature)
         .map_err(|_| anyhow::anyhow!("wisdom archive signature mismatch"))
+}
+
+// ---------------------------------------------------------------------------
+// sign-asset
+// ---------------------------------------------------------------------------
+
+/// Compute a BLAKE3 hash for a release binary and optionally sign it with PQC keys.
+///
+/// Always writes `<file>.b3` (hex BLAKE3 digest, newline-terminated).
+/// Writes `<file>.sig` (JSON PQC signature bundle) only when `pqc_key` is supplied.
+fn cmd_sign_asset(file: &Path, pqc_key: Option<&str>) -> anyhow::Result<()> {
+    use memmap2::Mmap;
+    use std::fs::File;
+
+    let f = File::open(file).with_context(|| format!("opening asset: {}", file.display()))?;
+    // SAFETY: standard mmap usage — file is not modified while the map is live.
+    let mmap = unsafe { Mmap::map(&f) }
+        .with_context(|| format!("mmap failed for asset: {}", file.display()))?;
+
+    let hash = blake3::hash(&mmap);
+    let hex = hash.to_hex().to_string();
+
+    // Append ".b3" to the full filename (including any existing extension).
+    let b3_path = {
+        let mut p = file.to_path_buf();
+        let mut name = p.file_name().unwrap_or_default().to_os_string();
+        name.push(".b3");
+        p.set_file_name(name);
+        p
+    };
+    std::fs::write(&b3_path, format!("{hex}\n"))
+        .with_context(|| format!("writing {}", b3_path.display()))?;
+    println!("BLAKE3: {hex}");
+    println!("Written: {}", b3_path.display());
+
+    if let Some(key_path) = pqc_key {
+        let bundle = common::pqc::sign_asset_hash_from_file(
+            hash.as_bytes(),
+            std::path::Path::new(key_path),
+        )?;
+        let sig_json = serde_json::json!({
+            "hash_algorithm": "BLAKE3",
+            "context": "janitor-release-asset",
+            "asset": file.file_name().unwrap_or_default().to_string_lossy(),
+            "ml_dsa_sig": bundle.ml_dsa_sig,
+            "slh_dsa_sig": bundle.slh_dsa_sig,
+        });
+        let sig_path = {
+            let mut p = file.to_path_buf();
+            let mut name = p.file_name().unwrap_or_default().to_os_string();
+            name.push(".sig");
+            p.set_file_name(name);
+            p
+        };
+        std::fs::write(&sig_path, serde_json::to_string_pretty(&sig_json)?)
+            .with_context(|| format!("writing {}", sig_path.display()))?;
+        println!("PQC signature written: {}", sig_path.display());
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod sign_asset_tests {
+    use super::*;
+
+    #[test]
+    fn sign_asset_produces_correct_blake3_hash() {
+        let dir = std::env::temp_dir().join("janitor_sign_asset_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let asset = dir.join("dummy_asset");
+        std::fs::write(&asset, b"hello janitor release").unwrap();
+
+        cmd_sign_asset(&asset, None).expect("sign_asset must succeed without pqc_key");
+
+        let b3_path = dir.join("dummy_asset.b3");
+        let b3_contents =
+            std::fs::read_to_string(&b3_path).expect("b3 file must exist after sign_asset");
+        let expected = blake3::hash(b"hello janitor release").to_hex().to_string();
+        assert_eq!(
+            b3_contents.trim(),
+            expected,
+            "BLAKE3 hash file must match blake3::hash output"
+        );
+    }
 }

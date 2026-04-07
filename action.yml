@@ -34,39 +34,52 @@ runs:
   using: 'composite'
   steps:
 
-    # Step 1 — Restore cached janitor binary.
+    # Step 1 — Download pre-compiled binary and verify BLAKE3 integrity.
     #
-    # Key: OS + digest of Cargo.lock, all crate source files, and crate manifests.
-    # Hashing source alongside the lockfile ensures a cache miss whenever any
-    # Rust source or Cargo.toml changes, not just when dependencies change.
-    # Path: the compiled binary only — not the full target/ tree.
-    # On cache hit  → Step 2 (Bootstrap) is skipped entirely.
-    # On cache miss → Step 2 clones + builds, populating the cache on exit.
-    - name: Cache Janitor Binary
-      id: cache-build
-      uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3 branch HEAD
-      with:
-        path: /tmp/the-janitor/target/release/janitor
-        key: ${{ runner.os }}-rust-stable-janitor-v3-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
-
-    # Step 2 — Clone and compile on cache miss only.
+    # SLSA Level 4 provenance: the binary in CI is the exact artifact emitted by
+    # the signed release pipeline — not a re-compilation that could silently
+    # diverge due to runner environment drift or supply-chain compromise of a
+    # transitive Cargo dependency resolved at build time.
     #
-    # Dependabot PRs that touch Cargo.lock will miss the cache and attempt a
-    # fresh build; all other PRs hit the cache and skip compilation entirely.
-    # The `if` condition prevents redundant rebuilds on repeated runs.
-    - name: Bootstrap Janitor Engine
-      if: steps.cache-build.outputs.cache-hit != 'true'
+    # Verification sequence:
+    #   1. Derive the release tag from github.action_ref (the version in `uses:`).
+    #   2. Download the pre-compiled binary and its companion .b3 BLAKE3 hash file
+    #      from the GitHub Release assets.
+    #   3. Compute the BLAKE3 hash of the downloaded binary using the `blake3`
+    #      Python package (installed on-demand; always available in GH runners).
+    #   4. Compare computed hash against the .b3 file — exit 1 on any mismatch.
+    #      A tampered CDN or corrupted release asset is caught before execution.
+    - name: Download and Verify Janitor Binary
       shell: bash
       run: |
         set -euo pipefail
-        git clone --depth 1 --branch "${{ github.action_ref || 'main' }}" \
-          https://github.com/janitor-security/the-janitor.git /tmp/the-janitor
-        cargo build --manifest-path /tmp/the-janitor/Cargo.toml --release -p cli
-
-    # Step 3 — Export binary path (always runs; cache hit and miss both land here).
-    - name: Export Janitor Binary Path
-      shell: bash
-      run: echo "JANITOR_BIN=/tmp/the-janitor/target/release/janitor" >> "$GITHUB_ENV"
+        ACTION_TAG="${{ github.action_ref }}"
+        # Normalize: ensure the tag starts with 'v' for the GitHub Release URL.
+        [[ "${ACTION_TAG}" == v* ]] || ACTION_TAG="v${ACTION_TAG}"
+        INSTALL_DIR=/tmp/janitor-bin
+        mkdir -p "${INSTALL_DIR}"
+        BASE_URL="https://github.com/janitor-security/the-janitor/releases/download/${ACTION_TAG}"
+        # Download binary and BLAKE3 hash file.
+        curl -fsSL "${BASE_URL}/janitor"    -o "${INSTALL_DIR}/janitor"
+        curl -fsSL "${BASE_URL}/janitor.b3" -o "${INSTALL_DIR}/janitor.b3"
+        # Install blake3 Python package for hash verification (idempotent).
+        python3 -m pip install blake3 --quiet
+        EXPECTED_HASH="$(tr -d '[:space:]' < "${INSTALL_DIR}/janitor.b3")"
+        ACTUAL_HASH="$(JANITOR_PATH="${INSTALL_DIR}/janitor" python3 -c "
+import blake3, os
+data = open(os.environ['JANITOR_PATH'], 'rb').read()
+print(blake3.blake3(data).hexdigest(), end='')
+")"
+        if [ "${ACTUAL_HASH}" != "${EXPECTED_HASH}" ]; then
+            echo "FATAL: BLAKE3 integrity check failed — binary may be tampered" >&2
+            echo "  Tag:      ${ACTION_TAG}" >&2
+            echo "  Expected: ${EXPECTED_HASH}" >&2
+            echo "  Actual:   ${ACTUAL_HASH}" >&2
+            exit 1
+        fi
+        echo "BLAKE3 integrity verified: ${ACTUAL_HASH}"
+        chmod +x "${INSTALL_DIR}/janitor"
+        echo "JANITOR_BIN=${INSTALL_DIR}/janitor" >> "$GITHUB_ENV"
 
     # Step 4 — Extract the PR unified diff.
     - name: Extract Patch
@@ -155,4 +168,4 @@ runs:
       if: always()
       shell: bash
       run: |
-        rm -rf /tmp/the-janitor /tmp/janitor-selftest-* .janitor-pr.patch || true
+        rm -rf /tmp/janitor-bin /tmp/janitor-selftest-* .janitor-pr.patch || true
