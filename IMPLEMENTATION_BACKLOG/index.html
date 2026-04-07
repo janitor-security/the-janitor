@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-quorum-wasm-provenance-v9916" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-sovereign-hardening-surface-expansion-v9915" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Sovereign Hardening &amp; Surface Expansion (v9.9.15)
@@ -1052,6 +1061,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-cryptographic-quorum-wasm-provenance-v9916" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-sovereign-hardening-surface-expansion-v9915" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Sovereign Hardening &amp; Surface Expansion (v9.9.15)
@@ -1478,6 +1496,46 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-06-cryptographic-quorum-wasm-provenance-v9916">2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)</h2>
+<p><strong>Directive:</strong> Seal private Wasm-rule execution into replayable provenance,
+require threshold-signed Wisdom mirror consensus before feed overwrite,
+autonomously seed the next sovereign distribution debt item, and release
+<code>v9.9.16</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.16</code>
+- <code>crates/common/src/lib.rs</code> <em>(modified)</em> — exported <code>wasm_receipt</code>
+- <code>crates/common/src/wasm_receipt.rs</code> <em>(new)</em> — added deterministic
+  <code>WasmPolicyReceipt</code> schema for module digest, rule ID, ABI version, and
+  result digest
+- <code>crates/common/src/receipt.rs</code> <em>(modified)</em> — threaded Wasm policy receipts
+  through <code>DecisionCapsule</code> and <code>DecisionReceipt</code>
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — added <code>[wisdom.quorum]</code>
+  configuration with default threshold <code>1</code>
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — added <code>WisdomMirrorReceipt</code> and
+  bound mirror provenance into <code>LoadedWisdom</code>
+- <code>crates/forge/src/wasm_host.rs</code> <em>(modified)</em> — Wasm host now emits
+  deterministic per-module provenance receipts alongside findings
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — BYOR execution path now
+  returns findings plus receipts for downstream sealing
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — bounce now seals Wasm receipts into
+  replay capsules; <code>verify-cbom</code> and <code>replay-receipt</code> validate them; 
+  <code>update-wisdom</code> now supports threshold mirror quorum with fail-closed
+  consensus selection and persisted mirror receipts
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>BounceLogEntry</code> and step summaries
+  now carry Wasm policy provenance
+- <code>crates/cli/src/cbom.rs</code> <em>(modified)</em> — CycloneDX metadata now serializes
+  Wasm policy receipts
+- <code>crates/cli/src/daemon.rs</code> <em>(modified)</em> and <code>crates/cli/src/git_drive.rs</code>
+  <em>(modified)</em> — synchronized auxiliary <code>BounceLogEntry</code> constructors with the
+  new provenance field
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em> — Governor countersigned receipts now
+  bind sealed Wasm policy provenance
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — updated Wasm-host regression to
+  assert both findings and provenance receipt emission
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed completed <code>P1-1</code> and <code>P1-2</code>;
+  seeded <code>P1-1</code> Air-Gap Intel Transfer Capsules
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</p>
+<p><strong>Commit:</strong> pending <code>just fast-release 9.9.16</code></p>
 <h2 id="2026-04-06-sovereign-hardening-surface-expansion-v9915">2026-04-06 — Sovereign Hardening &amp; Surface Expansion (v9.9.15)</h2>
 <p><strong>Directive:</strong> Revalidate signed Wisdom feed provenance, execute the
 filename-aware surface router across Forge and CLI paths, prove extensionless

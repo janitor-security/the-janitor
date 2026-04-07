@@ -605,18 +605,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-wasm-policy-module-provenance" class="md-nav__link">
+  <a href="#p1-1-air-gap-intel-transfer-capsules" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Wasm Policy Module Provenance
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-threshold-signed-intel-mirror-quorum" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: Threshold-Signed Intel Mirror Quorum
+      P1-1: Air-Gap Intel Transfer Capsules
     </span>
   </a>
   
@@ -734,18 +725,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-wasm-policy-module-provenance" class="md-nav__link">
+  <a href="#p1-1-air-gap-intel-transfer-capsules" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Wasm Policy Module Provenance
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-threshold-signed-intel-mirror-quorum" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: Threshold-Signed Intel Mirror Quorum
+      P1-1: Air-Gap Intel Transfer Capsules
     </span>
   </a>
   
@@ -804,47 +786,26 @@ ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-1-wasm-policy-module-provenance">P1-1: Wasm Policy Module Provenance</h3>
-<p><strong>Class:</strong> Enterprise Governance / Audit Provenance</p>
+<h3 id="p1-1-air-gap-intel-transfer-capsules">P1-1: Air-Gap Intel Transfer Capsules</h3>
+<p><strong>Class:</strong> Sovereign Distribution / Enterprise Portability</p>
 <p><strong>Observation:</strong>
-Replay capsules now seal the decision math, but they still do not prove which
-private Wasm rule modules participated in the decision. Once enterprise BYOR
-rules are mounted, an auditor will need cryptographic evidence of the exact
-module hash, ABI version, and invocation order that influenced the final score.</p>
+Mirror quorum and feed signatures now prove online retrieval integrity, but
+air-gapped operators still have to move <code>wisdom.rkyv</code>, detached signatures,
+mirror receipts, and policy evidence as separate files. That manual bundle
+assembly weakens custody guarantees at the exact handoff regulated buyers care
+about most.</p>
 <p><strong>Proposal:</strong>
-Add a <code>WasmPolicyReceipt</code> envelope that records the BLAKE3 digest, declared
-rule ID, ABI version, and result vector for every loaded Wasm governance module.
-Bind those module receipts into the replay capsule, Governor decision receipt,
-and CBOM so offline verification can prove which private policies fired without
-revealing the module source.</p>
+Introduce a signed <code>IntelTransferCapsule</code> that bundles the accepted
+<code>wisdom.rkyv</code>, detached Ed25519 signatures, quorum mirror receipt, feed hash,
+and compatible Governor / Wasm provenance metadata into one portable archive
+with an offline verification command.</p>
 <p><strong>Security impact:</strong>
-Closes the last enterprise governance blind spot by turning opaque private-rule
-execution into sealed, replayable provenance rather than an unverifiable black
-box.</p>
+Preserves cryptographic chain-of-custody when threat intelligence crosses air
+gaps, removable media, or sovereign mirror boundaries.</p>
 <p><strong>Implementation path:</strong>
-Introduce <code>crates/common/src/wasm_receipt.rs</code>, extend the Wasm host to emit
-deterministic per-module result digests, and thread those receipts through
-<code>DecisionCapsule</code>, <code>SignedDecisionReceipt</code>, <code>verify-cbom</code>, and
-<code>replay-receipt</code>.</p>
-<h3 id="p1-2-threshold-signed-intel-mirror-quorum">P1-2: Threshold-Signed Intel Mirror Quorum</h3>
-<p><strong>Class:</strong> Sovereign Supply Chain / Feed Resilience</p>
-<p><strong>Observation:</strong>
-The Wisdom feed is now signature-verified, but it is still operationally
-anchored to a single CDN retrieval path. In a sanctions event, regional outage,
-or targeted routing disruption, enterprises will need mathematically equivalent
-feed acceptance from multiple mirrors without relaxing provenance guarantees.</p>
-<p><strong>Proposal:</strong>
-Introduce a mirror-quorum receipt flow where <code>update-wisdom</code> can fetch the same
-<code>wisdom.rkyv</code> plus detached signatures from multiple sovereign endpoints,
-require a threshold of matching BLAKE3 digests, and emit a compact mirror
-receipt proving which authorities agreed on the accepted archive.</p>
-<p><strong>Security impact:</strong>
-Eliminates single-distribution trust assumptions while preserving strict
-fail-closed provenance under hostile network or geopolitical conditions.</p>
-<p><strong>Implementation path:</strong>
-Extend <code>JanitorPolicy</code> with a feed mirror set and quorum threshold, add a
-<code>WisdomMirrorReceipt</code> structure in <code>common</code>, and bind the accepted mirror set
-into <code>update-wisdom</code>, bounce logs, and CBOM metadata.</p>
+Add <code>janitor export-intel-capsule</code> and <code>janitor import-intel-capsule</code>,
+serialize the bundle under <code>common</code>, and teach <code>update-wisdom</code> to trust only
+capsules whose internal receipts and archive hash agree.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
 <h3 id="p2-1-exhaustion-corpus-promotion-pipeline">P2-1: Exhaustion Corpus Promotion Pipeline</h3>
 <p><strong>Class:</strong> Defensive Hardening / Fuzzing Operations
