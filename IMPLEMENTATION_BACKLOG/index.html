@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-air-gap-perimeter-hardening-v9919" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
@@ -1088,6 +1097,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-air-gap-perimeter-hardening-v9919" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
@@ -1549,6 +1567,17 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-cryptographic-sealing-v100-feature-freeze-v1000-rc1">2026-04-07 — Cryptographic Sealing &amp; v10.0 Feature Freeze (v10.0.0-rc.1)</h2>
+<p><strong>Directive:</strong> CT-013 — bind BLAKE3 taint catalog hash into DecisionCapsule; bump workspace to 10.0.0-rc.1; feature freeze.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/forge/src/taint_catalog.rs</code> <em>(modified)</em> — CT-013: added <code>catalog_hash: String</code> field to <code>CatalogView</code>; computed <code>blake3::hash(&amp;mmap[..])</code> at open time; exposed <code>catalog_hash()</code> accessor; added <code>catalog_hash_is_deterministic_and_content_sensitive</code> unit test
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — added <code>taint_catalog_hash: Option&lt;String&gt;</code> field to <code>SlopScore</code>; capture hash from catalog at open site (line ~1154); thread into <code>final_score</code>
+- <code>crates/common/src/receipt.rs</code> <em>(modified)</em> — added <code>#[serde(default)] pub taint_catalog_hash: Option&lt;String&gt;</code> field to <code>DecisionCapsule</code>; updated test fixture
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — propagated <code>score.taint_catalog_hash</code> into <code>DecisionCapsule</code> in <code>build_decision_capsule</code>; updated replay test fixture
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.1</code>
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — feature freeze banner added; CT-013 purged (RESOLVED); CT-014/CT-015/CT-016 marked "Deferred to v10.1"</p>
+<p><strong>Crucible:</strong> 19/19 SANCTUARY INTACT (no new Crucible entries — provenance field is additive, existing fixtures use <code>..SlopScore::default()</code>).</p>
 <hr />
 <h2 id="2026-04-07-air-gap-perimeter-hardening-v9919">2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)</h2>
 <p><strong>Directive:</strong> Execute CT-011 (OOM size guard) and CT-012 (symlink traversal confinement) in <code>cmd_import_intel_capsule</code>.</p>

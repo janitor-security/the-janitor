@@ -595,23 +595,14 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-compliance-integration" class="md-nav__link">
+  <a href="#p1-compliance-integration-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
-      P1 — Compliance / Integration
+      P1 — Compliance / Integration (Deferred to v10.1)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
+    <nav class="md-nav" aria-label="P1 — Compliance / Integration (Deferred to v10.1)">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-013-taint-catalog-unsigned-injection-via-janitor-directory-control" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-013: Taint catalog unsigned — injection via .janitor/ directory control
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#ct-014-cross-file-taint-member-expression-call-chains-not-detected" class="md-nav__link">
@@ -637,13 +628,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p2-architecture-ergonomics" class="md-nav__link">
+  <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
-      P2 — Architecture / Ergonomics
+      P2 — Architecture / Ergonomics (Deferred to v10.1)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
+    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics (Deferred to v10.1)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -733,23 +724,14 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-compliance-integration" class="md-nav__link">
+  <a href="#p1-compliance-integration-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
-      P1 — Compliance / Integration
+      P1 — Compliance / Integration (Deferred to v10.1)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
+    <nav class="md-nav" aria-label="P1 — Compliance / Integration (Deferred to v10.1)">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-013-taint-catalog-unsigned-injection-via-janitor-directory-control" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-013: Taint catalog unsigned — injection via .janitor/ directory control
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#ct-014-cross-file-taint-member-expression-call-chains-not-detected" class="md-nav__link">
@@ -775,13 +757,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p2-architecture-ergonomics" class="md-nav__link">
+  <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
-      P2 — Architecture / Ergonomics
+      P2 — Architecture / Ergonomics (Deferred to v10.1)
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
+    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics (Deferred to v10.1)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -819,25 +801,18 @@
 <h1 id="innovation-log">Innovation Log</h1>
 <p>Active architectural debt only. Completed work, resolved telemetry, and legacy
 ID epochs are purged during hard compaction.</p>
+<blockquote>
+<p><strong>FEATURE FREEZE ACTIVE: v10.0.0 RELEASE CANDIDATE.</strong>
+Only P0 bug fixes and stability patches are permitted.
+CT-014, CT-015, CT-016 are deferred constraints tracked for v10.1.</p>
+</blockquote>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <!-- CT-011 RESOLVED v9.9.19: 50 MiB size guard added to cmd_import_intel_capsule -->
 <!-- CT-012 RESOLVED v9.9.19: canonicalize + starts_with confinement check added -->
+<!-- CT-013 RESOLVED v10.0.0-rc.1: BLAKE3 catalog_hash bound into DecisionCapsule -->
 
-<h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="ct-013-taint-catalog-unsigned-injection-via-janitor-directory-control">CT-013: Taint catalog unsigned — injection via <code>.janitor/</code> directory control</h3>
-<p><strong>File:</strong> <code>crates/forge/src/taint_catalog.rs::CatalogView::open</code></p>
-<p><strong>Gap:</strong> <code>.janitor/taint_catalog.rkyv</code> is a zero-copy mmap'd file with no signature
-or hash binding to the CBOM or wisdom archive. An attacker who can write to the repo
-root (e.g. via a compromised CI step or a path traversal in a dependency) can inject
-fake <code>TaintExportRecord</code> entries: either fabricating false-positive cross-file taint
-findings (alert fatigue) or marking all helpers as clean (detection blind spot).</p>
-<p><strong>Fix:</strong> Chain a BLAKE3 hash of the taint catalog into the <code>DecisionCapsule</code> and
-verify it on load. Optionally sign the catalog with the same Ed25519 key used for
-wisdom verification.</p>
-<p><strong>TEI:</strong> Hardens the cross-file taint spine against supply-chain poisoning. Enterprise
-audit requirement for SOC 2 Type II.</p>
-<hr />
+<h2 id="p1-compliance-integration-deferred-to-v101">P1 — Compliance / Integration (Deferred to v10.1)</h2>
 <h3 id="ct-014-cross-file-taint-member-expression-call-chains-not-detected">CT-014: Cross-file taint — member-expression call chains not detected</h3>
 <p><strong>File:</strong> <code>crates/forge/src/taint_catalog.rs::walk_js_calls</code>, <code>walk_python_calls</code>,
 <code>walk_java_calls</code>, <code>walk_go_calls</code></p>
@@ -870,7 +845,7 @@ fuel.</p>
 <p><strong>TEI:</strong> Prevents BYOR governance modules from degrading CI scan latency on adversarial
 or buggy rule modules. Sovereign tier quality gate.</p>
 <hr />
-<h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
+<h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
 <h3 id="ct-016-bytelatticeanalyzer-false-positives-on-utf-16-encoded-source-files">CT-016: ByteLatticeAnalyzer false-positives on UTF-16 encoded source files</h3>
 <p><strong>File:</strong> <code>crates/forge/src/agnostic_shield.rs::ByteLatticeAnalyzer::classify</code></p>
 <p><strong>Gap:</strong> <code>ByteLatticeAnalyzer</code> classifies by raw byte entropy. UTF-16 encoded source
