@@ -42,6 +42,11 @@ const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
 
 /// Maximum Wasm fuel per `analyze` invocation (~100 M lightweight instructions).
 const FUEL_LIMIT: u64 = 100_000_000;
+/// Wall-clock timeout per `analyze` invocation via wasmtime epoch interruption.
+///
+/// Fires after 100 ms regardless of remaining fuel — prevents host-side
+/// allocator pressure and non-deterministic latency (CT-015).
+const EPOCH_TIMEOUT_MS: u64 = 100;
 const WASM_POLICY_ABI_VERSION: &str = "janitor.wasm_policy.v1";
 
 #[derive(Debug, Clone)]
@@ -82,6 +87,11 @@ impl WasmHost {
         let mut config = Config::new();
         // Fuel-based execution limit: each Wasm instruction consumes one unit.
         config.consume_fuel(true);
+        // CT-015: epoch interruption provides a wall-clock safety net alongside
+        // the fuel gate.  A guest that allocates near the memory ceiling within
+        // the fuel budget can cause host-side latency spikes; the epoch timeout
+        // guarantees termination within EPOCH_TIMEOUT_MS regardless of fuel.
+        config.epoch_interruption(true);
         let engine = Engine::new(&config).context("failed to create Wasm engine")?;
         let mut modules = Vec::with_capacity(wasm_paths.len());
         for path in wasm_paths {
@@ -153,6 +163,17 @@ impl WasmHost {
         store
             .set_fuel(FUEL_LIMIT)
             .context("configuring Wasm execution fuel")?;
+        // CT-015: arm the epoch wall-clock gate.  Deadline of 1 means the first
+        // `engine.increment_epoch()` call will interrupt this store's execution.
+        store.set_epoch_deadline(1);
+        // Spawn a detached thread that fires the epoch tick after EPOCH_TIMEOUT_MS.
+        // If `analyze_fn.call` completes before the tick, the store is already
+        // dropped and the increment is a no-op — zero overhead on the fast path.
+        let engine_for_timeout = self.engine.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(EPOCH_TIMEOUT_MS));
+            engine_for_timeout.increment_epoch();
+        });
 
         let instance =
             Instance::new(&mut store, module, &[]).context("instantiating Wasm rule module")?;

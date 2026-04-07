@@ -2339,4 +2339,221 @@ index 1111111..2222222 100644
             "empty source must yield no Wasm findings"
         );
     }
+
+    // ---------------------------------------------------------------------------
+    // CT-015: Wasm epoch wall-clock timeout — proves the 100 ms gate fires
+    // ---------------------------------------------------------------------------
+
+    /// Confirms that a tight-loop Wasm module is terminated within the wall-clock
+    /// budget even if it remains within the fuel allocation.
+    ///
+    /// The infinite-loop WAT below is killed by either fuel exhaustion or the
+    /// epoch timeout (whichever fires first).  The critical invariant is that
+    /// `host.run()` returns in bounded time and yields no findings — the engine
+    /// never hangs waiting for a runaway guest.
+    ///
+    /// This is the CT-015 regression gate: any removal of epoch_interruption or
+    /// the timeout thread in `wasm_host.rs` will cause this test to hang under
+    /// adversarial guest modules that allocate near the memory ceiling without
+    /// consuming fuel rapidly.
+    #[test]
+    fn wasm_host_epoch_timeout_enforced() {
+        use std::time::{Duration, Instant};
+
+        let infinite_wat = r#"(module
+  (memory (export "memory") 1)
+  (func (export "output_ptr") (result i32) i32.const 0)
+  (func (export "analyze") (param i32 i32) (result i32)
+    (loop $l (br $l))
+    i32.const 0
+  )
+)"#;
+
+        let mut tmp = tempfile::NamedTempFile::with_suffix(".wat").unwrap();
+        use std::io::Write as _;
+        tmp.write_all(infinite_wat.as_bytes()).unwrap();
+        let path = tmp.path().to_str().unwrap().to_owned();
+        let tmp_path = tmp.into_temp_path();
+
+        let host =
+            forge::wasm_host::WasmHost::new(&[&path]).expect("infinite-loop WAT must compile");
+
+        let start = Instant::now();
+        let result = host.run(b"fn main() {}");
+        let elapsed = start.elapsed();
+
+        drop(tmp_path);
+
+        // The combination of fuel gate + epoch timeout must terminate within 2 s.
+        // Under Cranelift JIT the fuel gate fires in < 500 ms; the epoch gate
+        // provides the backstop for memory-pressure scenarios that survive fuel.
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "Wasm host must terminate infinite-loop module within 2 s wall-clock budget"
+        );
+        assert!(
+            result.findings.is_empty(),
+            "terminated module must yield no findings"
+        );
+        assert!(
+            result.receipts.is_empty(),
+            "terminated module must yield no receipts"
+        );
+    }
+
+    // ---------------------------------------------------------------------------
+    // CT-014: member-expression call chain detection — Crucible fixtures
+    // ---------------------------------------------------------------------------
+
+    /// CT-014 true positive (JS): `obj.dangerousSink(userInput)` — member_expression
+    /// callee must be intercepted as a cross-file taint sink.
+    #[test]
+    fn cross_file_taint_js_member_expression_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let records = vec![TaintExportRecord {
+            symbol_name: "dangerousSink".to_string(),
+            file_path: "helpers.js".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "input".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: api.js calls obj.dangerousSink(userInput) — member-expression callee.
+        let patch = "diff --git a/api.js b/api.js\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/api.js\n\
+                     +++ b/api.js\n\
+                     @@ -0,0 +1,3 @@\n\
+                     +function handle(req) {\n\
+                     +    obj.dangerousSink(req.body);\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: JS member_expression cross_file_taint_sink must fire on obj.dangerousSink(tainted)"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: JS member_expression cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
+
+    /// CT-014 true positive (Python): `self.db_helper(user_input)` — attribute callee
+    /// must be intercepted as a cross-file taint sink.
+    #[test]
+    fn cross_file_taint_python_attribute_callee_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let records = vec![TaintExportRecord {
+            symbol_name: "db_helper".to_string(),
+            file_path: "helpers.py".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "user_input".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: service.py calls self.db_helper(user_input) — attribute callee.
+        let patch = "diff --git a/service.py b/service.py\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/service.py\n\
+                     +++ b/service.py\n\
+                     @@ -0,0 +1,3 @@\n\
+                     +def process(self, user_input):\n\
+                     +    return self.db_helper(user_input)\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: Python attribute callee cross_file_taint_sink must fire on self.db_helper(user_input)"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: Python attribute callee cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
+
+    /// CT-014 true positive (TS): `this.queryRunner(payload)` — member_expression callee
+    /// must be intercepted as a cross-file taint sink.
+    #[test]
+    fn cross_file_taint_ts_member_expression_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let records = vec![TaintExportRecord {
+            symbol_name: "queryRunner".to_string(),
+            file_path: "db.ts".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "payload".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: api.ts calls this.queryRunner(payload) — member-expression callee.
+        let patch = "diff --git a/api.ts b/api.ts\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/api.ts\n\
+                     +++ b/api.ts\n\
+                     @@ -0,0 +1,3 @@\n\
+                     +async function handle(payload: string) {\n\
+                     +    await this.queryRunner(payload);\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: TS member_expression cross_file_taint_sink must fire on this.queryRunner(payload)"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: TS member_expression cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
 }

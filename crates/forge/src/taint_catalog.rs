@@ -257,17 +257,25 @@ fn walk_python_calls(
 ) {
     if node.kind() == "call" {
         if let Some(func) = node.child_by_field_name("function") {
-            if func.kind() == "identifier" {
-                let callee = func.utf8_text(source).unwrap_or("");
-                if catalog.has_sink(callee) {
-                    if let Some(args) = node.child_by_field_name("arguments") {
-                        if has_nontrivial_arg_python(args, source) {
-                            out.push(CrossFileSinkFinding {
-                                callee_name: callee.to_string(),
-                                start_byte: node.start_byte(),
-                                end_byte: node.end_byte(),
-                            });
-                        }
+            // CT-014: match both bare identifiers (`helper(arg)`) and attribute
+            // calls (`self.helper(arg)`, `obj.db_helper(user_input)`).
+            let callee: String = match func.kind() {
+                "identifier" => func.utf8_text(source).unwrap_or("").to_string(),
+                "attribute" => func
+                    .child_by_field_name("attribute")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("")
+                    .to_string(),
+                _ => String::new(),
+            };
+            if !callee.is_empty() && catalog.has_sink(&callee) {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    if has_nontrivial_arg_python(args, source) {
+                        out.push(CrossFileSinkFinding {
+                            callee_name: callee,
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                        });
                     }
                 }
             }
@@ -331,17 +339,25 @@ fn walk_js_calls(
 ) {
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
-            if func.kind() == "identifier" {
-                let callee = func.utf8_text(source).unwrap_or("");
-                if catalog.has_sink(callee) {
-                    if let Some(args) = node.child_by_field_name("arguments") {
-                        if has_nontrivial_arg_js(args, source) {
-                            out.push(CrossFileSinkFinding {
-                                callee_name: callee.to_string(),
-                                start_byte: node.start_byte(),
-                                end_byte: node.end_byte(),
-                            });
-                        }
+            // CT-014: match bare identifiers (`sink(arg)`) and member-expression
+            // call chains (`obj.sink(arg)`, `this.dangerousHelper(userInput)`).
+            let callee: String = match func.kind() {
+                "identifier" => func.utf8_text(source).unwrap_or("").to_string(),
+                "member_expression" => func
+                    .child_by_field_name("property")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("")
+                    .to_string(),
+                _ => String::new(),
+            };
+            if !callee.is_empty() && catalog.has_sink(&callee) {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    if has_nontrivial_arg_js(args, source) {
+                        out.push(CrossFileSinkFinding {
+                            callee_name: callee,
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                        });
                     }
                 }
             }
@@ -461,17 +477,25 @@ fn walk_ts_calls(
 ) {
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
-            if func.kind() == "identifier" {
-                let callee = func.utf8_text(source).unwrap_or("");
-                if catalog.has_sink(callee) {
-                    if let Some(args) = node.child_by_field_name("arguments") {
-                        if has_nontrivial_arg_js(args, source) {
-                            out.push(CrossFileSinkFinding {
-                                callee_name: callee.to_string(),
-                                start_byte: node.start_byte(),
-                                end_byte: node.end_byte(),
-                            });
-                        }
+            // CT-014: match bare identifiers and member-expression call chains
+            // (`this.queryRunner.execute(payload)`, `service.dangerousSink(arg)`).
+            let callee: String = match func.kind() {
+                "identifier" => func.utf8_text(source).unwrap_or("").to_string(),
+                "member_expression" => func
+                    .child_by_field_name("property")
+                    .and_then(|n| n.utf8_text(source).ok())
+                    .unwrap_or("")
+                    .to_string(),
+                _ => String::new(),
+            };
+            if !callee.is_empty() && catalog.has_sink(&callee) {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    if has_nontrivial_arg_js(args, source) {
+                        out.push(CrossFileSinkFinding {
+                            callee_name: callee,
+                            start_byte: node.start_byte(),
+                            end_byte: node.end_byte(),
+                        });
                     }
                 }
             }
@@ -866,6 +890,104 @@ mod tests {
         assert!(
             findings.is_empty(),
             "Go literal arg must not emit cross-file taint finding"
+        );
+    }
+
+    // ── CT-014: member-expression / attribute call chain tests ─────────────
+
+    fn parse_js(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_javascript::LANGUAGE.into())
+            .expect("JavaScript grammar");
+        parser.parse(source.as_bytes(), None).expect("parse")
+    }
+
+    /// CT-014 true positive (JS): `obj.dangerousSink(tainted)` — member_expression callee.
+    #[test]
+    fn js_member_expression_cross_file_sink_fires() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("dangerousSink", true)];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = "obj.dangerousSink(userInput);\n";
+        let tree = parse_js(src);
+        let findings = scan_cross_file_sinks("js", src.as_bytes(), &tree, &catalog);
+        assert!(
+            !findings.is_empty(),
+            "JS member_expression callee must be intercepted as cross-file taint sink"
+        );
+        assert_eq!(findings[0].callee_name, "dangerousSink");
+    }
+
+    /// CT-014 true negative (JS): `obj.safeMethod("literal")` — literal arg must be silent.
+    #[test]
+    fn js_member_expression_literal_arg_silent() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("dangerousSink", true)];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = "obj.dangerousSink(\"static-value\");\n";
+        let tree = parse_js(src);
+        let findings = scan_cross_file_sinks("js", src.as_bytes(), &tree, &catalog);
+        assert!(
+            findings.is_empty(),
+            "JS member_expression callee with literal arg must not fire"
+        );
+    }
+
+    /// CT-014 true positive (TS): `this.queryRunner(payload)` — member_expression callee.
+    #[test]
+    fn ts_member_expression_cross_file_sink_fires() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("queryRunner", true)];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = "this.queryRunner(payload);\n";
+        let tree = parse_typescript(src);
+        let findings = scan_cross_file_sinks("ts", src.as_bytes(), &tree, &catalog);
+        assert!(
+            !findings.is_empty(),
+            "TS member_expression callee must be intercepted as cross-file taint sink"
+        );
+        assert_eq!(findings[0].callee_name, "queryRunner");
+    }
+
+    /// CT-014 true positive (Python): `self.db_helper(user_input)` — attribute callee.
+    #[test]
+    fn python_attribute_callee_cross_file_sink_fires() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("db_helper", true)];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = "self.db_helper(user_input)\n";
+        let tree = parse_python(src);
+        let findings = scan_cross_file_sinks("py", src.as_bytes(), &tree, &catalog);
+        assert!(
+            !findings.is_empty(),
+            "Python attribute callee must be intercepted as cross-file taint sink"
+        );
+        assert_eq!(findings[0].callee_name, "db_helper");
+    }
+
+    /// CT-014 true negative (Python): `self.safe_method("literal")` — literal arg, must be silent.
+    #[test]
+    fn python_attribute_callee_literal_arg_silent() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![make_record("db_helper", true)];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = "self.db_helper(\"static-query\")\n";
+        let tree = parse_python(src);
+        let findings = scan_cross_file_sinks("py", src.as_bytes(), &tree, &catalog);
+        assert!(
+            findings.is_empty(),
+            "Python attribute callee with literal arg must not fire"
         );
     }
 }

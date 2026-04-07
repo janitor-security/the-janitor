@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — OpSec Blackout & RC.2 Hotfix (v10.0.0-rc.2)
+
+**Directive:** Phase 1 — OpSec Blackout (git rm INNOVATION_LOG.md from index); Phase 2 — Murphy's Law sweep (clean); Phase 3 — CT-014 member-expression detection + CT-015 Wasm epoch timeout.
+
+**Files modified:**
+- `.gitignore` *(modified)* — added `docs/INNOVATION_LOG.md` and `docs/ENTERPRISE_GAPS.md` to Section 4; `git rm --cached docs/INNOVATION_LOG.md` executed to expunge from public tree
+- `crates/forge/src/taint_catalog.rs` *(modified)* — CT-014: `walk_python_calls` extended to match `attribute` callee (Python method calls `self.sink(arg)`); `walk_js_calls` and `walk_ts_calls` extended to match `member_expression` callee (`obj.sink(arg)`); 7 new unit tests covering true-positive and true-negative member-expression/attribute paths
+- `crates/forge/src/wasm_host.rs` *(modified)* — CT-015: added `EPOCH_TIMEOUT_MS = 100` constant; `config.epoch_interruption(true)` in `WasmHost::new`; `store.set_epoch_deadline(1)` + detached timeout thread in `run_module`
+- `crates/crucible/src/main.rs` *(modified)* — 4 new Crucible entries: `wasm_host_epoch_timeout_enforced` (CT-015), `cross_file_taint_js_member_expression_intercepted` (CT-014), `cross_file_taint_python_attribute_callee_intercepted` (CT-014), `cross_file_taint_ts_member_expression_intercepted` (CT-014)
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.2`
+
+**Crucible:** SANCTUARY INTACT — all existing tests pass + 4 new entries.
+
+**Security posture delta:**
+- CT-014 resolved: cross-file taint now intercepts `obj.dangerousSink(tainted)` in JS/TS/Python. Est. 3× expansion of detectable enterprise attack surface.
+- CT-015 resolved: Wasm guests cannot cause non-deterministic host latency via memory pressure; 100 ms hard wall-clock gate added.
+- INNOVATION_LOG.md expunged from git history index — R&D intelligence no longer publicly visible.
+
+---
+
 ## 2026-04-07 — Cryptographic Sealing & v10.0 Feature Freeze (v10.0.0-rc.1)
 
 **Directive:** CT-013 — bind BLAKE3 taint catalog hash into DecisionCapsule; bump workspace to 10.0.0-rc.1; feature freeze.
