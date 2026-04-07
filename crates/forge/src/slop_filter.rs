@@ -335,6 +335,26 @@ fn lang_for_ext(ext: &str) -> Option<LangConfig> {
                   body: (statement_block) @fn.body)
             "#,
         }),
+        // TypeScript and TSX: same function_declaration structure as JavaScript.
+        // Routing TS/TSX through lang_for_ext (rather than the is_definitive_text()
+        // early-return path) ensures the cross-file taint spine executes against the
+        // fully-parsed tree-sitter AST.
+        "ts" => Some(LangConfig {
+            language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            query_src: r#"
+                (function_declaration
+                  name: (identifier) @fn.name
+                  body: (statement_block) @fn.body)
+            "#,
+        }),
+        "tsx" => Some(LangConfig {
+            language: tree_sitter_typescript::LANGUAGE_TSX.into(),
+            query_src: r#"
+                (function_declaration
+                  name: (identifier) @fn.name
+                  body: (statement_block) @fn.body)
+            "#,
+        }),
         "glsl" | "vert" | "frag" => Some(LangConfig {
             // GLSL syntax is C-like; function bodies are compound_statement.
             language: tree_sitter_glsl::LANGUAGE_GLSL.into(),
@@ -1125,13 +1145,13 @@ impl PRBouncer for PatchBouncer {
             }
         }
 
-        // Cross-file taint spine (P0-1 Phase 3): for Python, JS/JSX, and Java
-        // files, consult the taint catalog to confirm multi-file taint flows.
-        // Each confirmed call to a cataloged sink function with a non-literal
+        // Cross-file taint spine (P0-1 Phase 4–7): for Python, JS/JSX, TypeScript,
+        // Java, and Go files, consult the taint catalog to confirm multi-file taint
+        // flows.  Each confirmed call to a cataloged sink function with a non-literal
         // argument emits `security:cross_file_taint_sink` at KevCritical.
         // Fail-open: if the catalog does not exist or fails to load, this block
         // is silently skipped — existing per-language detectors remain active.
-        if matches!(ext, "py" | "js" | "jsx" | "java") {
+        if matches!(ext, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go") {
             if let Some(catalog_path) = self.catalog_path.as_deref() {
                 if let Some(catalog) = crate::taint_catalog::CatalogView::open(catalog_path) {
                     for sink in

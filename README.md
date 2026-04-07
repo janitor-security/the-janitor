@@ -3,7 +3,7 @@
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v9.9.17: Zero-Upload, FIPS 204 Compliant.*
+*Attested by The Janitor v9.9.17: Zero-Upload, FIPS 204 Compliant.*
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
@@ -80,7 +80,7 @@ AI generators hallucinate package imports. The Janitor scans `package.json`, `Ca
 
 ### Cryptographic Integrity Bonds
 
-When a pull request clears the slop gate, **Janitor Sentinel** — our GitHub App — automatically issues a **CycloneDX v1.5 CBOM** (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the ML-DSA-65 (NIST FIPS 204) attestation signature, the BLAKE3 structural hashes, and the per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`. No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody for every line of code removed from production.
+When a pull request clears the slop gate, **Janitor Sentinel** — our GitHub App — automatically issues a **CycloneDX v1.6 CBOM** (Cryptography Bill of Materials) for the merge event. The CBOM records every cryptographic operation performed during the scan: the **Dual-PQC** attestation signature (ML-DSA-65 NIST FIPS 204 + SLH-DSA NIST FIPS 205), the BLAKE3 structural hashes, and the per-symbol audit entries covering `{timestamp}{file_path}{sha256_pre_cleanup}`. No token flag. No manual step. The proof is issued by the SaaS on a clean merge — a chain of custody for every line of code removed from production.
 
 ---
 
@@ -96,7 +96,31 @@ The Janitor is the opposite architecture: an **on-device structural firewall** �
 
 LLM-based code review tools cannot *prove* anything. They emit confidence scores against training distributions. A novel adversarial input — well-structured but semantically dangerous — is invisible to a heuristic system trained on pre-AI codebases.
 
-The Janitor does not guess. It uses **tree-sitter ASTs to prove structural identity**, **BLAKE3 hashing to prove clone equivalence**, and **ML-DSA-65 (NIST FIPS 204) to prove chain of custody**. The gate passes or it blocks. There is no confidence interval. There is no false-positive budget. When a PR clears the gate, Janitor Sentinel issues a CycloneDX v1.5 CBOM: a cryptographically signed bond you can present to a SOC 2 auditor — not a report, a proof.
+The Janitor does not guess. It uses **tree-sitter ASTs to prove structural identity**, **BLAKE3 hashing to prove clone equivalence**, and **Dual-PQC (ML-DSA-65 FIPS 204 + SLH-DSA FIPS 205) to prove chain of custody**. The gate passes or it blocks. There is no confidence interval. There is no false-positive budget. When a PR clears the gate, Janitor Sentinel issues a CycloneDX v1.6 CBOM: a cryptographically signed bond you can present to a SOC 2 auditor — not a report, a proof.
+
+### Air-Gap and Sovereign Deployment
+
+Veracode, Checkmarx, and SonarQube require cloud connectivity. Their analysis pipelines send your source to remote clusters. For IL5/IL6 environments — classified networks, air-gapped DoD infrastructure, sovereign cloud mandates — this is a hard disqualifier.
+
+The Janitor ships **Air-Gap Intel Transfer Capsules**: BLAKE3-hashed, Ed25519-signed wisdom bundles that can be physically transported and cryptographically verified offline. Import a capsule, verify the signature chain, and the engine is operational with full threat intelligence — no network ever required.
+
+### Private Governance Modules (Wasm BYOR)
+
+Veracode and Checkmarx enforce their rule sets. You cannot mount your own.
+
+The Janitor supports **Wasm BYOR (Bring Your Own Rules)**: private governance modules compiled to WebAssembly, fuel-bounded, memory-limited, and executed with deterministic provenance receipts. Every Wasm rule execution is sealed into the CBOM — auditable, reproducible, offline-verifiable.
+
+### Hallucinated Package Detection (Slopsquatting)
+
+AI code generators hallucinate package names. `py-react-vsc`, `django-tailwind-fast`, `node-express-secure-template` — packages that do not exist in any registry but sound plausible enough to install if a threat actor registers them first.
+
+The Janitor maintains a **BLAKE3-seeded Bloom filter** (`SlopsquatFilter`) seeded from the wisdom feed. Every package import in a PR is checked against the filter before it can reach the merge gate. Slopsquatting is stopped before it reaches production.
+
+### Replayable Decision Capsules
+
+No tool in the SAST market can prove, offline and without network access, exactly why a PR was blocked. The Janitor can.
+
+Every bounce decision is sealed into a **`DecisionCapsule`** — a tamper-evident record of the exact CST mutation roots, Wasm rule receipts, and analysis score that produced the verdict. A CISO can replay the capsule 18 months later, on an air-gapped machine, and cryptographically verify the chain of custody to the original diff.
 
 ### Agentic-Ready
 
@@ -165,7 +189,7 @@ janitor clean ./src --force-purge
 
 | Subsystem | Technology | Property |
 |-----------|-----------|---------|
-| **AST Engine** | Tree-sitter (12 grammars) | O(n) CST construction; byte-range precision per token |
+| **AST Engine** | Tree-sitter (23 grammars) | O(n) CST construction; byte-range precision per token |
 | **Reference Graph** | Petgraph directed digraph | Topological dead-symbol filter; in-degree = 0 → candidate |
 | **Pattern Matching** | Aho-Corasick (single automaton per group) | O(n+m) multi-pattern scan; zero allocation in hot path |
 | **Registry Persistence** | rkyv + memmap2 | mmap-direct deserialization; no heap allocation for reads |
@@ -175,7 +199,11 @@ janitor clean ./src --force-purge
 | **PR Quality Gate** | MinHash LSH (64 hashes, 8-band index) | Lock-free ArcSwap index; sub-linear collision detection |
 | **Deletion Engine** | Bottom-to-top byte-range splice | UTF-8 char-boundary hardened; zero re-parse overhead |
 | **Simulation Layer** | Symlink overlay (Shadow Tree) | Zero additional disk usage; tests run against simulated state |
-| **Audit Attestation** | ML-DSA-65 (NIST FIPS 204) | CycloneDX v1.5 CBOMs issued by Janitor Sentinel on clean merge |
+| **Audit Attestation** | Dual-PQC: ML-DSA-65 (FIPS 204) + SLH-DSA (FIPS 205) | CycloneDX v1.6 CBOMs issued by Janitor Sentinel on clean merge — quantum-safe, chain-of-custody provenance |
+| **Air-Gap Intel Transfer** | `IntelTransferCapsule` — BLAKE3 + Ed25519 offline verify | Signed wisdom feed bundles for IL5/IL6 environments; import without network access |
+| **Wasm BYOR Rules** | Wasmtime (fuel + memory bounded) | Mount private governance modules at `--wasm-rules <PATH>`; deterministic provenance receipts per execution |
+| **Slopsquatting Filter** | BLAKE3-seeded Bloom filter (`SlopsquatFilter`) | Flags hallucinated package names phonetically resembling known packages; seeded from `update-wisdom` |
+| **Replayable Decision Capsules** | `DecisionCapsule` + `WasmPolicyReceipt` | Offline audit replay of every bounce decision — CBOM-sealed, Ed25519 signed |
 
 ## Enterprise Integrations
 
@@ -202,7 +230,8 @@ janitor webhook-test --repo .
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
+| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
+| **Sovereign / Air-Gap** | **Custom (Starting at $49,900/yr)** | Everything in Team + **Dual-PQC CBOMs** (FIPS 204 ML-DSA + FIPS 205 SLH-DSA) + **Wasm BYOR rule mounting** (private governance modules) + **Offline Replayable Decision Capsules** (tamper-evident audit replay) + **Air-Gap Intel Transfers** (BLAKE3 + Ed25519 offline wisdom feed verification for IL5/IL6 environments) + SOC 2 Type II attestation packages + Dedicated SLA. |
 | **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 
 ### [→ Get Janitor Sentinel — $499/yr](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)

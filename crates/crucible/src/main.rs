@@ -1918,6 +1918,197 @@ index 1111111..2222222 100644
         );
     }
 
+    /// True-positive: TypeScript diff calls a cataloged sink helper with a non-literal arg.
+    /// Expects `security:cross_file_taint_sink` at KevCritical (+150 pts).
+    #[test]
+    fn cross_file_taint_typescript_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        // Catalog: `buildQuery` carries UserInput taint to a DatabaseResult sink.
+        let records = vec![TaintExportRecord {
+            symbol_name: "buildQuery".to_string(),
+            file_path: "helpers/db.ts".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "userId".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: api.ts calls buildQuery(req.userId) — tainted argument.
+        let patch = "diff --git a/api.ts b/api.ts\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/api.ts\n\
+                     +++ b/api.ts\n\
+                     @@ -0,0 +1,4 @@\n\
+                     +function handle(req: Request) {\n\
+                     +    const userId = req.query[\"uid\"];\n\
+                     +    const result = db.execute(buildQuery(userId));\n\
+                     +    return result;\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: TypeScript cross_file_taint_sink must fire on cataloged sink with tainted arg"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: TypeScript cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
+
+    /// True-negative: TypeScript diff calls a function NOT in the catalog — must be silent.
+    #[test]
+    fn cross_file_taint_typescript_safe() {
+        use common::taint::{TaintExportRecord, TaintKind};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let records = vec![TaintExportRecord {
+            symbol_name: "anotherHelper".to_string(),
+            file_path: "helpers.ts".to_string(),
+            tainted_params: vec![],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: false,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        let patch = "diff --git a/api.ts b/api.ts\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/api.ts\n\
+                     +++ b/api.ts\n\
+                     @@ -0,0 +1,3 @@\n\
+                     +function process(data: string) {\n\
+                     +    return safeTransform(data);\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: TypeScript cross_file_taint_sink must not fire for uncataloged function"
+        );
+    }
+
+    /// True-positive: Go diff calls a cataloged sink helper (bare identifier) with tainted arg.
+    /// Expects `security:cross_file_taint_sink` at KevCritical (+150 pts).
+    #[test]
+    fn cross_file_taint_go_intercepted() {
+        use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        // Catalog: `buildQuery` carries UserInput taint to a DatabaseResult sink.
+        let records = vec![TaintExportRecord {
+            symbol_name: "buildQuery".to_string(),
+            file_path: "helpers/db.go".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "userID".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: true,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        // Diff: handler.go calls db.Exec(buildQuery(userID)) — tainted argument.
+        let patch = "diff --git a/handler.go b/handler.go\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/handler.go\n\
+                     +++ b/handler.go\n\
+                     @@ -0,0 +1,6 @@\n\
+                     +package main\n\
+                     +func Handle(db *sql.DB, userID string) {\n\
+                     +    row, _ := db.Query(buildQuery(userID))\n\
+                     +    _ = row\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: Go cross_file_taint_sink must fire on cataloged bare-identifier sink"
+        );
+        assert!(
+            score.antipattern_score >= 150,
+            "Crucible: Go cross_file_taint_sink must contribute KevCritical points"
+        );
+    }
+
+    /// True-negative: Go diff calls a function NOT in the catalog — must be silent.
+    #[test]
+    fn cross_file_taint_go_safe() {
+        use common::taint::{TaintExportRecord, TaintKind};
+
+        let dir = tempfile::tempdir().unwrap();
+        let janitor_dir = dir.path().join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+
+        let records = vec![TaintExportRecord {
+            symbol_name: "dangerousHelper".to_string(),
+            file_path: "helpers.go".to_string(),
+            tainted_params: vec![],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: false,
+        }];
+        forge::taint_catalog::write_catalog(&janitor_dir.join("taint_catalog.rkyv"), &records)
+            .unwrap();
+
+        let patch = "diff --git a/handler.go b/handler.go\n\
+                     index 0000000..1111111 100644\n\
+                     --- a/handler.go\n\
+                     +++ b/handler.go\n\
+                     @@ -0,0 +1,5 @@\n\
+                     +package main\n\
+                     +func Process(x string) {\n\
+                     +    safeTransform(x)\n\
+                     +}\n";
+
+        let score = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+
+        assert!(
+            !score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("cross_file_taint_sink")),
+            "Crucible: Go cross_file_taint_sink must not fire for uncataloged function"
+        );
+    }
+
     /// True-negative: Python diff calls a function NOT in the catalog — must be silent.
     #[test]
     fn cross_file_taint_python_safe() {

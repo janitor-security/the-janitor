@@ -5,6 +5,21 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Fortune 500 Red Team Audit & Multi-Hop Taint Spine (v9.9.18)
+
+**Directive:** Phase 1 — commercial/doc teardown; Phase 2 — red team gap audit; Phase 3 — cross-file taint spine extension (TS + Go).
+
+**Files modified:**
+- `README.md` *(modified)* — fixed "12 grammars" → "23 grammars"; updated CBOM to CycloneDX v1.6 + Dual-PQC (ML-DSA-65 FIPS 204 + SLH-DSA FIPS 205); expanded Competitive Moat section with Air-Gap, Wasm BYOR, Slopsquatting, Replayable Decision Capsules moats; added `Sovereign / Air-Gap` pricing tier (Custom, starting $49,900/yr) with explicit feature list
+- `docs/INNOVATION_LOG.md` *(modified)* — filed CT-011 (P0: IntelTransferCapsule OOM/8GB Law), CT-012 (P0: symlink traversal in capsule import), CT-013 (P1: taint catalog unsigned), CT-014 (P1: member-expression call chains not detected), CT-015 (P1: Wasm fuel/memory pressure), CT-016 (P2: ByteLatticeAnalyzer UTF-16 false positives)
+- `crates/forge/src/taint_catalog.rs` *(modified)* — added `scan_ts()` (TypeScript cross-file taint, reuses JS literal check), `scan_go()` (Go bare-identifier + selector_expression callee detection), `has_nontrivial_arg_go()`, 7 new unit tests (TS true-positive/negative, Go bare/selector true-positive, Go true-negative/literal)
+- `crates/forge/src/slop_filter.rs` *(modified)* — added `"ts"` and `"tsx"` to `lang_for_ext()` (routes through full tree-sitter parse path, enabling cross-file taint); updated cross-file taint dispatch to `"py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go"`
+- `crates/crucible/src/main.rs` *(modified)* — added 4 Crucible fixtures: `cross_file_taint_typescript_intercepted`, `cross_file_taint_typescript_safe`, `cross_file_taint_go_intercepted`, `cross_file_taint_go_safe`
+
+**Crucible:** 19/19 SANCTUARY INTACT (4 new entries).
+
+---
+
 ## 2026-04-06 — Air-Gap Intel Capsules & Fuzz Corpus Promotion Pipeline (v9.9.17)
 
 **Directive:** P1-1 — Air-Gap Intel Transfer Capsules; P2-1 — Exhaustion Corpus
