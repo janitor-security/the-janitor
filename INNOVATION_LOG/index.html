@@ -613,6 +613,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#p1-2-threshold-signed-intel-mirror-quorum" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: Threshold-Signed Intel Mirror Quorum
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -629,18 +638,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-1-filename-aware-surface-routing-spine" class="md-nav__link">
+  <a href="#p2-1-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-1: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-2-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: Exhaustion Corpus Promotion Pipeline
+      P2-1: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -742,6 +742,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#p1-2-threshold-signed-intel-mirror-quorum" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: Threshold-Signed Intel Mirror Quorum
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -758,18 +767,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-1-filename-aware-surface-routing-spine" class="md-nav__link">
+  <a href="#p2-1-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-1: Filename-Aware Surface Routing Spine
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-2-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: Exhaustion Corpus Promotion Pipeline
+      P2-1: Exhaustion Corpus Promotion Pipeline
     </span>
   </a>
   
@@ -826,25 +826,27 @@ Introduce <code>crates/common/src/wasm_receipt.rs</code>, extend the Wasm host t
 deterministic per-module result digests, and thread those receipts through
 <code>DecisionCapsule</code>, <code>SignedDecisionReceipt</code>, <code>verify-cbom</code>, and
 <code>replay-receipt</code>.</p>
-<h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
-<h3 id="p2-1-filename-aware-surface-routing-spine">P2-1: Filename-Aware Surface Routing Spine</h3>
-<p><strong>Class:</strong> Core Engine Plumbing
-<strong>Inspired by:</strong> Extensionless security surfaces in P0-1 execution</p>
+<h3 id="p1-2-threshold-signed-intel-mirror-quorum">P1-2: Threshold-Signed Intel Mirror Quorum</h3>
+<p><strong>Class:</strong> Sovereign Supply Chain / Feed Resilience</p>
 <p><strong>Observation:</strong>
-Semantic routing still keys off file extensions alone. High-value build and
-control-plane files (<code>Dockerfile</code>, <code>CMakeLists.txt</code>, <code>BUILD</code>, <code>BUILD.bazel</code>,
-<code>WORKSPACE</code>, <code>MODULE.bazel</code>) carry semantics via canonical filename, not suffix.</p>
+The Wisdom feed is now signature-verified, but it is still operationally
+anchored to a single CDN retrieval path. In a sanctions event, regional outage,
+or targeted routing disruption, enterprises will need mathematically equivalent
+feed acceptance from multiple mirrors without relaxing provenance guarantees.</p>
 <p><strong>Proposal:</strong>
-Introduce a <code>SurfaceKind</code> classifier in <code>common</code> that resolves from
-<code>Path + shebang + diff metadata</code> to a stable semantic target. Thread it through
-<code>PatchBouncer</code>, <code>bounce_git</code>, <code>slop_hunter</code>, and the MCP response envelope.</p>
+Introduce a mirror-quorum receipt flow where <code>update-wisdom</code> can fetch the same
+<code>wisdom.rkyv</code> plus detached signatures from multiple sovereign endpoints,
+require a threshold of matching BLAKE3 digests, and emit a compact mirror
+receipt proving which authorities agreed on the accepted archive.</p>
 <p><strong>Security impact:</strong>
-Eliminates silent coverage gaps on extensionless build files and creates a single
-authoritative routing layer for size limits, parser budgets, and domain policy.</p>
+Eliminates single-distribution trust assumptions while preserving strict
+fail-closed provenance under hostile network or geopolitical conditions.</p>
 <p><strong>Implementation path:</strong>
-Add <code>crates/common/src/surface.rs</code> with <code>SurfaceKind</code> classification helpers;
-replace <code>extract_patch_ext()</code> string returns; update MCP serialization.</p>
-<h3 id="p2-2-exhaustion-corpus-promotion-pipeline">P2-2: Exhaustion Corpus Promotion Pipeline</h3>
+Extend <code>JanitorPolicy</code> with a feed mirror set and quorum threshold, add a
+<code>WisdomMirrorReceipt</code> structure in <code>common</code>, and bind the accepted mirror set
+into <code>update-wisdom</code>, bounce logs, and CBOM metadata.</p>
+<h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
+<h3 id="p2-1-exhaustion-corpus-promotion-pipeline">P2-1: Exhaustion Corpus Promotion Pipeline</h3>
 <p><strong>Class:</strong> Defensive Hardening / Fuzzing Operations
 <strong>Inspired by:</strong> <code>crates/fuzz</code> and harvested AST-bomb regressions</p>
 <p><strong>Observation:</strong>
