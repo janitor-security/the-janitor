@@ -5,6 +5,19 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Air-Gap Perimeter Hardening (v9.9.19)
+
+**Directive:** Execute CT-011 (OOM size guard) and CT-012 (symlink traversal confinement) in `cmd_import_intel_capsule`.
+
+**Files modified:**
+- `crates/cli/src/main.rs` *(modified)* — CT-011: `std::fs::metadata` size guard (50 MiB ceiling) fires before `std::fs::read`; CT-012: `std::fs::canonicalize` + `starts_with` confinement check after `create_dir_all`; 2 new unit tests (`size_guard_rejects_oversized_capsule`, `symlink_traversal_outside_root_is_rejected`)
+- `justfile` *(modified)* — `cargo test --workspace` now passes `-- --test-threads=1` to prevent WSL hypervisor OOM during CI
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-011 and CT-012 purged (RESOLVED v9.9.19)
+
+**Crucible:** 19/19 SANCTUARY INTACT (no new entries required — hardening is in production import path, not a new detection rule).
+
+---
+
 ## 2026-04-07 — Fortune 500 Red Team Audit & Multi-Hop Taint Spine (v9.9.18)
 
 **Directive:** Phase 1 — commercial/doc teardown; Phase 2 — red team gap audit; Phase 3 — cross-file taint spine extension (TS + Go).

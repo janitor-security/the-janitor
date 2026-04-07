@@ -42,7 +42,7 @@ audit:
 	cargo fmt --all -- --check
 	cargo clippy --workspace -- -D warnings
 	cargo check --workspace
-	cargo test --workspace
+	cargo test --workspace -- --test-threads=1
 	bash ./tools/tests/test_release_parity.sh
 	./tools/verify_doc_parity.sh
 	echo "✅ System Clean."

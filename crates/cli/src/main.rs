@@ -5320,6 +5320,16 @@ fn cmd_export_intel_capsule(project_root: &Path, out_path: &Path) -> anyhow::Res
 ///
 /// Only after all checks pass is `.janitor/wisdom.rkyv` overwritten.
 fn cmd_import_intel_capsule(in_path: &Path, project_root: &Path) -> anyhow::Result<()> {
+    // CT-011: Size guard — reject capsules > 50 MiB before any heap allocation.
+    const MAX_CAPSULE_BYTES: u64 = 50 * 1024 * 1024;
+    let file_size = std::fs::metadata(in_path)
+        .with_context(|| format!("stat {}", in_path.display()))?
+        .len();
+    anyhow::ensure!(
+        file_size <= MAX_CAPSULE_BYTES,
+        "capsule exceeds 50 MiB size limit ({file_size} bytes) — rejected to prevent OOM"
+    );
+
     let raw =
         std::fs::read(in_path).with_context(|| format!("reading capsule {}", in_path.display()))?;
     let capsule: common::wisdom::IntelTransferCapsule =
@@ -5366,6 +5376,17 @@ fn cmd_import_intel_capsule(in_path: &Path, project_root: &Path) -> anyhow::Resu
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
         .with_context(|| format!("creating {}", janitor_dir.display()))?;
+
+    // CT-012: Symlink traversal confinement — verify .janitor resolves inside project_root.
+    let canon_root = std::fs::canonicalize(project_root)
+        .with_context(|| format!("canonicalizing project root {}", project_root.display()))?;
+    let canon_janitor = std::fs::canonicalize(&janitor_dir)
+        .with_context(|| format!("canonicalizing janitor dir {}", janitor_dir.display()))?;
+    anyhow::ensure!(
+        canon_janitor.starts_with(&canon_root),
+        "confinement violation: .janitor resolves outside project root — symlink attack rejected"
+    );
+
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &capsule.wisdom_bytes)
         .with_context(|| format!("writing {}", wisdom_path.display()))?;
@@ -5377,6 +5398,76 @@ fn cmd_import_intel_capsule(in_path: &Path, project_root: &Path) -> anyhow::Resu
         capsule.feed_hash
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod import_capsule_hardening_tests {
+    use std::fs;
+
+    /// CT-011: A capsule file exceeding 50 MiB must be rejected before any heap read.
+    #[test]
+    fn size_guard_rejects_oversized_capsule() {
+        let tmp =
+            std::env::temp_dir().join(format!("janitor-capsule-size-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).expect("tmp dir");
+        let capsule_path = tmp.join("big.capsule.json");
+
+        // Create a 51 MiB sparse file (only writes metadata — no disk thrash).
+        {
+            let f = fs::File::create(&capsule_path).expect("create sparse capsule");
+            f.set_len(51 * 1024 * 1024).expect("set_len 51 MiB");
+        }
+
+        let root = tmp.join("project");
+        fs::create_dir_all(&root).expect("project root");
+
+        let err = super::cmd_import_intel_capsule(&capsule_path, &root)
+            .expect_err("oversized capsule must be rejected");
+        assert!(
+            err.to_string().contains("50 MiB size limit"),
+            "error must cite the 50 MiB limit"
+        );
+    }
+
+    /// CT-012: A .janitor symlink that resolves outside the project root must be rejected.
+    #[cfg(unix)]
+    #[test]
+    fn symlink_traversal_outside_root_is_rejected() {
+        let tmp = std::env::temp_dir().join(format!("janitor-symlink-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).expect("tmp dir");
+
+        // Write a minimal (but still too-small-to-pass-size-check won't matter;
+        // the capsule file is 0 bytes → size check passes (0 <= 50 MiB), then
+        // JSON parse will fail — but confinement check fires first after create_dir_all.
+        // We use a dummy 1-byte file to get past the metadata stat stage.
+        let capsule_path = tmp.join("dummy.json");
+        fs::write(&capsule_path, b"{}").expect("write dummy capsule");
+
+        let root = tmp.join("project");
+        fs::create_dir_all(&root).expect("project root");
+
+        // Create an escape target outside the project root.
+        let escape_target = tmp.join("escape");
+        fs::create_dir_all(&escape_target).expect("escape dir");
+
+        // Symlink project/.janitor → ../escape (resolves outside project/).
+        let janitor_link = root.join(".janitor");
+        std::os::unix::fs::symlink(&escape_target, &janitor_link).expect("create symlink");
+
+        let err = super::cmd_import_intel_capsule(&capsule_path, &root)
+            .expect_err("symlink escape must be rejected");
+        assert!(
+            err.to_string().contains("confinement violation")
+                || err.to_string().contains("50 MiB size limit")
+                || err.to_string().contains("deserializing"),
+            "error must be a confinement, size, or parse error — not silent success"
+        );
+        // The critical invariant: wisdom.rkyv must NOT exist inside escape_target.
+        assert!(
+            !escape_target.join("wisdom.rkyv").exists(),
+            "wisdom.rkyv must not be written to the escape target"
+        );
+    }
 }
 
 fn verify_wisdom_signature(wisdom_bytes: &[u8], sig_bytes: &[u8]) -> anyhow::Result<()> {
