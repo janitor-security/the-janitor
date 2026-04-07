@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-cryptographic-quorum-wasm-provenance-v9916" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)
@@ -1061,6 +1070,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-06-cryptographic-quorum-wasm-provenance-v9916" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)
@@ -1495,6 +1513,27 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-06-air-gap-intel-capsules-fuzz-corpus-promotion-pipeline-v9917">2026-04-06 — Air-Gap Intel Capsules &amp; Fuzz Corpus Promotion Pipeline (v9.9.17)</h2>
+<p><strong>Directive:</strong> P1-1 — Air-Gap Intel Transfer Capsules; P2-1 — Exhaustion Corpus
+Promotion Pipeline.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>9.9.17</code>
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — added <code>IntelTransferCapsule</code>
+  (rkyv + serde); added rkyv derives to <code>WisdomMirrorReceipt</code> so the capsule
+  can embed it
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — added <code>ExportIntelCapsule</code> and
+  <code>ImportIntelCapsule</code> subcommands; added <code>cmd_export_intel_capsule</code> and
+  <code>cmd_import_intel_capsule</code> functions with BLAKE3 feed-hash verification and
+  Ed25519 signature offline check
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added
+  <code>exhaustion_corpus_no_panic</code> regression test that dynamically reads
+  <code>fixtures/exhaustion/</code> and asserts no panic + 500 ms parse budget
+- <code>crates/crucible/fixtures/exhaustion/seed_deeply_nested_braces</code> <em>(new)</em> —
+  seed exhaustion fixture (deeply nested brace bomb)
+- <code>tools/promote_fuzz_corpus.sh</code> <em>(new)</em> — libFuzzer artifact promotion
+  script with <code>set -euo pipefail</code>, content-hash deduplication
+- <code>justfile</code> <em>(modified)</em> — added <code>promote-fuzz &lt;artifact_dir&gt;</code> recipe</p>
 <hr />
 <h2 id="2026-04-06-cryptographic-quorum-wasm-provenance-v9916">2026-04-06 — Cryptographic Quorum &amp; Wasm Provenance (v9.9.16)</h2>
 <p><strong>Directive:</strong> Seal private Wasm-rule execution into replayable provenance,

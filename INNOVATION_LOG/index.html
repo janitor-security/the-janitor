@@ -601,21 +601,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-air-gap-intel-transfer-capsules" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1: Air-Gap Intel Transfer Capsules
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -624,21 +609,6 @@
       P2 — Architecture / Ergonomics
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Exhaustion Corpus Promotion Pipeline
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -721,21 +691,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P1 — Compliance / Integration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-air-gap-intel-transfer-capsules" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1: Air-Gap Intel Transfer Capsules
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -744,21 +699,6 @@
       P2 — Architecture / Ergonomics
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P2 — Architecture / Ergonomics">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-exhaustion-corpus-promotion-pipeline" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Exhaustion Corpus Promotion Pipeline
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -786,46 +726,7 @@ ID epochs are purged during hard compaction.</p>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
 <h2 id="p1-compliance-integration">P1 — Compliance / Integration</h2>
-<h3 id="p1-1-air-gap-intel-transfer-capsules">P1-1: Air-Gap Intel Transfer Capsules</h3>
-<p><strong>Class:</strong> Sovereign Distribution / Enterprise Portability</p>
-<p><strong>Observation:</strong>
-Mirror quorum and feed signatures now prove online retrieval integrity, but
-air-gapped operators still have to move <code>wisdom.rkyv</code>, detached signatures,
-mirror receipts, and policy evidence as separate files. That manual bundle
-assembly weakens custody guarantees at the exact handoff regulated buyers care
-about most.</p>
-<p><strong>Proposal:</strong>
-Introduce a signed <code>IntelTransferCapsule</code> that bundles the accepted
-<code>wisdom.rkyv</code>, detached Ed25519 signatures, quorum mirror receipt, feed hash,
-and compatible Governor / Wasm provenance metadata into one portable archive
-with an offline verification command.</p>
-<p><strong>Security impact:</strong>
-Preserves cryptographic chain-of-custody when threat intelligence crosses air
-gaps, removable media, or sovereign mirror boundaries.</p>
-<p><strong>Implementation path:</strong>
-Add <code>janitor export-intel-capsule</code> and <code>janitor import-intel-capsule</code>,
-serialize the bundle under <code>common</code>, and teach <code>update-wisdom</code> to trust only
-capsules whose internal receipts and archive hash agree.</p>
 <h2 id="p2-architecture-ergonomics">P2 — Architecture / Ergonomics</h2>
-<h3 id="p2-1-exhaustion-corpus-promotion-pipeline">P2-1: Exhaustion Corpus Promotion Pipeline</h3>
-<p><strong>Class:</strong> Defensive Hardening / Fuzzing Operations
-<strong>Inspired by:</strong> <code>crates/fuzz</code> and harvested AST-bomb regressions</p>
-<p><strong>Observation:</strong>
-The workspace now compiles a grammar stress fuzzer, but there is still no
-governed promotion pipeline that minimizes interesting crashes/timeouts and
-upgrades them into permanent, signed Crucible fixtures.</p>
-<p><strong>Proposal:</strong>
-Build a corpus promotion tool that minimizes libFuzzer artifacts, annotates them
-with grammar + elapsed parse budget metadata, and emits deterministic exhaustion
-fixtures under <code>crates/crucible/fixtures/exhaustion/</code> with matching regression
-tests.</p>
-<p><strong>Security impact:</strong>
-Converts ephemeral fuzz discoveries into durable parser-hardening evidence and
-prevents regression drift on algorithmic-complexity exploits.</p>
-<p><strong>Implementation path:</strong>
-Add a <code>tools/promote-fuzz-corpus</code> binary, a manifest format for harvested
-payloads, and a <code>just promote-fuzz</code> command that regenerates Crucible
-exhaustion tests from minimized artifacts.</p>
 
 
 
