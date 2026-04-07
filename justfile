@@ -116,13 +116,23 @@ fast-release version:
 	just audit
 	cargo build --release --workspace
 	strip target/release/janitor
+	# Idempotency guard — check local and remote before any mutation (Law: idempotency.md).
+	if git rev-parse "v{{version}}" >/dev/null 2>&1 \
+	   || git ls-remote --tags origin "refs/tags/v{{version}}" | grep -q .; then
+	    echo "Idempotency guard: Release v{{version}} already exists. Halting gracefully."
+	    exit 0
+	fi
 	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"
 	git tag -s v{{version}} -m "release v{{version}}"
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
 	git push origin HEAD:main "v{{version}}"
 	git push origin "v${MAJOR}" --force
-	gh release create v{{version}} --generate-notes --title "The Janitor v{{version}}"
+	if gh release view "v{{version}}" >/dev/null 2>&1; then
+	    echo "Idempotency guard: GitHub Release v{{version}} already exists. Skipping gh release create."
+	else
+	    gh release create v{{version}} --generate-notes --title "The Janitor v{{version}}"
+	fi
 	just deploy-docs
 	echo "💀 Release v{{version}} deployed."
 

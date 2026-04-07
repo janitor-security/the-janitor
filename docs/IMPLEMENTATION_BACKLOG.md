@@ -5,6 +5,27 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Pipeline Idempotency & Final RC Polish (v10.0.0-rc.3)
+
+**Directive:** Phase 1 — Idempotency governance rule; Phase 2 — fast-release idempotency guards; Phase 3 — CT-016 UTF-16 BOM false-positive fix.
+
+**Files modified:**
+- `.agent_governance/rules/idempotency.md` *(created)* — The Idempotency Law: all shell/just mutation steps must query target state before acting; protocol for Git tag and GitHub Release guards; 4 hard constraints
+- `justfile` *(modified)* — `fast-release`: local + remote Git tag existence check before commit/tag/push (exits 0 cleanly if already released); `gh release view` pre-check before `gh release create`
+- `crates/forge/src/agnostic_shield.rs` *(modified)* — CT-016: UTF-16 LE/BE BOM guard added at top of `ByteLatticeAnalyzer::classify`; short-circuits to `ProbableCode` before null-byte check; 2 new unit tests (`test_utf16_le_bom_classifies_as_probable_code`, `test_utf16_be_bom_classifies_as_probable_code`)
+- `crates/crucible/src/main.rs` *(modified)* — 1 new Crucible entry: `utf16_bom_source_not_flagged_as_anomalous_blob` (CT-016 true-negative)
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.3`
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-016 purged (resolved); P2 section now empty (all constraints resolved)
+
+**Crucible:** SANCTUARY INTACT — all existing tests pass + 1 new CT-016 entry.
+
+**Security posture delta:**
+- CT-016 resolved: Windows-adjacent repos (Azure SDK, MSVC headers, VB.NET) no longer generate false-positive Critical findings. Enterprise adoption unblocked.
+- Pipeline idempotency: re-running `just fast-release <v>` after a successful release now exits 0 cleanly instead of crashing. Double-triggers from automation no longer cause oncall pages.
+- All CT-0xx constraints (CT-011 through CT-016) fully resolved. v10.0.0 is GA-candidate clean.
+
+---
+
 ## 2026-04-07 — OpSec Blackout & RC.2 Hotfix (v10.0.0-rc.2)
 
 **Directive:** Phase 1 — OpSec Blackout (git rm INNOVATION_LOG.md from index); Phase 2 — Murphy's Law sweep (clean); Phase 3 — CT-014 member-expression detection + CT-015 Wasm epoch timeout.

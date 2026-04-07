@@ -60,6 +60,17 @@ impl ByteLatticeAnalyzer {
             return TextClass::ProbableCode;
         }
 
+        // CT-016: UTF-16 BOM detection — must precede null-byte check.
+        // UTF-16 LE (FF FE) and UTF-16 BE (FE FF) encoded source files are
+        // valid text; the wide-char null bytes and high entropy they produce
+        // would otherwise trigger AnomalousBlob false positives on
+        // Windows-adjacent repos (Azure SDK, MSVC headers, legacy VB.NET).
+        // A BOM is cryptographic proof of textual encoding intent — classify
+        // unconditionally as ProbableCode and skip all further analysis.
+        if bytes.len() >= 2 && (bytes[0..2] == [0xFF, 0xFE] || bytes[0..2] == [0xFE, 0xFF]) {
+            return TextClass::ProbableCode;
+        }
+
         // Null bytes are the defining characteristic of binary content.
         // Well-formed source code — regardless of language — never contains
         // literal null bytes in its text representation.
@@ -186,6 +197,44 @@ mod tests {
             ByteLatticeAnalyzer::classify(&codeowners),
             TextClass::ProbableCode,
             "Repetitive structured text must not be flagged as AnomalousBlob"
+        );
+    }
+
+    /// CT-016 true-negative: UTF-16 LE BOM source file must classify as
+    /// ProbableCode, not AnomalousBlob.
+    ///
+    /// UTF-16 LE encoding produces null bytes for every ASCII character
+    /// (e.g. 'A' → `0x41 0x00`) which would normally trigger the null-byte
+    /// AnomalousBlob path.  The BOM guard must short-circuit before that check.
+    #[test]
+    fn test_utf16_le_bom_classifies_as_probable_code() {
+        // UTF-16 LE BOM followed by "int main() {}" in UTF-16 LE encoding.
+        let mut utf16_le: Vec<u8> = vec![0xFF, 0xFE];
+        for c in b"int main() {}" {
+            utf16_le.push(*c);
+            utf16_le.push(0x00);
+        }
+        assert_eq!(
+            ByteLatticeAnalyzer::classify(&utf16_le),
+            TextClass::ProbableCode,
+            "UTF-16 LE BOM source must classify as ProbableCode"
+        );
+    }
+
+    /// CT-016 true-negative: UTF-16 BE BOM source file must classify as
+    /// ProbableCode, not AnomalousBlob.
+    #[test]
+    fn test_utf16_be_bom_classifies_as_probable_code() {
+        // UTF-16 BE BOM followed by "int main() {}" in UTF-16 BE encoding.
+        let mut utf16_be: Vec<u8> = vec![0xFE, 0xFF];
+        for c in b"int main() {}" {
+            utf16_be.push(0x00);
+            utf16_be.push(*c);
+        }
+        assert_eq!(
+            ByteLatticeAnalyzer::classify(&utf16_be),
+            TextClass::ProbableCode,
+            "UTF-16 BE BOM source must classify as ProbableCode"
         );
     }
 

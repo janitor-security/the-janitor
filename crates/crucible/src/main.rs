@@ -2556,4 +2556,28 @@ index 1111111..2222222 100644
             "Crucible: TS member_expression cross_file_taint_sink must contribute KevCritical points"
         );
     }
+
+    /// CT-016 true-negative: UTF-16 LE BOM source file must NOT be flagged as
+    /// AnomalousBlob.  Without the BOM guard, the null bytes from wide-char
+    /// encoding trigger the binary-content path — a false positive that blocks
+    /// legitimate Windows-adjacent source files.
+    #[test]
+    fn utf16_bom_source_not_flagged_as_anomalous_blob() {
+        use forge::agnostic_shield::{ByteLatticeAnalyzer, TextClass};
+
+        // UTF-16 LE BOM (FF FE) + "int main() {}" in UTF-16 LE encoding.
+        // Each ASCII byte is followed by 0x00; without the BOM guard these
+        // null bytes would classify the payload as AnomalousBlob.
+        let mut utf16_le: Vec<u8> = vec![0xFF, 0xFE];
+        for c in b"int main() {}" {
+            utf16_le.push(*c);
+            utf16_le.push(0x00);
+        }
+
+        assert_eq!(
+            ByteLatticeAnalyzer::classify(&utf16_le),
+            TextClass::ProbableCode,
+            "Crucible: UTF-16 LE BOM source file must not be flagged as AnomalousBlob (CT-016)"
+        );
+    }
 }
