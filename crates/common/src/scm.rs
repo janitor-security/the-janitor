@@ -6,12 +6,13 @@
 use std::collections::HashMap;
 
 /// Supported SCM / CI providers with normalized environment extraction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScmProvider {
     GitHub,
     GitLab,
     Bitbucket,
     AzureDevOps,
+    #[default]
     Unknown,
 }
 
@@ -24,12 +25,6 @@ pub struct ScmContext {
     pub pr_number: Option<u64>,
     pub base_ref: Option<String>,
     pub head_ref: Option<String>,
-}
-
-impl Default for ScmProvider {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl ScmContext {

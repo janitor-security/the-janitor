@@ -4336,10 +4336,11 @@ fn cmd_update_wisdom_with_urls(
     if ci_mode {
         let mut kev_resp = match ureq::get(kev_url).call() {
             Ok(response) => response,
-            Err(e) => {
+            Err(_e) => {
+                // CodeQL: URL and error details redacted — URL may carry credentials.
                 return Err(anyhow::anyhow!(
-                    "update-wisdom --ci-mode: GET {kev_url} failed: {e}"
-                ))
+                    "update-wisdom --ci-mode: CISA KEV fetch failed"
+                ));
             }
         };
 
@@ -4520,17 +4521,25 @@ fn fetch_verified_wisdom_payload(
 ) -> anyhow::Result<VerifiedWisdomPayload> {
     let mut response = ureq::get(wisdom_url)
         .call()
-        .map_err(|e| anyhow::anyhow!("{mode_label}: GET {wisdom_url} failed: {e}"))?;
-    let bytes = response.body_mut().read_to_vec().map_err(|e| {
-        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_url} failed: {e}")
-    })?;
+        // CodeQL: URL and error details redacted — mirror URL may contain credentials.
+        .map_err(|_e| anyhow::anyhow!("{mode_label}: wisdom archive fetch failed"))?;
+    let bytes = response
+        .body_mut()
+        .read_to_vec()
+        // CodeQL: error details redacted.
+        .map_err(|_e| anyhow::anyhow!("update-wisdom: reading wisdom response body failed"))?;
 
     let mut sig_response = ureq::get(wisdom_sig_url)
         .call()
-        .map_err(|e| anyhow::anyhow!("{mode_label}: GET {wisdom_sig_url} failed: {e}"))?;
-    let sig_bytes = sig_response.body_mut().read_to_vec().map_err(|e| {
-        anyhow::anyhow!("update-wisdom: reading response body from {wisdom_sig_url} failed: {e}")
-    })?;
+        // CodeQL: URL and error details redacted — mirror URL may contain credentials.
+        .map_err(|_e| anyhow::anyhow!("{mode_label}: wisdom signature fetch failed"))?;
+    let sig_bytes = sig_response
+        .body_mut()
+        .read_to_vec()
+        // CodeQL: error details redacted.
+        .map_err(|_e| {
+            anyhow::anyhow!("update-wisdom: reading wisdom signature response body failed")
+        })?;
 
     verify_wisdom_signature(&bytes, &sig_bytes)
         .context("update-wisdom: detached wisdom signature verification failed")?;

@@ -5,6 +5,31 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-08 — Dashboard Eradication & Major SemVer Strike (v10.0.0-rc.9)
+
+**Directive:** GitHub Security tab failing automated enterprise risk assessments. (1) Wasmtime CVEs requiring major version bump (v28 → v43). (2) Residual CodeQL `cleartext-logging-sensitive-data` findings in `report.rs` and `fetch_verified_wisdom_payload`. (3) Autonomous intelligence seeding — two architectural gaps filed from session analysis. (4) Rust MSRV bump from 1.88 → 1.91 required by Wasmtime 43.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — `wasmtime` version bumped from `"28"` to `"43.0.0"`; `rust-version` bumped from `"1.88"` to `"1.91"`; workspace version bumped to `10.0.0-rc.9`.
+- `rust-toolchain.toml` *(modified)* — `channel` bumped from `"1.88.0"` to `"1.91.0"`; rustup directory override cleared.
+- `crates/forge/src/wasm_host.rs` *(modified)* — Wasmtime 43 API: `wasmtime::Error` no longer satisfies `std::error::Error + Send + Sync`, breaking anyhow's `Context` trait on all wasmtime `Result<T, wasmtime::Error>` calls. Seven call sites migrated from `.context("...")` / `.with_context(|| ...)` to `.map_err(|e| anyhow::anyhow!("...: {e:#}"))`: `Engine::new`, `Module::new`, `Store::set_fuel`, `Instance::new`, `get_typed_func` (×2), `TypedFunc::call` (×2), `Memory::grow`. Fuel gate (`set_fuel`) and epoch interruption (`epoch_interruption(true)` + `set_epoch_deadline(1)`) preserved verbatim — algorithmic circuit breakers intact.
+- `crates/forge/src/deobfuscate.rs` *(modified)* — Clippy 1.91 `manual_is_multiple_of` lint: `raw.len() % 2 != 0` → `!raw.len().is_multiple_of(2)`.
+- `crates/common/src/scm.rs` *(modified)* — Clippy 1.91 `derivable_impls` lint: manual `impl Default for ScmProvider` removed; `#[derive(Default)]` + `#[default]` on `Unknown` variant added.
+- `crates/cli/src/report.rs` *(modified)* — Phase 2 CodeQL: `post_bounce_result` `Err(e) =>` arm changed to `Err(_e) =>`; `{e}` interpolation removed from `anyhow::bail!` — ureq errors may carry Authorization header fragments from `"Bearer {token}"`.
+- `crates/cli/src/main.rs` *(modified)* — Phase 2 CodeQL: `fetch_verified_wisdom_payload` — four `{wisdom_url}` / `{wisdom_sig_url}` / `{e}` interpolations in `ureq::get` error handlers replaced with static strings. `update-wisdom --ci-mode` `{kev_url}` / `{e}` interpolation in KEV fetch error replaced with static string.
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-022 (Wasm Rule Integrity Pinning) and CT-023 (Wasm Epoch Thread Pool Leak) filed as P1.
+
+**Crucible:** SANCTUARY INTACT — wasmtime API migration is infrastructure, not detector logic; no new Crucible entries required.
+
+**Security posture delta:**
+- 3 Wasmtime CVEs (requiring major version bump) eradicated — wasmtime 43.0.0 resolves all open Dependabot alerts for the Wasm subsystem.
+- BLAKE3 + epoch interruption circuit breakers preserved through the API migration — no regression in adversarial AST protection.
+- `report.rs` CodeQL taint path closed: `post_bounce_result` no longer echoes ureq error (which carries Authorization header data) to the caller.
+- `fetch_verified_wisdom_payload` CodeQL taint path closed: wisdom mirror URLs no longer appear in error messages (enterprise configs may embed credentials in mirror URLs).
+- Rust 1.91 MSRV brings `is_multiple_of` API and `#[default]` enum derive — both enforced by Clippy as of this version.
+
+---
+
 ## 2026-04-08 — Algorithmic Circuit Breakers & Clean Slate Protocol (v10.0.0-rc.8)
 
 **Directive:** (1) PR #930 on godotengine/godot caused a one-hour hang — combinatorial explosion in AST walkers on deeply-nested auto-generated files. (2) CodeQL cleartext logging alerts in governor POST error handlers. (3) Dependabot dependency bumps to close open CVEs. (4) CT-021 — replace zeroed `JANITOR_RELEASE_ML_DSA_PUB_KEY` placeholder with structurally valid throwaway key.

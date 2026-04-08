@@ -164,7 +164,7 @@ fn decode_base64_scalar(raw: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn decode_hex_scalar(raw: &[u8]) -> Option<Vec<u8>> {
-    if raw.len() < 4 || raw.len() % 2 != 0 || raw.len() > MAX_NORMALIZED_BYTES * 2 {
+    if raw.len() < 4 || !raw.len().is_multiple_of(2) || raw.len() > MAX_NORMALIZED_BYTES * 2 {
         return None;
     }
     if !raw.iter().all(u8::is_ascii_hexdigit) {

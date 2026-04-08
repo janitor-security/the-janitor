@@ -861,9 +861,10 @@ pub fn post_bounce_result(
                 r.status()
             );
         }
-        Err(e) => {
+        Err(_e) => {
+            // CodeQL: error message redacted — ureq error may carry Authorization header fragments.
             anyhow::bail!(
-                "failed to POST bounce result to Governor: {e} — firewall cannot confirm attestation"
+                "failed to POST bounce result to Governor — firewall cannot confirm attestation"
             );
         }
     }

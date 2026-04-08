@@ -12,11 +12,11 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "10.0.0-rc.8"
+version = "10.0.0-rc.9"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [workspace.dependencies]
 # Core
@@ -106,7 +106,7 @@ arc-swap = "1.7"
 # Cranelift JIT + WAT text-format parsing. Default features retained so all
 # required runtime types are available; LTO in the release profile strips
 # unreachable code paths, controlling the final binary footprint.
-wasmtime = { version = "28", features = ["cranelift", "wat"] }
+wasmtime = { version = "43.0.0", features = ["cranelift", "wat"] }
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
 git2 = "0.20"

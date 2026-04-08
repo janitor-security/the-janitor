@@ -92,13 +92,14 @@ impl WasmHost {
         // the fuel budget can cause host-side latency spikes; the epoch timeout
         // guarantees termination within EPOCH_TIMEOUT_MS regardless of fuel.
         config.epoch_interruption(true);
-        let engine = Engine::new(&config).context("failed to create Wasm engine")?;
+        let engine = Engine::new(&config)
+            .map_err(|e| anyhow::anyhow!("failed to create Wasm engine: {e:#}"))?;
         let mut modules = Vec::with_capacity(wasm_paths.len());
         for path in wasm_paths {
             let bytes =
                 std::fs::read(path).with_context(|| format!("reading Wasm rule module: {path}"))?;
             let module = Module::new(&engine, &bytes)
-                .with_context(|| format!("compiling Wasm rule module: {path}"))?;
+                .map_err(|e| anyhow::anyhow!("compiling Wasm rule module: {path}: {e:#}"))?;
             let rule_id = Path::new(path)
                 .file_stem()
                 .and_then(|stem| stem.to_str())
@@ -162,7 +163,7 @@ impl WasmHost {
         store.limiter(|state| state as &mut dyn ResourceLimiter);
         store
             .set_fuel(FUEL_LIMIT)
-            .context("configuring Wasm execution fuel")?;
+            .map_err(|e| anyhow::anyhow!("configuring Wasm execution fuel: {e:#}"))?;
         // CT-015: arm the epoch wall-clock gate.  Deadline of 1 means the first
         // `engine.increment_epoch()` call will interrupt this store's execution.
         store.set_epoch_deadline(1);
@@ -175,8 +176,8 @@ impl WasmHost {
             engine_for_timeout.increment_epoch();
         });
 
-        let instance =
-            Instance::new(&mut store, module, &[]).context("instantiating Wasm rule module")?;
+        let instance = Instance::new(&mut store, module, &[])
+            .map_err(|e| anyhow::anyhow!("instantiating Wasm rule module: {e:#}"))?;
 
         // Resolve mandatory ABI exports.
         let memory = instance
@@ -184,10 +185,14 @@ impl WasmHost {
             .context("Wasm rule module must export 'memory' (linear memory)")?;
         let output_ptr_fn = instance
             .get_typed_func::<(), i32>(&mut store, "output_ptr")
-            .context("Wasm rule module must export 'output_ptr() -> i32'")?;
+            .map_err(|e| {
+                anyhow::anyhow!("Wasm rule module must export 'output_ptr() -> i32': {e:#}")
+            })?;
         let analyze_fn = instance
             .get_typed_func::<(i32, i32), i32>(&mut store, "analyze")
-            .context("Wasm rule module must export 'analyze(i32, i32) -> i32'")?;
+            .map_err(|e| {
+                anyhow::anyhow!("Wasm rule module must export 'analyze(i32, i32) -> i32': {e:#}")
+            })?;
 
         // Guard: source must fit within the guest memory budget.
         let src_end = SRC_OFFSET
@@ -202,7 +207,7 @@ impl WasmHost {
             let pages_needed = (src_end - current_bytes).div_ceil(65536);
             memory
                 .grow(&mut store, pages_needed as u64)
-                .context("growing Wasm linear memory")?;
+                .map_err(|e| anyhow::anyhow!("growing Wasm linear memory: {e:#}"))?;
         }
 
         // Write source bytes into guest memory at SRC_OFFSET.
@@ -211,14 +216,14 @@ impl WasmHost {
         // Invoke analysis; guest writes findings to its output buffer.
         let output_len = analyze_fn
             .call(&mut store, (SRC_OFFSET as i32, src.len() as i32))
-            .context("calling Wasm 'analyze' function")?;
+            .map_err(|e| anyhow::anyhow!("calling Wasm 'analyze' function: {e:#}"))?;
         if output_len <= 0 {
             return Ok(Vec::new());
         }
 
         let output_base = output_ptr_fn
             .call(&mut store, ())
-            .context("calling Wasm 'output_ptr' function")?;
+            .map_err(|e| anyhow::anyhow!("calling Wasm 'output_ptr' function: {e:#}"))?;
 
         // Bounds-check the output range before reading.
         let base = output_base as usize;
