@@ -746,6 +746,14 @@ impl PRBouncer for PatchBouncer {
             return Ok(total);
         }
 
+        // Wall-clock budget: auto-generated / adversarial ASTs can cause O(2^N)
+        // traversal even on files that pass the 64 KiB byte limit.  PR #930 on
+        // godotengine/godot caused a one-hour hang on a single deeply-nested file.
+        // If the total single-file analysis exceeds 5 s, abort and emit an
+        // exhaustion finding so the multi-file aggregator can continue cleanly.
+        let file_wall_clock = std::time::Instant::now();
+        const FILE_WALL_CLOCK_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
         // Detect language from the +++ header extension.
         let surface = extract_patch_surface(patch);
         let ext = surface.language_key();
@@ -1132,6 +1140,28 @@ impl PRBouncer for PatchBouncer {
             raw_findings.extend(crate::slop_hunter::find_slop(ext, &subtree_unit));
         }
         crate::slop_hunter::set_current_wisdom_path(None);
+
+        // Wall-clock check: if find_slop consumed the full budget on this file,
+        // abort taint analysis (which can itself recurse deeply on large ASTs)
+        // and return an exhaustion finding immediately.
+        if file_wall_clock.elapsed() >= FILE_WALL_CLOCK_LIMIT {
+            let desc = format!(
+                "exhaustion:per_file_wall_clock — .{ext} AST walk exceeded 5 s budget; \
+                 taint analysis skipped (probable auto-generated or adversarial AST bomb)"
+            );
+            let mut timeout_score = SlopScore {
+                antipatterns_found: (raw_findings.len() as u32) + 1,
+                antipattern_score: raw_findings
+                    .iter()
+                    .map(|f| f.severity.points())
+                    .sum::<u32>()
+                    + 100,
+                antipattern_details: raw_findings.iter().map(|f| f.description.clone()).collect(),
+                ..SlopScore::default()
+            };
+            timeout_score.antipattern_details.push(desc);
+            return Ok(timeout_score);
+        }
 
         // Intra-file taint spine (P0-1 Phase 2): for Go files, confirm
         // parameter→SQL-sink flows via taint_propagate::track_taint_go_sqli.

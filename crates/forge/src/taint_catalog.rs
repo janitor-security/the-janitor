@@ -245,7 +245,7 @@ pub fn scan_cross_file_sinks(
 
 fn scan_python(source: &[u8], root: Node<'_>, catalog: &CatalogView) -> Vec<CrossFileSinkFinding> {
     let mut out = Vec::new();
-    walk_python_calls(root, source, catalog, &mut out);
+    walk_python_calls(root, source, catalog, &mut out, 0);
     out
 }
 
@@ -254,7 +254,11 @@ fn walk_python_calls(
     source: &[u8],
     catalog: &CatalogView,
     out: &mut Vec<CrossFileSinkFinding>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "call" {
         if let Some(func) = node.child_by_field_name("function") {
             // CT-014: match both bare identifiers (`helper(arg)`) and attribute
@@ -283,7 +287,7 @@ fn walk_python_calls(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        walk_python_calls(child, source, catalog, out);
+        walk_python_calls(child, source, catalog, out, depth + 1);
     }
 }
 
@@ -327,7 +331,7 @@ fn has_nontrivial_arg_python(args_node: Node<'_>, source: &[u8]) -> bool {
 
 fn scan_js(source: &[u8], root: Node<'_>, catalog: &CatalogView) -> Vec<CrossFileSinkFinding> {
     let mut out = Vec::new();
-    walk_js_calls(root, source, catalog, &mut out);
+    walk_js_calls(root, source, catalog, &mut out, 0);
     out
 }
 
@@ -336,7 +340,11 @@ fn walk_js_calls(
     source: &[u8],
     catalog: &CatalogView,
     out: &mut Vec<CrossFileSinkFinding>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
             // CT-014: match bare identifiers (`sink(arg)`) and member-expression
@@ -365,7 +373,7 @@ fn walk_js_calls(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        walk_js_calls(child, source, catalog, out);
+        walk_js_calls(child, source, catalog, out, depth + 1);
     }
 }
 
@@ -399,7 +407,7 @@ fn has_nontrivial_arg_js(args_node: Node<'_>, source: &[u8]) -> bool {
 
 fn scan_java(source: &[u8], root: Node<'_>, catalog: &CatalogView) -> Vec<CrossFileSinkFinding> {
     let mut out = Vec::new();
-    walk_java_calls(root, source, catalog, &mut out);
+    walk_java_calls(root, source, catalog, &mut out, 0);
     out
 }
 
@@ -408,7 +416,11 @@ fn walk_java_calls(
     source: &[u8],
     catalog: &CatalogView,
     out: &mut Vec<CrossFileSinkFinding>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "method_invocation" {
         if let Some(name_node) = node.child_by_field_name("name") {
             let callee = name_node.utf8_text(source).unwrap_or("");
@@ -427,7 +439,7 @@ fn walk_java_calls(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        walk_java_calls(child, source, catalog, out);
+        walk_java_calls(child, source, catalog, out, depth + 1);
     }
 }
 
@@ -465,7 +477,7 @@ fn has_nontrivial_arg_java(args_node: Node<'_>, source: &[u8]) -> bool {
 /// identical.  Both `"ts"` and `"tsx"` dispatch here.
 fn scan_ts(source: &[u8], root: Node<'_>, catalog: &CatalogView) -> Vec<CrossFileSinkFinding> {
     let mut out = Vec::new();
-    walk_ts_calls(root, source, catalog, &mut out);
+    walk_ts_calls(root, source, catalog, &mut out, 0);
     out
 }
 
@@ -474,7 +486,11 @@ fn walk_ts_calls(
     source: &[u8],
     catalog: &CatalogView,
     out: &mut Vec<CrossFileSinkFinding>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
             // CT-014: match bare identifiers and member-expression call chains
@@ -503,7 +519,7 @@ fn walk_ts_calls(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        walk_ts_calls(child, source, catalog, out);
+        walk_ts_calls(child, source, catalog, out, depth + 1);
     }
 }
 
@@ -524,7 +540,7 @@ fn walk_ts_calls(
 /// `"false"`, `"nil"`.
 fn scan_go(source: &[u8], root: Node<'_>, catalog: &CatalogView) -> Vec<CrossFileSinkFinding> {
     let mut out = Vec::new();
-    walk_go_calls(root, source, catalog, &mut out);
+    walk_go_calls(root, source, catalog, &mut out, 0);
     out
 }
 
@@ -533,7 +549,11 @@ fn walk_go_calls(
     source: &[u8],
     catalog: &CatalogView,
     out: &mut Vec<CrossFileSinkFinding>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
             let callee = match func.kind() {
@@ -560,7 +580,7 @@ fn walk_go_calls(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        walk_go_calls(child, source, catalog, out);
+        walk_go_calls(child, source, catalog, out, depth + 1);
     }
 }
 

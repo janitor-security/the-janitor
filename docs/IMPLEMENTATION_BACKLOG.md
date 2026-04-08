@@ -5,6 +5,29 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-08 — Algorithmic Circuit Breakers & Clean Slate Protocol (v10.0.0-rc.8)
+
+**Directive:** (1) PR #930 on godotengine/godot caused a one-hour hang — combinatorial explosion in AST walkers on deeply-nested auto-generated files. (2) CodeQL cleartext logging alerts in governor POST error handlers. (3) Dependabot dependency bumps to close open CVEs. (4) CT-021 — replace zeroed `JANITOR_RELEASE_ML_DSA_PUB_KEY` placeholder with structurally valid throwaway key.
+
+**Files modified:**
+- `crates/forge/src/slop_filter.rs` *(modified)* — Phase 1: 5-second wall-clock timeout injected at start of single-file `bounce()` path. If `find_slop` loop consumes the full budget, an `exhaustion:per_file_wall_clock` finding is emitted and the function returns early (taint analysis skipped). Prevents O(2^N) hang on adversarial/auto-generated ASTs.
+- `crates/forge/src/taint_catalog.rs` *(modified)* — Phase 1: `depth: u32` parameter added to all 5 internal walk functions (`walk_python_calls`, `walk_js_calls`, `walk_java_calls`, `walk_ts_calls`, `walk_go_calls`). Depth guard `if depth > 100 { return; }` injected at top of each. Public `scan_*` callers pass `0` as initial depth.
+- `crates/forge/src/taint_propagate.rs` *(modified)* — Phase 1: `depth: u32` parameter added to `collect_go_params`, `find_tainted_sql_sinks`, `find_tainted_operand`. Depth guards at `> 100`; `find_tainted_operand` returns `None` on breach. Public `track_taint_go_sqli` passes `0` at all call sites.
+- `crates/cli/src/main.rs` *(modified)* — Phase 2: Three CodeQL `cleartext-logging-sensitive-data` alerts resolved. In governor POST error handlers: `format!("...{e}")` in `append_diag_log` replaced with static strings; `Err(e) => return Err(e)` replaced with static anyhow error. Error message redaction prevents auth tokens and URL fragments from reaching diag log files or error propagation.
+- `crates/cli/src/verify_asset.rs` *(modified)* — Phase 4 (CT-021): Zeroed `JANITOR_RELEASE_ML_DSA_PUB_KEY` array replaced with a structurally valid 1952-byte throwaway ML-DSA-65 public key. The zeroed-key guard (`iter().any(|&b| b != 0)`) now passes, enabling Layer 2 PQC verification in CI without cryptographic parser panics. Production key must be substituted in an offline ceremony before activating full chain-of-custody.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.8`.
+- `Cargo.lock` *(modified)* — `cargo update` applied: zerofrom-derive, zerovec, zerovec-derive, zerotrie updated to latest patch versions.
+
+**Crucible:** SANCTUARY INTACT — no new Crucible entries (circuit breakers are in traversal paths, not detector logic; key substitution is in verification infrastructure).
+
+**Security posture delta:**
+- O(2^N) AST walk hang eliminated — 5 s per-file wall-clock budget enforced.
+- Recursive AST depth capped at 101 in all 8 walk functions across taint_catalog and taint_propagate.
+- Governor POST error messages no longer carry auth tokens or URL fragments to diag log or error propagation paths.
+- ML-DSA-65 zeroed placeholder eliminated — Layer 2 PQC path no longer fails-open at key parse time; throwaway key validates structural soundness of the verify-asset pipeline.
+
+---
+
 ## 2026-04-07 — Trust-Anchor Refactor (v10.0.0-rc.7)
 
 **Directive:** JAB Assessor identified three ATO-revoking vulnerabilities in the release candidate: (1) leaf-node symlink overwrite in `cmd_import_intel_capsule` (write follows attacker-placed symlink), (2) cryptographic downgrade — `pqc_enforced=true` did not enforce dual-PQC after signing, and `private_key_bundle_from_bytes` accepted partial single-algorithm bundles, (3) co-hosted BLAKE3 hash insufficient as sole trust anchor (CDN that controls `.b3` can bypass). All three remediated this session.

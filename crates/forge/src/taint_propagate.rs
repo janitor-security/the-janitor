@@ -63,12 +63,12 @@ const GO_SQL_METHODS: &[&str] = &["Query", "Exec", "QueryRow", "QueryContext", "
 /// Returns an empty `Vec` (fail-open) when no confirmed flow exists.
 pub fn track_taint_go_sqli(source: &[u8], root: Node<'_>) -> Vec<TaintFlow> {
     let mut params: Vec<String> = Vec::new();
-    collect_go_params(root, source, &mut params);
+    collect_go_params(root, source, &mut params, 0);
     if params.is_empty() {
         return Vec::new();
     }
     let mut flows: Vec<TaintFlow> = Vec::new();
-    find_tainted_sql_sinks(root, source, &params, &mut flows);
+    find_tainted_sql_sinks(root, source, &params, &mut flows, 0);
     flows
 }
 
@@ -83,7 +83,10 @@ pub fn track_taint_go_sqli(source: &[u8], root: Node<'_>) -> Vec<TaintFlow> {
 /// unnamed parameters are handled: unnamed parameters (`_`) are collected but
 /// will never match an identifier in a call site, so they produce no false
 /// positives.
-fn collect_go_params(node: Node<'_>, source: &[u8], params: &mut Vec<String>) {
+fn collect_go_params(node: Node<'_>, source: &[u8], params: &mut Vec<String>, depth: u32) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "parameter_declaration" {
         let mut cur = node.walk();
         for child in node.named_children(&mut cur) {
@@ -101,7 +104,7 @@ fn collect_go_params(node: Node<'_>, source: &[u8], params: &mut Vec<String>) {
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        collect_go_params(child, source, params);
+        collect_go_params(child, source, params, depth + 1);
     }
 }
 
@@ -116,7 +119,11 @@ fn find_tainted_sql_sinks(
     source: &[u8],
     params: &[String],
     flows: &mut Vec<TaintFlow>,
+    depth: u32,
 ) {
+    if depth > 100 {
+        return;
+    }
     if node.kind() == "call_expression" {
         if let Some(func) = node.child_by_field_name("function") {
             if func.kind() == "selector_expression" {
@@ -134,7 +141,7 @@ fn find_tainted_sql_sinks(
                                 });
                                 if has_plus {
                                     if let Some(src) =
-                                        find_tainted_operand(first_arg, source, params)
+                                        find_tainted_operand(first_arg, source, params, 0)
                                     {
                                         flows.push(TaintFlow {
                                             taint_source: src,
@@ -152,7 +159,7 @@ fn find_tainted_sql_sinks(
     }
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
-        find_tainted_sql_sinks(child, source, params, flows);
+        find_tainted_sql_sinks(child, source, params, flows, depth + 1);
     }
 }
 
@@ -161,7 +168,15 @@ fn find_tainted_sql_sinks(
 /// Handles nested concatenation: `"prefix" + table + " WHERE " + filter`
 /// produces a left-skewed binary tree; recursive descent on the `left` field
 /// discovers `table` even though it is two levels deep.
-fn find_tainted_operand(binary_expr: Node<'_>, source: &[u8], params: &[String]) -> Option<String> {
+fn find_tainted_operand(
+    binary_expr: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    depth: u32,
+) -> Option<String> {
+    if depth > 100 {
+        return None;
+    }
     for field in ["left", "right"] {
         let Some(operand) = binary_expr.child_by_field_name(field) else {
             continue;
@@ -175,7 +190,7 @@ fn find_tainted_operand(binary_expr: Node<'_>, source: &[u8], params: &[String])
             }
             "binary_expression" => {
                 // Recursive: handle multi-level concatenation chains.
-                if let Some(src) = find_tainted_operand(operand, source, params) {
+                if let Some(src) = find_tainted_operand(operand, source, params, depth + 1) {
                     return Some(src);
                 }
             }

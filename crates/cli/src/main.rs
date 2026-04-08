@@ -3505,25 +3505,32 @@ probable AI context-collapse (hallucinated function reference)"
                 log_entry.decision_receipt = Some(attestation.decision_receipt);
                 log_entry.governor_status = Some("ok".to_string());
             }
-            Err(e) if soft_fail => {
+            Err(_e) if soft_fail => {
                 eprintln!(
                     "[JANITOR DEGRADED] Governor unreachable. \
                      Soft-fail active: proceeding without attestation."
                 );
+                // CodeQL: error message redacted — may contain auth token or URL fragments.
                 report::append_diag_log(
                     &janitor_dir,
-                    &format!("WARN soft-fail: post_bounce_result failed: {e}"),
+                    "WARN soft-fail: post_bounce_result failed — error details redacted",
                 );
                 log_entry.governor_status = Some("degraded".to_string());
                 // Fall through — append degraded entry and exit 0.
             }
-            Err(e) if !is_critical => {
+            Err(_e) if !is_critical => {
+                // CodeQL: error message redacted — may contain auth token or URL fragments.
                 report::append_diag_log(
                     &janitor_dir,
-                    &format!("WARN post_bounce_result failed (non-critical PR): {e}"),
+                    "WARN post_bounce_result failed (non-critical PR) — error details redacted",
                 );
             }
-            Err(e) => return Err(e),
+            Err(_e) => {
+                return Err(anyhow::anyhow!(
+                    "governor POST failed — critical threat intercept blocked; \
+                     check .janitor/diag.log for connectivity details"
+                ))
+            }
         }
     }
 
