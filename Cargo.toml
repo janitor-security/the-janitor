@@ -106,7 +106,7 @@ arc-swap = "1.7"
 # Cranelift JIT + WAT text-format parsing. Default features retained so all
 # required runtime types are available; LTO in the release profile strips
 # unreachable code paths, controlling the final binary footprint.
-wasmtime = { version = "28", features = ["cranelift", "wat"] }
+wasmtime = { version = "36", features = ["cranelift", "wat"] }
 
 # Git integration (C binding to libgit2 — requires libgit2-dev in build env)
 git2 = "0.20"
