@@ -84,7 +84,7 @@ aho-corasick = "1.1"
 bumpalo = { version = "3", features = ["collections"] }
 
 # JSON / hashing utilities
-sha2 = "0.10"
+sha2 = "0.11"
 flate2 = "1.0"
 toml = "1.0"
 semver = "1.0"
