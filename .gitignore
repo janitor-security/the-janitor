@@ -92,6 +92,9 @@ SOVEREIGN_BRIEFING.md
 # Machine-local Claude Code state — never commit.
 .claude/settings.local.json
 .claude/mcp.json
+# Internal R&D intelligence — never push to public repo.
+docs/INNOVATION_LOG.md
+docs/ENTERPRISE_GAPS.md
 
 
 # ------------------------------------------------------------------------------
