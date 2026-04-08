@@ -20,7 +20,7 @@ rust-version = "1.91"
 
 [workspace.dependencies]
 # Core
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "io-util", "io-std", "net", "signal", "sync", "time"] }
+tokio = { version = "1.51", features = ["rt-multi-thread", "macros", "io-util", "io-std", "net", "signal", "sync", "time"] }
 sysinfo = "0.38"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
