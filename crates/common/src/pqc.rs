@@ -165,6 +165,37 @@ pub fn verify_slh_dsa_signature(
     Ok(pk.verify(cbom_bytes, &sig_array, JANITOR_CBOM_CONTEXT))
 }
 
+/// Verify an ML-DSA-65 signature over a release-asset BLAKE3 hash.
+///
+/// Uses [`JANITOR_ASSET_CONTEXT`] — distinct from the CBOM context — so that a
+/// CBOM signature cannot be replayed as a release-asset signature and vice versa.
+///
+/// `hash_bytes` is the raw 32-byte BLAKE3 digest.  `sig_b64` is the base64-encoded
+/// ML-DSA-65 signature as written to the `.sig` file by `janitor sign-asset`.
+pub fn verify_asset_ml_dsa_signature(
+    hash_bytes: &[u8; 32],
+    public_key_bytes: &[u8],
+    sig_b64: &str,
+) -> anyhow::Result<bool> {
+    let pk_array: [u8; ML_DSA_PUBLIC_KEY_LEN] = public_key_bytes.try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "ML-DSA-65 release public key must be exactly {ML_DSA_PUBLIC_KEY_LEN} bytes"
+        )
+    })?;
+    let pk = ml_dsa_65::PublicKey::try_from_bytes(pk_array)
+        .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 release public key: {e}"))?;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(sig_b64)
+        .context("base64 decode of ML-DSA-65 release signature failed")?;
+    let sig_array: [u8; ml_dsa_65::SIG_LEN] = sig_bytes.try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "ML-DSA-65 release signature must decode to exactly {} bytes",
+            ml_dsa_65::SIG_LEN
+        )
+    })?;
+    Ok(pk.verify(hash_bytes, &sig_array, JANITOR_ASSET_CONTEXT))
+}
+
 /// Sign a release-asset BLAKE3 hash using the PQC private key bundle at `path`.
 ///
 /// `hash_bytes` is the 32-byte raw BLAKE3 digest of the release asset.
@@ -213,41 +244,35 @@ pub fn sign_asset_hash_from_file(
     })
 }
 
+/// Parse a PQC private key bundle from raw bytes.
+///
+/// Strictly requires the full dual-bundle format: ML-DSA-65 private key bytes
+/// immediately followed by SLH-DSA-SHAKE-192s private key bytes.  Partial
+/// bundles (ML-only or SLH-only) are rejected — accepting them would allow a
+/// cryptographic downgrade to a single-algorithm signature that survives
+/// one algorithm break.
 fn private_key_bundle_from_bytes(bytes: &[u8]) -> anyhow::Result<PqcPrivateKeyBundle> {
-    match bytes.len() {
-        ML_DSA_PRIVATE_KEY_LEN => {
-            let ml_dsa = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid ML-DSA-65 key length"))?;
-            Ok(PqcPrivateKeyBundle {
-                ml_dsa: Some(ml_dsa),
-                slh_dsa: None,
-            })
-        }
-        SLH_DSA_PRIVATE_KEY_LEN => {
-            let slh_dsa = bytes
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("invalid {SLH_DSA_VARIANT} key length"))?;
-            Ok(PqcPrivateKeyBundle {
-                ml_dsa: None,
-                slh_dsa: Some(slh_dsa),
-            })
-        }
-        len if len == ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN => {
-            let (ml_bytes, slh_bytes) = bytes.split_at(ML_DSA_PRIVATE_KEY_LEN);
-            let ml_dsa = ml_bytes
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("invalid ML-DSA-65 key bundle prefix"))?;
-            let slh_dsa = slh_bytes
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("invalid {SLH_DSA_VARIANT} key bundle suffix"))?;
-            Ok(PqcPrivateKeyBundle {
-                ml_dsa: Some(ml_dsa),
-                slh_dsa: Some(slh_dsa),
-            })
-        }
-        other => bail!(
-            "unsupported PQC private key bundle length {other}; expected {ML_DSA_PRIVATE_KEY_LEN}, {SLH_DSA_PRIVATE_KEY_LEN}, or {} bytes",
-            ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN
-        ),
+    const DUAL_LEN: usize = ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN;
+    if bytes.len() == DUAL_LEN {
+        let (ml_bytes, slh_bytes) = bytes.split_at(ML_DSA_PRIVATE_KEY_LEN);
+        let ml_dsa = ml_bytes
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid ML-DSA-65 key bundle prefix"))?;
+        let slh_dsa = slh_bytes
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid {SLH_DSA_VARIANT} key bundle suffix"))?;
+        Ok(PqcPrivateKeyBundle {
+            ml_dsa: Some(ml_dsa),
+            slh_dsa: Some(slh_dsa),
+        })
+    } else {
+        bail!(
+            "unsupported PQC private key bundle length {}; \
+             expected exactly {} bytes (ML-DSA-65 || SLH-DSA-SHAKE-192s dual bundle). \
+             Partial single-algorithm bundles are rejected to prevent cryptographic downgrade.",
+            bytes.len(),
+            DUAL_LEN
+        )
     }
 }
 
@@ -335,6 +360,32 @@ mod tests {
             err.to_string()
                 .contains("unsupported PQC private key bundle length"),
             "bundle parser must explain supported dual-signature key formats"
+        );
+    }
+
+    #[test]
+    fn ml_only_bundle_rejected_as_partial() {
+        // A single ML-DSA-65 key (no SLH-DSA suffix) must be rejected to
+        // prevent cryptographic downgrade to single-algorithm attestation.
+        let err = super::private_key_bundle_from_bytes(&[0u8; super::ML_DSA_PRIVATE_KEY_LEN])
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("unsupported PQC private key bundle length"),
+            "ml-only key bundle must be rejected as a partial bundle"
+        );
+    }
+
+    #[test]
+    fn slh_only_bundle_rejected_as_partial() {
+        // A single SLH-DSA key (no ML-DSA prefix) must be rejected to
+        // prevent cryptographic downgrade to single-algorithm attestation.
+        let err = super::private_key_bundle_from_bytes(&[0u8; super::SLH_DSA_PRIVATE_KEY_LEN])
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("unsupported PQC private key bundle length"),
+            "slh-only key bundle must be rejected as a partial bundle"
         );
     }
 }

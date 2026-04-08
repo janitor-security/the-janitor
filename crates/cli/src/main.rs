@@ -10,6 +10,7 @@ mod daemon;
 mod export;
 mod git_drive;
 mod report;
+mod verify_asset;
 
 #[derive(Parser)]
 #[command(name = "janitor")]
@@ -657,6 +658,32 @@ enum Commands {
         #[arg(long)]
         pqc_key: Option<String>,
     },
+
+    /// Verify the integrity of a Janitor release binary.
+    ///
+    /// Performs BLAKE3 hash verification against `--hash` (.b3 file) and,
+    /// when `--sig` is supplied, verifies the ML-DSA-65 detached signature
+    /// against the hardcoded release verifying key.  Implements the SLSA Level 4
+    /// trust anchor: a tampered CDN binary cannot forge the PQC signature.
+    ///
+    /// Used by the GitHub Actions composite action (action.yml) after binary
+    /// download to confirm supply-chain integrity before execution.
+    #[command(hide = true)]
+    VerifyAsset {
+        /// Path to the release binary to verify.
+        #[arg(long)]
+        file: PathBuf,
+        /// Path to the `.b3` BLAKE3 hash file (64 lowercase hex chars).
+        #[arg(long)]
+        hash: PathBuf,
+        /// Optional path to the `.sig` JSON signature file produced by `sign-asset`.
+        ///
+        /// When omitted, only the BLAKE3 hash is checked.  Providing `--sig`
+        /// additionally verifies the ML-DSA-65 signature against the hardcoded
+        /// release public key.
+        #[arg(long)]
+        sig: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1067,6 +1094,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::SignAsset { file, pqc_key } => {
             cmd_sign_asset(file, pqc_key.as_deref())?;
+        }
+        Commands::VerifyAsset { file, hash, sig } => {
+            verify_asset::cmd_verify_asset(file, hash, sig.as_deref())?;
         }
     }
 
@@ -3427,6 +3457,23 @@ probable AI context-collapse (hallucinated function reference)"
         log_entry.governor_status = Some("local_pqc".to_string());
     }
 
+    // Dual-PQC downgrade gate: when pqc_enforced, both signatures are mandatory.
+    // A key bundle that produces only one signature (e.g. ml-only key with
+    // pqc_enforced=true) is a cryptographic downgrade — reject immediately.
+    if policy.pqc_enforced {
+        let has_ml = log_entry.pqc_sig.is_some();
+        let has_slh = log_entry.pqc_slh_sig.is_some();
+        if !has_ml || !has_slh {
+            anyhow::bail!(
+                "pqc_enforced = true but PQC signing produced an incomplete dual-signature \
+                 bundle (ML-DSA-65: {}, SLH-DSA: {}). Supply a full dual key bundle \
+                 (ML-DSA + SLH-DSA concatenated) via --pqc-key.",
+                if has_ml { "present" } else { "MISSING" },
+                if has_slh { "present" } else { "MISSING" }
+            );
+        }
+    }
+
     // ── Architecture Inversion: POST result to Governor ───────────────────────
     //
     // Critical threat: fail-closed.  A transport error or non-2xx response is a
@@ -3668,6 +3715,26 @@ fn cmd_verify_cbom(
                 let mut entry_signed = false;
                 let mut entry_failed = false;
                 let has_receipt = entry.decision_receipt.is_some();
+
+                // Dual-PQC integrity: partial bundles are a downgrade attack surface.
+                // If either signature is present, both MUST be present.
+                if entry.pqc_sig.is_some() != entry.pqc_slh_sig.is_some() {
+                    anyhow::bail!(
+                        "line {}: partial PQC signature bundle — ML-DSA-65 {} but SLH-DSA {} \
+                         — dual-signature integrity violated",
+                        line_no + 1,
+                        if entry.pqc_sig.is_some() {
+                            "present"
+                        } else {
+                            "MISSING"
+                        },
+                        if entry.pqc_slh_sig.is_some() {
+                            "present"
+                        } else {
+                            "MISSING"
+                        }
+                    );
+                }
 
                 if let Some(ref sig_b64) = entry.pqc_sig {
                     entry_signed = true;
@@ -5466,8 +5533,37 @@ fn cmd_import_intel_capsule(in_path: &Path, project_root: &Path) -> anyhow::Resu
     );
 
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
-    std::fs::write(&wisdom_path, &capsule.wisdom_bytes)
-        .with_context(|| format!("writing {}", wisdom_path.display()))?;
+
+    // CT-symlink: Reject if target is a symlink — prevents follow-on write via
+    // attacker-placed symlink (leaf-node overwrite).
+    if let Ok(meta) = std::fs::symlink_metadata(&wisdom_path) {
+        if meta.file_type().is_symlink() {
+            anyhow::bail!(
+                "write rejected: {} is a symlink — potential symlink overwrite attack",
+                wisdom_path.display()
+            );
+        }
+    }
+
+    // Atomic write: stage to .tmp, sync_all, then rename — prevents torn writes
+    // and partial-update read races on the live wisdom file.
+    let tmp_path = janitor_dir.join("wisdom.rkyv.tmp");
+    {
+        use std::io::Write as _;
+        let mut tmp = std::fs::File::create(&tmp_path)
+            .with_context(|| format!("creating {}", tmp_path.display()))?;
+        tmp.write_all(&capsule.wisdom_bytes)
+            .with_context(|| format!("writing to {}", tmp_path.display()))?;
+        tmp.sync_all()
+            .with_context(|| format!("sync_all on {}", tmp_path.display()))?;
+    }
+    std::fs::rename(&tmp_path, &wisdom_path).with_context(|| {
+        format!(
+            "atomic rename {} → {}",
+            tmp_path.display(),
+            wisdom_path.display()
+        )
+    })?;
 
     println!(
         "Intel capsule verified and installed: {} ({} bytes, hash {})",

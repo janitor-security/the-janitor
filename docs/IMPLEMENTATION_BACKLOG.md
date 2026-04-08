@@ -5,6 +5,28 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Trust-Anchor Refactor (v10.0.0-rc.7)
+
+**Directive:** JAB Assessor identified three ATO-revoking vulnerabilities in the release candidate: (1) leaf-node symlink overwrite in `cmd_import_intel_capsule` (write follows attacker-placed symlink), (2) cryptographic downgrade — `pqc_enforced=true` did not enforce dual-PQC after signing, and `private_key_bundle_from_bytes` accepted partial single-algorithm bundles, (3) co-hosted BLAKE3 hash insufficient as sole trust anchor (CDN that controls `.b3` can bypass). All three remediated this session.
+
+**Files modified:**
+- `crates/cli/src/main.rs` *(modified)* — Phase 1: `cmd_import_intel_capsule` write replaced with symlink check (`symlink_metadata`) + atomic write (`write_all` → `sync_all` → `rename`). Phase 2a: dual-PQC enforcement gate in `cmd_bounce` — if `pqc_enforced && (pqc_sig.is_none() || pqc_slh_sig.is_none())` → bail. Phase 2b: partial-bundle detection in `cmd_verify_cbom` — if one sig present but not the other → bail. Phase 3: new `VerifyAsset` subcommand dispatches to `verify_asset::cmd_verify_asset`. Module `mod verify_asset` added.
+- `crates/cli/src/verify_asset.rs` *(created)* — `cmd_verify_asset(file, hash_path, sig_path)`: Layer 1 = BLAKE3 recompute + strict 64-hex-char format gate; Layer 2 (when `--sig` supplied) = ML-DSA-65 verify via hardcoded `JANITOR_RELEASE_ML_DSA_PUB_KEY` (zeroed placeholder — production key must be substituted). 4 tests: BLAKE3 mismatch rejected, invalid format rejected, BLAKE3-only succeeds, PQC roundtrip with dynamic key, tampered hash rejected.
+- `crates/common/src/pqc.rs` *(modified)* — Phase 2c: `private_key_bundle_from_bytes` now rejects all partial bundles (ML-only and SLH-only lengths both → error); only the concatenated dual-bundle length (`ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN`) is accepted. New `verify_asset_ml_dsa_signature` function added using `JANITOR_ASSET_CONTEXT` (distinct from CBOM context). 2 new tests: `ml_only_bundle_rejected_as_partial`, `slh_only_bundle_rejected_as_partial`.
+- `action.yml` *(modified)* — Download step now fetches `janitor.sig` (best-effort `|| true`), runs existing BLAKE3 Python verification, then invokes `janitor verify-asset --file --hash [--sig]` for Layer 2 PQC verification. Pre-PQC releases gracefully degrade to BLAKE3-only when `.sig` absent.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.7`
+
+**Crucible:** SANCTUARY INTACT — no new Crucible entries (hardening is in import/PQC paths, not detector logic).
+
+**Security posture delta:**
+- Symlink overwrite at `wisdom.rkyv` eliminated — pre-write symlink check + atomic rename.
+- `pqc_enforced=true` now fails closed if signing yields incomplete dual bundle.
+- Single-algorithm key bundles rejected at parse time — downgrade to ML-only or SLH-only impossible via `private_key_bundle_from_bytes`.
+- Partial CBOM bundles now cause `verify-cbom` to bail — cannot have one sig without the other.
+- CI download chain upgraded from 1-factor (BLAKE3) to 2-factor (BLAKE3 + ML-DSA-65) for PQC-signed releases.
+
+---
+
 ## 2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
 
 **Directive:** External red-team audit identified four fatal bash syntax/logic errors in the CI pipeline: missing `-e` on `jq` token extraction (silent null propagation), wrong `--report-url` path (404 double-path), unsafe PQC key word-splitting in `justfile`, and missing non-PR event guard on Extract Patch step. All remediated this session.
