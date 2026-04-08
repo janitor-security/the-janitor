@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-08-algorithmic-circuit-breakers-clean-slate-protocol-v1000-rc8" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-08 — Algorithmic Circuit Breakers &amp; Clean Slate Protocol (v10.0.0-rc.8)
@@ -1160,6 +1169,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-08-algorithmic-circuit-breakers-clean-slate-protocol-v1000-rc8" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-08 — Algorithmic Circuit Breakers &amp; Clean Slate Protocol (v10.0.0-rc.8)
@@ -1693,6 +1711,25 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9">2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)</h2>
+<p><strong>Directive:</strong> GitHub Security tab failing automated enterprise risk assessments. (1) Wasmtime CVEs requiring major version bump (v28 → v43). (2) Residual CodeQL <code>cleartext-logging-sensitive-data</code> findings in <code>report.rs</code> and <code>fetch_verified_wisdom_payload</code>. (3) Autonomous intelligence seeding — two architectural gaps filed from session analysis. (4) Rust MSRV bump from 1.88 → 1.91 required by Wasmtime 43.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — <code>wasmtime</code> version bumped from <code>"28"</code> to <code>"43.0.0"</code>; <code>rust-version</code> bumped from <code>"1.88"</code> to <code>"1.91"</code>; workspace version bumped to <code>10.0.0-rc.9</code>.
+- <code>rust-toolchain.toml</code> <em>(modified)</em> — <code>channel</code> bumped from <code>"1.88.0"</code> to <code>"1.91.0"</code>; rustup directory override cleared.
+- <code>crates/forge/src/wasm_host.rs</code> <em>(modified)</em> — Wasmtime 43 API: <code>wasmtime::Error</code> no longer satisfies <code>std::error::Error + Send + Sync</code>, breaking anyhow's <code>Context</code> trait on all wasmtime <code>Result&lt;T, wasmtime::Error&gt;</code> calls. Seven call sites migrated from <code>.context("...")</code> / <code>.with_context(|| ...)</code> to <code>.map_err(|e| anyhow::anyhow!("...: {e:#}"))</code>: <code>Engine::new</code>, <code>Module::new</code>, <code>Store::set_fuel</code>, <code>Instance::new</code>, <code>get_typed_func</code> (×2), <code>TypedFunc::call</code> (×2), <code>Memory::grow</code>. Fuel gate (<code>set_fuel</code>) and epoch interruption (<code>epoch_interruption(true)</code> + <code>set_epoch_deadline(1)</code>) preserved verbatim — algorithmic circuit breakers intact.
+- <code>crates/forge/src/deobfuscate.rs</code> <em>(modified)</em> — Clippy 1.91 <code>manual_is_multiple_of</code> lint: <code>raw.len() % 2 != 0</code> → <code>!raw.len().is_multiple_of(2)</code>.
+- <code>crates/common/src/scm.rs</code> <em>(modified)</em> — Clippy 1.91 <code>derivable_impls</code> lint: manual <code>impl Default for ScmProvider</code> removed; <code>#[derive(Default)]</code> + <code>#[default]</code> on <code>Unknown</code> variant added.
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — Phase 2 CodeQL: <code>post_bounce_result</code> <code>Err(e) =&gt;</code> arm changed to <code>Err(_e) =&gt;</code>; <code>{e}</code> interpolation removed from <code>anyhow::bail!</code> — ureq errors may carry Authorization header fragments from <code>"Bearer {token}"</code>.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — Phase 2 CodeQL: <code>fetch_verified_wisdom_payload</code> — four <code>{wisdom_url}</code> / <code>{wisdom_sig_url}</code> / <code>{e}</code> interpolations in <code>ureq::get</code> error handlers replaced with static strings. <code>update-wisdom --ci-mode</code> <code>{kev_url}</code> / <code>{e}</code> interpolation in KEV fetch error replaced with static string.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — CT-022 (Wasm Rule Integrity Pinning) and CT-023 (Wasm Epoch Thread Pool Leak) filed as P1.</p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — wasmtime API migration is infrastructure, not detector logic; no new Crucible entries required.</p>
+<p><strong>Security posture delta:</strong>
+- 3 Wasmtime CVEs (requiring major version bump) eradicated — wasmtime 43.0.0 resolves all open Dependabot alerts for the Wasm subsystem.
+- BLAKE3 + epoch interruption circuit breakers preserved through the API migration — no regression in adversarial AST protection.
+- <code>report.rs</code> CodeQL taint path closed: <code>post_bounce_result</code> no longer echoes ureq error (which carries Authorization header data) to the caller.
+- <code>fetch_verified_wisdom_payload</code> CodeQL taint path closed: wisdom mirror URLs no longer appear in error messages (enterprise configs may embed credentials in mirror URLs).
+- Rust 1.91 MSRV brings <code>is_multiple_of</code> API and <code>#[default]</code> enum derive — both enforced by Clippy as of this version.</p>
 <hr />
 <h2 id="2026-04-08-algorithmic-circuit-breakers-clean-slate-protocol-v1000-rc8">2026-04-08 — Algorithmic Circuit Breakers &amp; Clean Slate Protocol (v10.0.0-rc.8)</h2>
 <p><strong>Directive:</strong> (1) PR #930 on godotengine/godot caused a one-hour hang — combinatorial explosion in AST walkers on deeply-nested auto-generated files. (2) CodeQL cleartext logging alerts in governor POST error handlers. (3) Dependabot dependency bumps to close open CVEs. (4) CT-021 — replace zeroed <code>JANITOR_RELEASE_ML_DSA_PUB_KEY</code> placeholder with structurally valid throwaway key.</p>
