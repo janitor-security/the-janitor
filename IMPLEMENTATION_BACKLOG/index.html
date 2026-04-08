@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-red-team-syntax-rescue-v1000-rc6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)
@@ -1133,6 +1142,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-red-team-syntax-rescue-v1000-rc6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)
@@ -1639,6 +1657,19 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-red-team-syntax-rescue-v1000-rc6">2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)</h2>
+<p><strong>Directive:</strong> External red-team audit identified four fatal bash syntax/logic errors in the CI pipeline: missing <code>-e</code> on <code>jq</code> token extraction (silent null propagation), wrong <code>--report-url</code> path (404 double-path), unsafe PQC key word-splitting in <code>justfile</code>, and missing non-PR event guard on Extract Patch step. All remediated this session.</p>
+<p><strong>Files modified:</strong>
+- <code>action.yml</code> <em>(modified)</em> — (1) <code>jq -r '.token'</code> → <code>jq -er '.token'</code>: <code>-e</code> makes jq exit non-zero on <code>null</code>, failing fast instead of passing literal <code>"null"</code> as an analysis token. (2) <code>--report-url "${GOVERNOR}/v1/report"</code> → <code>--governor-url "${GOVERNOR}"</code>: CLI appends <code>/v1/report</code> internally; double-path caused 404 on every Governor POST. (3) <code>if:</code> guard added to Extract Patch step — skips gracefully on <code>workflow_dispatch</code> and <code>schedule</code> triggers that have no PR number. (4) BLAKE3 format validation gate (<code>^[0-9a-f]{64}$</code>) added before Python hash comparison — corrupted or empty <code>.b3</code> files now fail with a diagnostic message rather than a silent empty-string comparison.
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> PQC key expansion replaced: <code>${JANITOR_PQC_KEY:+--pqc-key ...}</code> inline expansion (unsafe — unquoted word-splitting if key contains spaces) replaced with explicit bash array <code>SIGN_ARGS</code> + conditional append. No behavioral change in environments with no key set; eliminates potential injection vector when key is set.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.6</code></p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — no new Crucible entries (CI pipeline fixes, not detector logic).</p>
+<p><strong>Security posture delta:</strong>
+- Silent <code>null</code> analysis token no longer reaches Governor — pipeline now fails hard at token extraction.
+- Governor endpoint double-path eliminated — all bounces correctly POST to <code>/v1/report</code> (one path segment, not two).
+- Non-PR trigger events (workflow_dispatch, schedule) no longer abort with <code>gh pr diff</code> on a missing PR number.
+- BLAKE3 format gate prevents empty or malformed <code>.b3</code> files from producing a false-positive integrity pass.</p>
 <hr />
 <h2 id="2026-04-07-syntax-rescue-slsa-level-4-provenance-v1000-rc5">2026-04-07 — Syntax Rescue &amp; SLSA Level 4 Provenance (v10.0.0-rc.5)</h2>
 <p><strong>Directive:</strong> Phase 1 — Confirm <code>DEFAULT_GOVERNOR_URL</code> integrity (no truncation); Phase 2 — Add <code>janitor sign-asset</code> subcommand; Phase 3 — Wire <code>fast-release</code> to sign and attach binary assets; Phase 4 — Gut <code>action.yml</code> of <code>cargo build</code>; replace with BLAKE3-verified binary download.</p>
