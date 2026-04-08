@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-trust-anchor-refactor-v1000-rc7" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Trust-Anchor Refactor (v10.0.0-rc.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-red-team-syntax-rescue-v1000-rc6" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
@@ -1142,6 +1151,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-07-trust-anchor-refactor-v1000-rc7" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-07 — Trust-Anchor Refactor (v10.0.0-rc.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-07-red-team-syntax-rescue-v1000-rc6" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
@@ -1657,6 +1675,22 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-07-trust-anchor-refactor-v1000-rc7">2026-04-07 — Trust-Anchor Refactor (v10.0.0-rc.7)</h2>
+<p><strong>Directive:</strong> JAB Assessor identified three ATO-revoking vulnerabilities in the release candidate: (1) leaf-node symlink overwrite in <code>cmd_import_intel_capsule</code> (write follows attacker-placed symlink), (2) cryptographic downgrade — <code>pqc_enforced=true</code> did not enforce dual-PQC after signing, and <code>private_key_bundle_from_bytes</code> accepted partial single-algorithm bundles, (3) co-hosted BLAKE3 hash insufficient as sole trust anchor (CDN that controls <code>.b3</code> can bypass). All three remediated this session.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — Phase 1: <code>cmd_import_intel_capsule</code> write replaced with symlink check (<code>symlink_metadata</code>) + atomic write (<code>write_all</code> → <code>sync_all</code> → <code>rename</code>). Phase 2a: dual-PQC enforcement gate in <code>cmd_bounce</code> — if <code>pqc_enforced &amp;&amp; (pqc_sig.is_none() || pqc_slh_sig.is_none())</code> → bail. Phase 2b: partial-bundle detection in <code>cmd_verify_cbom</code> — if one sig present but not the other → bail. Phase 3: new <code>VerifyAsset</code> subcommand dispatches to <code>verify_asset::cmd_verify_asset</code>. Module <code>mod verify_asset</code> added.
+- <code>crates/cli/src/verify_asset.rs</code> <em>(created)</em> — <code>cmd_verify_asset(file, hash_path, sig_path)</code>: Layer 1 = BLAKE3 recompute + strict 64-hex-char format gate; Layer 2 (when <code>--sig</code> supplied) = ML-DSA-65 verify via hardcoded <code>JANITOR_RELEASE_ML_DSA_PUB_KEY</code> (zeroed placeholder — production key must be substituted). 4 tests: BLAKE3 mismatch rejected, invalid format rejected, BLAKE3-only succeeds, PQC roundtrip with dynamic key, tampered hash rejected.
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — Phase 2c: <code>private_key_bundle_from_bytes</code> now rejects all partial bundles (ML-only and SLH-only lengths both → error); only the concatenated dual-bundle length (<code>ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN</code>) is accepted. New <code>verify_asset_ml_dsa_signature</code> function added using <code>JANITOR_ASSET_CONTEXT</code> (distinct from CBOM context). 2 new tests: <code>ml_only_bundle_rejected_as_partial</code>, <code>slh_only_bundle_rejected_as_partial</code>.
+- <code>action.yml</code> <em>(modified)</em> — Download step now fetches <code>janitor.sig</code> (best-effort <code>|| true</code>), runs existing BLAKE3 Python verification, then invokes <code>janitor verify-asset --file --hash [--sig]</code> for Layer 2 PQC verification. Pre-PQC releases gracefully degrade to BLAKE3-only when <code>.sig</code> absent.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.7</code></p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — no new Crucible entries (hardening is in import/PQC paths, not detector logic).</p>
+<p><strong>Security posture delta:</strong>
+- Symlink overwrite at <code>wisdom.rkyv</code> eliminated — pre-write symlink check + atomic rename.
+- <code>pqc_enforced=true</code> now fails closed if signing yields incomplete dual bundle.
+- Single-algorithm key bundles rejected at parse time — downgrade to ML-only or SLH-only impossible via <code>private_key_bundle_from_bytes</code>.
+- Partial CBOM bundles now cause <code>verify-cbom</code> to bail — cannot have one sig without the other.
+- CI download chain upgraded from 1-factor (BLAKE3) to 2-factor (BLAKE3 + ML-DSA-65) for PQC-signed releases.</p>
 <hr />
 <h2 id="2026-04-07-red-team-syntax-rescue-v1000-rc6">2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)</h2>
 <p><strong>Directive:</strong> External red-team audit identified four fatal bash syntax/logic errors in the CI pipeline: missing <code>-e</code> on <code>jq</code> token extraction (silent null propagation), wrong <code>--report-url</code> path (404 double-path), unsafe PQC key word-splitting in <code>justfile</code>, and missing non-PR event guard on Extract Patch step. All remediated this session.</p>
