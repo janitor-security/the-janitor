@@ -118,8 +118,11 @@ fast-release version:
 	strip target/release/janitor
 	# SLSA Level 4: compute BLAKE3 hash (and optional ML-DSA-65 sig) for binary provenance.
 	# Produces target/release/janitor.b3 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.
-	./target/release/janitor sign-asset target/release/janitor \
-	    ${JANITOR_PQC_KEY:+--pqc-key "${JANITOR_PQC_KEY}"}
+	SIGN_ARGS=(target/release/janitor)
+	if [[ -n "${JANITOR_PQC_KEY:-}" ]]; then
+	    SIGN_ARGS+=(--pqc-key "${JANITOR_PQC_KEY}")
+	fi
+	./target/release/janitor sign-asset "${SIGN_ARGS[@]}"
 	# Idempotency guard — check local and remote before any mutation (Law: idempotency.md).
 	if git rev-parse "v{{version}}" >/dev/null 2>&1 \
 	   || git ls-remote --tags origin "refs/tags/v{{version}}" | grep -q .; then

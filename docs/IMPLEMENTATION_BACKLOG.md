@@ -5,6 +5,25 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-07 — Red Team Syntax Rescue (v10.0.0-rc.6)
+
+**Directive:** External red-team audit identified four fatal bash syntax/logic errors in the CI pipeline: missing `-e` on `jq` token extraction (silent null propagation), wrong `--report-url` path (404 double-path), unsafe PQC key word-splitting in `justfile`, and missing non-PR event guard on Extract Patch step. All remediated this session.
+
+**Files modified:**
+- `action.yml` *(modified)* — (1) `jq -r '.token'` → `jq -er '.token'`: `-e` makes jq exit non-zero on `null`, failing fast instead of passing literal `"null"` as an analysis token. (2) `--report-url "${GOVERNOR}/v1/report"` → `--governor-url "${GOVERNOR}"`: CLI appends `/v1/report` internally; double-path caused 404 on every Governor POST. (3) `if:` guard added to Extract Patch step — skips gracefully on `workflow_dispatch` and `schedule` triggers that have no PR number. (4) BLAKE3 format validation gate (`^[0-9a-f]{64}$`) added before Python hash comparison — corrupted or empty `.b3` files now fail with a diagnostic message rather than a silent empty-string comparison.
+- `justfile` *(modified)* — `fast-release` PQC key expansion replaced: `${JANITOR_PQC_KEY:+--pqc-key ...}` inline expansion (unsafe — unquoted word-splitting if key contains spaces) replaced with explicit bash array `SIGN_ARGS` + conditional append. No behavioral change in environments with no key set; eliminates potential injection vector when key is set.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.6`
+
+**Crucible:** SANCTUARY INTACT — no new Crucible entries (CI pipeline fixes, not detector logic).
+
+**Security posture delta:**
+- Silent `null` analysis token no longer reaches Governor — pipeline now fails hard at token extraction.
+- Governor endpoint double-path eliminated — all bounces correctly POST to `/v1/report` (one path segment, not two).
+- Non-PR trigger events (workflow_dispatch, schedule) no longer abort with `gh pr diff` on a missing PR number.
+- BLAKE3 format gate prevents empty or malformed `.b3` files from producing a false-positive integrity pass.
+
+---
+
 ## 2026-04-07 — Syntax Rescue & SLSA Level 4 Provenance (v10.0.0-rc.5)
 
 **Directive:** Phase 1 — Confirm `DEFAULT_GOVERNOR_URL` integrity (no truncation); Phase 2 — Add `janitor sign-asset` subcommand; Phase 3 — Wire `fast-release` to sign and attach binary assets; Phase 4 — Gut `action.yml` of `cargo build`; replace with BLAKE3-verified binary download.
