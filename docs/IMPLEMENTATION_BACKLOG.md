@@ -25,7 +25,7 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 - `cargo test --workspace -- --test-threads=1` ✅
 - `just audit` ✅
 
-**Release status:** blocked locally — `just fast-release 10.0.0-rc.15` reached the signing gate and failed because the GPG key is locked and `JANITOR_GPG_PASSPHRASE` is unset.
+**Release status:** completed — `just fast-release 10.0.0-rc.15` succeeded after the signing key was unlocked. Signed release commit/tag published at `09fb522a93fff59c0d2f22b65a06face9dabc977`; the release automation left `.github/workflows/msrv.yml` unstaged, so a follow-up cleanup commit `70a2af94ddfb4eeec805c5bdfeed8d50148ee642` was pushed to `main` to keep CI state aligned with the shipped code.
 
 ## 2026-04-09 — Dashboard Annihilation & Resumable Strikes (v10.0.0-rc.14)
 
