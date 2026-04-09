@@ -614,15 +614,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-3-no-resumable-hyper-audit-strike-execution-ledger" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3 — No resumable hyper-audit / strike execution ledger
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete" class="md-nav__link">
     <span class="md-ellipsis">
       P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete
@@ -821,15 +812,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-3-no-resumable-hyper-audit-strike-execution-ledger" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3 — No resumable hyper-audit / strike execution ledger
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete" class="md-nav__link">
     <span class="md-ellipsis">
       P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete
@@ -984,13 +966,6 @@ All CT constraints through CT-020 resolved.</p>
 - CLI progress spinners already exist for scan / clean flows; the gap is long-run orchestration and resumability, not absence of all progress UI.
 - Suppression primitives exist (<code># noqa</code>-style pragmas, test-scope routing, local-brain <code>janitor pardon</code>); the gap is governable, reviewable suppression lifecycle.</p>
 <h2 id="p0-enterprise-deployment-blockers">P0 — Enterprise Deployment Blockers</h2>
-<h3 id="p0-3-no-resumable-hyper-audit-strike-execution-ledger">P0-3 — No resumable hyper-audit / strike execution ledger</h3>
-<p><strong>Gap</strong>: The product can batch-audit and render ledgers, but there is no explicit checkpoint/resume protocol for multi-hour adversarial strikes. If a 3-hour <code>hyper-audit</code> dies at 92%, the operator should not restart from zero. Long enterprise scans need durable progress state, resumable shards, and deterministic partial outputs.</p>
-<p><strong>Required change</strong>:
-1. Persist shard checkpoints under <code>.janitor/strikes/&lt;run-id&gt;/</code>.
-2. Resume by PR cursor / git OID boundary.
-3. Emit machine-readable heartbeat and ETA snapshots.</p>
-<p><strong>Why this blocks GA</strong>: Marathon audits without resumability are demo-grade, not fleet-grade.</p>
 <h3 id="p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete">P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete</h3>
 <p><strong>Gap</strong>: SCM normalization exists, but the commercial operating model still assumes GitHub App, GitHub PR checks, GitHub Actions, and GitHub release paths. Enterprises running GitLab, Azure DevOps, Bitbucket Server, or mixed estate need first-class check publishers, not just environment parsing.</p>
 <p><strong>Required change</strong>:
