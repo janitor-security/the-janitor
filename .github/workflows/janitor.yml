@@ -37,7 +37,7 @@ jobs:
       # and self-attestation hits share the same cache entry.
       - name: Cache Janitor Binary
         id: cache-build
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: /tmp/the-janitor/target/release/janitor
           key: ${{ runner.os }}-rust-stable-janitor-v3-${{ hashFiles('**/Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml') }}
