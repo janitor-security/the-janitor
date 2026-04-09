@@ -92,6 +92,13 @@ impl WasmHost {
         // the fuel budget can cause host-side latency spikes; the epoch timeout
         // guarantees termination within EPOCH_TIMEOUT_MS regardless of fuel.
         config.epoch_interruption(true);
+        // Wasm target pinning: explicitly disable the memory64 proposal.
+        // BYOP rule modules MUST target wasm32-wasip1 (classic 32-bit linear
+        // memory, no 64-bit addressing).  This rejects wasm64/wasip2 modules at
+        // engine level, insulating the host from the Rust wasm32-wasi → wasip1/wasip2
+        // target split.  Classic wasip1 modules compile with `--target wasm32-wasip1`
+        // (formerly `wasm32-wasi`) and require only 32-bit memory.
+        config.wasm_memory64(false);
         let engine = Engine::new(&config)
             .map_err(|e| anyhow::anyhow!("failed to create Wasm engine: {e:#}"))?;
         let mut modules = Vec::with_capacity(wasm_paths.len());

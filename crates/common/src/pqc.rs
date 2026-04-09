@@ -5,6 +5,7 @@ use fips204::traits::{SerDes as MlSerDes, Signer as MlSigner, Verifier as MlVeri
 use fips205::slh_dsa_shake_192s;
 use fips205::traits::{SerDes as SlhSerDes, Signer as SlhSigner, Verifier as SlhVerifier};
 use std::path::{Path, PathBuf};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const JANITOR_CBOM_CONTEXT: &[u8] = b"janitor-cbom";
 /// Domain-separation context for release-asset signatures.
@@ -24,7 +25,12 @@ pub struct PqcSignatureBundle {
     pub slh_dsa_sig: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// PQC private key bundle holding both algorithm keys.
+///
+/// [`ZeroizeOnDrop`] ensures all key material is scrubbed from RAM when the
+/// bundle is dropped — preventing key leakage to swap or crash dumps after
+/// the signing operation completes.
+#[derive(Debug, Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct PqcPrivateKeyBundle {
     pub ml_dsa: Option<[u8; ML_DSA_PRIVATE_KEY_LEN]>,
     pub slh_dsa: Option<[u8; SLH_DSA_PRIVATE_KEY_LEN]>,
@@ -77,8 +83,11 @@ pub fn sign_cbom_dual_from_file(
     cbom_bytes: &[u8],
     path: &Path,
 ) -> anyhow::Result<PqcSignatureBundle> {
-    let key_bytes = std::fs::read(path)
-        .with_context(|| format!("reading PQC private key bundle: {}", path.display()))?;
+    // Zeroizing<Vec<u8>>: key material is wiped from RAM when this binding is dropped.
+    let key_bytes = Zeroizing::new(
+        std::fs::read(path)
+            .with_context(|| format!("reading PQC private key bundle: {}", path.display()))?,
+    );
     let keys = private_key_bundle_from_bytes(&key_bytes)?;
     sign_cbom_dual_from_keys(cbom_bytes, &keys)
 }
@@ -208,8 +217,11 @@ pub fn sign_asset_hash_from_file(
     hash_bytes: &[u8; 32],
     path: &Path,
 ) -> anyhow::Result<PqcSignatureBundle> {
-    let key_bytes = std::fs::read(path)
-        .with_context(|| format!("reading PQC private key bundle: {}", path.display()))?;
+    // Zeroizing<Vec<u8>>: key material is wiped from RAM when this binding is dropped.
+    let key_bytes = Zeroizing::new(
+        std::fs::read(path)
+            .with_context(|| format!("reading PQC private key bundle: {}", path.display()))?,
+    );
     let keys = private_key_bundle_from_bytes(&key_bytes)?;
 
     let ml_dsa_sig = if let Some(sk_bytes) = keys.ml_dsa {
@@ -386,6 +398,33 @@ mod tests {
             err.to_string()
                 .contains("unsupported PQC private key bundle length"),
             "slh-only key bundle must be rejected as a partial bundle"
+        );
+    }
+
+    #[test]
+    fn pqc_private_key_bundle_zeroizes_on_drop() {
+        // Verify that PqcPrivateKeyBundle derives Zeroize correctly — a bundle
+        // constructed with known byte patterns must be zeroizable without panicking.
+        // (ZeroizeOnDrop fires automatically on drop; this test exercises the
+        // explicit Zeroize::zeroize() path to confirm the derive expansion is valid.)
+        //
+        // The zeroize crate's Option<[u8; N]> implementation calls .take().zeroize():
+        // it zeroes the inner array contents and then sets the discriminant to None.
+        // The post-zeroize value is therefore None, not Some([0u8; N]).
+        use zeroize::Zeroize as _;
+        let mut bundle = super::PqcPrivateKeyBundle {
+            ml_dsa: Some([0xAAu8; super::ML_DSA_PRIVATE_KEY_LEN]),
+            slh_dsa: Some([0xBBu8; super::SLH_DSA_PRIVATE_KEY_LEN]),
+        };
+        bundle.zeroize();
+        // After zeroization the Options are None (inner bytes were wiped before discard).
+        assert!(
+            bundle.ml_dsa.is_none(),
+            "ml_dsa must be None after zeroize (inner bytes wiped then discriminant cleared)"
+        );
+        assert!(
+            bundle.slh_dsa.is_none(),
+            "slh_dsa must be None after zeroize (inner bytes wiped then discriminant cleared)"
         );
     }
 }

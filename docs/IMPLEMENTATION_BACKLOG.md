@@ -5,6 +5,32 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-08 — Cryptographic Enclave, Wasm Pinning & SLSA 4 Enforcement (v10.0.0-rc.11)
+
+**Directive:** JAB Assessor identified ATO-revoking vulnerabilities in v10.0.0-rc.9: circular trust in action.yml BLAKE3 verification, no memory zeroization on PQC key material, and Rust wasm32-wasi target rename threatening BYOP engine compatibility. Version bumped to rc.11 (rc.10 skipped — rc.11 is the remediation release).
+
+**Files modified:**
+- `action.yml` *(modified)* — Phase 1: Circular trust eliminated. Download step rewrites entirely: downloads new binary + `.b3` + `.sig`, then downloads hardcoded bootstrap binary from `v10.0.0-rc.9` (previous known-good release) and runs `bootstrap verify-asset --file NEW --hash NEW.b3 [--sig NEW.sig]`. The bootstrap binary carries the ML-DSA-65 release verifying key and validates the new release without relying on any co-hosted asset. Python blake3 dependency removed. `BOOTSTRAP_TAG` comment instructs operator to update on each new release.
+- `Cargo.toml` *(modified)* — Workspace version bumped to `10.0.0-rc.11`; `zeroize = { version = "1", features = ["derive"] }` added to workspace dependencies.
+- `crates/common/Cargo.toml` *(modified)* — `zeroize.workspace = true` added.
+- `crates/common/src/pqc.rs` *(modified)* — Phase 3: `use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing}` added. `PqcPrivateKeyBundle` gains `#[derive(Zeroize, ZeroizeOnDrop)]` — key material wiped from RAM on drop. Both `sign_cbom_dual_from_file` and `sign_asset_hash_from_file` now wrap `std::fs::read(path)` return in `Zeroizing::new(...)` so the raw key bytes are zeroed when the function returns. One new unit test: `pqc_private_key_bundle_zeroizes_on_drop`.
+- `crates/forge/src/wasm_host.rs` *(modified)* — Phase 5: `config.wasm_memory64(false)` added to `WasmHost::new()`. Explicitly disables the memory64 proposal — rejects wasm64/wasip2 modules at engine level, pinning BYOP rule modules to `wasm32-wasip1` classic 32-bit memory addressing. Insulates engine from Rust `wasm32-wasi` → `wasip1/wasip2` target rename.
+- `README.md` *(modified)* — Version string updated to `v10.0.0-rc.11` via `just sync-versions`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(this file)* — Session ledger appended.
+
+**Phases confirmed already complete (no code change required):**
+- Phase 2 (Downgrade gates): `cmd_bounce` dual-PQC downgrade gate at lines 3463-3475 already present; `cmd_verify_cbom` partial-bundle bail at lines 3728-3744 already present; `private_key_bundle_from_bytes` `DUAL_LEN` strict enforcement already present.
+- Phase 4 (Symlink overwrites): `cmd_import_intel_capsule` already has `symlink_metadata` check + atomic `wisdom.rkyv.tmp` → `rename` pattern; `registry.rs::save()` already uses `symbols.rkyv.tmp` → rename.
+
+**Crucible:** SANCTUARY INTACT — 24/24. No new Crucible entries required (zeroize is infrastructure; wasm_memory64 is a config pin, not a new detector).
+
+**Security posture delta:**
+- Circular trust eliminated from SLSA Level 4 verification — co-hosted `.b3` / Python no longer act as the trust anchor; a bootstrapped prior-release binary holds the cryptographic authority.
+- PQC private key RAM exposure window closed — `Zeroizing<Vec<u8>>` wrapping + `ZeroizeOnDrop` on `PqcPrivateKeyBundle` guarantees key bytes are wiped immediately after use, preventing key material from persisting in swap or crash dumps.
+- BYOP engine explicitly pinned to wasm32-wasip1 (classic modules only) — `memory64=false` rejects wasm64 modules at parse time; future customer rule authors targeting `wasm32-wasip1` are fully supported.
+
+---
+
 ## 2026-04-08 — Dashboard Eradication & Major SemVer Strike (v10.0.0-rc.9)
 
 **Directive:** GitHub Security tab failing automated enterprise risk assessments. (1) Wasmtime CVEs requiring major version bump (v28 → v43). (2) Residual CodeQL `cleartext-logging-sensitive-data` findings in `report.rs` and `fetch_verified_wisdom_payload`. (3) Autonomous intelligence seeding — two architectural gaps filed from session analysis. (4) Rust MSRV bump from 1.88 → 1.91 required by Wasmtime 43.

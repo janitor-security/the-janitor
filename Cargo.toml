@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "10.0.0-rc.9"
+version = "10.0.0-rc.11"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -98,6 +98,10 @@ fips205 = "0.4.1"
 
 # Base64 encoding for PQC signature serialization
 base64 = "0.22"
+
+# Secure memory zeroization — wipe key material from RAM immediately after use.
+# `derive` feature enables #[derive(Zeroize, ZeroizeOnDrop)] on key structs.
+zeroize = { version = "1", features = ["derive"] }
 
 # Lock-free atomic reference counting
 arc-swap = "1.7"
