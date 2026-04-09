@@ -614,24 +614,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-no-repository-governed-suppression-waiver-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1 — No repository-governed suppression / waiver system
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-2-no-enterprise-case-management-surface" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2 — No enterprise case-management surface
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-3-no-resumable-hyper-audit-strike-execution-ledger" class="md-nav__link">
     <span class="md-ellipsis">
       P0-3 — No resumable hyper-audit / strike execution ledger
@@ -728,39 +710,6 @@
   <a href="#p2-2-no-lightweight-maintainer-mode-for-tiny-repos" class="md-nav__link">
     <span class="md-ellipsis">
       P2-2 — No lightweight maintainer mode for tiny repos
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#p1-byop-supply-chain-runtime-safety" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — BYOP Supply Chain &amp; Runtime Safety
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — BYOP Supply Chain & Runtime Safety">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-022-wasm-rule-integrity-pinning-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-022 — Wasm Rule Integrity Pinning (Deferred to v10.1)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-023-wasm-epoch-thread-pool-leak-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-023 — Wasm Epoch Thread Pool Leak (Deferred to v10.1)
     </span>
   </a>
   
@@ -872,24 +821,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-no-repository-governed-suppression-waiver-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1 — No repository-governed suppression / waiver system
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-2-no-enterprise-case-management-surface" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2 — No enterprise case-management surface
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-3-no-resumable-hyper-audit-strike-execution-ledger" class="md-nav__link">
     <span class="md-ellipsis">
       P0-3 — No resumable hyper-audit / strike execution ledger
@@ -997,39 +928,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-byop-supply-chain-runtime-safety" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — BYOP Supply Chain &amp; Runtime Safety
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — BYOP Supply Chain & Runtime Safety">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ct-022-wasm-rule-integrity-pinning-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-022 — Wasm Rule Integrity Pinning (Deferred to v10.1)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ct-023-wasm-epoch-thread-pool-leak-deferred-to-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      CT-023 — Wasm Epoch Thread Pool Leak (Deferred to v10.1)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p2-architecture-ergonomics-deferred-to-v101" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Architecture / Ergonomics (Deferred to v10.1)
@@ -1061,7 +959,7 @@
 ID epochs are purged during hard compaction.</p>
 <blockquote>
 <p><strong>FEATURE FREEZE LIFTED: v10.0.0-rc.5 completes SLSA Level 4 provenance.</strong>
-All CT constraints through CT-020 resolved. P0-1 closed.</p>
+All CT constraints through CT-020 resolved.</p>
 </blockquote>
 <hr />
 <h2 id="p0-core-security">P0 — Core Security</h2>
@@ -1077,8 +975,6 @@ All CT constraints through CT-020 resolved. P0-1 closed.</p>
 <!-- CT-020 RESOLVED v10.0.0-rc.5: janitor sign-asset + BLAKE3 provenance; action.yml gutted of cargo build; binary downloaded from GH Release + BLAKE3-verified -->
 
 <!-- CT-021 RESOLVED v10.0.0-rc.8: zeroed key replaced with throwaway ML-DSA-65 key (1952 bytes); Layer 2 PQC structural path validated. Production key substitution from offline ceremony is a prerequisite for activating full SLSA Level 4 chain-of-custody. -->
-<!-- CT-022 RESOLVED v10.0.0-rc.12: JanitorPolicy now carries wasm_pins; WasmHost hard-fails on BLAKE3 mismatch before Module::new, closing the BYOP rule poisoning gap. -->
-<!-- CT-023 RESOLVED v10.0.0-rc.12: per-execution epoch timeout thread deleted; Wasm engine/watchdog collapsed to a single process-wide epoch ticker thread with O(1) thread growth. -->
 
 <hr />
 <h2 id="2026-04-09-ga-teardown-audit-hostile-product-review">2026-04-09 — GA Teardown Audit (Hostile Product Review)</h2>
@@ -1088,20 +984,6 @@ All CT constraints through CT-020 resolved. P0-1 closed.</p>
 - CLI progress spinners already exist for scan / clean flows; the gap is long-run orchestration and resumability, not absence of all progress UI.
 - Suppression primitives exist (<code># noqa</code>-style pragmas, test-scope routing, local-brain <code>janitor pardon</code>); the gap is governable, reviewable suppression lifecycle.</p>
 <h2 id="p0-enterprise-deployment-blockers">P0 — Enterprise Deployment Blockers</h2>
-<h3 id="p0-1-no-repository-governed-suppression-waiver-system">P0-1 — No repository-governed suppression / waiver system</h3>
-<p><strong>Gap</strong>: Current suppression is split across inline pragmas and the local <code>.janitor/local_brain.rkyv</code> pardon model. That is not auditable policy. A 10,000-developer org needs reviewable, committed waivers with rule id, path glob, owner, justification, expiry, and severity ceiling. Silent local pardons are unacceptable in regulated environments because they create analyst-specific blind spots with no chain of custody.</p>
-<p><strong>Required change</strong>:
-1. Add <code>[[suppressions]]</code> to <code>janitor.toml</code> with fields: <code>id</code>, <code>rules</code>, <code>paths</code>, <code>expires</code>, <code>owner</code>, <code>reason</code>, <code>max_severity</code>.
-2. Emit suppression hits into the bounce log, SARIF suppressions block, and rendered reports.
-3. Hard-fail expired suppressions in CI.</p>
-<p><strong>Why this blocks GA</strong>: Without governed waivers, the product cannot survive a real audit committee or central AppSec rollout.</p>
-<h3 id="p0-2-no-enterprise-case-management-surface">P0-2 — No enterprise case-management surface</h3>
-<p><strong>Gap</strong>: The engine emits scores and receipts; it does not emit assignable remediation cases. There is no first-class owner routing, service/team metadata, SLA clock, risk acceptance state, or ticket sync. Large organizations do not buy another detector that dumps JSON and says "good luck."</p>
-<p><strong>Required change</strong>:
-1. Add optional owner mapping (<code>CODEOWNERS</code>, team map, or manifest routing) to every finding.
-2. Add Jira / Azure DevOps / Linear export adapters with deterministic finding fingerprints.
-3. Add "new vs existing vs waived" state so reruns do not reopen noise forever.</p>
-<p><strong>Why this blocks GA</strong>: No workflow integration means security ops becomes a human copy-paste farm.</p>
 <h3 id="p0-3-no-resumable-hyper-audit-strike-execution-ledger">P0-3 — No resumable hyper-audit / strike execution ledger</h3>
 <p><strong>Gap</strong>: The product can batch-audit and render ledgers, but there is no explicit checkpoint/resume protocol for multi-hour adversarial strikes. If a 3-hour <code>hyper-audit</code> dies at 92%, the operator should not restart from zero. Long enterprise scans need durable progress state, resumable shards, and deterministic partial outputs.</p>
 <p><strong>Required change</strong>:
@@ -1153,60 +1035,6 @@ All CT constraints through CT-020 resolved. P0-1 closed.</p>
 1. Add <code>janitor init --profile oss</code>.
 2. Add compact text summaries optimized for solo maintainers.
 3. Publish migration guidance from zero config to governed config.</p>
-<h2 id="p1-byop-supply-chain-runtime-safety">P1 — BYOP Supply Chain &amp; Runtime Safety</h2>
-<h3 id="ct-022-wasm-rule-integrity-pinning-deferred-to-v101">CT-022 — Wasm Rule Integrity Pinning (Deferred to v10.1)</h3>
-<p><strong>File</strong>: <code>crates/common/src/policy.rs</code> → <code>ForgeConfig</code>; <code>crates/forge/src/wasm_host.rs</code> → <code>WasmHost::new</code></p>
-<p><strong>Gap</strong>: The <code>--wasm-rules &lt;PATH&gt;</code> CLI flag loads arbitrary <code>.wasm</code> modules from the filesystem
-with no policy-pinned hash check. <code>WasmPolicyReceipt.module_digest</code> records the BLAKE3 of the
-loaded module after the fact, but there is no pre-load assertion against a known-good value.
-An attacker who can write to the wasm rule path (e.g., via a compromised build artifact store
-or path injection) can inject arbitrary Wasm that executes inside the 10 MiB sandbox against
-every source file analyzed. No SOC2 Type II, FedRAMP Moderate, or CMMC Level 2 auditor will
-approve the BYOP tier without this gate.</p>
-<p><strong>Required change</strong>:
-1. Add <code>wasm_rule_pins: Vec&lt;WasmRulePin&gt;</code> to <code>ForgeConfig</code> in <code>policy.rs</code>:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[[forge.wasm_rules]]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rules/audit_rule.wasm&quot;</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">blake3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;e4cda1bb...&quot;</span><span class="w">  </span><span class="c1"># required; absent = hard-fail</span>
-</code></pre></div>
-2. <code>WasmHost::new()</code> computes BLAKE3 of each loaded module bytes and asserts against the
-   corresponding pin entry. Missing pin entry or hash mismatch = <code>anyhow::bail!</code>.
-3. Add <code>janitor wasm-pin &lt;PATH&gt;</code> subcommand that prints the <code>[[forge.wasm_rules]]</code> TOML stanza.
-4. Add Crucible entry: <code>wasm_rule_hash_mismatch_rejected</code> (true-positive) +
-   <code>wasm_rule_hash_match_accepted</code> (true-negative).</p>
-<p><strong>Commercial justification</strong>: Wasm rule pinning is the gate between "BYOP available" and
-"BYOP enterprise-approved". Every Fortune 500 running the Sovereign tier requires a
-cryptographically-bound bill of rules — analogous to SLSA Level 4 for rule artifacts.
-Unlocks the "Verified Rule Marketplace" pricing tier and directly answers the FedRAMP AU-9
-audit control requirement for integrity of security tools. TAM expansion: +$30K/yr per
-Sovereign seat that activates custom rules.</p>
-<hr />
-<h3 id="ct-023-wasm-epoch-thread-pool-leak-deferred-to-v101">CT-023 — Wasm Epoch Thread Pool Leak (Deferred to v10.1)</h3>
-<p><strong>File</strong>: <code>crates/forge/src/wasm_host.rs</code> → <code>WasmHost::run_module</code></p>
-<p><strong>Gap</strong>: <code>run_module()</code> spawns a detached thread (via <code>std::thread::spawn</code>) per analysis
-invocation to fire the 100 ms epoch deadline. If the Wasm module completes before the timer,
-the thread is not cancelled — it sleeps, wakes, and calls <code>engine.increment_epoch()</code> on the
-shared engine. Under the <code>gauntlet-runner</code> 1000-PR strike with Wasm rules active, this creates
-up to <code>concurrency × files_per_pr × wasm_modules</code> simultaneous orphaned threads. Each thread
-consumes an 8 MiB stack on Linux by default. At 8 concurrent workers × 50 files × 1 Wasm
-module = 400 orphaned threads = 3.2 GiB stack space reserved — an OOM vector that bypasses
-the Physarum gate (which guards heap, not stack).</p>
-<p><strong>Required change</strong>:
-1. Add <code>Arc&lt;AtomicBool&gt;</code> cancellation flag, set to <code>true</code> after <code>analyze_fn.call()</code> returns.
-2. Timeout thread checks the flag before calling <code>increment_epoch()</code>; if cancelled, exits
-   immediately without touching the engine.
-3. Alternatively, migrate to wasmtime's <code>Store::set_epoch_deadline</code> + a shared <code>EpochTicker</code>
-   background thread that advances at 100 ms intervals globally (one thread total, not one
-   per invocation). This is the architecturally preferred solution and reduces thread overhead
-   from O(analyses) to O(1).
-4. Add a unit test that verifies concurrent <code>WasmHost::run()</code> calls with 8 workers do not
-   accumulate more than <code>workers + 1</code> live threads.</p>
-<p><strong>Commercial justification</strong>: Directly unblocks the <code>gauntlet-runner</code> adversarial strike
-feature at scale. Without the fix, enabling <code>--wasm-rules</code> on large monorepo strikes
-(10k+ files) risks OOM on the customer runner. The fix also eliminates the only remaining
-thread-count unboundedness in the engine — a finding that surfaces in every penetration test
-of the CI agent.</p>
-<hr />
 <h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
 <!-- All CT-0xx constraints (CT-011 through CT-020) resolved. -->
 
