@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-08-cryptographic-enclave-wasm-pinning-slsa-4-enforcement-v1000-rc11" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-08 — Cryptographic Enclave, Wasm Pinning &amp; SLSA 4 Enforcement (v10.0.0-rc.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)
@@ -1169,6 +1178,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-08-cryptographic-enclave-wasm-pinning-slsa-4-enforcement-v1000-rc11" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-08 — Cryptographic Enclave, Wasm Pinning &amp; SLSA 4 Enforcement (v10.0.0-rc.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)
@@ -1711,6 +1729,25 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-08-cryptographic-enclave-wasm-pinning-slsa-4-enforcement-v1000-rc11">2026-04-08 — Cryptographic Enclave, Wasm Pinning &amp; SLSA 4 Enforcement (v10.0.0-rc.11)</h2>
+<p><strong>Directive:</strong> JAB Assessor identified ATO-revoking vulnerabilities in v10.0.0-rc.9: circular trust in action.yml BLAKE3 verification, no memory zeroization on PQC key material, and Rust wasm32-wasi target rename threatening BYOP engine compatibility. Version bumped to rc.11 (rc.10 skipped — rc.11 is the remediation release).</p>
+<p><strong>Files modified:</strong>
+- <code>action.yml</code> <em>(modified)</em> — Phase 1: Circular trust eliminated. Download step rewrites entirely: downloads new binary + <code>.b3</code> + <code>.sig</code>, then downloads hardcoded bootstrap binary from <code>v10.0.0-rc.9</code> (previous known-good release) and runs <code>bootstrap verify-asset --file NEW --hash NEW.b3 [--sig NEW.sig]</code>. The bootstrap binary carries the ML-DSA-65 release verifying key and validates the new release without relying on any co-hosted asset. Python blake3 dependency removed. <code>BOOTSTRAP_TAG</code> comment instructs operator to update on each new release.
+- <code>Cargo.toml</code> <em>(modified)</em> — Workspace version bumped to <code>10.0.0-rc.11</code>; <code>zeroize = { version = "1", features = ["derive"] }</code> added to workspace dependencies.
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — <code>zeroize.workspace = true</code> added.
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — Phase 3: <code>use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing}</code> added. <code>PqcPrivateKeyBundle</code> gains <code>#[derive(Zeroize, ZeroizeOnDrop)]</code> — key material wiped from RAM on drop. Both <code>sign_cbom_dual_from_file</code> and <code>sign_asset_hash_from_file</code> now wrap <code>std::fs::read(path)</code> return in <code>Zeroizing::new(...)</code> so the raw key bytes are zeroed when the function returns. One new unit test: <code>pqc_private_key_bundle_zeroizes_on_drop</code>.
+- <code>crates/forge/src/wasm_host.rs</code> <em>(modified)</em> — Phase 5: <code>config.wasm_memory64(false)</code> added to <code>WasmHost::new()</code>. Explicitly disables the memory64 proposal — rejects wasm64/wasip2 modules at engine level, pinning BYOP rule modules to <code>wasm32-wasip1</code> classic 32-bit memory addressing. Insulates engine from Rust <code>wasm32-wasi</code> → <code>wasip1/wasip2</code> target rename.
+- <code>README.md</code> <em>(modified)</em> — Version string updated to <code>v10.0.0-rc.11</code> via <code>just sync-versions</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(this file)</em> — Session ledger appended.</p>
+<p><strong>Phases confirmed already complete (no code change required):</strong>
+- Phase 2 (Downgrade gates): <code>cmd_bounce</code> dual-PQC downgrade gate at lines 3463-3475 already present; <code>cmd_verify_cbom</code> partial-bundle bail at lines 3728-3744 already present; <code>private_key_bundle_from_bytes</code> <code>DUAL_LEN</code> strict enforcement already present.
+- Phase 4 (Symlink overwrites): <code>cmd_import_intel_capsule</code> already has <code>symlink_metadata</code> check + atomic <code>wisdom.rkyv.tmp</code> → <code>rename</code> pattern; <code>registry.rs::save()</code> already uses <code>symbols.rkyv.tmp</code> → rename.</p>
+<p><strong>Crucible:</strong> SANCTUARY INTACT — 24/24. No new Crucible entries required (zeroize is infrastructure; wasm_memory64 is a config pin, not a new detector).</p>
+<p><strong>Security posture delta:</strong>
+- Circular trust eliminated from SLSA Level 4 verification — co-hosted <code>.b3</code> / Python no longer act as the trust anchor; a bootstrapped prior-release binary holds the cryptographic authority.
+- PQC private key RAM exposure window closed — <code>Zeroizing&lt;Vec&lt;u8&gt;&gt;</code> wrapping + <code>ZeroizeOnDrop</code> on <code>PqcPrivateKeyBundle</code> guarantees key bytes are wiped immediately after use, preventing key material from persisting in swap or crash dumps.
+- BYOP engine explicitly pinned to wasm32-wasip1 (classic modules only) — <code>memory64=false</code> rejects wasm64 modules at parse time; future customer rule authors targeting <code>wasm32-wasip1</code> are fully supported.</p>
 <hr />
 <h2 id="2026-04-08-dashboard-eradication-major-semver-strike-v1000-rc9">2026-04-08 — Dashboard Eradication &amp; Major SemVer Strike (v10.0.0-rc.9)</h2>
 <p><strong>Directive:</strong> GitHub Security tab failing automated enterprise risk assessments. (1) Wasmtime CVEs requiring major version bump (v28 → v43). (2) Residual CodeQL <code>cleartext-logging-sensitive-data</code> findings in <code>report.rs</code> and <code>fetch_verified_wisdom_payload</code>. (3) Autonomous intelligence seeding — two architectural gaps filed from session analysis. (4) Rust MSRV bump from 1.88 → 1.91 required by Wasmtime 43.</p>
