@@ -28,7 +28,11 @@
 use anyhow::{Context, Result};
 use common::slop::StructuredFinding;
 use common::wasm_receipt::WasmPolicyReceipt;
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, OnceLock};
+use std::thread;
+use std::time::Duration;
 use wasmtime::{Config, Engine, Instance, Module, ResourceLimiter, Store, StoreLimitsBuilder};
 
 /// Source-bytes offset within the guest's linear memory (4 KiB).
@@ -46,8 +50,12 @@ const FUEL_LIMIT: u64 = 100_000_000;
 ///
 /// Fires after 100 ms regardless of remaining fuel — prevents host-side
 /// allocator pressure and non-deterministic latency (CT-015).
-const EPOCH_TIMEOUT_MS: u64 = 100;
+const EPOCH_TICK_MS: u64 = 10;
+const EPOCH_DEADLINE_TICKS: u64 = 10;
 const WASM_POLICY_ABI_VERSION: &str = "janitor.wasm_policy.v1";
+
+static WASM_ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
+static WASM_WATCHDOG: OnceLock<()> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 struct LoadedModule {
@@ -71,7 +79,7 @@ pub struct WasmExecutionResult {
 /// memory-limited store to guarantee isolation between analysis runs — a
 /// faulting or fuel-exhausted module cannot affect subsequent invocations.
 pub struct WasmHost {
-    engine: Engine,
+    engine: Arc<Engine>,
     modules: Vec<LoadedModule>,
 }
 
@@ -83,29 +91,21 @@ impl WasmHost {
     /// Cargo feature is enabled).
     ///
     /// Returns an error if any path is unreadable or fails to compile.
-    pub fn new(wasm_paths: &[&str]) -> Result<Self> {
-        let mut config = Config::new();
-        // Fuel-based execution limit: each Wasm instruction consumes one unit.
-        config.consume_fuel(true);
-        // CT-015: epoch interruption provides a wall-clock safety net alongside
-        // the fuel gate.  A guest that allocates near the memory ceiling within
-        // the fuel budget can cause host-side latency spikes; the epoch timeout
-        // guarantees termination within EPOCH_TIMEOUT_MS regardless of fuel.
-        config.epoch_interruption(true);
-        // Wasm target pinning: explicitly disable the memory64 proposal.
-        // BYOP rule modules MUST target wasm32-wasip1 (classic 32-bit linear
-        // memory, no 64-bit addressing).  This rejects wasm64/wasip2 modules at
-        // engine level, insulating the host from the Rust wasm32-wasi → wasip1/wasip2
-        // target split.  Classic wasip1 modules compile with `--target wasm32-wasip1`
-        // (formerly `wasm32-wasi`) and require only 32-bit memory.
-        config.wasm_memory64(false);
-        let engine = Engine::new(&config)
-            .map_err(|e| anyhow::anyhow!("failed to create Wasm engine: {e:#}"))?;
+    pub fn new(wasm_paths: &[&str], wasm_pins: &HashMap<String, String>) -> Result<Self> {
+        let engine = shared_engine()?;
         let mut modules = Vec::with_capacity(wasm_paths.len());
         for path in wasm_paths {
             let bytes =
                 std::fs::read(path).with_context(|| format!("reading Wasm rule module: {path}"))?;
-            let module = Module::new(&engine, &bytes)
+            let module_digest = blake3::hash(&bytes).to_hex().to_string();
+            if let Some(expected_digest) = wasm_pins.get(*path) {
+                if module_digest != *expected_digest {
+                    anyhow::bail!(
+                        "Wasm rule integrity pin mismatch: {path}: expected {expected_digest}, got {module_digest}"
+                    );
+                }
+            }
+            let module = Module::new(engine.as_ref(), &bytes)
                 .map_err(|e| anyhow::anyhow!("compiling Wasm rule module: {path}: {e:#}"))?;
             let rule_id = Path::new(path)
                 .file_stem()
@@ -117,7 +117,7 @@ impl WasmHost {
                 path: (*path).to_string(),
                 rule_id,
                 abi_version: WASM_POLICY_ABI_VERSION.to_string(),
-                module_digest: blake3::hash(&bytes).to_hex().to_string(),
+                module_digest,
                 module,
             });
         }
@@ -171,17 +171,9 @@ impl WasmHost {
         store
             .set_fuel(FUEL_LIMIT)
             .map_err(|e| anyhow::anyhow!("configuring Wasm execution fuel: {e:#}"))?;
-        // CT-015: arm the epoch wall-clock gate.  Deadline of 1 means the first
-        // `engine.increment_epoch()` call will interrupt this store's execution.
-        store.set_epoch_deadline(1);
-        // Spawn a detached thread that fires the epoch tick after EPOCH_TIMEOUT_MS.
-        // If `analyze_fn.call` completes before the tick, the store is already
-        // dropped and the increment is a no-op — zero overhead on the fast path.
-        let engine_for_timeout = self.engine.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(EPOCH_TIMEOUT_MS));
-            engine_for_timeout.increment_epoch();
-        });
+        // CT-023: a single process-wide watchdog increments the shared engine epoch
+        // every 10 ms; deadline 10 yields a 100 ms wall-clock termination budget.
+        store.set_epoch_deadline(EPOCH_DEADLINE_TICKS);
 
         let instance = Instance::new(&mut store, module, &[])
             .map_err(|e| anyhow::anyhow!("instantiating Wasm rule module: {e:#}"))?;
@@ -257,6 +249,42 @@ impl WasmHost {
     }
 }
 
+fn shared_engine() -> Result<Arc<Engine>> {
+    let engine = if let Some(engine) = WASM_ENGINE.get() {
+        Arc::clone(engine)
+    } else {
+        let mut config = Config::new();
+        // Fuel-based execution limit: each Wasm instruction consumes one unit.
+        config.consume_fuel(true);
+        // CT-015/CT-023: epoch interruption provides a wall-clock safety net
+        // while the singleton watchdog drives epoch progression in O(1) space.
+        config.epoch_interruption(true);
+        // Wasm target pinning: explicitly disable the memory64 proposal.
+        // BYOP rule modules MUST target wasm32-wasip1 (classic 32-bit linear
+        // memory, no 64-bit addressing).  This rejects wasm64/wasip2 modules at
+        // engine level, insulating the host from the Rust wasm32-wasi → wasip1/wasip2
+        // target split.  Classic wasip1 modules compile with `--target wasm32-wasip1`
+        // (formerly `wasm32-wasi`) and require only 32-bit memory.
+        config.wasm_memory64(false);
+        let engine = Arc::new(
+            Engine::new(&config)
+                .map_err(|e| anyhow::anyhow!("failed to create Wasm engine: {e:#}"))?,
+        );
+        match WASM_ENGINE.set(Arc::clone(&engine)) {
+            Ok(()) => engine,
+            Err(existing_engine) => existing_engine,
+        }
+    };
+    WASM_WATCHDOG.get_or_init(|| {
+        let engine = Arc::clone(&engine);
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(EPOCH_TICK_MS));
+            engine.increment_epoch();
+        });
+    });
+    Ok(Arc::clone(&engine))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_empty_rules_returns_empty() {
-        let host = WasmHost::new(&[]).unwrap();
+        let host = WasmHost::new(&[], &HashMap::new()).unwrap();
         let result = host.run(b"fn foo() {}");
         assert!(
             result.findings.is_empty(),
@@ -307,7 +335,7 @@ mod tests {
     #[test]
     fn test_empty_source_returns_empty() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
-        let host = WasmHost::new(&[&path]).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
         let result = host.run(b"");
         assert!(
             result.findings.is_empty(),
@@ -322,7 +350,7 @@ mod tests {
     #[test]
     fn test_mock_rule_fires_on_source() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
-        let host = WasmHost::new(&[&path]).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
         let result = host.run(b"fn foo() {}");
         assert_eq!(
             result.findings.len(),
@@ -356,7 +384,7 @@ mod tests {
   )
 )"#;
         let (_tmp, path) = wat_to_tempfile(infinite_wat);
-        let host = WasmHost::new(&[&path]).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
         // Must not hang — fuel exhaustion skips the module and returns empty.
         let result = host.run(b"int main() {}");
         assert!(
@@ -366,6 +394,31 @@ mod tests {
         assert!(
             result.receipts.is_empty(),
             "fuel-exhausted module must yield no receipts"
+        );
+    }
+
+    #[test]
+    fn test_wasm_pin_match_allows_module_load() {
+        let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
+        let bytes = std::fs::read(&path).unwrap();
+        let mut pins = HashMap::new();
+        pins.insert(path.clone(), blake3::hash(&bytes).to_hex().to_string());
+        let host = WasmHost::new(&[&path], &pins).unwrap();
+        let result = host.run(b"fn foo() {}");
+        assert_eq!(result.findings.len(), 1, "pinned module must still execute");
+    }
+
+    #[test]
+    fn test_wasm_pin_mismatch_rejected() {
+        let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
+        let mut pins = HashMap::new();
+        pins.insert(path.clone(), "deadbeef".repeat(8));
+        let err = WasmHost::new(&[&path], &pins)
+            .err()
+            .expect("mismatched pin must fail module initialisation");
+        assert!(
+            err.to_string().contains("integrity pin mismatch"),
+            "mismatched pin must hard-fail module initialisation"
         );
     }
 }

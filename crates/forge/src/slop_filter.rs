@@ -1960,11 +1960,15 @@ pub fn bounce_git(
 /// Module load or compilation failures are logged to `stderr` and result in
 /// an empty vec — the bounce pipeline is never hard-blocked by a malformed
 /// custom rule.
-pub fn run_wasm_rules(wasm_paths: &[&str], src: &[u8]) -> crate::wasm_host::WasmExecutionResult {
+pub fn run_wasm_rules(
+    wasm_paths: &[&str],
+    wasm_pins: &HashMap<String, String>,
+    src: &[u8],
+) -> crate::wasm_host::WasmExecutionResult {
     if wasm_paths.is_empty() {
         return crate::wasm_host::WasmExecutionResult::default();
     }
-    match crate::wasm_host::WasmHost::new(wasm_paths) {
+    match crate::wasm_host::WasmHost::new(wasm_paths, wasm_pins) {
         Ok(host) => host.run(src),
         Err(e) => {
             eprintln!("slop_filter: failed to initialise Wasm rule host: {e:#}");

@@ -5,6 +5,28 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — Wasm Lockdown & Unhinged GA Teardown (v10.0.0-rc.12)
+
+**Directive:** Execute CT-023 and CT-022 to close the final Wasm architecture leaks, run the hostile GA teardown audit, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.12` release.
+
+**Files modified:**
+- `crates/forge/src/wasm_host.rs` *(modified)* — CT-023: per-execution detached timeout thread deleted. Wasm host now uses a process-wide singleton `Engine` plus exactly one watchdog thread that sleeps 10 ms and calls `increment_epoch()`. Stores now arm `set_epoch_deadline(10)` for a 100 ms wall-clock ceiling. CT-022: module bytes are BLAKE3-hashed before `Module::new`; policy pin mismatch hard-fails host initialization. Added positive/negative pin tests.
+- `crates/forge/src/slop_filter.rs` *(modified)* — Wasm rule runner now accepts policy-backed hash pins and forwards them into `WasmHost`.
+- `crates/common/src/policy.rs` *(modified)* — `JanitorPolicy` gains `wasm_pins: HashMap<String, String>` with defaulting and TOML round-trip coverage.
+- `crates/cli/src/main.rs` *(modified)* — BYOP Wasm execution now passes `policy.wasm_pins` into the forge entrypoint.
+- `crates/crucible/src/main.rs` *(modified)* — Wasm host constructor call sites updated to the pinned-host signature.
+- `docs/INNOVATION_LOG.md` *(modified)* — CT-022 / CT-023 marked resolved; hostile GA teardown appended with prioritized enterprise, OSS, UX, and pricing gaps.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.12`.
+- `README.md` *(modified)* — version string updated to `v10.0.0-rc.12`.
+- `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.12`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+**Release status:** pending `just fast-release 10.0.0-rc.12`
+
 ## 2026-04-08 — Cryptographic Enclave, Wasm Pinning & SLSA 4 Enforcement (v10.0.0-rc.11)
 
 **Directive:** JAB Assessor identified ATO-revoking vulnerabilities in v10.0.0-rc.9: circular trust in action.yml BLAKE3 verification, no memory zeroization on PQC key material, and Rust wasm32-wasi target rename threatening BYOP engine compatibility. Version bumped to rc.11 (rc.10 skipped — rc.11 is the remediation release).

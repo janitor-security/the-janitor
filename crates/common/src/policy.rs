@@ -33,6 +33,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -391,6 +392,17 @@ pub struct JanitorPolicy {
     /// Default: `[]` (no proprietary rules).
     #[serde(default)]
     pub wasm_rules: Vec<String>,
+
+    /// BLAKE3 integrity pins for BYOP Wasm rule modules.
+    ///
+    /// Keys are the rule paths listed in [`Self::wasm_rules`] or passed via
+    /// `--wasm-rules`; values are lowercase BLAKE3 hex digests of the expected
+    /// module bytes. When a configured pin does not match the loaded bytes, the
+    /// Wasm host aborts module initialisation immediately.
+    ///
+    /// Default: `{}` (no integrity pins).
+    #[serde(default)]
+    pub wasm_pins: HashMap<String, String>,
 }
 
 impl Default for JanitorPolicy {
@@ -409,6 +421,7 @@ impl Default for JanitorPolicy {
             soft_fail: false,
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
+            wasm_pins: HashMap::new(),
         }
     }
 }
@@ -628,6 +641,7 @@ impl JanitorPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn default_gate_is_100() {
@@ -684,6 +698,7 @@ mod tests {
             soft_fail: false,
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
+            wasm_pins: HashMap::new(),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
