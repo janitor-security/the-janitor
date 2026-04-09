@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use tree_sitter::{Language, Query, StreamingIterator};
 
+use common::policy::Suppression;
 use common::registry::SymbolRegistry;
 use common::surface::SurfaceKind;
 
@@ -580,19 +581,39 @@ pub struct PatchBouncer {
     /// analysis on Python / JS / Java diffs.  `None` in the default (no-root)
     /// configuration; set by [`for_workspace`].
     catalog_path: Option<PathBuf>,
+    suppressions: Vec<Suppression>,
     deep_scan: bool,
 }
 
 impl PatchBouncer {
     pub fn for_workspace(root: &Path) -> Self {
-        Self::for_workspace_with_deep_scan(root, false)
+        let policy = common::policy::JanitorPolicy::load(root).unwrap_or_default();
+        Self::for_workspace_with_deep_scan_and_suppressions(
+            root,
+            policy.suppressions.unwrap_or_default(),
+            false,
+        )
     }
 
     pub fn for_workspace_with_deep_scan(root: &Path, deep_scan: bool) -> Self {
+        let policy = common::policy::JanitorPolicy::load(root).unwrap_or_default();
+        Self::for_workspace_with_deep_scan_and_suppressions(
+            root,
+            policy.suppressions.unwrap_or_default(),
+            deep_scan,
+        )
+    }
+
+    pub fn for_workspace_with_deep_scan_and_suppressions(
+        root: &Path,
+        suppressions: Vec<Suppression>,
+        deep_scan: bool,
+    ) -> Self {
         Self {
             repo_root: Some(root.to_path_buf()),
             wisdom_path: Some(root.join(".janitor").join("wisdom.rkyv")),
             catalog_path: Some(root.join(".janitor").join("taint_catalog.rkyv")),
+            suppressions,
             deep_scan,
         }
     }
@@ -1216,11 +1237,48 @@ impl PRBouncer for PatchBouncer {
             }
         }
 
+        raw_findings.extend(ncd_findings.into_iter().map(|description| {
+            crate::slop_hunter::SlopFinding {
+                start_byte: 0,
+                end_byte: 0,
+                description,
+                domain: crate::metadata::DOMAIN_FIRST_PARTY,
+                severity: crate::slop_hunter::Severity::Warning,
+            }
+        }));
+        raw_findings.extend(payload_findings.into_iter().map(|description| {
+            crate::slop_hunter::SlopFinding {
+                start_byte: 0,
+                end_byte: 0,
+                description,
+                domain: crate::metadata::DOMAIN_ALL,
+                severity: crate::slop_hunter::Severity::Critical,
+            }
+        }));
+        if let Some(finding) = crate::slop_hunter::detect_recursive_boilerplate(ext, source) {
+            raw_findings.push(finding);
+        }
+        if let Some(finding) = crate::slop_hunter::check_logic_regression(patch) {
+            raw_findings.push(finding);
+        }
+
         let mut suppressed_by_domain: u32 = 0;
         let mut antipattern_score: u32 = 0;
         let mut accepted: Vec<crate::slop_hunter::SlopFinding> =
             Vec::with_capacity(raw_findings.len());
+        let now_unix_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         for f in raw_findings {
+            let rule_id = extract_rule_id(&f.description);
+            if self
+                .suppressions
+                .iter()
+                .any(|suppression| suppression.matches(rule_id, &file_path, now_unix_secs))
+            {
+                continue;
+            }
             let passes_domain = (f.domain & file_domain) != 0;
             // Test domain exemption (Phase 3): on test-path files, Warning and Lint
             // findings are suppressed — test code is allowed to be structurally
@@ -1248,9 +1306,14 @@ impl PRBouncer for PatchBouncer {
             let line = byte_offset_to_line(source, f.start_byte);
             antipattern_details.push(format!("{} (line={line})", f.description));
             structured_findings.push(common::slop::StructuredFinding {
-                id: f.description,
-                file: None, // file context injected by bounce_git caller
+                id: f.description.clone(),
+                file: Some(file_path.clone()),
                 line: Some(line),
+                fingerprint: finding_fingerprint(
+                    extract_rule_id(&f.description),
+                    &file_path,
+                    finding_fingerprint_span(source, f.start_byte, f.end_byte),
+                ),
             });
         }
 
@@ -1484,63 +1547,6 @@ impl PRBouncer for PatchBouncer {
             raw_clone_count
         };
 
-        // Recursive Boilerplate — topology-hash flood detection.
-        //
-        // Fires Critical (+50 pts) when >5 added functions share identical AST
-        // topology in the same source blob.  This is the canonical AI context-bloat
-        // signature: a context-exhausted agent scaffolds the same function body N
-        // times with distinct names but identical structure.
-        let boilerplate_finding = crate::slop_hunter::detect_recursive_boilerplate(ext, source);
-        let boilerplate_count = boilerplate_finding.is_some() as u32;
-        let boilerplate_details: Vec<String> = boilerplate_finding
-            .map(|f| f.description)
-            .into_iter()
-            .collect();
-
-        // Logic Erasure Detector — Structural Regression signal.
-        //
-        // Fires Critical (+50 pts) when the PR reduces conditional branch count by
-        // >20% while keeping code volume similar (+/- 10%).  This is the structural
-        // fingerprint of an AI model "optimising" away edge-case safety checks: the
-        // code stays roughly the same size but the branching logic that guards
-        // error paths, permission checks, or input validation is silently removed.
-        let logic_regression_finding = crate::slop_hunter::check_logic_regression(patch);
-        let regression_count = logic_regression_finding.is_some() as u32;
-        let regression_details: Vec<String> = logic_regression_finding
-            .map(|f| f.description)
-            .into_iter()
-            .collect();
-
-        // Merge NCD entropy gate, Compiled Payload Shield, Recursive Boilerplate,
-        // and Logic Erasure findings into the antipattern totals.
-        //
-        // Severity split (v7.9.0 Threat Demotion):
-        //   NCD (antipattern:ncd_anomaly)  → Warning tier: 10 pts.
-        //     Generative verbosity is an antipattern, not a supply-chain attack.
-        //     It MUST NOT trigger the $150 Critical Threat billing ledger in
-        //     report.rs::is_critical_threat (which gates on "security:" prefix).
-        //   Payload (binary_hunter)         → Critical tier: 50 pts.
-        //     ELF magic, mining stratum URIs, shell NULs are active supply-chain
-        //     signals — Critical billing is correct and intentional.
-        //   Recursive Boilerplate           → Critical tier: 50 pts.
-        //     Structural topology flood is a direct AI-generation artefact;
-        //     Critical billing is correct and intentional.
-        //   Logic Erasure                   → Critical tier: 50 pts.
-        //     Branch reduction on volume-neutral rewrites is direct AI safety-check
-        //     erasure — Critical billing is correct and intentional.
-        let ncd_count = ncd_findings.len() as u32;
-        let payload_count = payload_findings.len() as u32;
-        let antipatterns_found =
-            antipatterns_found + ncd_count + payload_count + boilerplate_count + regression_count;
-        let antipattern_score = antipattern_score
-            + ncd_count * 10
-            + payload_count * 50
-            + boilerplate_count * 50
-            + regression_count * 50;
-        antipattern_details.extend(ncd_findings);
-        antipattern_details.extend(payload_findings);
-        antipattern_details.extend(boilerplate_details);
-        antipattern_details.extend(regression_details);
         let mut final_score = SlopScore {
             dead_symbols_added,
             logic_clones_found,
@@ -1822,6 +1828,7 @@ pub fn bounce_git(
     base_sha: &str,
     head_sha: &str,
     registry: &SymbolRegistry,
+    suppressions: Vec<Suppression>,
     deep_scan: bool,
 ) -> Result<(SlopScore, HashMap<std::path::PathBuf, Vec<u8>>)> {
     let repo = git2::Repository::open(repo_path).map_err(|e| {
@@ -1917,8 +1924,12 @@ pub fn bounce_git(
             }
         }
 
-        if let Ok(mut score) =
-            PatchBouncer::for_workspace_with_deep_scan(repo_path, deep_scan).bounce(patch, registry)
+        if let Ok(mut score) = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+            repo_path,
+            suppressions.clone(),
+            deep_scan,
+        )
+        .bounce(patch, registry)
         {
             total.dead_symbols_added += score.dead_symbols_added;
             total.logic_clones_found += score.logic_clones_found;
@@ -1932,7 +1943,9 @@ pub fn bounce_git(
             // Inject file context into structured findings before accumulating.
             let file_str = path.to_string_lossy().into_owned();
             for sf in &mut score.structured_findings {
-                sf.file = Some(file_str.clone());
+                if sf.file.is_none() {
+                    sf.file = Some(file_str.clone());
+                }
             }
             total
                 .structured_findings
@@ -1975,6 +1988,31 @@ pub fn run_wasm_rules(
             crate::wasm_host::WasmExecutionResult::default()
         }
     }
+}
+
+fn extract_rule_id(description: &str) -> &str {
+    description
+        .split_once(" —")
+        .map(|(id, _)| id)
+        .unwrap_or(description)
+}
+
+fn finding_fingerprint_span(source: &[u8], start_byte: usize, end_byte: usize) -> &[u8] {
+    if start_byte < end_byte && end_byte <= source.len() {
+        &source[start_byte..end_byte]
+    } else {
+        source
+    }
+}
+
+fn finding_fingerprint(rule_id: &str, file_path: &str, span_bytes: &[u8]) -> String {
+    let material = format!(
+        "{}:{}:{}",
+        rule_id,
+        file_path,
+        blake3::hash(span_bytes).to_hex()
+    );
+    blake3::hash(material.as_bytes()).to_hex().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -2604,6 +2642,8 @@ mod tests {
         if !score.structured_findings.is_empty() {
             let sf = &score.structured_findings[0];
             assert!(sf.line.is_some(), "line must be populated in bounce path");
+            assert_eq!(sf.file.as_deref(), Some("app.py"));
+            assert!(!sf.fingerprint.is_empty(), "fingerprint must be populated");
             // id must be the raw description (no line annotation).
             assert!(
                 !sf.id.contains("(line="),

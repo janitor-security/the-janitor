@@ -2885,8 +2885,14 @@ fn cmd_bounce(
         (Some(repo_path), Some(base_sha), Some(head_sha)) => {
             // Git-native mode: shadow_git blob extraction.
             // bounce_git now returns (SlopScore, HashMap<PathBuf, Vec<u8>>).
-            let (mut score, blobs) =
-                bounce_git(repo_path, base_sha, head_sha, &registry, deep_scan)?;
+            let (mut score, blobs) = bounce_git(
+                repo_path,
+                base_sha,
+                head_sha,
+                &registry,
+                policy.suppressions.clone().unwrap_or_default(),
+                deep_scan,
+            )?;
             // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
             let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
             let merkle_key = format!("{repo_path:?}:{base_sha}:{head_sha}");
@@ -2979,8 +2985,12 @@ fn cmd_bounce(
                     }
                 }
             };
-            let mut score = PatchBouncer::for_workspace_with_deep_scan(project_root, deep_scan)
-                .bounce(&patch, &registry)?;
+            let mut score = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+                project_root,
+                policy.suppressions.clone().unwrap_or_default(),
+                deep_scan,
+            )
+            .bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());
 

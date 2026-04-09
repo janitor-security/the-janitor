@@ -439,9 +439,14 @@ fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_
 
     use forge::slop_filter::{PRBouncer, PatchBouncer};
     let registry = common::registry::SymbolRegistry::default();
-    let score = PatchBouncer::for_workspace(&root)
-        .bounce(&patch_text, &registry)
-        .context("PatchBouncer::bounce failed")?;
+    let policy = common::policy::JanitorPolicy::load(&root)?;
+    let score = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+        &root,
+        policy.suppressions.unwrap_or_default(),
+        false,
+    )
+    .bounce(&patch_text, &registry)
+    .context("PatchBouncer::bounce failed")?;
 
     let threat_class = if score
         .antipattern_details

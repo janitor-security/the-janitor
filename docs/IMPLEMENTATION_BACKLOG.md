@@ -5,6 +5,30 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — Enterprise Triage Spine & Waiver Governance (v10.0.0-rc.13)
+
+**Directive:** Execute P0-1 and P0-2 from the hostile GA teardown: add auditable suppression governance, add deterministic finding fingerprints for external state tracking, verify the workspace under single-threaded test execution, purge stale innovation-log residue, and prepare the `10.0.0-rc.13` release.
+
+**Files modified:**
+- `docs/INNOVATION_LOG.md` *(modified)* — purged stale CT-022 / CT-023 residue and removed the completed `P0-1` and `P0-2` blocks from the active innovation queue.
+- `crates/common/src/policy.rs` *(modified)* — added `Suppression` plus `JanitorPolicy.suppressions`, deterministic expiry parsing for unix and RFC3339-like UTC timestamps, glob matching, TOML round-trip coverage, and activation tests.
+- `crates/common/src/slop.rs` *(modified)* — `StructuredFinding` now carries a deterministic `fingerprint`.
+- `crates/forge/src/slop_filter.rs` *(modified)* — `PatchBouncer` now loads policy suppressions, waives matching active findings before score computation, propagates deterministic file attribution, and computes BLAKE3 fingerprints from rule id + file path + node span bytes.
+- `crates/cli/src/main.rs` *(modified)* — CLI bounce paths now thread policy suppressions into forge.
+- `crates/cli/src/git_drive.rs` *(modified)* — PR replay path now threads policy suppressions into git-native bounce evaluation.
+- `crates/mcp/src/lib.rs` *(modified)* — MCP bounce dispatch now loads and applies suppression policy.
+- `crates/crucible/src/main.rs` *(modified)* — added a true-positive crucible proving an active suppression waives the finding and preserves `slop_score == 0`.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.13`.
+- `README.md` *(modified)* — version string updated to `v10.0.0-rc.13`.
+- `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.13`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+**Release status:** pending `just fast-release 10.0.0-rc.13`
+
 ## 2026-04-09 — Wasm Lockdown & Unhinged GA Teardown (v10.0.0-rc.12)
 
 **Directive:** Execute CT-023 and CT-022 to close the final Wasm architecture leaks, run the hostile GA teardown audit, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.12` release.

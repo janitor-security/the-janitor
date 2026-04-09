@@ -578,11 +578,19 @@ fn bounce_one(
         });
     }
 
-    let (mut score, blobs) = bounce_git(repo_path, &merge_base_sha, pr_sha, registry, false)
-        .map_err(|e| {
-            eprintln!("hyper-drive PR#{pr_num}: {e}");
-        })
-        .ok()?;
+    let policy = common::policy::JanitorPolicy::load(repo_path).ok()?;
+    let (mut score, blobs) = bounce_git(
+        repo_path,
+        &merge_base_sha,
+        pr_sha,
+        registry,
+        policy.suppressions.unwrap_or_default(),
+        false,
+    )
+    .map_err(|e| {
+        eprintln!("hyper-drive PR#{pr_num}: {e}");
+    })
+    .ok()?;
 
     // Zombie dependency scan over the blobs (best-effort).
     let zombie_deps = anatomist::manifest::find_zombie_deps_in_blobs(&blobs);

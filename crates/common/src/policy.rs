@@ -248,6 +248,31 @@ pub struct WisdomConfig {
     pub quorum: WisdomQuorumConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Suppression {
+    pub id: String,
+    pub rule: String,
+    pub path_glob: String,
+    pub expires: Option<String>,
+    pub owner: String,
+    pub reason: String,
+}
+
+impl Suppression {
+    pub fn is_active_at(&self, now_unix_secs: u64) -> bool {
+        match self.expires.as_deref() {
+            None => true,
+            Some(expires) => parse_suppression_expiry(expires)
+                .map(|expiry| now_unix_secs < expiry)
+                .unwrap_or(false),
+        }
+    }
+
+    pub fn matches(&self, rule: &str, path: &str, now_unix_secs: u64) -> bool {
+        self.rule == rule && glob_match(&self.path_glob, path) && self.is_active_at(now_unix_secs)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // JanitorPolicy
 // ---------------------------------------------------------------------------
@@ -403,6 +428,10 @@ pub struct JanitorPolicy {
     /// Default: `{}` (no integrity pins).
     #[serde(default)]
     pub wasm_pins: HashMap<String, String>,
+
+    /// Repository-governed waivers for individual findings.
+    #[serde(default)]
+    pub suppressions: Option<Vec<Suppression>>,
 }
 
 impl Default for JanitorPolicy {
@@ -422,8 +451,102 @@ impl Default for JanitorPolicy {
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
             wasm_pins: HashMap::new(),
+            suppressions: None,
         }
     }
+}
+
+fn parse_suppression_expiry(raw: &str) -> Option<u64> {
+    if let Ok(unix_secs) = raw.parse::<u64>() {
+        return Some(unix_secs);
+    }
+
+    let ts = raw.strip_suffix('Z')?;
+    let bytes = ts.as_bytes();
+    if bytes.len() != 19
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+    {
+        return None;
+    }
+
+    let year = ts[0..4].parse::<i64>().ok()?;
+    let month = ts[5..7].parse::<u32>().ok()?;
+    let day = ts[8..10].parse::<u32>().ok()?;
+    let hour = ts[11..13].parse::<u32>().ok()?;
+    let minute = ts[14..16].parse::<u32>().ok()?;
+    let second = ts[17..19].parse::<u32>().ok()?;
+
+    if !(1..=12).contains(&month)
+        || day == 0
+        || day > days_in_month(year, month)
+        || hour > 23
+        || minute > 59
+        || second > 59
+    {
+        return None;
+    }
+
+    let days = days_from_civil(year, month, day)?;
+    Some((days as u64) * 86_400 + (hour as u64) * 3600 + (minute as u64) * 60 + second as u64)
+}
+
+fn days_in_month(year: i64, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+fn is_leap_year(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
+    let y = year - i64::from(month <= 2);
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = month as i64 + if month > 2 { -3 } else { 9 };
+    let doy = (153 * mp + 2) / 5 + day as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    (days >= 0).then_some(days)
+}
+
+fn glob_match(pattern: &str, candidate: &str) -> bool {
+    let p = pattern.as_bytes();
+    let s = candidate.as_bytes();
+    let (mut pi, mut si) = (0usize, 0usize);
+    let (mut star_pi, mut star_si) = (None, 0usize);
+
+    while si < s.len() {
+        if pi < p.len() && (p[pi] == s[si] || p[pi] == b'?') {
+            pi += 1;
+            si += 1;
+        } else if pi < p.len() && p[pi] == b'*' {
+            star_pi = Some(pi);
+            pi += 1;
+            star_si = si;
+        } else if let Some(star) = star_pi {
+            pi = star + 1;
+            star_si += 1;
+            si = star_si;
+        } else {
+            return false;
+        }
+    }
+
+    while pi < p.len() && p[pi] == b'*' {
+        pi += 1;
+    }
+
+    pi == p.len()
 }
 
 impl JanitorPolicy {
@@ -699,10 +822,46 @@ mod tests {
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
             wasm_pins: HashMap::new(),
+            suppressions: Some(vec![Suppression {
+                id: "waive-1".to_string(),
+                rule: "security:test".to_string(),
+                path_glob: "src/*.rs".to_string(),
+                expires: Some("4102444800".to_string()),
+                owner: "appsec".to_string(),
+                reason: "test fixture".to_string(),
+            }]),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
         assert_eq!(original, deserialised);
+    }
+
+    #[test]
+    fn suppression_matches_future_unix_expiry_and_glob() {
+        let suppression = Suppression {
+            id: "waive-1".to_string(),
+            rule: "security:command_injection".to_string(),
+            path_glob: "src/*.rs".to_string(),
+            expires: Some("4102444800".to_string()),
+            owner: "secops".to_string(),
+            reason: "accepted risk".to_string(),
+        };
+        assert!(suppression.matches("security:command_injection", "src/main.rs", 1_900_000_000));
+        assert!(!suppression.matches("security:command_injection", "tests/main.rs", 1_900_000_000));
+    }
+
+    #[test]
+    fn suppression_rfc3339_expiry_enforced() {
+        let suppression = Suppression {
+            id: "waive-2".to_string(),
+            rule: "security:eval".to_string(),
+            path_glob: "app.py".to_string(),
+            expires: Some("2026-04-10T00:00:00Z".to_string()),
+            owner: "secops".to_string(),
+            reason: "temporary waiver".to_string(),
+        };
+        assert!(suppression.is_active_at(1_775_779_199));
+        assert!(!suppression.is_active_at(1_775_779_200));
     }
 
     #[test]

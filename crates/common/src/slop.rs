@@ -29,4 +29,8 @@ pub struct StructuredFinding {
     /// `None` for findings that are not line-addressable (e.g. symbol-level dead
     /// code entries where only the symbol name is known).
     pub line: Option<u32>,
+
+    /// Deterministic BLAKE3 fingerprint of the finding's structural root.
+    #[serde(default)]
+    pub fingerprint: String,
 }

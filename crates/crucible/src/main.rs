@@ -2401,6 +2401,51 @@ index 1111111..2222222 100644
         );
     }
 
+    #[test]
+    fn policy_suppression_waives_patch_finding() {
+        let patch = "\
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -0,0 +1,2 @@
++def inject(user_input):
++    eval(user_input)
+";
+        let registry = common::registry::SymbolRegistry::default();
+
+        let unsuppressed = forge::slop_filter::PatchBouncer::default()
+            .bounce(patch, &registry)
+            .expect("baseline patch must analyze");
+        assert!(
+            unsuppressed.score() > 0,
+            "baseline patch must produce a non-zero score before waiver"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("janitor.toml"),
+            r#"
+[[suppressions]]
+id = "waive-eval"
+rule = "security:dynamic_eval"
+path_glob = "app.py"
+expires = "4102444800"
+owner = "appsec"
+reason = "temporary waiver"
+"#,
+        )
+        .unwrap();
+
+        let waived = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
+            .bounce(patch, &registry)
+            .expect("suppressed patch must analyze");
+        assert_eq!(waived.score(), 0, "active suppression must zero the score");
+        assert!(
+            waived.structured_findings.is_empty(),
+            "waived finding must be removed from structured results"
+        );
+    }
+
     // ---------------------------------------------------------------------------
     // CT-014: member-expression call chain detection — Crucible fixtures
     // ---------------------------------------------------------------------------
