@@ -35,6 +35,7 @@ use std::time::Instant;
 use anyhow::{anyhow, Result};
 use git2::{Oid, Repository};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use anatomist::parser::ParserHost;
 use common::physarum::{Pulse, SystemHeart};
@@ -69,6 +70,139 @@ use include_deflator::graph::IncludeGraphBuilder;
 use crate::report::{BounceLogEntry, PrState};
 use crate::utc_now_iso8601;
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct StrikeCheckpoint {
+    run_id: String,
+    #[serde(default)]
+    processed_pr_numbers: Vec<u32>,
+    #[serde(default)]
+    processed_commit_shas: Vec<String>,
+}
+
+struct StrikeCheckpointState {
+    doc: StrikeCheckpoint,
+    path: PathBuf,
+    processed_pr_numbers: HashSet<u32>,
+    processed_commit_shas: HashSet<String>,
+}
+
+impl StrikeCheckpointState {
+    fn load(janitor_dir: &Path, run_id: &str) -> Self {
+        let path = strike_checkpoint_path(janitor_dir, run_id);
+        let mut doc = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<StrikeCheckpoint>(&raw).ok())
+            .unwrap_or_else(|| StrikeCheckpoint {
+                run_id: run_id.to_string(),
+                ..StrikeCheckpoint::default()
+            });
+        if doc.run_id.is_empty() {
+            doc.run_id = run_id.to_string();
+        }
+
+        if doc.processed_pr_numbers.is_empty() {
+            doc.processed_pr_numbers = load_processed_pr_numbers(janitor_dir).into_iter().collect();
+            doc.processed_pr_numbers.sort_unstable();
+        }
+
+        let processed_pr_numbers = doc.processed_pr_numbers.iter().copied().collect();
+        let processed_commit_shas = doc.processed_commit_shas.iter().cloned().collect();
+        Self {
+            doc,
+            path,
+            processed_pr_numbers,
+            processed_commit_shas,
+        }
+    }
+
+    fn fresh(janitor_dir: &Path, run_id: &str) -> Self {
+        let path = strike_checkpoint_path(janitor_dir, run_id);
+        let _ = std::fs::remove_file(&path);
+        Self {
+            doc: StrikeCheckpoint {
+                run_id: run_id.to_string(),
+                ..StrikeCheckpoint::default()
+            },
+            path,
+            processed_pr_numbers: HashSet::new(),
+            processed_commit_shas: HashSet::new(),
+        }
+    }
+
+    fn contains(&self, pr_num: u32, pr_sha: &str) -> bool {
+        self.processed_pr_numbers.contains(&pr_num) || self.processed_commit_shas.contains(pr_sha)
+    }
+
+    fn mark_processed(&mut self, pr_num: u32, pr_sha: &str) {
+        if self.processed_pr_numbers.insert(pr_num) {
+            self.doc.processed_pr_numbers.push(pr_num);
+            self.doc.processed_pr_numbers.sort_unstable();
+        }
+        if self.processed_commit_shas.insert(pr_sha.to_string()) {
+            self.doc.processed_commit_shas.push(pr_sha.to_string());
+            self.doc.processed_commit_shas.sort();
+        }
+    }
+
+    fn persist_atomically(&self) -> Result<()> {
+        let checkpoint_dir = self
+            .path
+            .parent()
+            .ok_or_else(|| anyhow!("strike checkpoint has no parent directory"))?;
+        std::fs::create_dir_all(checkpoint_dir).map_err(|e| {
+            anyhow!(
+                "Cannot create strike checkpoint directory {}: {e}",
+                checkpoint_dir.display()
+            )
+        })?;
+        let tmp_path = self.path.with_extension("json.tmp");
+        let payload = serde_json::to_vec_pretty(&self.doc)
+            .map_err(|_| anyhow!("strike checkpoint serialization failed"))?;
+        std::fs::write(&tmp_path, payload).map_err(|e| {
+            anyhow!(
+                "Cannot write strike checkpoint temp file {}: {e}",
+                tmp_path.display()
+            )
+        })?;
+        std::fs::rename(&tmp_path, &self.path).map_err(|e| {
+            anyhow!(
+                "Cannot atomically publish strike checkpoint {}: {e}",
+                self.path.display()
+            )
+        })?;
+        Ok(())
+    }
+}
+
+struct StrikeRecorder {
+    checkpoint: StrikeCheckpointState,
+    writer: BufWriter<std::fs::File>,
+}
+
+impl StrikeRecorder {
+    fn new(writer: BufWriter<std::fs::File>, checkpoint: StrikeCheckpointState) -> Self {
+        Self { checkpoint, writer }
+    }
+
+    fn record_success(&mut self, pr_num: u32, pr_sha: &str, entry: &BounceLogEntry) -> Result<()> {
+        let line = serde_json::to_string(entry)
+            .map_err(|_| anyhow!("hyper-drive result serialization failed"))?;
+        writeln!(self.writer, "{line}")
+            .map_err(|e| anyhow!("hyper-drive log write failed: {e}"))?;
+        self.writer
+            .flush()
+            .map_err(|e| anyhow!("hyper-drive log flush failed: {e}"))?;
+        self.checkpoint.mark_processed(pr_num, pr_sha);
+        self.checkpoint.persist_atomically()
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        self.writer
+            .flush()
+            .map_err(|e| anyhow!("hyper-drive log flush failed: {e}"))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -92,6 +226,12 @@ pub fn cmd_hyper_drive(
     resume: bool,
 ) -> Result<()> {
     let t0 = Instant::now();
+    let slug = repo_slug.map(str::to_owned).unwrap_or_else(|| {
+        repo_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
 
     // ── Step 1: collect PR refs ───────────────────────────────────────────
     let mut pr_entries = collect_pr_refs(repo_path, limit)?;
@@ -124,21 +264,33 @@ pub fn cmd_hyper_drive(
     std::fs::create_dir_all(&janitor_dir)
         .map_err(|e| anyhow!("Cannot create .janitor dir: {e}"))?;
 
+    let run_id = strike_run_id(&slug, &base_sha, limit);
+    let checkpoint = if resume {
+        StrikeCheckpointState::load(&janitor_dir, &run_id)
+    } else {
+        StrikeCheckpointState::fresh(&janitor_dir, &run_id)
+    };
+
     // ── Step 2.55: Resume filter ──────────────────────────────────────────
-    // When --resume is active, skip PRs already present in the bounce log so
-    // an interrupted run can be continued without re-scoring completed work.
+    // When --resume is active, skip PRs already present in the strike checkpoint
+    // so an interrupted run can be continued without re-scoring completed work.
     if resume {
-        let processed_set = load_processed_pr_numbers(&janitor_dir);
-        if !processed_set.is_empty() {
+        if !checkpoint.processed_pr_numbers.is_empty()
+            || !checkpoint.processed_commit_shas.is_empty()
+        {
             let before = pr_entries.len();
-            pr_entries.retain(|(pr_num, _)| !processed_set.contains(pr_num));
+            pr_entries.retain(|(pr_num, pr_sha)| !checkpoint.contains(*pr_num, pr_sha));
             eprintln!(
-                "janitor hyper-drive: resume — skipping {} already-processed PRs ({} remaining)",
+                "janitor hyper-drive: resume [{}] — skipping {} checkpointed PRs ({} remaining)",
+                run_id,
                 before - pr_entries.len(),
                 pr_entries.len()
             );
         } else {
-            eprintln!("janitor hyper-drive: resume — no prior log found, processing all PRs");
+            eprintln!(
+                "janitor hyper-drive: resume [{}] — no prior checkpoint found, processing all PRs",
+                run_id
+            );
         }
         if pr_entries.is_empty() {
             eprintln!("janitor hyper-drive: resume — all PRs already processed, nothing to do");
@@ -168,13 +320,6 @@ pub fn cmd_hyper_drive(
     let registry = load_registry(repo_path)?;
 
     // ── Step 4: open bounce log for streaming writes ──────────────────────
-    let slug = repo_slug.map(str::to_owned).unwrap_or_else(|| {
-        repo_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
-
     // janitor_dir was already created in Step 2.5 — this is a no-op but
     // kept for clarity so the log_path derivation block remains self-contained.
 
@@ -187,8 +332,10 @@ pub fn cmd_hyper_drive(
 
     // Wrap in a BufWriter behind a mutex so rayon workers can write without
     // blocking each other for the duration of a syscall.
-    let writer: Arc<Mutex<BufWriter<std::fs::File>>> =
-        Arc::new(Mutex::new(BufWriter::new(log_file)));
+    let recorder: Arc<Mutex<StrikeRecorder>> = Arc::new(Mutex::new(StrikeRecorder::new(
+        BufWriter::new(log_file),
+        checkpoint,
+    )));
 
     // ── Step 5a: pre-emptive WOPR graph — serialize before any AST work ─────
     // Executed immediately after base resolution so that a SIGABRT from a
@@ -277,27 +424,26 @@ pub fn cmd_hyper_drive(
                 if entry.is_some() { "OK" } else { "SKIP" }
             );
             if let Some(ref e) = entry {
-                match serde_json::to_string(e) {
-                    Ok(line) => {
-                        if let Ok(mut guard) = writer.lock() {
-                            if writeln!(guard, "{line}").is_ok() {
-                                // Flush after every entry — guarantees that a SIGABRT
-                                // or core dump cannot lose a completed PR result.
-                                let _ = guard.flush();
-                                written.fetch_add(1, Ordering::Relaxed);
-                            }
+                if let Ok(mut guard) = recorder.lock() {
+                    match guard.record_success(*pr_num, pr_sha, e) {
+                        Ok(()) => {
+                            written.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "hyper-drive PR#{pr_num}: checkpoint/log write failed: {err}"
+                            );
                         }
                     }
-                    Err(err) => {
-                        eprintln!("hyper-drive PR#{pr_num}: serialize failed: {err}");
-                    }
+                } else {
+                    eprintln!("hyper-drive PR#{pr_num}: recorder lock poisoned");
                 }
             }
         });
     });
 
     // Final flush — drains any remaining BufWriter capacity.
-    if let Ok(mut guard) = writer.lock() {
+    if let Ok(mut guard) = recorder.lock() {
         let _ = guard.flush();
     }
 
@@ -916,4 +1062,81 @@ fn load_processed_pr_numbers(janitor_dir: &Path) -> HashSet<u32> {
             v["pr_number"].as_u64().map(|n| n as u32)
         })
         .collect()
+}
+
+fn strike_run_id(repo_slug: &str, base_sha: &str, limit: usize) -> String {
+    let material = format!("{repo_slug}:{base_sha}:{limit}");
+    format!(
+        "strike-{}",
+        &blake3::hash(material.as_bytes()).to_hex()[..16]
+    )
+}
+
+fn strike_checkpoint_path(janitor_dir: &Path, run_id: &str) -> PathBuf {
+    janitor_dir
+        .join("strikes")
+        .join(run_id)
+        .join("checkpoint.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        load_processed_pr_numbers, strike_checkpoint_path, strike_run_id, StrikeCheckpoint,
+        StrikeCheckpointState,
+    };
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "janitor-git-drive-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn strike_checkpoint_roundtrip_and_contains_processed_targets() {
+        let janitor_dir = temp_dir("checkpoint").join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+        let run_id = strike_run_id("owner/repo", "abcdef0123456789", 100);
+        let mut checkpoint = StrikeCheckpointState::fresh(&janitor_dir, &run_id);
+        checkpoint.mark_processed(42, "deadbeef");
+        checkpoint.persist_atomically().unwrap();
+
+        let restored = StrikeCheckpointState::load(&janitor_dir, &run_id);
+        assert!(restored.contains(42, "deadbeef"));
+        assert_eq!(restored.path, strike_checkpoint_path(&janitor_dir, &run_id));
+    }
+
+    #[test]
+    fn strike_checkpoint_seeds_from_existing_bounce_log() {
+        let janitor_dir = temp_dir("seed").join(".janitor");
+        fs::create_dir_all(&janitor_dir).unwrap();
+        fs::write(
+            janitor_dir.join("bounce_log.ndjson"),
+            "{\"pr_number\":7}\n{\"pr_number\":11}\n",
+        )
+        .unwrap();
+
+        let run_id = "strike-seeded";
+        let checkpoint = StrikeCheckpointState::load(&janitor_dir, run_id);
+        assert!(checkpoint.contains(7, "sha-a"));
+        assert!(checkpoint.contains(11, "sha-b"));
+        assert_eq!(load_processed_pr_numbers(&janitor_dir).len(), 2);
+        assert_eq!(checkpoint.doc.run_id, run_id);
+    }
+
+    #[test]
+    fn strike_checkpoint_serializes_empty_sha_list() {
+        let checkpoint = StrikeCheckpoint {
+            run_id: "strike-x".to_string(),
+            processed_pr_numbers: vec![1],
+            processed_commit_shas: Vec::new(),
+        };
+        let json = serde_json::to_string(&checkpoint).unwrap();
+        assert!(json.contains("\"processed_pr_numbers\":[1]"));
+    }
 }

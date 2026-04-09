@@ -14,7 +14,7 @@
 //!
 //! Output formats: `markdown` (default) and `json`.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::{HashMap, HashSet};
@@ -831,7 +831,7 @@ pub fn post_bounce_result(
             let response: serde_json::Value = r
                 .body_mut()
                 .read_json()
-                .map_err(|e| anyhow::anyhow!("Governor /v1/report response parse error: {e}"))?;
+                .map_err(|_| anyhow::anyhow!("Governor response parse failed"))?;
             let proof = serde_json::from_value::<InclusionProof>(
                 response.get("inclusion_proof").cloned().ok_or_else(|| {
                     anyhow::anyhow!("Governor /v1/report omitted inclusion_proof")

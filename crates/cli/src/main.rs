@@ -3210,7 +3210,7 @@ cross-reference GitHub Actor ID against commit author email and GPG signatures t
         println!(
             "{}",
             serde_json::to_string_pretty(&json_out)
-                .map_err(|e| anyhow::anyhow!("JSON serialization failed: {e}"))?
+                .map_err(|_| anyhow::anyhow!("JSON serialization failed"))?
         );
     } else {
         println!("+------------------------------------------+");
@@ -4616,7 +4616,7 @@ fn write_wisdom_receipt(
         "recorded_at": utc_now_iso8601(),
     });
     let receipt_str = serde_json::to_string_pretty(&receipt)
-        .map_err(|e| anyhow::anyhow!("serializing wisdom receipt failed: {e}"))?;
+        .map_err(|_| anyhow::anyhow!("serializing wisdom receipt failed"))?;
     std::fs::write(&receipt_path, receipt_str.as_bytes())
         .with_context(|| format!("writing {}", receipt_path.display()))?;
     Ok(())
@@ -4628,7 +4628,7 @@ fn write_wisdom_mirror_receipt(
 ) -> anyhow::Result<()> {
     let receipt_path = janitor_dir.join("wisdom.rkyv.mirror.json");
     let body = serde_json::to_string_pretty(receipt)
-        .map_err(|e| anyhow::anyhow!("serializing wisdom mirror receipt failed: {e}"))?;
+        .map_err(|_| anyhow::anyhow!("serializing wisdom mirror receipt failed"))?;
     std::fs::write(&receipt_path, body.as_bytes())
         .with_context(|| format!("writing {}", receipt_path.display()))?;
     Ok(())

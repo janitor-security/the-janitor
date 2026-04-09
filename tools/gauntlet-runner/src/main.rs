@@ -136,7 +136,7 @@ struct Config {
     /// Zero network calls during scoring after the initial fetch.
     hyper: bool,
     /// When `true`, do not purge existing bounce logs and pass `--resume` to
-    /// `janitor hyper-drive` so interrupted runs continue from where they left off.
+    /// `janitor hyper-drive` so interrupted runs continue from the strike checkpoint.
     resume: bool,
     /// Number of parallel bounce workers per repo.
     ///

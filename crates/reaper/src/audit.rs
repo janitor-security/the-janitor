@@ -265,7 +265,7 @@ fn remote_attest(token: &str, entries: &[AuditEntry]) -> Result<String, ReaperEr
     for e in entries {
         hasher.update(e.signing_payload().as_bytes());
     }
-    let merkle_root = format!("{:x}", hasher.finalize());
+    let merkle_root = digest_hex(hasher.finalize().as_slice());
 
     let files_modified: Vec<&str> = entries.iter().map(|e| e.file_path.as_str()).collect();
 
@@ -298,7 +298,11 @@ fn remote_attest(token: &str, entries: &[AuditEntry]) -> Result<String, ReaperEr
 fn hex_sha256(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    format!("{:x}", hasher.finalize())
+    digest_hex(hasher.finalize().as_slice())
+}
+
+fn digest_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Returns the current UTC time as an ISO 8601 string.

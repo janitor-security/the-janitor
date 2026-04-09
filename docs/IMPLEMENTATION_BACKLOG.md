@@ -5,6 +5,39 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — Dashboard Annihilation & Resumable Strikes (v10.0.0-rc.14)
+
+**Directive:** Close the stale Dependabot and workflow-action debt, sever lingering CodeQL-sensitive network error interpolation, implement resumable strike checkpointing for multi-hour hyper-audits, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.14` release.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — dependency requirements bumped to match the live Dependabot surface (`tokio 1.51.0`, `sha2 0.11.0`, `hmac 0.13.0`, plus the tree-sitter grammar group), then workspace version bumped to `10.0.0-rc.14`.
+- `Cargo.lock` *(modified)* — refreshed via `cargo update`; new crypto/runtime/transitive packages resolved and the targeted grammar crates advanced.
+- `.github/workflows/janitor.yml` *(modified)* — `actions/cache` pinned to `v5.0.4`; `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/janitor-pr-gate.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/cisa-kev-sync.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/dependency-review.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/msrv.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/deploy_docs.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/codeql.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `.github/workflows/scorecard.yml` *(modified)* — `step-security/harden-runner` pinned to `v2.16.1`.
+- `crates/cli/src/report.rs` *(modified)* — Governor response parse path updated to hardcoded static failure text; `hmac 0.13` compatibility restored via `KeyInit`.
+- `crates/cli/src/main.rs` *(modified)* — residual JSON / wisdom receipt serialization errors now use static strings only.
+- `crates/cli/src/git_drive.rs` *(modified)* — added deterministic `StrikeCheckpoint` state under `.janitor/strikes/<run-id>/checkpoint.json`, backward-compatible seeding from existing bounce logs, O(1) skip checks before analysis, and atomic checkpoint publication immediately after successful bounce-log writes. Added checkpoint tests.
+- `tools/gauntlet-runner/src/main.rs` *(modified)* — resume semantics updated to reflect strike-checkpoint continuation.
+- `crates/reaper/src/audit.rs` *(modified)* — `sha2 0.11` compatibility fix: digest bytes now hex-encode explicitly instead of relying on `LowerHex`.
+- `README.md` *(modified)* — version string updated to `v10.0.0-rc.14`.
+- `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.14`.
+- `docs/INNOVATION_LOG.md` *(modified, gitignored)* — completed `P0-3` block purged from the active queue.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo update` ✅
+- `cargo check --workspace` ✅
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+**Release status:** pending `just fast-release 10.0.0-rc.14`
+
 ## 2026-04-09 — Enterprise Triage Spine & Waiver Governance (v10.0.0-rc.13)
 
 **Directive:** Execute P0-1 and P0-2 from the hostile GA teardown: add auditable suppression governance, add deterministic finding fingerprints for external state tracking, verify the workspace under single-threaded test execution, purge stale innovation-log residue, and prepare the `10.0.0-rc.13` release.
