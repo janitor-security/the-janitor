@@ -1,10 +1,10 @@
 name: MSRV Check
 
 # Guards against Dependabot or manual dep bumps that silently require a Rust
-# version newer than the pinned 1.88.0 toolchain.  Runs `cargo +1.88.0 check`
+# version newer than the pinned 1.91.0 toolchain.  Runs `cargo +1.91.0 check`
 # against the exact locked dependency tree — the same check that surfaces the
 # "requires rustc X.Y.Z" error caught in the RUSTSEC-2026-0002 remediation
-# (lru soundness bug forced ratatui 0.30 + toolchain bump to 1.88.0).
+# (wasmtime 43.0.0 raised the minimum supported Rust version to 1.91.0).
 #
 # Trigger: every PR targeting main + every push to main.
 on:
@@ -20,7 +20,7 @@ permissions: read-all
 
 jobs:
   msrv:
-    name: MSRV — Rust 1.88.0
+    name: MSRV — Rust 1.91.0
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,14 +36,14 @@ jobs:
 
       # Install only the pinned stable toolchain — no additional components
       # needed for a check-only pass.
-      - name: Install Rust 1.88.0
+      - name: Install Rust 1.91.0
         run: |
-          rustup toolchain install 1.88.0 --profile minimal
-          rustup override set 1.88.0
+          rustup toolchain install 1.91.0 --profile minimal
+          rustup override set 1.91.0
 
       # --locked: honour the committed Cargo.lock exactly.
       # --workspace: include every crate (dashboard, forge, anatomist …).
-      # If any dependency declares rust-version > 1.88 this step fails with
-      # "error: rustc 1.88.0 is not supported by the following packages: …"
-      - name: cargo check (Rust 1.88.0, locked)
-        run: cargo +1.88.0 check --workspace --locked
+      # If any dependency declares rust-version > 1.91 this step fails with
+      # "error: rustc 1.91.0 is not supported by the following packages: …"
+      - name: cargo check (Rust 1.91.0, locked)
+        run: cargo +1.91.0 check --workspace --locked
