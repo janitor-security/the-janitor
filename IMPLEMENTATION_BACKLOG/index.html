@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-dashboard-annihilation-resumable-strikes-v1000-rc14" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — Dashboard Annihilation &amp; Resumable Strikes (v10.0.0-rc.14)
@@ -1205,6 +1214,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-dashboard-annihilation-resumable-strikes-v1000-rc14" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — Dashboard Annihilation &amp; Resumable Strikes (v10.0.0-rc.14)
@@ -1784,6 +1802,23 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15">2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)</h2>
+<p><strong>Directive:</strong> Synchronize CI to Rust 1.91.0 after the Wasmtime 43 MSRV jump, sever all remaining Governor/Wisdom-sensitive data-flow interpolation, implement first-class SCM verdict publishing outside GitHub, verify the workspace under single-threaded test execution, and prepare the <code>10.0.0-rc.15</code> release.</p>
+<p><strong>Files modified:</strong>
+- <code>.github/workflows/msrv.yml</code> <em>(modified)</em> — hardcoded Rust 1.88 references upgraded to Rust 1.91.0 so the MSRV lane matches the workspace after the Wasmtime 43 bump.
+- <code>crates/common/src/scm.rs</code> <em>(modified)</em> — <code>StatusVerdict</code> and <code>StatusPublisher</code> added; native provider renderers implemented for GitHub Actions annotations and Azure DevOps logging commands, with GitLab and Bitbucket provider stubs plus deterministic provider detection tests.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — bounce completion and timeout paths now publish SCM verdicts through the shared status abstraction; sensitive Governor dispatch failures no longer interpolate network-derived error payloads into stderr.
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — Governor response validation/parse failures reduced to static strings only, fully severing cleartext-sensitive data flow from remote payloads into operator-visible logs.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.15</code>.
+- <code>README.md</code> <em>(modified)</em> — version string updated to <code>v10.0.0-rc.15</code>.
+- <code>docs/index.md</code> <em>(modified)</em> — version string updated to <code>v10.0.0-rc.15</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified, gitignored)</em> — completed <code>P0-4</code> block purged from the active innovation queue.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
+<p><strong>Verification:</strong>
+- <code>cargo check --workspace</code> ✅
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅</p>
+<p><strong>Release status:</strong> blocked locally — <code>just fast-release 10.0.0-rc.15</code> reached the signing gate and failed because the GPG key is locked and <code>JANITOR_GPG_PASSPHRASE</code> is unset.</p>
 <h2 id="2026-04-09-dashboard-annihilation-resumable-strikes-v1000-rc14">2026-04-09 — Dashboard Annihilation &amp; Resumable Strikes (v10.0.0-rc.14)</h2>
 <p><strong>Directive:</strong> Close the stale Dependabot and workflow-action debt, sever lingering CodeQL-sensitive network error interpolation, implement resumable strike checkpointing for multi-hour hyper-audits, verify the workspace under single-threaded test execution, and prepare the <code>10.0.0-rc.14</code> release.</p>
 <p><strong>Files modified:</strong>

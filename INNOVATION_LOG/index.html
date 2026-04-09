@@ -610,21 +610,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Enterprise Deployment Blockers">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -808,21 +793,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P0 — Enterprise Deployment Blockers">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -966,13 +936,6 @@ All CT constraints through CT-020 resolved.</p>
 - CLI progress spinners already exist for scan / clean flows; the gap is long-run orchestration and resumability, not absence of all progress UI.
 - Suppression primitives exist (<code># noqa</code>-style pragmas, test-scope routing, local-brain <code>janitor pardon</code>); the gap is governable, reviewable suppression lifecycle.</p>
 <h2 id="p0-enterprise-deployment-blockers">P0 — Enterprise Deployment Blockers</h2>
-<h3 id="p0-4-github-heavy-operational-surface-non-github-enforcement-is-incomplete">P0-4 — GitHub-heavy operational surface; non-GitHub enforcement is incomplete</h3>
-<p><strong>Gap</strong>: SCM normalization exists, but the commercial operating model still assumes GitHub App, GitHub PR checks, GitHub Actions, and GitHub release paths. Enterprises running GitLab, Azure DevOps, Bitbucket Server, or mixed estate need first-class check publishers, not just environment parsing.</p>
-<p><strong>Required change</strong>:
-1. Add provider-specific check/status publishers for GitLab MR, Azure DevOps PR, and Bitbucket.
-2. Add SARIF upload helpers or native API adapters per provider.
-3. Make the docs and SKU language stop implying GitHub-first operation if the product claims universal SCM support.</p>
-<p><strong>Why this blocks GA</strong>: "Works outside GitHub" is not credible until enforcement surfaces exist outside GitHub.</p>
 <h2 id="p1-product-ux-commercial-defects">P1 — Product / UX / Commercial Defects</h2>
 <h3 id="p1-1-pricing-pages-contradict-themselves">P1-1 — Pricing pages contradict themselves</h3>
 <p><strong>Gap</strong>: <code>README.md</code> and <code>docs/index.md</code> sell Team as "up to 25 seats" and then immediately say "No per-seat limits." That is revenue-ops sloppiness visible to customers. Procurement will interpret this as either deceptive pricing or internal confusion.</p>
