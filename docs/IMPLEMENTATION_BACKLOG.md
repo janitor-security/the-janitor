@@ -5,6 +5,28 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — Data-Flow Guillotine & SCM Expansion (v10.0.0-rc.15)
+
+**Directive:** Synchronize CI to Rust 1.91.0 after the Wasmtime 43 MSRV jump, sever all remaining Governor/Wisdom-sensitive data-flow interpolation, implement first-class SCM verdict publishing outside GitHub, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.15` release.
+
+**Files modified:**
+- `.github/workflows/msrv.yml` *(modified)* — hardcoded Rust 1.88 references upgraded to Rust 1.91.0 so the MSRV lane matches the workspace after the Wasmtime 43 bump.
+- `crates/common/src/scm.rs` *(modified)* — `StatusVerdict` and `StatusPublisher` added; native provider renderers implemented for GitHub Actions annotations and Azure DevOps logging commands, with GitLab and Bitbucket provider stubs plus deterministic provider detection tests.
+- `crates/cli/src/main.rs` *(modified)* — bounce completion and timeout paths now publish SCM verdicts through the shared status abstraction; sensitive Governor dispatch failures no longer interpolate network-derived error payloads into stderr.
+- `crates/cli/src/report.rs` *(modified)* — Governor response validation/parse failures reduced to static strings only, fully severing cleartext-sensitive data flow from remote payloads into operator-visible logs.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.15`.
+- `README.md` *(modified)* — version string updated to `v10.0.0-rc.15`.
+- `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.15`.
+- `docs/INNOVATION_LOG.md` *(modified, gitignored)* — completed `P0-4` block purged from the active innovation queue.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo check --workspace` ✅
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+**Release status:** blocked locally — `just fast-release 10.0.0-rc.15` reached the signing gate and failed because the GPG key is locked and `JANITOR_GPG_PASSPHRASE` is unset.
+
 ## 2026-04-09 — Dashboard Annihilation & Resumable Strikes (v10.0.0-rc.14)
 
 **Directive:** Close the stale Dependabot and workflow-action debt, sever lingering CodeQL-sensitive network error interpolation, implement resumable strike checkpointing for multi-hour hyper-audits, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.14` release.

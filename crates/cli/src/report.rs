@@ -837,18 +837,14 @@ pub fn post_bounce_result(
                     anyhow::anyhow!("Governor /v1/report omitted inclusion_proof")
                 })?,
             )
-            .map_err(|e| {
-                anyhow::anyhow!("Governor /v1/report returned invalid inclusion_proof: {e}")
-            })?;
+            .map_err(|_| anyhow::anyhow!("Governor response validation failed"))?;
             let decision_receipt =
                 serde_json::from_value::<common::receipt::SignedDecisionReceipt>(
                     response.get("decision_receipt").cloned().ok_or_else(|| {
                         anyhow::anyhow!("Governor /v1/report omitted decision_receipt")
                     })?,
                 )
-                .map_err(|e| {
-                    anyhow::anyhow!("Governor /v1/report returned invalid decision_receipt: {e}")
-                })?;
+                .map_err(|_| anyhow::anyhow!("Governor response validation failed"))?;
             eprintln!("info: bounce result reported to Governor");
             Ok(GovernorAttestation {
                 inclusion_proof: proof,

@@ -957,10 +957,18 @@ async fn main() -> anyhow::Result<()> {
                             decision_receipt: None,
                             cognition_surrender_index: 0.0,
                         };
-                        // Best-effort POST — log if it fails but still exit non-zero.
-                        if let Err(e) = report::post_bounce_result(url, token, &timeout_entry) {
-                            eprintln!("warning: failed to dispatch timeout payload: {e}");
+                        let timeout_verdict = common::scm::StatusVerdict::timeout(timeout_secs);
+                        // Best-effort POST — never echo transport payloads to stderr.
+                        if report::post_bounce_result(url, token, &timeout_entry).is_err() {
+                            let _ = common::scm::status_publisher_for(&scm_context)
+                                .publish_verdict(
+                                    &scm_context,
+                                    &common::scm::StatusVerdict::governor_failure(),
+                                );
+                            eprintln!("warning: failed to dispatch timeout payload");
                         }
+                        let _ = common::scm::status_publisher_for(&scm_context)
+                            .publish_verdict(&scm_context, &timeout_verdict);
                     }
                     anyhow::bail!("bounce analysis timed out after {timeout_secs}s");
                 }
@@ -3546,6 +3554,20 @@ probable AI context-collapse (hallucinated function reference)"
     }
 
     report::append_bounce_log(&janitor_dir, &log_entry);
+    let verdict = common::scm::StatusVerdict::bounce(
+        gate_passed,
+        log_entry.slop_score,
+        log_entry.governor_status.as_deref(),
+    );
+    if common::scm::status_publisher_for(&scm_context)
+        .publish_verdict(&scm_context, &verdict)
+        .is_err()
+    {
+        report::append_diag_log(
+            &janitor_dir,
+            "WARN scm status publish failed — error details redacted",
+        );
+    }
     // Write color-coded SVG badge to .janitor/janitor_badge.svg for CI/PR comment use.
     report::write_badge(&janitor_dir, log_entry.slop_score);
     report::fire_webhook_if_configured(&log_entry, &policy);
