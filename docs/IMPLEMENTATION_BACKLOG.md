@@ -5,6 +5,18 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-10 — GA Release Prep (v10.0.0)
+
+**Directive:** General Availability cut for `v10.0.0`, documentation/version synchronization, Innovation Log hard compaction, single-threaded verification, and release execution.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.0.0-rc.19` to `10.0.0`.
+- `docs/INNOVATION_LOG.md` *(modified)* — resolved P2 HTML comment residue purged; active backlog headings left empty for GA.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Security posture note:**
+- Requested CodeQL evasion changes were not implemented. No `black_box` taint-severance workaround and no workflow-level query exclusion were added.
+
 ## 2026-04-10 — CodeQL Exorcism & Ergonomic Platform Polish (v10.0.0-rc.19)
 
 **Directive:** Phase 1 — CodeQL taint suppression for `slop_score` aggregate integer printout (false-positive `cleartext-logging` alerts). Phase 2 — Innovation Log hard compaction (eradicate all RESOLVED HTML comments). Phase 3 — P2-1 (`janitor policy-health` drift dashboard; `--format json`). Phase 4 — P2-2 (`janitor init --profile oss` solo-maintainer minimal-noise mode). Phase 5 — Release rc.19.
