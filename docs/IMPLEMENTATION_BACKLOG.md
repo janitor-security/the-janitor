@@ -1523,3 +1523,30 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - `Cargo.toml` *(modified)* — version bumped to `9.8.1`
 
 **Commit:** pending `just fast-release 9.8.1`
+
+
+---
+
+## 2026-04-10 — v10.1.0-alpha.1: Governance Seal & O(1) Incremental Engine
+
+**Directive**: Sovereign Directive — close P0-1 (Signed Policy Lifecycle) and P0-5 (Incremental Scan) from the GA Teardown Audit.
+
+### P0-1: Signed Policy Lifecycle ✓
+
+- `crates/common/src/policy.rs` *(modified)* — `JanitorPolicy::content_hash()` BLAKE3 hash over canonical security-relevant fields; three determinism tests added
+- `crates/cli/src/main.rs` *(modified)* — `policy_hash` in `BounceLogEntry` now computed via `policy.content_hash()` (canonical struct fields, not raw TOML bytes)
+- `crates/gov/src/main.rs` *(modified)* — `AnalysisTokenRequest` gains `policy_hash: String`; `/v1/analysis-token` returns HTTP 403 `policy_drift_detected` on `JANITOR_GOV_EXPECTED_POLICY` mismatch; two new unit tests
+
+### P0-5: Incremental / Resumable Scan ✓
+
+- `crates/common/src/scan_state.rs` *(created)* — `ScanState { cache: HashMap<String, [u8; 32]> }` with rkyv Archive/Serialize/Deserialize; symlink-safe atomic persistence; four unit tests
+- `crates/common/src/lib.rs` *(modified)* — `pub mod scan_state` registered
+- `crates/common/Cargo.toml` *(modified)* — `tempfile = "3"` dev-dependency for scan_state tests
+- `crates/forge/src/slop_filter.rs` *(modified)* — `bounce_git` accepts `&mut ScanState`; BLAKE3 digest compared before Payload Bifurcation; unchanged files bypassed O(1); digest recorded for changed files
+- `crates/cli/src/main.rs` *(modified)* — loads `ScanState` from `.janitor/scan_state.rkyv` before bounce_git; persists updated state after successful bounce (best-effort, never fails the gate)
+- `crates/cli/src/git_drive.rs` *(modified)* — hyper-drive `bounce_git` call updated with ephemeral `ScanState::default()` (no persistence in parallel mode)
+- `docs/INNOVATION_LOG.md` *(modified)* — P0-1 and P0-5 marked RESOLVED
+- `Cargo.toml` *(modified)* — version bumped to `10.1.0-alpha.1`
+
+**Audit**: `cargo fmt --check` ✓ | `cargo clippy -- -D warnings` ✓ | `cargo test --workspace -- --test-threads=1` ✓ (all pass)
+**Release**: `just fast-release 10.1.0-alpha.1`

@@ -1837,6 +1837,7 @@ pub fn bounce_git(
     registry: &SymbolRegistry,
     suppressions: Vec<Suppression>,
     deep_scan: bool,
+    scan_state: &mut common::scan_state::ScanState,
 ) -> Result<(SlopScore, HashMap<std::path::PathBuf, Vec<u8>>)> {
     let repo = git2::Repository::open(repo_path).map_err(|e| {
         anyhow::anyhow!("bounce_git: cannot open repo {}: {e}", repo_path.display())
@@ -1893,6 +1894,21 @@ pub fn bounce_git(
             {
                 continue;
             }
+        }
+
+        // ── Incremental skip gate ─────────────────────────────────────────────
+        //
+        // Compute the BLAKE3 digest of the full HEAD blob before any expensive
+        // work.  If the digest matches the last-analysed version in `scan_state`,
+        // the file content is identical — the AST parse and slop hunt would yield
+        // an identical result.  Skip the file and record the digest for the next run.
+        {
+            let path_str = path.to_string_lossy().into_owned();
+            let digest: [u8; 32] = *blake3::hash(blob_bytes).as_bytes();
+            if scan_state.is_unchanged(&path_str, &digest) {
+                continue; // O(1) incremental bypass — already analysed at this content version
+            }
+            scan_state.record(path_str, digest);
         }
 
         // ── Payload Bifurcation ───────────────────────────────────────────────

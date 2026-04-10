@@ -725,6 +725,7 @@ fn bounce_one(
     }
 
     let policy = common::policy::JanitorPolicy::load(repo_path).ok()?;
+    let mut scan_state = common::scan_state::ScanState::default();
     let (mut score, blobs) = bounce_git(
         repo_path,
         &merge_base_sha,
@@ -732,6 +733,7 @@ fn bounce_one(
         registry,
         policy.suppressions.unwrap_or_default(),
         false,
+        &mut scan_state,
     )
     .map_err(|e| {
         eprintln!("hyper-drive PR#{pr_num}: {e}");

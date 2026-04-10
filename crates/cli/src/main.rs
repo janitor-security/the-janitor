@@ -2971,6 +2971,10 @@ fn cmd_bounce(
         (SymbolRegistry::new(), false)
     };
 
+    // Load incremental scan cache — absent on first run, populated on subsequent runs.
+    let scan_state_path = project_root.join(".janitor").join("scan_state.rkyv");
+    let mut scan_state = common::scan_state::ScanState::load(&scan_state_path).unwrap_or_default();
+
     // Determine analysis mode and compute score + merkle root + MinHash sketch.
     // `bounce_blobs` carries the per-file byte content of the PR for the
     // O(1)-scoped zombie dep scan performed below (no full-repo WalkDir).
@@ -2994,6 +2998,7 @@ fn cmd_bounce(
                 &registry,
                 policy.suppressions.clone().unwrap_or_default(),
                 deep_scan,
+                &mut scan_state,
             )?;
             // Fetch base Cargo.lock for silo delta (subtract pre-existing splits).
             let base_lock = fetch_base_lockfile_from_odb(repo_path, base_sha);
@@ -3485,17 +3490,7 @@ probable AI context-collapse (hallucinated function reference)"
         // (the git ref for diff extraction) as a fallback preserves local-run
         // behaviour; GITHUB_SHA covers plain GitHub Actions without git-native mode.
         commit_sha: resolved_commit_sha.unwrap_or_default(),
-        policy_hash: {
-            let toml_path = project_root.join("janitor.toml");
-            if toml_path.exists() {
-                match std::fs::read(&toml_path) {
-                    Ok(bytes) => blake3::hash(&bytes).to_hex().to_string(),
-                    Err(_) => String::new(),
-                }
-            } else {
-                String::new()
-            }
-        },
+        policy_hash: policy.content_hash(),
         version_silos,
         // Per-commit Copilot attribution: 100% when the PR author is a detected
         // agentic actor (whole-PR signal); 0% otherwise.  Per-commit granularity
@@ -3668,6 +3663,15 @@ probable AI context-collapse (hallucinated function reference)"
     // Write color-coded SVG badge to .janitor/janitor_badge.svg for CI/PR comment use.
     report::write_badge(&janitor_dir, log_entry.slop_score);
     report::fire_webhook_if_configured(&log_entry, &policy);
+
+    // Persist incremental scan cache — best-effort, never fails the bounce.
+    if let Err(e) = scan_state.save(&scan_state_path) {
+        report::append_diag_log(
+            &janitor_dir,
+            "WARN scan_state persist failed — error details redacted",
+        );
+        let _ = e; // suppress unused warning; details redacted per SAST rule
+    }
 
     // ── Weekly heartbeat ───────────────────────────────────────────────────────
     // Best-effort, silent.  Fires at most once per 7 days; result goes to

@@ -755,6 +755,39 @@ impl JanitorPolicy {
     pub fn gate_passes(&self, score: u32, pr_body: Option<&str>) -> bool {
         score < self.effective_gate(pr_body)
     }
+
+    /// Computes a stable BLAKE3 hash over the security-relevant canonical fields.
+    ///
+    /// Only fields that affect enforcement semantics are included — ephemeral
+    /// settings such as `soft_fail` or `forge.governor_url` are excluded so
+    /// that infrastructure-only changes do not trigger policy-drift alerts.
+    ///
+    /// The hash is deterministic: maps are sorted before serialization.
+    pub fn content_hash(&self) -> String {
+        // Sort wasm_pins HashMap keys for deterministic ordering.
+        let mut pins_sorted: Vec<(&String, &String)> = self.wasm_pins.iter().collect();
+        pins_sorted.sort_by_key(|(k, _)| k.as_str());
+
+        // Sort trusted_bot_authors for determinism (callers may insert in any order).
+        let mut trusted_sorted = self.trusted_bot_authors.clone();
+        trusted_sorted.sort();
+
+        let canonical = serde_json::json!({
+            "min_slop_score": self.min_slop_score,
+            "require_issue_link": self.require_issue_link,
+            "allowed_zombies": self.allowed_zombies,
+            "pqc_enforced": self.pqc_enforced,
+            "custom_antipatterns": self.custom_antipatterns,
+            "refactor_bonus": self.refactor_bonus,
+            "trusted_bot_authors": trusted_sorted,
+            "wasm_rules": self.wasm_rules,
+            "wasm_pins": pins_sorted,
+            "suppressions": self.suppressions,
+        });
+        blake3::hash(canonical.to_string().as_bytes())
+            .to_hex()
+            .to_string()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1174,6 +1207,54 @@ mod tests {
         assert!(
             !p.is_author_impersonation("copilot[bot]", Some(body)),
             "when handle already triggers, body trailer cannot add impersonation"
+        );
+    }
+
+    #[test]
+    fn content_hash_is_deterministic_for_default_policy() {
+        let p = JanitorPolicy::default();
+        let h1 = p.content_hash();
+        let h2 = p.content_hash();
+        assert_eq!(h1, h2, "content_hash must be stable across calls");
+        assert_eq!(h1.len(), 64, "BLAKE3 hex output is 64 characters");
+    }
+
+    #[test]
+    fn content_hash_changes_on_security_field_mutation() {
+        let p1 = JanitorPolicy::default();
+        let p2 = JanitorPolicy {
+            min_slop_score: 200,
+            ..Default::default()
+        };
+        assert_ne!(
+            p1.content_hash(),
+            p2.content_hash(),
+            "different min_slop_score must produce a different content hash"
+        );
+    }
+
+    #[test]
+    fn content_hash_stable_despite_map_insertion_order() {
+        let mut pins1 = HashMap::new();
+        pins1.insert("rules/a.wasm".to_string(), "aaa".to_string());
+        pins1.insert("rules/b.wasm".to_string(), "bbb".to_string());
+        let p1 = JanitorPolicy {
+            wasm_pins: pins1,
+            ..Default::default()
+        };
+
+        let mut pins2 = HashMap::new();
+        pins2.insert("rules/b.wasm".to_string(), "bbb".to_string());
+        pins2.insert("rules/a.wasm".to_string(), "aaa".to_string());
+        let p2 = JanitorPolicy {
+            wasm_pins: pins2,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            p1.content_hash(),
+            p2.content_hash(),
+            "HashMap insertion order must not affect content_hash"
         );
     }
 }

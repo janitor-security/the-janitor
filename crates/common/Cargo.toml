@@ -43,3 +43,6 @@ ureq.workspace = true
 
 # System introspection (Physarum Protocol memory backpressure)
 sysinfo.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

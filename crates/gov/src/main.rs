@@ -100,6 +100,13 @@ struct AnalysisTokenRequest {
     head_sha: String,
     #[serde(default)]
     installation_id: u64,
+    /// BLAKE3 hash of the canonical policy fields (from `JanitorPolicy::content_hash`).
+    ///
+    /// When `JANITOR_GOV_EXPECTED_POLICY` is set in the Governor environment, the
+    /// hash MUST match or the token request is rejected with HTTP 403
+    /// `policy_drift_detected`.
+    #[serde(default)]
+    policy_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,6 +337,23 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
         ("POST", "/v1/analysis-token") => {
             match serde_json::from_slice::<AnalysisTokenRequest>(&request.body) {
                 Ok(req) => {
+                    // Policy-drift gate: when JANITOR_GOV_EXPECTED_POLICY is set,
+                    // the incoming policy_hash must match exactly.  A mismatch means
+                    // the repository's janitor.toml was modified without a Governor
+                    // re-configuration — fail-closed with HTTP 403.
+                    if let Ok(expected) = std::env::var("JANITOR_GOV_EXPECTED_POLICY") {
+                        let expected = expected.trim();
+                        if !expected.is_empty() && req.policy_hash != expected {
+                            return json_response(
+                                403,
+                                serde_json::json!({
+                                    "error": "policy_drift_detected",
+                                    "message": "policy_hash in request does not match \
+                                                JANITOR_GOV_EXPECTED_POLICY — token denied",
+                                }),
+                            );
+                        }
+                    }
                     emit_event(&GovLogEvent::AnalysisToken { request: req });
                     json_response(
                         200,
@@ -460,6 +484,57 @@ mod tests {
             decision_receipt: None,
             cognition_surrender_index: 0.0,
         }
+    }
+
+    #[test]
+    fn policy_drift_detected_returns_403() {
+        std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "expected-hash-abc123");
+        let req_body = serde_json::to_vec(&serde_json::json!({
+            "repo": "owner/repo",
+            "pr": 1,
+            "head_sha": "deadbeef",
+            "policy_hash": "wrong-hash",
+        }))
+        .unwrap();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/analysis-token".to_string(),
+            body: req_body,
+        };
+        let response = route_request(&request);
+        assert_eq!(
+            response.status, 403,
+            "mismatched policy_hash must yield HTTP 403"
+        );
+        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(payload["error"], "policy_drift_detected");
+        // Cleanup env so other tests are not affected.
+        std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
+    }
+
+    #[test]
+    fn matching_policy_hash_returns_token() {
+        std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "correct-hash");
+        let req_body = serde_json::to_vec(&serde_json::json!({
+            "repo": "owner/repo",
+            "pr": 2,
+            "head_sha": "cafebabe",
+            "policy_hash": "correct-hash",
+        }))
+        .unwrap();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/analysis-token".to_string(),
+            body: req_body,
+        };
+        let response = route_request(&request);
+        assert_eq!(
+            response.status, 200,
+            "matching policy_hash must yield HTTP 200"
+        );
+        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(payload["token"], "stub-analysis-token");
+        std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
     }
 
     #[test]
