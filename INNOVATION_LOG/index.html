@@ -632,24 +632,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-2-oss-maintainer-onboarding-is-still-too-doctrinal" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2 — OSS maintainer onboarding is still too doctrinal
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-3-wasm-byor-lacks-operator-ergonomics" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3 — Wasm BYOR lacks operator ergonomics
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p1-4-finding-explainability-is-too-terse-for-broad-rollout" class="md-nav__link">
     <span class="md-ellipsis">
       P1-4 — Finding explainability is too terse for broad rollout
@@ -815,24 +797,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-2-oss-maintainer-onboarding-is-still-too-doctrinal" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2 — OSS maintainer onboarding is still too doctrinal
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-3-wasm-byor-lacks-operator-ergonomics" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-3 — Wasm BYOR lacks operator ergonomics
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p1-4-finding-explainability-is-too-terse-for-broad-rollout" class="md-nav__link">
     <span class="md-ellipsis">
       P1-4 — Finding explainability is too terse for broad rollout
@@ -943,18 +907,10 @@ All CT constraints through CT-020 resolved.</p>
 1. Pick one truth: seat-capped Team or unlimited Team.
 2. Normalize README, docs site, Lemon Squeezy copy, and Terms.
 3. Add a pricing FAQ for OSS maintainer, startup, and enterprise procurement paths.</p>
-<h3 id="p1-2-oss-maintainer-onboarding-is-still-too-doctrinal">P1-2 — OSS maintainer onboarding is still too doctrinal</h3>
-<p><strong>Gap</strong>: The engine is strong; the product voice still assumes the user already buys into the manifesto. A broke maintainer needs a 5-minute path to "what do I run, what does it output, how do I suppress one false positive, how do I wire CI without reading a constitution."</p>
-<p><strong>Required change</strong>:
-1. Add an "OSS fast path" doc with one local command, one CI snippet, one suppression example, and one SARIF upload example.
-2. Ship starter <code>janitor.toml</code> profiles for library, app, monorepo, and security-sensitive repo.
-3. Add a <code>janitor init</code> command that generates sane defaults.</p>
-<h3 id="p1-3-wasm-byor-lacks-operator-ergonomics">P1-3 — Wasm BYOR lacks operator ergonomics</h3>
-<p><strong>Gap</strong>: Integrity pinning now exists, but the operator experience is still primitive. There is no dedicated pin-generation CLI, no manifest helper, no pin rotation workflow, and no policy-level explanation when mixed CLI + manifest rules collide.</p>
-<p><strong>Required change</strong>:
-1. Add <code>janitor wasm-pin &lt;PATH&gt;</code>.
-2. Add <code>janitor wasm-verify &lt;PATH&gt; --expected &lt;BLAKE3&gt;</code>.
-3. Document precedence rules between <code>janitor.toml</code> and repeated <code>--wasm-rules</code> flags.</p>
+<!-- P1-2 RESOLVED v10.0.0-rc.17: `janitor init` + `janitor init --profile enterprise` implemented; default and enterprise janitor.toml profiles scaffolded; 6 deterministic unit tests added. -->
+
+<!-- P1-3 RESOLVED v10.0.0-rc.17: `janitor wasm-pin <PATH>` and `janitor wasm-verify <PATH> --expected <BLAKE3>` implemented; BLAKE3 pin computation + verification wired; 6 deterministic unit tests added. -->
+
 <h3 id="p1-4-finding-explainability-is-too-terse-for-broad-rollout">P1-4 — Finding explainability is too terse for broad rollout</h3>
 <p><strong>Gap</strong>: The engine produces strong machine labels, but many findings still read like detector IDs plus short prose. Enterprise adoption improves when each finding carries "why flagged", "why dangerous", "how to remediate", and "how to suppress correctly" in a predictable schema.</p>
 <p><strong>Required change</strong>:

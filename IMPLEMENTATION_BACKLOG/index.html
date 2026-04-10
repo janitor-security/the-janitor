@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-operator-ergonomics-threat-sync-v1000-rc17" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — Operator Ergonomics &amp; Threat Sync (v10.0.0-rc.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)
@@ -1223,6 +1232,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-operator-ergonomics-threat-sync-v1000-rc17" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — Operator Ergonomics &amp; Threat Sync (v10.0.0-rc.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)
@@ -1819,6 +1837,22 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-09-operator-ergonomics-threat-sync-v1000-rc17">2026-04-09 — Operator Ergonomics &amp; Threat Sync (v10.0.0-rc.17)</h2>
+<p><strong>Directive:</strong> Implement P1-3 (Wasm BYOR Ergonomics — <code>wasm-pin</code> / <code>wasm-verify</code>), P1-2 (OSS Maintainer Onboarding — <code>janitor init</code>), and audit Phase 3 (CISA KEV URL — confirmed correct, no changes needed).</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — added <code>WasmPin</code>, <code>WasmVerify</code>, and <code>Init</code> subcommands to <code>Commands</code> enum; dispatch arms added to <code>match &amp;cli.command</code>; <code>cmd_wasm_pin</code>, <code>cmd_wasm_verify</code>, <code>cmd_init</code> implementation functions added; 6 new deterministic unit tests in <code>wasm_pin_tests</code> module.
+- <code>crates/cli/Cargo.toml</code> <em>(modified)</em> — added <code>tempfile = "3"</code> under <code>[dev-dependencies]</code> for the new test fixtures.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.17</code>.
+- <code>README.md</code> / <code>docs/index.md</code> <em>(modified via <code>just sync-versions</code>)</em> — version strings updated.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger prepended.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P1-3 and P1-2 purged as completed.</p>
+<p><strong>Phase 3 audit result:</strong> CISA KEV URL confirmed correct at <code>https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json</code>. No code changes needed.</p>
+<p><strong>Verification:</strong>
+- <code>cargo check --workspace</code> ✅
+- <code>cargo test --workspace -- --test-threads=1</code> ✅ (all tests pass including 6 new)
+- <code>just audit</code> ✅</p>
+<p><strong>Release status:</strong> <code>just fast-release 10.0.0-rc.17</code> — executed below.</p>
 <hr />
 <h2 id="2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16">2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)</h2>
 <p><strong>Directive:</strong> Clear the CodeQL false-positive dashboard by severing tainted data-flow from <code>detect_secret_entropy</code> into <code>antipattern_details</code>; patch Wasmtime 10 open CVEs via <code>cargo update</code> (43.0.0 → 43.0.1); implement native commit-status HTTP publishing for GitLab and Azure DevOps SCM backends.</p>
