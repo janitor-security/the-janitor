@@ -605,6 +605,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)
@@ -1214,6 +1223,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)
@@ -1802,6 +1820,21 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-09-codeql-severance-universal-scm-spine-v1000-rc16">2026-04-09 — CodeQL Severance &amp; Universal SCM Spine (v10.0.0-rc.16)</h2>
+<p><strong>Directive:</strong> Clear the CodeQL false-positive dashboard by severing tainted data-flow from <code>detect_secret_entropy</code> into <code>antipattern_details</code>; patch Wasmtime 10 open CVEs via <code>cargo update</code> (43.0.0 → 43.0.1); implement native commit-status HTTP publishing for GitLab and Azure DevOps SCM backends.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.lock</code> <em>(modified)</em> — <code>wasmtime</code> family (19 crates) bumped 43.0.0 → 43.0.1 via <code>cargo update</code>; clears CVE batch tied to pulley-interpreter, wasmtime-internal-core and wasmtime-internal-cranelift.
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>detect_secret_entropy</code>: replaced two <code>format!("… {entropy:.2} … {token.len()}")</code> calls with a static <code>"security:credential_leak — high-entropy token detected; possible API key or secret".to_string()</code>. No tainted (entropy-derived or token-derived) data now flows into the findings vector, severing the CodeQL <code>cleartext-logging-sensitive-data</code> taint path.
+- <code>crates/common/Cargo.toml</code> <em>(modified)</em> — added <code>ureq.workspace = true</code> to enable HTTP commit-status publishing from the <code>scm</code> module.
+- <code>crates/common/src/scm.rs</code> <em>(modified)</em> — <code>ScmContext</code> struct gains four new fields: <code>api_base_url</code>, <code>api_token</code>, <code>project_id</code>, <code>repo_id</code>; <code>from_pairs</code> wires <code>CI_API_V4_URL</code> / <code>GITLAB_TOKEN</code> / <code>CI_PROJECT_ID</code> for GitLab and <code>SYSTEM_TEAMFOUNDATIONCOLLECTIONURI</code> / <code>SYSTEM_ACCESSTOKEN</code> / <code>SYSTEM_TEAMPROJECTID</code> / <code>BUILD_REPOSITORY_ID</code> for Azure DevOps; <code>GitLabStatusPublisher::publish_verdict</code> overrides the default to POST <code>state/name/description</code> to the GitLab Commit Statuses API, falling back to stderr annotation when credentials are absent; <code>AzureDevOpsStatusPublisher::publish_verdict</code> overrides to POST <code>state/description/context/targetUrl</code> to the Azure DevOps Git Statuses API (api-version 7.1-preview.1), falling back to <code>##vso</code> annotation; 4 new deterministic unit tests added.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.16</code>.
+- <code>README.md</code> / <code>docs/index.md</code> <em>(modified via <code>just sync-versions</code>)</em> — version strings updated to <code>v10.0.0-rc.16</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
+<p><strong>Verification:</strong>
+- <code>cargo update</code> ✅ — wasmtime 43.0.0 → 43.0.1, indexmap 2.13.1 → 2.14.0, 19 crate patches total
+- <code>cargo check --workspace</code> ✅
+- <code>just audit</code> ✅ — all tests pass, doc parity verified</p>
+<p><strong>Release status:</strong> <code>just fast-release 10.0.0-rc.16</code> — pending execution below.</p>
 <h2 id="2026-04-09-data-flow-guillotine-scm-expansion-v1000-rc15">2026-04-09 — Data-Flow Guillotine &amp; SCM Expansion (v10.0.0-rc.15)</h2>
 <p><strong>Directive:</strong> Synchronize CI to Rust 1.91.0 after the Wasmtime 43 MSRV jump, sever all remaining Governor/Wisdom-sensitive data-flow interpolation, implement first-class SCM verdict publishing outside GitHub, verify the workspace under single-threaded test execution, and prepare the <code>10.0.0-rc.15</code> release.</p>
 <p><strong>Files modified:</strong>
@@ -1818,7 +1851,7 @@ implemented as a result. Maintained by the Evolution Tracker skill.</p>
 - <code>cargo check --workspace</code> ✅
 - <code>cargo test --workspace -- --test-threads=1</code> ✅
 - <code>just audit</code> ✅</p>
-<p><strong>Release status:</strong> blocked locally — <code>just fast-release 10.0.0-rc.15</code> reached the signing gate and failed because the GPG key is locked and <code>JANITOR_GPG_PASSPHRASE</code> is unset.</p>
+<p><strong>Release status:</strong> completed — <code>just fast-release 10.0.0-rc.15</code> succeeded after the signing key was unlocked. Signed release commit/tag published at <code>09fb522a93fff59c0d2f22b65a06face9dabc977</code>; the release automation left <code>.github/workflows/msrv.yml</code> unstaged, so a follow-up cleanup commit <code>70a2af94ddfb4eeec805c5bdfeed8d50148ee642</code> was pushed to <code>main</code> to keep CI state aligned with the shipped code.</p>
 <h2 id="2026-04-09-dashboard-annihilation-resumable-strikes-v1000-rc14">2026-04-09 — Dashboard Annihilation &amp; Resumable Strikes (v10.0.0-rc.14)</h2>
 <p><strong>Directive:</strong> Close the stale Dependabot and workflow-action debt, sever lingering CodeQL-sensitive network error interpolation, implement resumable strike checkpointing for multi-hour hyper-audits, verify the workspace under single-threaded test execution, and prepare the <code>10.0.0-rc.14</code> release.</p>
 <p><strong>Files modified:</strong>
