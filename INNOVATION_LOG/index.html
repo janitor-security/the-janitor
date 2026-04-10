@@ -606,15 +606,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#p0-core-security" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0 — Core Security
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#2026-04-09-ga-teardown-audit-hostile-product-review" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — GA Teardown Audit (Hostile Product Review)
@@ -647,30 +638,6 @@
       P2 — Scale / Platform Expansion
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P2 — Scale / Platform Expansion">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-no-first-class-drift-dashboard-for-policy-health" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1 — No first-class drift dashboard for policy health
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-2-no-lightweight-maintainer-mode-for-tiny-repos" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2 — No lightweight maintainer mode for tiny repos
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -747,15 +714,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#p0-core-security" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0 — Core Security
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#2026-04-09-ga-teardown-audit-hostile-product-review" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — GA Teardown Audit (Hostile Product Review)
@@ -788,30 +746,6 @@
       P2 — Scale / Platform Expansion
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P2 — Scale / Platform Expansion">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-no-first-class-drift-dashboard-for-policy-health" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1 — No first-class drift dashboard for policy health
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p2-2-no-lightweight-maintainer-mode-for-tiny-repos" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2 — No lightweight maintainer mode for tiny repos
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -850,21 +784,6 @@ ID epochs are purged during hard compaction.</p>
 All CT constraints through CT-020 resolved.</p>
 </blockquote>
 <hr />
-<h2 id="p0-core-security">P0 — Core Security</h2>
-<!-- CT-011 RESOLVED v9.9.19: 50 MiB size guard added to cmd_import_intel_capsule -->
-<!-- CT-012 RESOLVED v9.9.19: canonicalize + starts_with confinement check added -->
-<!-- CT-013 RESOLVED v10.0.0-rc.1: BLAKE3 catalog_hash bound into DecisionCapsule -->
-<!-- CT-014 RESOLVED v10.0.0-rc.2: member_expression/attribute callee detection added to walk_js_calls, walk_ts_calls, walk_python_calls -->
-<!-- CT-015 RESOLVED v10.0.0-rc.2: epoch_interruption(true) + 100 ms timeout thread in wasm_host.rs -->
-<!-- CT-016 RESOLVED v10.0.0-rc.3: UTF-16 LE/BE BOM guard added to ByteLatticeAnalyzer::classify; BOM-present files short-circuit to ProbableCode before null-byte check -->
-<!-- CT-017 RESOLVED v10.0.0-rc.4: JanitorPolicy::load() hard-fails on malformed janitor.toml (fail-open eradicated) -->
-<!-- CT-018 RESOLVED v10.0.0-rc.4: pqc_enforced=true now bails if --pqc-key absent; fail-open PQC path closed -->
-<!-- CT-019 RESOLVED v10.0.0-rc.4: DEFAULT_GOVERNOR_URL severed from fly.dev; set to http://127.0.0.1:8080; action.yml governor_url input required -->
-<!-- CT-020 RESOLVED v10.0.0-rc.5: janitor sign-asset + BLAKE3 provenance; action.yml gutted of cargo build; binary downloaded from GH Release + BLAKE3-verified -->
-
-<!-- CT-021 RESOLVED v10.0.0-rc.8: zeroed key replaced with throwaway ML-DSA-65 key (1952 bytes); Layer 2 PQC structural path validated. Production key substitution from offline ceremony is a prerequisite for activating full SLSA Level 4 chain-of-custody. -->
-
-<hr />
 <h2 id="2026-04-09-ga-teardown-audit-hostile-product-review">2026-04-09 — GA Teardown Audit (Hostile Product Review)</h2>
 <p><strong>Verdict</strong>: not a toy engine; still not frictionless GA product for a 10,000-developer org.</p>
 <p><strong>Already present — do not waste cycles re-building these</strong>:
@@ -873,28 +792,12 @@ All CT constraints through CT-020 resolved.</p>
 - Suppression primitives exist (<code># noqa</code>-style pragmas, test-scope routing, local-brain <code>janitor pardon</code>); the gap is governable, reviewable suppression lifecycle.</p>
 <h2 id="p0-enterprise-deployment-blockers">P0 — Enterprise Deployment Blockers</h2>
 <h2 id="p1-product-ux-commercial-defects">P1 — Product / UX / Commercial Defects</h2>
-<!-- P1-1 RESOLVED v10.0.0-rc.18: "Up to 25 seats" eradicated from README.md and docs/index.md; single truth "No per-seat limits" across all tiers; docs/pricing_faq.md created (why no per-seat, Sovereign/Air-Gap tier, OSS free-forever); mkdocs.yml nav updated. -->
-
-<!-- P1-2 RESOLVED v10.0.0-rc.17: `janitor init` + `janitor init --profile enterprise` implemented; default and enterprise janitor.toml profiles scaffolded; 6 deterministic unit tests added. -->
-
-<!-- P1-3 RESOLVED v10.0.0-rc.17: `janitor wasm-pin <PATH>` and `janitor wasm-verify <PATH> --expected <BLAKE3>` implemented; BLAKE3 pin computation + verification wired; 6 deterministic unit tests added. -->
-
-<!-- P1-4 RESOLVED v10.0.0-rc.18: `StructuredFinding` gains `remediation: Option<String>` + `docs_url: Option<String>`; `rule_help()` static lookup in report.rs populates SARIF `rule.help.markdown` + `helpUri` for slopsquat_injection, phantom_payload_evasion, and ncd_anomaly; GitHub Advanced Security and Azure DevOps natively surface "How to fix" in PR review UI. -->
-
 <h2 id="p2-scale-platform-expansion">P2 — Scale / Platform Expansion</h2>
-<h3 id="p2-1-no-first-class-drift-dashboard-for-policy-health">P2-1 — No first-class drift dashboard for policy health</h3>
-<p><strong>Gap</strong>: The ledger is strong after the fact. There is still no compact view showing suppression growth, noisy rules, top owners, stale waivers, or score drift across services.</p>
-<p><strong>Required change</strong>:
-1. Add a policy-health dashboard and JSON endpoint.
-2. Track waiver counts, expired waivers, and hottest findings per team.</p>
-<h3 id="p2-2-no-lightweight-maintainer-mode-for-tiny-repos">P2-2 — No lightweight maintainer mode for tiny repos</h3>
-<p><strong>Gap</strong>: Free capability is generous, but the product packaging still feels enterprise-first. Small OSS maintainers need a "minimal noise" preset with lower ceremony, tiny config, and human-readable output defaults.</p>
-<p><strong>Required change</strong>:
-1. Add <code>janitor init --profile oss</code>.
-2. Add compact text summaries optimized for solo maintainers.
-3. Publish migration guidance from zero config to governed config.</p>
+<!-- P2-1 RESOLVED v10.0.0-rc.19: `janitor policy-health` drift dashboard implemented; reads .janitor/bounce_log.ndjson; aggregates total PRs, failed PRs, top 3 triggered rules, top 3 highest-risk authors by cumulative slop; --format json for machine-readable CI dashboards; 2 deterministic unit tests added. -->
+
+<!-- P2-2 RESOLVED v10.0.0-rc.19: `janitor init --profile oss` implemented; min_slop_score=200, require_issue_link=false, pqc_enforced=false; comment block explains OSS maintainer optimization and upgrade path to enterprise; 1 deterministic unit test added; Init subcommand doc updated with oss profile description. -->
+
 <h2 id="p2-architecture-ergonomics-deferred-to-v101">P2 — Architecture / Ergonomics (Deferred to v10.1)</h2>
-<!-- All CT-0xx constraints (CT-011 through CT-020) resolved. -->
 
 
 

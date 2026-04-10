@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-codeql-exorcism-ergonomic-platform-polish-v1000-rc19" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — CodeQL Exorcism &amp; Ergonomic Platform Polish (v10.0.0-rc.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)
@@ -1261,6 +1270,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-codeql-exorcism-ergonomic-platform-polish-v1000-rc19" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — CodeQL Exorcism &amp; Ergonomic Platform Polish (v10.0.0-rc.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)
@@ -1875,6 +1893,13 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-10-codeql-exorcism-ergonomic-platform-polish-v1000-rc19">2026-04-10 — CodeQL Exorcism &amp; Ergonomic Platform Polish (v10.0.0-rc.19)</h2>
+<p><strong>Directive:</strong> Phase 1 — CodeQL taint suppression for <code>slop_score</code> aggregate integer printout (false-positive <code>cleartext-logging</code> alerts). Phase 2 — Innovation Log hard compaction (eradicate all RESOLVED HTML comments). Phase 3 — P2-1 (<code>janitor policy-health</code> drift dashboard; <code>--format json</code>). Phase 4 — P2-2 (<code>janitor init --profile oss</code> solo-maintainer minimal-noise mode). Phase 5 — Release rc.19.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — 3 <code>// codeql[rust/cleartext-logging]</code> suppressions added above <code>score.score()</code> printouts in <code>cmd_bounce</code>; <code>PolicyHealth</code> subcommand added with <code>cmd_policy_health()</code> implementation (aggregates total PRs, failed PRs, top 3 rules, top 3 authors); <code>janitor init --profile oss</code> added to <code>cmd_init</code> with <code>min_slop_score = 200</code>, <code>require_issue_link = false</code>, <code>pqc_enforced = false</code>; 3 new unit tests (<code>policy_health_empty_log_text_exits_cleanly</code>, <code>policy_health_empty_log_json_exits_cleanly</code>, <code>init_creates_janitor_toml_oss</code>).
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — all RESOLVED HTML comment blocks purged; only active P2-1 and P2-2 items remain.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.19</code>.</p>
 <hr />
 <h2 id="2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18">2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)</h2>
 <p><strong>Directive:</strong> Resolve P1-1 (pricing contradiction — "Up to 25 seats" vs. "No per-seat limits"), P1-4 (finding explainability — <code>remediation</code> + <code>docs_url</code> on <code>StructuredFinding</code>; SARIF <code>rule.help.markdown</code> / <code>helpUri</code> wiring for top 3 critical detectors).</p>
