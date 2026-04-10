@@ -5,6 +5,16 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-10 — Absolute Taint Severance (v10.0.1)
+
+**Directive:** Replace string-bearing secret entropy findings with a primitive count, isolate the PatchBouncer aggregation boundary to static redacted labels only, verify under single-threaded tests, and cut the `v10.0.1` release.
+
+**Files modified:**
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `detect_secret_entropy` return type changed from `Vec<String>` to `usize`; detector now counts qualifying high-entropy runs without allocating or returning strings; deterministic tests updated to assert counts.
+- `crates/forge/src/slop_filter.rs` *(modified)* — secret entropy aggregation rewritten to consume the primitive count and emit only static `"security:credential_exposure — [REDACTED]"` details into `SlopScore`.
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.0.0` to `10.0.1`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
 ## 2026-04-10 — GA Release Prep (v10.0.0)
 
 **Directive:** General Availability cut for `v10.0.0`, documentation/version synchronization, Innovation Log hard compaction, single-threaded verification, and release execution.

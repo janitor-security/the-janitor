@@ -4771,20 +4771,19 @@ pub fn shannon_entropy(bytes: &[u8]) -> f64 {
 /// Scan a unified-diff `patch` for high-entropy alphanumeric tokens.
 ///
 /// Operates only on added lines (prefix `+`, excluding `+++` headers).
-/// Emits one `security:credential_leak` finding per continuous alphanumeric
-/// run that satisfies **both**:
+/// Returns the count of continuous alphanumeric runs that satisfy **both**:
 /// - length > 32 characters, and
 /// - Shannon entropy > 4.5 bits/symbol.
 ///
 /// The 4.5-bit threshold separates random credential tokens (typical entropy
 /// ≥5.0 bits) from dictionary words, base64-padded known strings, and UUIDs.
 ///
-/// Each finding contributes +150 pts when wired into
+/// Each counted secret contributes +150 pts when wired into
 /// [`crate::slop_filter::PatchBouncer::bounce`] — escalated above the
 /// standard Critical tier (50 pts) because exposed live credentials are
 /// immediately actionable by an adversary.
-pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
-    let mut findings = Vec::new();
+pub fn detect_secret_entropy(patch: &str) -> usize {
+    let mut findings = 0usize;
     for line in patch.lines() {
         if !line.starts_with('+') || line.starts_with("+++") {
             continue;
@@ -4801,14 +4800,7 @@ pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
             } else if let Some(s) = run_start.take() {
                 let token = &bytes[s..i];
                 if token.len() > 32 && shannon_entropy(token) > 4.5 {
-                    // Static string — no raw token bytes enter the finding.
-                    // CodeQL taint severance: entropy is computed but never
-                    // stored; only a static label flows into antipattern_details.
-                    findings.push(
-                        "security:credential_leak — high-entropy token detected; \
-                         possible API key or secret"
-                            .to_string(),
-                    );
+                    findings += 1;
                 }
             }
         }
@@ -4816,11 +4808,7 @@ pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
         if let Some(s) = run_start {
             let token = &bytes[s..];
             if token.len() > 32 && shannon_entropy(token) > 4.5 {
-                findings.push(
-                    "security:credential_leak — high-entropy token detected; \
-                     possible API key or secret"
-                        .to_string(),
-                );
+                findings += 1;
             }
         }
     }
@@ -5852,11 +5840,7 @@ mod credential_tests {
         // = log2(33) ≈ 5.04 bits/symbol, well above the 4.5-bit threshold.
         let patch = "+const SECRET: &str = \"xK9mP2nQ8wR5vL3jB7hF4dC6uT1iY0eAz\";\n";
         let findings = detect_secret_entropy(patch);
-        assert!(
-            !findings.is_empty(),
-            "high-entropy 33-char token must be detected"
-        );
-        assert!(findings[0].contains("credential_leak"));
+        assert_eq!(findings, 1, "high-entropy 33-char token must be detected");
     }
 
     #[test]
@@ -5864,8 +5848,8 @@ mod credential_tests {
         // Lines starting with `-` are removals — must NOT be scanned.
         let patch = "-const SECRET: &str = \"xK9mP2nQ8wR5vL3jB7hF4dC6uT1iY0eAz\";\n";
         let findings = detect_secret_entropy(patch);
-        assert!(
-            findings.is_empty(),
+        assert_eq!(
+            findings, 0,
             "removed lines must not be flagged by entropy detector"
         );
     }
@@ -5875,8 +5859,8 @@ mod credential_tests {
         // 40 repeated characters — entropy = 0, well below 4.5.
         let patch = "+const KEY: &str = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\n";
         let findings = detect_secret_entropy(patch);
-        assert!(
-            findings.is_empty(),
+        assert_eq!(
+            findings, 0,
             "low-entropy repeated characters must not trigger entropy gate"
         );
     }
@@ -5886,10 +5870,7 @@ mod credential_tests {
         // 16-char token — below the > 32-char length gate.
         let patch = "+const KEY: &str = \"xK9mP2nQ8wR5vL3j\";\n";
         let findings = detect_secret_entropy(patch);
-        assert!(
-            findings.is_empty(),
-            "token ≤32 chars must not trigger entropy gate"
-        );
+        assert_eq!(findings, 0, "token ≤32 chars must not trigger entropy gate");
     }
 
     // ── find_supply_chain_slop ────────────────────────────────────────────────

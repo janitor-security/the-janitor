@@ -742,11 +742,16 @@ impl PRBouncer for PatchBouncer {
             // Each finding is +150 pts — live credential exposure is
             // severity-escalated above standard Critical (50 pts) because an
             // adversary can act on it immediately after the PR is merged.
-            let sec = crate::slop_hunter::detect_secret_entropy(patch);
-            let sec_count = sec.len() as u32;
-            total.antipatterns_found += sec_count;
-            total.antipattern_score += sec_count * 150;
-            total.antipattern_details.extend(sec);
+            let sec_count = crate::slop_hunter::detect_secret_entropy(patch) as u32;
+            if sec_count > 0 {
+                total.antipatterns_found += sec_count;
+                total.antipattern_score += sec_count * 150;
+                for _ in 0..sec_count {
+                    total
+                        .antipattern_details
+                        .push("security:credential_exposure — [REDACTED]".to_string());
+                }
+            }
             // ── Blast Radius Gate ─────────────────────────────────────────────
             // Fire at Critical (+50 pts) when the PR spans more than 5 distinct
             // top-level directories.  Lockfile-only paths are excluded from the
