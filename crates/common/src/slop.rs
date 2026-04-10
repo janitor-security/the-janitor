@@ -33,4 +33,19 @@ pub struct StructuredFinding {
     /// Deterministic BLAKE3 fingerprint of the finding's structural root.
     #[serde(default)]
     pub fingerprint: String,
+
+    /// Actionable remediation instruction for the developer, e.g.
+    /// `"Remove the hallucinated dependency from your manifest and run cargo update"`.
+    ///
+    /// `None` for findings that have no structured remediation guidance yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
+
+    /// Stable documentation URL for this finding class, e.g.
+    /// `"https://thejanitor.app/findings/security-slopsquat-injection"`.
+    ///
+    /// Mapped to `helpUri` in SARIF output so GitHub Advanced Security and
+    /// Azure DevOps surface the "How to fix" link inside the PR review UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs_url: Option<String>,
 }

@@ -2632,6 +2632,46 @@ fn parse_sarif_line(detail: &str) -> Option<u32> {
     rest[..end].parse().ok()
 }
 
+/// Return `(remediation_markdown, help_uri)` for known finding classes.
+///
+/// Maps antipattern label prefixes to structured remediation guidance that is
+/// surfaced in SARIF `rule.help.markdown` and `rule.helpUri` — rendered natively
+/// inside GitHub Advanced Security and Azure DevOps PR review UI.
+fn rule_help(label: &str) -> Option<(&'static str, &'static str)> {
+    // Match on the stable prefix of the antipattern label so both bare labels
+    // and labels with (line=N) suffixes are caught.
+    if label.starts_with("security:slopsquat_injection") {
+        return Some((
+            "**Remediation**: Remove the hallucinated dependency from your manifest \
+             and run `cargo update` (Rust) or the equivalent package manager command. \
+             Verify the intended package name against the upstream registry. \
+             Do not simply rename the import — remove and re-add from the correct namespace.",
+            "https://thejanitor.app/findings/security-slopsquat-injection",
+        ));
+    }
+    if label.starts_with("security:phantom_payload_evasion") {
+        return Some((
+            "**Remediation**: Remove the dead branch containing the obfuscated or \
+             anomalous logic. If the branch is legitimately unreachable, delete it — \
+             dead code with anomalous payloads is indistinguishable from staged \
+             adversarial logic. If the branch is intended to be reachable, fix the \
+             guard condition and document it with an issue link.",
+            "https://thejanitor.app/findings/security-phantom-payload-evasion",
+        ));
+    }
+    if label.starts_with("antipattern:ncd_anomaly") {
+        return Some((
+            "**Remediation**: The patch compresses to less than 15% of its original size, \
+             indicating extreme repetition (machine-generated boilerplate, auto-templated \
+             blocks, or verbosity-bomb commits). Reduce the PR to only the non-repetitive \
+             delta. If the repetition is intentional, split into a separate commit with an \
+             explicit justification in the PR description.",
+            "https://thejanitor.app/findings/antipattern-ncd-anomaly",
+        ));
+    }
+    None
+}
+
 pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
     use serde_json::{json, Value};
     use std::collections::BTreeSet;
@@ -2656,12 +2696,22 @@ pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
             } else {
                 "warning"
             };
-            json!({
-                "id": label,
-                "name": label,
-                "shortDescription": { "text": label },
-                "defaultConfiguration": { "level": level }
-            })
+            match rule_help(label) {
+                Some((remediation_md, help_uri)) => json!({
+                    "id": label,
+                    "name": label,
+                    "shortDescription": { "text": label },
+                    "defaultConfiguration": { "level": level },
+                    "help": { "markdown": remediation_md, "text": remediation_md },
+                    "helpUri": help_uri
+                }),
+                None => json!({
+                    "id": label,
+                    "name": label,
+                    "shortDescription": { "text": label },
+                    "defaultConfiguration": { "level": level }
+                }),
+            }
         })
         .collect();
 

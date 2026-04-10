@@ -1,9 +1,9 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v10.0.0-rc.17 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
+**v10.0.0-rc.18 — Rust-Native. Zero-Copy. Pro-Entropic Resilience at the Gate.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.0.0-rc.17: Zero-Upload, FIPS 204 Compliant.*
+*Attested by The Janitor v10.0.0-rc.18: Zero-Upload, FIPS 204 Compliant.*
 
 🎥 **[Watch the 60-Second Terminal Demo →](https://thejanitor.app)**
 
@@ -230,7 +230,7 @@ janitor webhook-test --repo .
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
+| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. No per-seat limits. |
 | **Sovereign / Air-Gap** | **Custom (Starting at $49,900/yr)** | Everything in Team + **Dual-PQC CBOMs** (FIPS 204 ML-DSA + FIPS 205 SLH-DSA) + **Wasm BYOR rule mounting** (private governance modules) + **Offline Replayable Decision Capsules** (tamper-evident audit replay) + **Air-Gap Intel Transfers** (BLAKE3 + Ed25519 offline wisdom feed verification for IL5/IL6 environments) + SOC 2 Type II attestation packages + Dedicated SLA. |
 | **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
 

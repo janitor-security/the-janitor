@@ -5,6 +5,22 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-10 — Commercial Coherence & SARIF Enrichment (v10.0.0-rc.18)
+
+**Directive:** Resolve P1-1 (pricing contradiction — "Up to 25 seats" vs. "No per-seat limits"), P1-4 (finding explainability — `remediation` + `docs_url` on `StructuredFinding`; SARIF `rule.help.markdown` / `helpUri` wiring for top 3 critical detectors).
+
+**Files modified:**
+- `README.md` *(modified)* — Team tier "Up to 25 seats." → "No per-seat limits."
+- `docs/index.md` *(modified)* — same in pricing table; Team Specialist table row "Up to 25 seats" → "No per-seat limits"; Industrial Core "Unlimited seats" → "No per-seat limits".
+- `docs/pricing_faq.md` *(created)* — 3-question FAQ: why no per-seat pricing, Sovereign/Air-Gap tier definition, OSS free-forever guarantee.
+- `mkdocs.yml` *(modified)* — `Pricing FAQ: pricing_faq.md` added to nav.
+- `crates/common/src/slop.rs` *(modified)* — `StructuredFinding` gains `pub remediation: Option<String>` and `pub docs_url: Option<String>` (both `#[serde(default, skip_serializing_if = "Option::is_none")]`).
+- `crates/forge/src/slop_filter.rs` *(modified)* — `StructuredFinding` construction site updated with `remediation: None, docs_url: None`.
+- `crates/cli/src/report.rs` *(modified)* — `rule_help(label: &str)` static lookup added for `slopsquat_injection`, `phantom_payload_evasion`, and `ncd_anomaly`; `render_sarif` rules array wired to emit `help.markdown`, `help.text`, and `helpUri` when enrichment is available.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.18`.
+
+---
+
 ## 2026-04-09 — Operator Ergonomics & Threat Sync (v10.0.0-rc.17)
 
 **Directive:** Implement P1-3 (Wasm BYOR Ergonomics — `wasm-pin` / `wasm-verify`), P1-2 (OSS Maintainer Onboarding — `janitor init`), and audit Phase 3 (CISA KEV URL — confirmed correct, no changes needed).

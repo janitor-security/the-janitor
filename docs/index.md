@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v10.0.0-rc.17 — Parse-Forest Engine & Deterministic Structural Firewall. 23/23 grammar AST coverage (100%). Attosecond-grade integrity for the AI-assisted development economy.**
+**v10.0.0-rc.18 — Parse-Forest Engine & Deterministic Structural Firewall. 23/23 grammar AST coverage (100%). Attosecond-grade integrity for the AI-assisted development economy.**
 
 ---
 
@@ -297,8 +297,8 @@ See the [setup documentation](setup.md#webhook-sub-table) for the full `[webhook
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
 | **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. Up to 25 seats. |
-| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
+| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + ML-DSA-65 Integrity Bonds + CycloneDX v1.5 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. No per-seat limits. |
+| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. No per-seat limits. |
 
 The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.
 
@@ -346,7 +346,7 @@ Includes all Free tier capabilities, plus:
 | **CI/CD Compliance Attestation** — `--token` flag activates signed reports in CI | ✓ |
 | **Janitor Sentinel** — GitHub App that runs `janitor bounce` on every PR | ✓ |
 | **Shared Credit Pool** — team-level token across all CI runners | ✓ |
-| Up to 25 seats on a single license | ✓ |
+| **No per-seat limits** — run on every developer machine and CI runner under one license | ✓ |
 
 [**Activate — $499/yr →**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
 
@@ -357,7 +357,7 @@ Includes all Team capabilities, plus:
 - **On-Premises Token Server** — dedicated verifying key for air-gapped deployments
 - **Keypair Rotation Protocol** — satisfies SOC 2 Type II change-management requirements
 - **Enterprise SLA** — 4-hour emergency rotation SLA for confirmed compromises
-- **Unlimited seats** on a single organization license
+- **No per-seat limits** — one organization license covers all developers and CI runners
 
 [**Contact sales → sales@thejanitor.app**](mailto:sales@thejanitor.app)
 
