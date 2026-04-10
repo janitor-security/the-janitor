@@ -144,6 +144,15 @@ pub struct WebhookConfig {
     /// Defaults to `["critical_threat"]` when omitted.
     #[serde(default = "WebhookConfig::default_events")]
     pub events: Vec<String>,
+
+    /// Enables bidirectional ASPM lifecycle notifications (`finding_opened` /
+    /// `finding_resolved`) over the configured webhook transport.
+    #[serde(default)]
+    pub lifecycle_events: bool,
+
+    /// Optional external ticketing project key (JIRA / ServiceNow / Linear).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_project: Option<String>,
 }
 
 impl Default for WebhookConfig {
@@ -152,6 +161,8 @@ impl Default for WebhookConfig {
             url: String::new(),
             secret: String::new(),
             events: Self::default_events(),
+            lifecycle_events: false,
+            ticket_project: None,
         }
     }
 }
@@ -214,6 +225,11 @@ pub struct ForgeConfig {
     /// `<governor_url>/health`. When absent, the CLI falls back to its built-in
     /// default Governor base URL.
     pub governor_url: Option<String>,
+    /// Optional path to a PEM-encoded client certificate used for mTLS when
+    /// reporting to the Governor.
+    pub mtls_cert: Option<String>,
+    /// Optional path to a PEM-encoded private key paired with `mtls_cert`.
+    pub mtls_key: Option<String>,
     /// Raises bounce analysis budgets from the default 1 MiB / 500 ms path to
     /// the deep-scan 32 MiB / 30 s path for AST-evasion-resistant analysis.
     pub deep_scan: bool,
@@ -910,6 +926,8 @@ mod tests {
             url: "https://example.com/hook".to_string(),
             secret: String::new(),
             events: vec!["critical_threat".to_string()],
+            lifecycle_events: false,
+            ticket_project: None,
         };
         assert!(cfg.should_fire(true, false));
         assert!(!cfg.should_fire(false, false));
@@ -919,11 +937,15 @@ mod tests {
             url: "https://example.com/hook".to_string(),
             secret: String::new(),
             events: vec!["all".to_string()],
+            lifecycle_events: true,
+            ticket_project: Some("SEC".to_string()),
         };
         assert!(cfg2.should_fire(false, false));
 
         let cfg3 = WebhookConfig::default(); // url is empty
         assert!(!cfg3.should_fire(true, true)); // empty url = no fire
+        assert!(!cfg3.lifecycle_events);
+        assert!(cfg3.ticket_project.is_none());
     }
 
     #[test]
@@ -1003,6 +1025,8 @@ mod tests {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned(), "app/nixpkgs-ci".to_owned()],
                 governor_url: None,
+                mtls_cert: None,
+                mtls_key: None,
                 deep_scan: false,
             },
             ..Default::default()
@@ -1015,13 +1039,15 @@ mod tests {
 
     #[test]
     fn forge_automation_accounts_roundtrip_toml() {
-        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ngovernor_url = \"http://127.0.0.1:3000\"\ndeep_scan = true\n";
+        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ngovernor_url = \"http://127.0.0.1:3000\"\nmtls_cert = \"/tmp/client.pem\"\nmtls_key = \"/tmp/client.key\"\ndeep_scan = true\n";
         let p: JanitorPolicy = toml::from_str(raw).unwrap();
         assert_eq!(p.forge.automation_accounts, ["r-ryantm", "app/nixpkgs-ci"]);
         assert_eq!(
             p.forge.governor_url.as_deref(),
             Some("http://127.0.0.1:3000")
         );
+        assert_eq!(p.forge.mtls_cert.as_deref(), Some("/tmp/client.pem"));
+        assert_eq!(p.forge.mtls_key.as_deref(), Some("/tmp/client.key"));
         assert!(p.forge.deep_scan);
         assert!(p.is_automation_account("r-ryantm"));
         assert!(p.is_automation_account("app/nixpkgs-ci"));
@@ -1035,6 +1061,8 @@ mod tests {
             forge: ForgeConfig {
                 automation_accounts: vec!["r-ryantm".to_owned()],
                 governor_url: None,
+                mtls_cert: None,
+                mtls_key: None,
                 deep_scan: false,
             },
             ..Default::default()
@@ -1072,6 +1100,8 @@ mod tests {
             p.forge.governor_url.as_deref(),
             Some("http://127.0.0.1:4040")
         );
+        assert!(p.forge.mtls_cert.is_none());
+        assert!(p.forge.mtls_key.is_none());
     }
 
     #[test]

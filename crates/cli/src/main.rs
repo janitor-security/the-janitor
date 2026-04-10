@@ -12,6 +12,102 @@ mod git_drive;
 mod report;
 mod verify_asset;
 
+fn load_mtls_client_cert(
+    cert_path: &Path,
+    key_path: &Path,
+) -> anyhow::Result<ureq::tls::ClientCert> {
+    let cert_pem = std::fs::read(cert_path).with_context(|| {
+        format!(
+            "failed to read mTLS certificate PEM from {}",
+            cert_path.display()
+        )
+    })?;
+    let key_pem = std::fs::read(key_path)
+        .with_context(|| format!("failed to read mTLS key PEM from {}", key_path.display()))?;
+
+    let mut cert_reader = std::io::BufReader::new(cert_pem.as_slice());
+    let certs = rustls_pemfile::certs(&mut cert_reader)
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to parse mTLS certificate chain PEM")?;
+    if certs.is_empty() {
+        anyhow::bail!("mTLS certificate chain PEM contained no certificates");
+    }
+
+    let mut key_reader = std::io::BufReader::new(key_pem.as_slice());
+    let key_present = rustls_pemfile::private_key(&mut key_reader)
+        .context("failed to parse mTLS private key PEM")?;
+    if key_present.is_none() {
+        anyhow::bail!("mTLS private key PEM contained no private key");
+    }
+
+    let cert_chain: Vec<ureq::tls::Certificate<'static>> = ureq::tls::parse_pem(&cert_pem)
+        .filter_map(|item| match item {
+            Ok(ureq::tls::PemItem::Certificate(cert)) => Some(Ok(cert)),
+            Ok(ureq::tls::PemItem::PrivateKey(_)) => None,
+            Ok(_) => None,
+            Err(err) => Some(Err(err)),
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| anyhow::anyhow!("failed to translate mTLS certificate chain"))?;
+    let private_key = ureq::tls::PrivateKey::from_pem(&key_pem)
+        .map_err(|_| anyhow::anyhow!("failed to translate mTLS private key"))?;
+
+    Ok(ureq::tls::ClientCert::new_with_certs(
+        &cert_chain,
+        private_key,
+    ))
+}
+
+fn build_ureq_agent(policy: &common::policy::JanitorPolicy) -> anyhow::Result<ureq::Agent> {
+    let cert_path = env::var("JANITOR_MTLS_CERT")
+        .ok()
+        .or_else(|| policy.forge.mtls_cert.clone());
+    let key_path = env::var("JANITOR_MTLS_KEY")
+        .ok()
+        .or_else(|| policy.forge.mtls_key.clone());
+
+    let Some(cert_path) = cert_path else {
+        if key_path.is_some() {
+            anyhow::bail!("JANITOR_MTLS_KEY provided without JANITOR_MTLS_CERT");
+        }
+        return Ok(ureq::Agent::new_with_defaults());
+    };
+    let Some(key_path) = key_path else {
+        anyhow::bail!("JANITOR_MTLS_CERT provided without JANITOR_MTLS_KEY");
+    };
+
+    let client_cert = load_mtls_client_cert(Path::new(&cert_path), Path::new(&key_path))?;
+    let tls_config = ureq::tls::TlsConfig::builder()
+        .provider(ureq::tls::TlsProvider::Rustls)
+        .client_cert(Some(client_cert))
+        .build();
+
+    Ok(ureq::Agent::config_builder()
+        .tls_config(tls_config)
+        .build()
+        .new_agent())
+}
+
+fn find_prior_bounce_entry<'a>(
+    prior_entries: &'a [report::BounceLogEntry],
+    repo_slug: &str,
+    pr_number: Option<u64>,
+    commit_sha: &str,
+) -> Option<&'a report::BounceLogEntry> {
+    prior_entries.iter().rev().find(|entry| {
+        if entry.repo_slug != repo_slug {
+            return false;
+        }
+        if let Some(pr_number) = pr_number {
+            entry.pr_number == Some(pr_number)
+        } else if !commit_sha.is_empty() {
+            entry.commit_sha == commit_sha
+        } else {
+            true
+        }
+    })
+}
+
 #[derive(Parser)]
 #[command(name = "janitor")]
 #[command(version)]
@@ -948,6 +1044,7 @@ async fn main() -> anyhow::Result<()> {
                 governor_url.as_deref(),
                 &timeout_policy,
             ));
+            let timeout_agent = build_ureq_agent(&timeout_policy)?;
             let timeout_token = analysis_token.clone();
             let timeout_commit_sha = head_sha
                 .clone()
@@ -1041,7 +1138,9 @@ async fn main() -> anyhow::Result<()> {
                         };
                         let timeout_verdict = common::scm::StatusVerdict::timeout(timeout_secs);
                         // Best-effort POST — never echo transport payloads to stderr.
-                        if report::post_bounce_result(url, token, &timeout_entry).is_err() {
+                        if report::post_bounce_result(&timeout_agent, url, token, &timeout_entry)
+                            .is_err()
+                        {
                             let _ = common::scm::status_publisher_for(&scm_context)
                                 .publish_verdict(
                                     &scm_context,
@@ -2927,6 +3026,7 @@ fn cmd_bounce(
     let soft_fail = soft_fail_flag || policy.soft_fail;
     let deep_scan = deep_scan_flag || policy.forge.deep_scan;
     let governor_url = report::resolve_governor_url(governor_url, &policy);
+    let governor_agent = build_ureq_agent(&policy)?;
 
     // PQC enforcement gate (Phase 2 — Hard-Fail Mandate).
     // When pqc_enforced = true in janitor.toml, the operator has declared that
@@ -3164,9 +3264,9 @@ fn cmd_bounce(
     // Query it with the current PR's MinHash signature at Jaccard threshold 0.85.
     // Any matching entries represent PRs with >85% structural overlap — a strong
     // signal of duplicate logic being introduced from different branches.
+    let janitor_dir_early = project_root.join(".janitor");
+    let prior_entries = report::load_bounce_log(&janitor_dir_early);
     {
-        let janitor_dir_early = project_root.join(".janitor");
-        let prior_entries = report::load_bounce_log(&janitor_dir_early);
         if !prior_entries.is_empty() && min_hashes_vec.len() == 64 && patch_has_entropy {
             // The current PR number as u32 for self-collision exclusion.
             // Zero means unknown — only exclude when a real PR number is known.
@@ -3538,6 +3638,12 @@ probable AI context-collapse (hallucinated function reference)"
             }
         },
     };
+    let prior_entry = find_prior_bounce_entry(
+        &prior_entries,
+        &log_entry.repo_slug,
+        log_entry.pr_number,
+        &log_entry.commit_sha,
+    );
     let decision_capsule = build_decision_capsule(&score, &log_entry)?;
     log_entry.capsule_hash = Some(decision_capsule.hash()?);
 
@@ -3608,7 +3714,8 @@ probable AI context-collapse (hallucinated function reference)"
     // entry so the local NDJSON audit trail reflects the outcome.
     if let Some(token) = analysis_token {
         let is_critical = report::is_critical_threat(&log_entry);
-        let post_result = report::post_bounce_result(&governor_url, token, &log_entry);
+        let post_result =
+            report::post_bounce_result(&governor_agent, &governor_url, token, &log_entry);
         match post_result {
             Ok(attestation) => {
                 save_decision_capsule(&janitor_dir, &log_entry, &decision_capsule, &attestation)?;
@@ -3645,6 +3752,13 @@ probable AI context-collapse (hallucinated function reference)"
         }
     }
 
+    report::emit_lifecycle_webhook(
+        &log_entry,
+        prior_entry,
+        &score.structured_findings,
+        effective_gate,
+        &policy,
+    );
     report::append_bounce_log(&janitor_dir, &log_entry);
     let verdict = common::scm::StatusVerdict::bounce(
         gate_passed,
@@ -3676,7 +3790,7 @@ probable AI context-collapse (hallucinated function reference)"
     // ── Weekly heartbeat ───────────────────────────────────────────────────────
     // Best-effort, silent.  Fires at most once per 7 days; result goes to
     // `.janitor/diag.log`.  Never blocks or fails the bounce.
-    report::send_heartbeat_if_due(&janitor_dir, &governor_url);
+    report::send_heartbeat_if_due(&governor_agent, &janitor_dir, &governor_url);
 
     Ok(())
 }
@@ -6314,6 +6428,95 @@ mod wasm_pin_tests {
             content.contains("require_issue_link = false"),
             "oss profile must have require_issue_link = false"
         );
+    }
+}
+
+#[cfg(test)]
+mod mtls_agent_tests {
+    use super::*;
+
+    const TEST_CLIENT_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
+MIIEqDCCApCgAwIBAgIUK5Ns4y2CzosB/ZoFlaxjZqoBTIIwDQYJKoZIhvcNAQEL
+BQAwfjELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcM
+DVNhbiBGcmFuY2lzY28xDzANBgNVBAoMBkJhZFNTTDExMC8GA1UEAwwoQmFkU1NM
+IENsaWVudCBSb290IENlcnRpZmljYXRlIEF1dGhvcml0eTAeFw0xOTExMjcwMDE5
+NTdaFw0yMTExMjYwMDE5NTdaMG8xCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApDYWxp
+Zm9ybmlhMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMQ8wDQYDVQQKDAZCYWRTU0wx
+IjAgBgNVBAMMGUJhZFNTTCBDbGllbnQgQ2VydGlmaWNhdGUwggEiMA0GCSqGSIb3
+DQEBAQUAA4IBDwAwggEKAoIBAQDHN18R6x5Oz+u6SOXLoxIscz5GHR6cDcCLgyPa
+x2XfXHdJs+h6fTy61WGM+aXEhR2SIwbj5997s34m0MsbvkJrFmn0LHK1fuTLCihE
+EmxGdCGZA9xrwxFYAkEjP7D8v7cAWRMipYF/JP7VU7xNUo+QSkZ0sOi9k6bNkABK
+L3+yP6PqAzsBoKIN5lN/YRLrppsDmk6nrRDo4R3CD+8JQl9quEoOmL22Pc/qpOjL
+1jgOIFSE5y3gwbzDlfCYoAL5V+by1vu0yJShTTK8oo5wvphcFfEHaQ9w5jFg2htd
+q99UER3BKuNDuL+zejqGQZCWb0Xsk8S5WBuX8l3Brrg5giqNAgMBAAGjLTArMAkG
+A1UdEwQCMAAwEQYJYIZIAYb4QgEBBAQDAgeAMAsGA1UdDwQEAwIF4DANBgkqhkiG
+9w0BAQsFAAOCAgEAZBauLzFSOijkDadcippr9C6laHebb0oRS54xAV70E9k5GxfR
+/E2EMuQ8X+miRUMXxKquffcDsSxzo2ac0flw94hDx3B6vJIYvsQx9Lzo95Im0DdT
+DkHFXhTlv2kjQwFVnEsWYwyGpHMTjanvNkO7sBP9p1bN1qTE3QAeyMZNKWJk5xPl
+U298ERar6tl3Z2Cl8mO6yLhrq4ba6iPGw08SENxzuAJW+n8r0rq7EU+bMg5spgT1
+CxExzG8Bb0f98ZXMklpYFogkcuH4OUOFyRodotrotm3iRbuvZNk0Zz7N5n1oLTPl
+bGPMwBcqaGXvK62NlaRkwjnbkPM4MYvREM0bbAgZD2GHyANBTso8bdWvhLvmoSjs
+FSqJUJp17AZ0x/ELWZd69v2zKW9UdPmw0evyVR19elh/7dmtF6wbewc4N4jxQnTq
+IItuhIWKWB9edgJz65uZ9ubQWjXoa+9CuWcV/1KxuKCbLHdZXiboLrKm4S1WmMYW
+d0sJm95H9mJzcLyhLF7iX2kK6K9ug1y02YCVXBC9WGZc2x6GMS7lDkXSkJFy3EWh
+CmfxkmFGwOgwKt3Jd1pF9ftcSEMhu4WcMgxi9vZr9OdkJLxmk033sVKI/hnkPaHw
+g0Y2YBH5v0xmi8sYU7weOcwynkjZARpUltBUQ0pWCF5uJsEB8uE8PPDD3c4=
+-----END CERTIFICATE-----
+"#;
+
+    const TEST_CLIENT_KEY_PEM: &str = r#"-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAxzdfEeseTs/rukjly6MSLHM+Rh0enA3Ai4Mj2sdl31x3SbPo
+en08utVhjPmlxIUdkiMG4+ffe7N+JtDLG75CaxZp9CxytX7kywooRBJsRnQhmQPc
+a8MRWAJBIz+w/L+3AFkTIqWBfyT+1VO8TVKPkEpGdLDovZOmzZAASi9/sj+j6gM7
+AaCiDeZTf2ES66abA5pOp60Q6OEdwg/vCUJfarhKDpi9tj3P6qToy9Y4DiBUhOct
+4MG8w5XwmKAC+Vfm8tb7tMiUoU0yvKKOcL6YXBXxB2kPcOYxYNobXavfVBEdwSrj
+Q7i/s3o6hkGQlm9F7JPEuVgbl/Jdwa64OYIqjQIDAQABAoIBAFUQf7fW/YoJnk5c
+8kKRzyDL1Lt7k6Zu+NiZlqXEnutRQF5oQ8yJzXS5yH25296eOJI+AqMuT28ypZtN
+bGzcQOAZIgTxNcnp9Sf9nlPyyekLjY0Y6PXaxX0e+VFj0N8bvbiYUGNq6HCyC15r
+8uvRZRvnm04YfEj20zLTWkxTG+OwJ6ZNha1vfq8z7MG5JTsZbP0g7e/LrEb3wI7J
+Zu9yHQUzq23HhfhpmLN/0l89YLtOaS8WNq4QvKYgZapw/0G1wWoWW4Y2/UpAxZ9r
+cqTBWSpCSCCgyWjiNhPbSJWfe/9J2bcanITLcvCLlPWGAHy1wpo9iBH57y7S+7YS
+3yi7lgECgYEA8lwaRIChc38tmtQCNPtai/7uVDdeJe0uv8Jsg04FTF8KMYcD0V1g
++T7rUPA+rTHwv8uAGLdzl4NW5Qryw18rDY+UivnaZkEdEsnlo3fc8MSQF78dDHCX
+nwmHfOmBnBoSbLl+W5ByHkJRHOnX+8qKq9ePNFUMf/hZNYuma9BCFBUCgYEA0m2p
+VDn12YdhFUUBIH91aD5cQIsBhkHFU4vqW4zBt6TsJpFciWbrBrTeRzeDou59aIsn
+zGBrLMykOY+EwwRku9KTVM4U791Z/NFbH89GqyUaicb4or+BXw5rGF8DmzSsDo0f
+ixJ9TVD5DmDi3c9ZQ7ljrtdSxPdA8kOoYPFsApkCgYEA08uZSPQAI6aoe/16UEK4
+Rk9qhz47kHlNuVZ27ehoyOzlQ5Lxyy0HacmKaxkILOLPuUxljTQEWAv3DAIdVI7+
+WMN41Fq0eVe9yIWXoNtGwUGFirsA77YVSm5RcN++3GQMZedUfUAl+juKFvJkRS4j
+MTkXdGw+mDa3/wsjTGSa2mECgYABO6NCWxSVsbVf6oeXKSgG9FaWCjp4DuqZErjM
+0IZSDSVVFIT2SSQXZffncuvSiJMziZ0yFV6LZKeRrsWYXu44K4Oxe4Oj5Cgi0xc1
+mIFRf2YoaIIMchLP+8Wk3ummfyiC7VDB/9m8Gj1bWDX8FrrvKqbq31gcz1YSFVNn
+PgLkAQKBgFzG8NdL8os55YcjBcOZMUs5QTKiQSyZM0Abab17k9JaqsU0jQtzeFsY
+FTiwh2uh6l4gdO/dGC/P0Vrp7F05NnO7oE4T+ojDzVQMnFpCBeL7x08GfUQkphEG
+m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
+-----END RSA PRIVATE KEY-----
+"#;
+
+    #[test]
+    fn build_ureq_agent_accepts_valid_mtls_material() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let cert_path = dir.path().join("client.pem");
+        let key_path = dir.path().join("client.key");
+        std::fs::write(&cert_path, TEST_CLIENT_CERT_PEM).expect("cert write must succeed");
+        std::fs::write(&key_path, TEST_CLIENT_KEY_PEM).expect("key write must succeed");
+
+        let mut policy = common::policy::JanitorPolicy::default();
+        policy.forge.mtls_cert = Some(cert_path.display().to_string());
+        policy.forge.mtls_key = Some(key_path.display().to_string());
+
+        let agent = build_ureq_agent(&policy).expect("mTLS agent must build");
+        let clone = agent.clone();
+        drop(clone);
+    }
+
+    #[test]
+    fn build_ureq_agent_rejects_partial_mtls_configuration() {
+        let mut policy = common::policy::JanitorPolicy::default();
+        policy.forge.mtls_cert = Some("/tmp/client.pem".to_string());
+
+        let err = build_ureq_agent(&policy).expect_err("partial mTLS config must fail");
+        assert!(err.to_string().contains("JANITOR_MTLS_CERT"));
     }
 }
 

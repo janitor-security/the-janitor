@@ -1527,6 +1527,24 @@ provider-neutral SCM context extraction, and roll the portability work into the
 
 ---
 
+## 2026-04-10 — v10.1.0-alpha.2: Zero Trust Transport & ASPM Lifecycle Sync
+
+**Directive**: Sovereign Directive — close P0-2 (Mutual TLS Governor Transport) and P0-3 (ASPM Bidirectional Sync).
+
+- `Cargo.toml` *(modified)* — version bumped to `10.1.0-alpha.2`; workspace `ureq` switched to rustls-backed TLS; `rustls` and `rustls-pemfile` added
+- `crates/cli/Cargo.toml` *(modified)* — imported workspace `rustls` / `rustls-pemfile` dependencies
+- `crates/common/src/policy.rs` *(modified)* — `ForgeConfig` gains `mtls_cert` / `mtls_key`; `WebhookConfig` gains `lifecycle_events` / `ticket_project`; policy tests expanded
+- `crates/cli/src/main.rs` *(modified)* — added `build_ureq_agent()` and PEM parsing helpers; Governor POST/heartbeat now share the mTLS-aware agent; lifecycle transition emission wired into `cmd_bounce`
+- `crates/cli/src/report.rs` *(modified)* — Governor transport now accepts a configured `ureq::Agent`; implemented `emit_lifecycle_webhook()` with HMAC signing and finding-opened / finding-resolved payloads; added lifecycle transport tests
+- `README.md` *(modified)* — version string synced to `v10.1.0-alpha.2`
+- `docs/index.md` *(modified)* — version string synced to `v10.1.0-alpha.2`
+- `docs/INNOVATION_LOG.md` *(modified)* — removed resolved P0-2 / P0-3 items; P1-1 now explicitly tracks C# / Ruby / PHP / Swift taint-spine expansion
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Verification**: pending `cargo test --workspace -- --test-threads=1` | `just audit`
+**Release**: pending `just fast-release 10.1.0-alpha.2`
+
+
 ## 2026-04-10 — v10.1.0-alpha.1: Governance Seal & O(1) Incremental Engine
 
 **Directive**: Sovereign Directive — close P0-1 (Signed Policy Lifecycle) and P0-5 (Incremental Scan) from the GA Teardown Audit.

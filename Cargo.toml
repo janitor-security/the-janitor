@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "10.1.0-alpha.1"
+version = "10.1.0-alpha.2"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -90,7 +90,9 @@ toml = "1.0"
 semver = "1.0"
 
 # HTTP client (sync, used for remote audit attestation)
-ureq = { version = "3", features = ["json"] }
+ureq = { version = "3", features = ["json", "rustls"] }
+rustls = "0.23"
+rustls-pemfile = "2"
 
 # Post-quantum cryptography — ML-DSA-65 (FIPS 204) for BYOK local attestation
 fips204 = "0.4"

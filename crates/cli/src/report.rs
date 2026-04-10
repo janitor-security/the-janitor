@@ -64,6 +64,96 @@ pub fn is_critical_threat(e: &BounceLogEntry) -> bool {
     e.antipatterns.iter().any(|a| a.contains("security:")) || !e.collided_pr_numbers.is_empty()
 }
 
+fn resolve_webhook_secret(cfg: &common::policy::WebhookConfig) -> String {
+    if cfg.secret.starts_with("env:") {
+        let var_name = &cfg.secret[4..];
+        match std::env::var(var_name) {
+            Ok(v) => v,
+            Err(_) => {
+                eprintln!(
+                    "Structural Integrity Warning: Webhook secret environment variable is not set. Delivering unsigned payload."
+                );
+                String::new()
+            }
+        }
+    } else {
+        cfg.secret.clone()
+    }
+}
+
+fn sign_webhook_payload(secret: &str, payload: &str) -> String {
+    if secret.is_empty() {
+        return String::new();
+    }
+
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+    mac.update(payload.as_bytes());
+    let result = mac.finalize().into_bytes();
+    let hex: String = result.iter().map(|b| format!("{b:02x}")).collect();
+    format!("sha256={hex}")
+}
+
+fn spawn_signed_webhook_post(
+    url: String,
+    event_name: &'static str,
+    payload: String,
+    sig_header: String,
+) {
+    std::thread::spawn(move || {
+        let mut builder = ureq::post(&url)
+            .header("Content-Type", "application/json")
+            .header("X-Janitor-Event", event_name);
+        if !sig_header.is_empty() {
+            builder = builder.header("X-Janitor-Signature-256", &sig_header);
+        }
+        match builder.send(payload.as_str()) {
+            Ok(_) => {}
+            Err(e) => eprintln!("warning: webhook delivery failed: {e}"),
+        }
+    });
+}
+
+fn structured_findings_from_entry(entry: &BounceLogEntry) -> Vec<common::slop::StructuredFinding> {
+    entry
+        .antipatterns
+        .iter()
+        .map(|detail| common::slop::StructuredFinding {
+            id: detail.split(" — ").next().unwrap_or(detail).to_string(),
+            file: None,
+            line: None,
+            fingerprint: blake3::hash(
+                format!(
+                    "{}:{}:{}:{}",
+                    entry.repo_slug,
+                    entry.commit_sha,
+                    entry.pr_number.unwrap_or_default(),
+                    detail
+                )
+                .as_bytes(),
+            )
+            .to_hex()
+            .to_string(),
+            remediation: None,
+            docs_url: None,
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct LifecycleWebhookPayload {
+    event: &'static str,
+    repo_slug: String,
+    pr_number: Option<u64>,
+    commit_sha: String,
+    slop_score: u32,
+    threshold: u32,
+    ticket_project: Option<String>,
+    finding_count: usize,
+    findings: Vec<common::slop::StructuredFinding>,
+    emitted_at: String,
+}
+
 /// Fire an outbound webhook POST if configured in `janitor.toml`.
 ///
 /// - Signs the payload with HMAC-SHA256 using the configured secret.
@@ -84,20 +174,7 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
     }
 
     // ── Resolve secret ───────────────────────────────────────────────────
-    let secret = if cfg.secret.starts_with("env:") {
-        let var_name = &cfg.secret[4..];
-        match std::env::var(var_name) {
-            Ok(v) => v,
-            Err(_) => {
-                eprintln!(
-                    "Structural Integrity Warning: Webhook secret environment variable is not set. Delivering unsigned payload."
-                );
-                String::new()
-            }
-        }
-    } else {
-        cfg.secret.clone()
-    };
+    let secret = resolve_webhook_secret(cfg);
 
     // ── Serialize payload ────────────────────────────────────────────────
     let payload = match serde_json::to_string(entry) {
@@ -109,16 +186,7 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
     };
 
     // ── HMAC-SHA256 signature ─────────────────────────────────────────────
-    let sig_header = if !secret.is_empty() {
-        let mut mac =
-            Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
-        mac.update(payload.as_bytes());
-        let result = mac.finalize().into_bytes();
-        let hex: String = result.iter().map(|b| format!("{b:02x}")).collect();
-        format!("sha256={hex}")
-    } else {
-        String::new()
-    };
+    let sig_header = sign_webhook_payload(&secret, &payload);
 
     let url = cfg.url.clone();
     let event_name = if is_critical {
@@ -127,19 +195,69 @@ pub fn fire_webhook_if_configured(entry: &BounceLogEntry, policy: &common::polic
         "necrotic_flag"
     };
 
-    // ── Non-blocking POST ─────────────────────────────────────────────────
-    std::thread::spawn(move || {
-        let mut builder = ureq::post(&url)
-            .header("Content-Type", "application/json")
-            .header("X-Janitor-Event", event_name);
-        if !sig_header.is_empty() {
-            builder = builder.header("X-Janitor-Signature-256", &sig_header);
+    spawn_signed_webhook_post(url, event_name, payload, sig_header);
+}
+
+/// Emit a webhook-driven ASPM lifecycle event when the finding state changes.
+///
+/// Uses the existing HMAC signing model and webhook transport, but emits a
+/// narrower payload keyed to finding lifecycle transitions so ticketing systems
+/// can open and resolve cases deterministically.
+pub fn emit_lifecycle_webhook(
+    entry: &BounceLogEntry,
+    prior_entry: Option<&BounceLogEntry>,
+    current_findings: &[common::slop::StructuredFinding],
+    effective_gate: u32,
+    policy: &common::policy::JanitorPolicy,
+) {
+    let cfg = &policy.webhook;
+    if cfg.url.is_empty() || !cfg.lifecycle_events {
+        return;
+    }
+
+    let prior_flagged = prior_entry
+        .map(|prior| prior.slop_score > effective_gate)
+        .unwrap_or(false);
+    let current_flagged = entry.slop_score > effective_gate;
+
+    let (event_name, findings) = if current_flagged && !prior_flagged {
+        let findings = if current_findings.is_empty() {
+            structured_findings_from_entry(entry)
+        } else {
+            current_findings.to_vec()
+        };
+        ("finding_opened", findings)
+    } else if prior_flagged && entry.slop_score == 0 {
+        let findings = prior_entry
+            .map(structured_findings_from_entry)
+            .unwrap_or_default();
+        ("finding_resolved", findings)
+    } else {
+        return;
+    };
+
+    let payload = LifecycleWebhookPayload {
+        event: event_name,
+        repo_slug: entry.repo_slug.clone(),
+        pr_number: entry.pr_number,
+        commit_sha: entry.commit_sha.clone(),
+        slop_score: entry.slop_score,
+        threshold: effective_gate,
+        ticket_project: cfg.ticket_project.clone(),
+        finding_count: findings.len(),
+        findings,
+        emitted_at: crate::utc_now_iso8601(),
+    };
+    let payload = match serde_json::to_string(&payload) {
+        Ok(payload) => payload,
+        Err(e) => {
+            eprintln!("warning: failed to serialise lifecycle webhook payload: {e}");
+            return;
         }
-        match builder.send(payload.as_str()) {
-            Ok(_) => {}
-            Err(e) => eprintln!("warning: webhook delivery failed: {e}"),
-        }
-    });
+    };
+    let secret = resolve_webhook_secret(cfg);
+    let sig_header = sign_webhook_payload(&secret, &payload);
+    spawn_signed_webhook_post(cfg.url.clone(), event_name, payload, sig_header);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,17 +288,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
     eprintln!("info: webhook-test — events filter: {:?}", cfg.events);
 
     // ── Resolve secret ───────────────────────────────────────────────────────
-    let secret = if cfg.secret.starts_with("env:") {
-        let var_name = &cfg.secret[4..];
-        std::env::var(var_name).unwrap_or_else(|_| {
-            eprintln!(
-                "Structural Integrity Warning: Webhook secret environment variable is not set. Delivering unsigned payload."
-            );
-            String::new()
-        })
-    } else {
-        cfg.secret.clone()
-    };
+    let secret = resolve_webhook_secret(cfg);
 
     // ── Construct synthetic critical_threat payload ──────────────────────────
     let dummy = BounceLogEntry {
@@ -226,16 +334,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
 
     // ── HMAC-SHA256 signature ────────────────────────────────────────────────
     let sig_header = if !secret.is_empty() {
-        let mut mac =
-            Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
-        mac.update(payload.as_bytes());
-        let hex: String = mac
-            .finalize()
-            .into_bytes()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        let header = format!("sha256={hex}");
+        let header = sign_webhook_payload(&secret, &payload);
         eprintln!("info: webhook-test — X-Janitor-Signature-256: {header}");
         header
     } else {
@@ -816,13 +915,15 @@ fn governor_health_endpoint(base_url: &str) -> String {
 /// firewall cannot be bypassed by a degraded or hostile Governor endpoint.
 /// The Bearer token is the short-lived JWT obtained from `/v1/analysis-token`.
 pub fn post_bounce_result(
+    agent: &ureq::Agent,
     governor_base_url: &str,
     token: &str,
     entry: &BounceLogEntry,
 ) -> anyhow::Result<GovernorAttestation> {
     let body = serde_json::to_string(entry)?;
     let report_url = governor_report_endpoint(governor_base_url);
-    let result = ureq::post(&report_url)
+    let result = agent
+        .post(&report_url)
         .header("Authorization", &format!("Bearer {token}"))
         .header("Content-Type", "application/json")
         .send(body.as_str());
@@ -897,7 +998,7 @@ pub fn append_diag_log(janitor_dir: &Path, msg: &str) {
 ///   timeout, logs the result to `.janitor/diag.log`, then touches the heartbeat
 ///   file to reset the 7-day window.
 /// - Entirely best-effort and silent: no stdout/stderr output, no CI impact.
-pub fn send_heartbeat_if_due(janitor_dir: &Path, governor_base_url: &str) {
+pub fn send_heartbeat_if_due(agent: &ureq::Agent, janitor_dir: &Path, governor_base_url: &str) {
     let heartbeat_path = janitor_dir.join("heartbeat");
 
     let due = match std::fs::metadata(&heartbeat_path) {
@@ -914,7 +1015,8 @@ pub fn send_heartbeat_if_due(janitor_dir: &Path, governor_base_url: &str) {
         return;
     }
 
-    let msg = match ureq::get(&governor_health_endpoint(governor_base_url))
+    let msg = match agent
+        .get(&governor_health_endpoint(governor_base_url))
         .config()
         .timeout_global(Some(std::time::Duration::from_secs(5)))
         .build()
@@ -3294,6 +3396,10 @@ mod tests {
 mod webhook_tests {
     use super::*;
     use common::policy::WebhookConfig;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::time::Duration;
 
     fn make_entry(antipatterns: Vec<String>, necrotic: Option<String>) -> BounceLogEntry {
         BounceLogEntry {
@@ -3351,6 +3457,8 @@ mod webhook_tests {
             url: "https://example.com/hook".to_string(),
             secret: String::new(),
             events: vec!["critical_threat".to_string()], // necrotic not in filter
+            lifecycle_events: false,
+            ticket_project: None,
         };
         // necrotic flag present, but filter only wants critical_threat — should not fire
         assert!(!policy.webhook.should_fire(false, true));
@@ -3362,8 +3470,125 @@ mod webhook_tests {
             url: "https://example.com/hook".to_string(),
             secret: String::new(),
             events: vec!["critical_threat".to_string()],
+            lifecycle_events: false,
+            ticket_project: None,
         };
         assert!(policy_cfg.should_fire(true, false));
+    }
+
+    #[test]
+    fn lifecycle_webhook_emits_finding_opened() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener must bind");
+        let addr = listener.local_addr().expect("listener must expose address");
+        let (tx, rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept must succeed");
+            let mut buf = [0_u8; 8192];
+            let n = stream.read(&mut buf).expect("request read must succeed");
+            tx.send(String::from_utf8_lossy(&buf[..n]).to_string())
+                .expect("request send must succeed");
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .expect("response write must succeed");
+            stream.flush().expect("flush must succeed");
+        });
+
+        let mut policy = common::policy::JanitorPolicy::default();
+        policy.webhook = WebhookConfig {
+            url: format!("http://{}", addr),
+            secret: "transport-secret".to_string(),
+            events: vec!["all".to_string()],
+            lifecycle_events: true,
+            ticket_project: Some("SEC".to_string()),
+        };
+        let entry = BounceLogEntry {
+            slop_score: 200,
+            repo_slug: "owner/repo".to_string(),
+            commit_sha: "deadbeef".to_string(),
+            antipatterns: vec!["security:credential_exposure — [REDACTED]".to_string()],
+            ..make_entry(Vec::new(), None)
+        };
+        let findings = vec![common::slop::StructuredFinding {
+            id: "security:credential_exposure".to_string(),
+            file: Some("src/lib.rs".to_string()),
+            line: Some(42),
+            fingerprint: "fp-open".to_string(),
+            remediation: Some("Rotate the credential and remove it from the patch.".to_string()),
+            docs_url: None,
+        }];
+
+        emit_lifecycle_webhook(&entry, None, &findings, 100, &policy);
+
+        let request = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("lifecycle webhook request must arrive");
+        let request_lower = request.to_ascii_lowercase();
+        assert!(request_lower.contains("x-janitor-event: finding_opened"));
+        assert!(request.contains("\"event\":\"finding_opened\""));
+        assert!(request.contains("\"ticket_project\":\"SEC\""));
+        let body = request
+            .split("\r\n\r\n")
+            .nth(1)
+            .expect("request must contain body");
+        let expected_sig = sign_webhook_payload("transport-secret", body);
+        assert!(request_lower.contains(&format!(
+            "x-janitor-signature-256: {}",
+            expected_sig.to_ascii_lowercase()
+        )));
+    }
+
+    #[test]
+    fn lifecycle_webhook_emits_finding_resolved() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener must bind");
+        let addr = listener.local_addr().expect("listener must expose address");
+        let (tx, rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept must succeed");
+            let mut buf = [0_u8; 8192];
+            let n = stream.read(&mut buf).expect("request read must succeed");
+            tx.send(String::from_utf8_lossy(&buf[..n]).to_string())
+                .expect("request send must succeed");
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .expect("response write must succeed");
+            stream.flush().expect("flush must succeed");
+        });
+
+        let mut policy = common::policy::JanitorPolicy::default();
+        policy.webhook = WebhookConfig {
+            url: format!("http://{}", addr),
+            secret: "transport-secret".to_string(),
+            events: vec!["all".to_string()],
+            lifecycle_events: true,
+            ticket_project: Some("SEC".to_string()),
+        };
+        let current = BounceLogEntry {
+            slop_score: 0,
+            repo_slug: "owner/repo".to_string(),
+            commit_sha: "feedface".to_string(),
+            ..make_entry(Vec::new(), None)
+        };
+        let prior = BounceLogEntry {
+            slop_score: 180,
+            repo_slug: "owner/repo".to_string(),
+            commit_sha: "cafebabe".to_string(),
+            antipatterns: vec!["security:credential_exposure — [REDACTED]".to_string()],
+            ..make_entry(Vec::new(), None)
+        };
+
+        emit_lifecycle_webhook(&current, Some(&prior), &[], 100, &policy);
+
+        let request = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("resolved lifecycle webhook request must arrive");
+        let request_lower = request.to_ascii_lowercase();
+        assert!(request_lower.contains("x-janitor-event: finding_resolved"));
     }
 }
 
@@ -3417,7 +3642,8 @@ mod soft_fail_tests {
     fn post_bounce_result_fails_for_unreachable_endpoint() {
         let entry = make_test_entry();
         // Port 1 is always connection-refused; never has a listener.
-        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
+        let agent = ureq::Agent::new_with_defaults();
+        let result = post_bounce_result(&agent, "http://127.0.0.1:1", "fake-token", &entry);
         assert!(result.is_err(), "unreachable endpoint must return Err");
     }
 
@@ -3426,7 +3652,8 @@ mod soft_fail_tests {
     #[test]
     fn soft_fail_suppresses_governor_error() {
         let entry = make_test_entry();
-        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
+        let agent = ureq::Agent::new_with_defaults();
+        let result = post_bounce_result(&agent, "http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = true;
         let handled: anyhow::Result<()> = match result {
             Ok(_) => Ok(()),
@@ -3443,7 +3670,8 @@ mod soft_fail_tests {
     #[test]
     fn hard_fail_propagates_governor_error() {
         let entry = make_test_entry();
-        let result = post_bounce_result("http://127.0.0.1:1", "fake-token", &entry);
+        let agent = ureq::Agent::new_with_defaults();
+        let result = post_bounce_result(&agent, "http://127.0.0.1:1", "fake-token", &entry);
         let soft_fail = false;
         let handled: anyhow::Result<()> = match result {
             Ok(_) => Ok(()),
@@ -3525,7 +3753,9 @@ mod soft_fail_tests {
             stream.flush().expect("response flush must succeed");
         });
 
+        let agent = ureq::Agent::new_with_defaults();
         let attestation = post_bounce_result(
+            &agent,
             &format!("http://{}", addr),
             "fake-token",
             &make_test_entry(),
