@@ -38,5 +38,8 @@ fips205.workspace = true
 # Secure key material zeroization (PQC private key bundles)
 zeroize.workspace = true
 
+# HTTP client (SCM commit-status publishing — GitLab and Azure DevOps)
+ureq.workspace = true
+
 # System introspection (Physarum Protocol memory backpressure)
 sysinfo.workspace = true

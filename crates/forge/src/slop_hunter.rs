@@ -4800,32 +4800,27 @@ pub fn detect_secret_entropy(patch: &str) -> Vec<String> {
                 }
             } else if let Some(s) = run_start.take() {
                 let token = &bytes[s..i];
-                if token.len() > 32 {
-                    let entropy = shannon_entropy(token);
-                    if entropy > 4.5 {
-                        findings.push(format!(
-                            "security:credential_leak — high-entropy token \
-                             ({:.2} bits/symbol, {} chars); possible API key or secret",
-                            entropy,
-                            token.len()
-                        ));
-                    }
+                if token.len() > 32 && shannon_entropy(token) > 4.5 {
+                    // Static string — no raw token bytes enter the finding.
+                    // CodeQL taint severance: entropy is computed but never
+                    // stored; only a static label flows into antipattern_details.
+                    findings.push(
+                        "security:credential_leak — high-entropy token detected; \
+                         possible API key or secret"
+                            .to_string(),
+                    );
                 }
             }
         }
         // Check trailing run at end of line.
         if let Some(s) = run_start {
             let token = &bytes[s..];
-            if token.len() > 32 {
-                let entropy = shannon_entropy(token);
-                if entropy > 4.5 {
-                    findings.push(format!(
-                        "security:credential_leak — high-entropy token \
-                         ({:.2} bits/symbol, {} chars); possible API key or secret",
-                        entropy,
-                        token.len()
-                    ));
-                }
+            if token.len() > 32 && shannon_entropy(token) > 4.5 {
+                findings.push(
+                    "security:credential_leak — high-entropy token detected; \
+                     possible API key or secret"
+                        .to_string(),
+                );
             }
         }
     }

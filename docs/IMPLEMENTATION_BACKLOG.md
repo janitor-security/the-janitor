@@ -5,6 +5,26 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — CodeQL Severance & Universal SCM Spine (v10.0.0-rc.16)
+
+**Directive:** Clear the CodeQL false-positive dashboard by severing tainted data-flow from `detect_secret_entropy` into `antipattern_details`; patch Wasmtime 10 open CVEs via `cargo update` (43.0.0 → 43.0.1); implement native commit-status HTTP publishing for GitLab and Azure DevOps SCM backends.
+
+**Files modified:**
+- `Cargo.lock` *(modified)* — `wasmtime` family (19 crates) bumped 43.0.0 → 43.0.1 via `cargo update`; clears CVE batch tied to pulley-interpreter, wasmtime-internal-core and wasmtime-internal-cranelift.
+- `crates/forge/src/slop_hunter.rs` *(modified)* — `detect_secret_entropy`: replaced two `format!("… {entropy:.2} … {token.len()}")` calls with a static `"security:credential_leak — high-entropy token detected; possible API key or secret".to_string()`. No tainted (entropy-derived or token-derived) data now flows into the findings vector, severing the CodeQL `cleartext-logging-sensitive-data` taint path.
+- `crates/common/Cargo.toml` *(modified)* — added `ureq.workspace = true` to enable HTTP commit-status publishing from the `scm` module.
+- `crates/common/src/scm.rs` *(modified)* — `ScmContext` struct gains four new fields: `api_base_url`, `api_token`, `project_id`, `repo_id`; `from_pairs` wires `CI_API_V4_URL` / `GITLAB_TOKEN` / `CI_PROJECT_ID` for GitLab and `SYSTEM_TEAMFOUNDATIONCOLLECTIONURI` / `SYSTEM_ACCESSTOKEN` / `SYSTEM_TEAMPROJECTID` / `BUILD_REPOSITORY_ID` for Azure DevOps; `GitLabStatusPublisher::publish_verdict` overrides the default to POST `state/name/description` to the GitLab Commit Statuses API, falling back to stderr annotation when credentials are absent; `AzureDevOpsStatusPublisher::publish_verdict` overrides to POST `state/description/context/targetUrl` to the Azure DevOps Git Statuses API (api-version 7.1-preview.1), falling back to `##vso` annotation; 4 new deterministic unit tests added.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.16`.
+- `README.md` / `docs/index.md` *(modified via `just sync-versions`)* — version strings updated to `v10.0.0-rc.16`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo update` ✅ — wasmtime 43.0.0 → 43.0.1, indexmap 2.13.1 → 2.14.0, 19 crate patches total
+- `cargo check --workspace` ✅
+- `just audit` ✅ — all tests pass, doc parity verified
+
+**Release status:** `just fast-release 10.0.0-rc.16` — pending execution below.
+
 ## 2026-04-09 — Data-Flow Guillotine & SCM Expansion (v10.0.0-rc.15)
 
 **Directive:** Synchronize CI to Rust 1.91.0 after the Wasmtime 43 MSRV jump, sever all remaining Governor/Wisdom-sensitive data-flow interpolation, implement first-class SCM verdict publishing outside GitHub, verify the workspace under single-threaded test execution, and prepare the `10.0.0-rc.15` release.

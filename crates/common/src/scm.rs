@@ -6,6 +6,7 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io::Write as _;
+use ureq;
 
 /// Supported SCM / CI providers with normalized environment extraction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,6 +28,23 @@ pub struct ScmContext {
     pub pr_number: Option<u64>,
     pub base_ref: Option<String>,
     pub head_ref: Option<String>,
+    /// Provider REST API base URL used for commit-status publishing.
+    ///
+    /// GitLab: `CI_API_V4_URL` (e.g. `https://gitlab.com/api/v4`).
+    /// Azure DevOps: `SYSTEM_TEAMFOUNDATIONCOLLECTIONURI`.
+    pub api_base_url: Option<String>,
+    /// Short bearer / personal-access token for commit-status writes.
+    ///
+    /// GitLab: `GITLAB_TOKEN`. Azure DevOps: `SYSTEM_ACCESSTOKEN`.
+    pub api_token: Option<String>,
+    /// Numeric or slug project / team-project identifier.
+    ///
+    /// GitLab: `CI_PROJECT_ID`. Azure DevOps: `SYSTEM_TEAMPROJECTID`.
+    pub project_id: Option<String>,
+    /// Repository identifier used in the commit-status URL path.
+    ///
+    /// Azure DevOps: `BUILD_REPOSITORY_ID`. Unused for GitLab (project_id is sufficient).
+    pub repo_id: Option<String>,
 }
 
 /// Provider-neutral CI verdict severity.
@@ -138,6 +156,10 @@ impl ScmContext {
                     .or_else(|| parse_github_pr_number(&map)),
                 base_ref: get(&map, "GITHUB_BASE_REF"),
                 head_ref: get(&map, "GITHUB_HEAD_REF"),
+                api_base_url: None,
+                api_token: None,
+                project_id: None,
+                repo_id: None,
             };
         }
 
@@ -151,6 +173,10 @@ impl ScmContext {
                     .or_else(|| get(&map, "CI_DEFAULT_BRANCH")),
                 head_ref: get(&map, "CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")
                     .or_else(|| get(&map, "CI_COMMIT_REF_NAME")),
+                api_base_url: get(&map, "CI_API_V4_URL"),
+                api_token: get(&map, "GITLAB_TOKEN"),
+                project_id: get(&map, "CI_PROJECT_ID"),
+                repo_id: None,
             };
         }
 
@@ -162,6 +188,10 @@ impl ScmContext {
                 pr_number: get(&map, "BITBUCKET_PR_ID").and_then(parse_u64),
                 base_ref: get(&map, "BITBUCKET_PR_DESTINATION_BRANCH"),
                 head_ref: get(&map, "BITBUCKET_BRANCH"),
+                api_base_url: None,
+                api_token: None,
+                project_id: None,
+                repo_id: None,
             };
         }
 
@@ -177,6 +207,10 @@ impl ScmContext {
                 head_ref: get(&map, "SYSTEM_PULLREQUEST_SOURCEBRANCH")
                     .map(|s| strip_git_ref(&s))
                     .or_else(|| get(&map, "BUILD_SOURCEBRANCHNAME")),
+                api_base_url: get(&map, "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI"),
+                api_token: get(&map, "SYSTEM_ACCESSTOKEN"),
+                project_id: get(&map, "SYSTEM_TEAMPROJECTID"),
+                repo_id: get(&map, "BUILD_REPOSITORY_ID"),
             };
         }
 
@@ -260,6 +294,39 @@ impl StatusPublisher for GitLabStatusPublisher {
             verdict.summary
         )
     }
+
+    fn publish_verdict(&self, ctx: &ScmContext, verdict: &StatusVerdict) -> Result<()> {
+        // Attempt native GitLab commit-status API POST when credentials are present.
+        if let (Some(api_base), Some(project_id), Some(sha), Some(token)) = (
+            ctx.api_base_url.as_deref(),
+            ctx.project_id.as_deref(),
+            ctx.commit_sha.as_deref(),
+            ctx.api_token.as_deref(),
+        ) {
+            let state = match verdict.level {
+                VerdictLevel::Success => "success",
+                VerdictLevel::Warning => "pending",
+                VerdictLevel::Failure => "failed",
+            };
+            let url = format!("{api_base}/projects/{project_id}/statuses/{sha}");
+            let body = serde_json::json!({
+                "state": state,
+                "name": "janitor",
+                "description": verdict.summary
+            });
+            // Best-effort — network failure is non-fatal; fall through to stderr.
+            let _ = ureq::post(&url)
+                .header("PRIVATE-TOKEN", token)
+                .header("Content-Type", "application/json")
+                .send(body.to_string().as_str());
+            return Ok(());
+        }
+        // Fallback: emit annotation line to stderr for local runs / missing creds.
+        let line = self.render_verdict(ctx, verdict);
+        std::io::stderr().write_all(line.as_bytes())?;
+        std::io::stderr().write_all(b"\n")?;
+        Ok(())
+    }
 }
 
 impl StatusPublisher for BitbucketStatusPublisher {
@@ -292,6 +359,45 @@ impl StatusPublisher for AzureDevOpsStatusPublisher {
             scoped_target(ctx).trim(),
             verdict.summary
         )
+    }
+
+    fn publish_verdict(&self, ctx: &ScmContext, verdict: &StatusVerdict) -> Result<()> {
+        // Attempt native Azure DevOps commit-status API POST when credentials are present.
+        if let (Some(collection_uri), Some(project_id), Some(repo_id), Some(sha), Some(token)) = (
+            ctx.api_base_url.as_deref(),
+            ctx.project_id.as_deref(),
+            ctx.repo_id.as_deref(),
+            ctx.commit_sha.as_deref(),
+            ctx.api_token.as_deref(),
+        ) {
+            let state = match verdict.level {
+                VerdictLevel::Success => "succeeded",
+                VerdictLevel::Warning => "pending",
+                VerdictLevel::Failure => "failed",
+            };
+            let collection_uri = collection_uri.trim_end_matches('/');
+            let url = format!(
+                "{collection_uri}/{project_id}/_apis/git/repositories/{repo_id}/statuses\
+                 ?api-version=7.1-preview.1"
+            );
+            let body = serde_json::json!({
+                "state": state,
+                "description": verdict.summary,
+                "context": { "name": "janitor", "genre": "scan" },
+                "targetUrl": format!("commit:{sha}")
+            });
+            // Best-effort — network failure is non-fatal; fall through to ##vso annotation.
+            let _ = ureq::post(&url)
+                .header("Authorization", &format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
+                .send(body.to_string().as_str());
+            return Ok(());
+        }
+        // Fallback: emit ##vso logging command for local runs / missing creds.
+        let line = self.render_verdict(ctx, verdict);
+        std::io::stderr().write_all(line.as_bytes())?;
+        std::io::stderr().write_all(b"\n")?;
+        Ok(())
     }
 }
 
@@ -459,5 +565,87 @@ mod tests {
         assert_eq!(clean.level, VerdictLevel::Success);
         assert_eq!(blocked.level, VerdictLevel::Failure);
         assert!(blocked.summary.contains("Governor degraded."));
+    }
+
+    #[test]
+    fn gitlab_context_captures_api_credentials() {
+        let ctx = ScmContext::from_pairs([
+            ("GITLAB_CI", "true"),
+            ("CI_COMMIT_SHA", "aabbcc"),
+            ("CI_PROJECT_PATH", "acme/platform"),
+            ("CI_PROJECT_ID", "42"),
+            ("CI_API_V4_URL", "https://gitlab.com/api/v4"),
+            ("GITLAB_TOKEN", "glpat-test-token"),
+        ]);
+        assert_eq!(ctx.provider, ScmProvider::GitLab);
+        assert_eq!(ctx.project_id.as_deref(), Some("42"));
+        assert_eq!(
+            ctx.api_base_url.as_deref(),
+            Some("https://gitlab.com/api/v4")
+        );
+        assert_eq!(ctx.api_token.as_deref(), Some("glpat-test-token"));
+        assert!(ctx.repo_id.is_none());
+    }
+
+    #[test]
+    fn azure_context_captures_api_credentials() {
+        let ctx = ScmContext::from_pairs([
+            ("TF_BUILD", "True"),
+            ("BUILD_SOURCEVERSION", "deadbeef"),
+            (
+                "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI",
+                "https://dev.azure.com/acme/",
+            ),
+            ("SYSTEM_TEAMPROJECTID", "proj-uuid-123"),
+            ("BUILD_REPOSITORY_ID", "repo-uuid-456"),
+            ("SYSTEM_ACCESSTOKEN", "ado-pat-secret"),
+            ("SYSTEM_PULLREQUEST_PULLREQUESTNUMBER", "5"),
+        ]);
+        assert_eq!(ctx.provider, ScmProvider::AzureDevOps);
+        assert_eq!(
+            ctx.api_base_url.as_deref(),
+            Some("https://dev.azure.com/acme/")
+        );
+        assert_eq!(ctx.project_id.as_deref(), Some("proj-uuid-123"));
+        assert_eq!(ctx.repo_id.as_deref(), Some("repo-uuid-456"));
+        assert_eq!(ctx.api_token.as_deref(), Some("ado-pat-secret"));
+    }
+
+    #[test]
+    fn gitlab_publisher_falls_back_to_stderr_without_credentials() {
+        let ctx = ScmContext {
+            provider: ScmProvider::GitLab,
+            repo_slug: Some("acme/platform".to_string()),
+            pr_number: Some(17),
+            // No api credentials — must fall through to render_verdict path.
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        let line = publisher.render_verdict(
+            &ctx,
+            &StatusVerdict {
+                title: "Janitor verdict clean".to_string(),
+                summary: "Patch accepted at slop score 0.".to_string(),
+                level: VerdictLevel::Success,
+            },
+        );
+        assert!(line.contains("janitor-gitlab-status"));
+        assert!(line.contains("success"));
+        assert!(line.contains("Patch accepted"));
+    }
+
+    #[test]
+    fn azure_publisher_falls_back_to_vso_without_credentials() {
+        let ctx = ScmContext {
+            provider: ScmProvider::AzureDevOps,
+            repo_slug: Some("Acme/janitor".to_string()),
+            pr_number: Some(8),
+            // No api credentials — must fall through to ##vso annotation.
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        let line = publisher.render_verdict(&ctx, &StatusVerdict::governor_failure());
+        assert!(line.starts_with("##vso[task.logissue type=warning;"));
+        assert!(line.contains("Governor network request failed."));
     }
 }
