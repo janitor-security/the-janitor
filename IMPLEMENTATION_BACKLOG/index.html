@@ -1245,6 +1245,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-10-v1010-alpha1-governance-seal-o1-incremental-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — v10.1.0-alpha.1: Governance Seal &amp; O(1) Incremental Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2026-04-10 — v10.1.0-alpha.1: Governance Seal & O(1) Incremental Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-1-signed-policy-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1: Signed Policy Lifecycle ✓
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-5-incremental-resumable-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-5: Incremental / Resumable Scan ✓
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1905,6 +1938,39 @@
       2026-04-05 — Direct Triage &amp; Commercial Expansion (v9.8.1)
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-10-v1010-alpha1-governance-seal-o1-incremental-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — v10.1.0-alpha.1: Governance Seal &amp; O(1) Incremental Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2026-04-10 — v10.1.0-alpha.1: Governance Seal & O(1) Incremental Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-1-signed-policy-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1: Signed Policy Lifecycle ✓
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-5-incremental-resumable-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-5: Incremental / Resumable Scan ✓
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3173,6 +3239,28 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.8.1</code></p>
 <p><strong>Commit:</strong> pending <code>just fast-release 9.8.1</code></p>
+<hr />
+<h2 id="2026-04-10-v1010-alpha1-governance-seal-o1-incremental-engine">2026-04-10 — v10.1.0-alpha.1: Governance Seal &amp; O(1) Incremental Engine</h2>
+<p><strong>Directive</strong>: Sovereign Directive — close P0-1 (Signed Policy Lifecycle) and P0-5 (Incremental Scan) from the GA Teardown Audit.</p>
+<h3 id="p0-1-signed-policy-lifecycle">P0-1: Signed Policy Lifecycle ✓</h3>
+<ul>
+<li><code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>JanitorPolicy::content_hash()</code> BLAKE3 hash over canonical security-relevant fields; three determinism tests added</li>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>policy_hash</code> in <code>BounceLogEntry</code> now computed via <code>policy.content_hash()</code> (canonical struct fields, not raw TOML bytes)</li>
+<li><code>crates/gov/src/main.rs</code> <em>(modified)</em> — <code>AnalysisTokenRequest</code> gains <code>policy_hash: String</code>; <code>/v1/analysis-token</code> returns HTTP 403 <code>policy_drift_detected</code> on <code>JANITOR_GOV_EXPECTED_POLICY</code> mismatch; two new unit tests</li>
+</ul>
+<h3 id="p0-5-incremental-resumable-scan">P0-5: Incremental / Resumable Scan ✓</h3>
+<ul>
+<li><code>crates/common/src/scan_state.rs</code> <em>(created)</em> — <code>ScanState { cache: HashMap&lt;String, [u8; 32]&gt; }</code> with rkyv Archive/Serialize/Deserialize; symlink-safe atomic persistence; four unit tests</li>
+<li><code>crates/common/src/lib.rs</code> <em>(modified)</em> — <code>pub mod scan_state</code> registered</li>
+<li><code>crates/common/Cargo.toml</code> <em>(modified)</em> — <code>tempfile = "3"</code> dev-dependency for scan_state tests</li>
+<li><code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>bounce_git</code> accepts <code>&amp;mut ScanState</code>; BLAKE3 digest compared before Payload Bifurcation; unchanged files bypassed O(1); digest recorded for changed files</li>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — loads <code>ScanState</code> from <code>.janitor/scan_state.rkyv</code> before bounce_git; persists updated state after successful bounce (best-effort, never fails the gate)</li>
+<li><code>crates/cli/src/git_drive.rs</code> <em>(modified)</em> — hyper-drive <code>bounce_git</code> call updated with ephemeral <code>ScanState::default()</code> (no persistence in parallel mode)</li>
+<li><code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P0-1 and P0-5 marked RESOLVED</li>
+<li><code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>10.1.0-alpha.1</code></li>
+</ul>
+<p><strong>Audit</strong>: <code>cargo fmt --check</code> ✓ | <code>cargo clippy -- -D warnings</code> ✓ | <code>cargo test --workspace -- --test-threads=1</code> ✓ (all pass)
+<strong>Release</strong>: <code>just fast-release 10.1.0-alpha.1</code></p>
 
 
 
