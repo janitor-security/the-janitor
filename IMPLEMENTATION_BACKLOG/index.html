@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-absolute-taint-severance-v1001" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — Absolute Taint Severance (v10.0.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-10-ga-release-prep-v1000" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-10 — GA Release Prep (v10.0.0)
@@ -1279,6 +1288,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-absolute-taint-severance-v1001" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — Absolute Taint Severance (v10.0.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-10-ga-release-prep-v1000" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-10 — GA Release Prep (v10.0.0)
@@ -1912,6 +1930,13 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-10-absolute-taint-severance-v1001">2026-04-10 — Absolute Taint Severance (v10.0.1)</h2>
+<p><strong>Directive:</strong> Replace string-bearing secret entropy findings with a primitive count, isolate the PatchBouncer aggregation boundary to static redacted labels only, verify under single-threaded tests, and cut the <code>v10.0.1</code> release.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — <code>detect_secret_entropy</code> return type changed from <code>Vec&lt;String&gt;</code> to <code>usize</code>; detector now counts qualifying high-entropy runs without allocating or returning strings; deterministic tests updated to assert counts.
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — secret entropy aggregation rewritten to consume the primitive count and emit only static <code>"security:credential_exposure — [REDACTED]"</code> details into <code>SlopScore</code>.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped from <code>10.0.0</code> to <code>10.0.1</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
 <h2 id="2026-04-10-ga-release-prep-v1000">2026-04-10 — GA Release Prep (v10.0.0)</h2>
 <p><strong>Directive:</strong> General Availability cut for <code>v10.0.0</code>, documentation/version synchronization, Innovation Log hard compaction, single-threaded verification, and release execution.</p>
 <p><strong>Files modified:</strong>
