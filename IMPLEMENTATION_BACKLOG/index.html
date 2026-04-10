@@ -1246,6 +1246,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-v1010-alpha2-zero-trust-transport-aspm-lifecycle-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — v10.1.0-alpha.2: Zero Trust Transport &amp; ASPM Lifecycle Sync
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-10-v1010-alpha1-governance-seal-o1-incremental-engine" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-10 — v10.1.0-alpha.1: Governance Seal &amp; O(1) Incremental Engine
@@ -1936,6 +1945,15 @@
   <a href="#2026-04-05-direct-triage-commercial-expansion-v981" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-05 — Direct Triage &amp; Commercial Expansion (v9.8.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-10-v1010-alpha2-zero-trust-transport-aspm-lifecycle-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — v10.1.0-alpha.2: Zero Trust Transport &amp; ASPM Lifecycle Sync
     </span>
   </a>
   
@@ -3240,6 +3258,21 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - <code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>9.8.1</code></p>
 <p><strong>Commit:</strong> pending <code>just fast-release 9.8.1</code></p>
 <hr />
+<h2 id="2026-04-10-v1010-alpha2-zero-trust-transport-aspm-lifecycle-sync">2026-04-10 — v10.1.0-alpha.2: Zero Trust Transport &amp; ASPM Lifecycle Sync</h2>
+<p><strong>Directive</strong>: Sovereign Directive — close P0-2 (Mutual TLS Governor Transport) and P0-3 (ASPM Bidirectional Sync).</p>
+<ul>
+<li><code>Cargo.toml</code> <em>(modified)</em> — version bumped to <code>10.1.0-alpha.2</code>; workspace <code>ureq</code> switched to rustls-backed TLS; <code>rustls</code> and <code>rustls-pemfile</code> added</li>
+<li><code>crates/cli/Cargo.toml</code> <em>(modified)</em> — imported workspace <code>rustls</code> / <code>rustls-pemfile</code> dependencies</li>
+<li><code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>ForgeConfig</code> gains <code>mtls_cert</code> / <code>mtls_key</code>; <code>WebhookConfig</code> gains <code>lifecycle_events</code> / <code>ticket_project</code>; policy tests expanded</li>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — added <code>build_ureq_agent()</code> and PEM parsing helpers; Governor POST/heartbeat now share the mTLS-aware agent; lifecycle transition emission wired into <code>cmd_bounce</code></li>
+<li><code>crates/cli/src/report.rs</code> <em>(modified)</em> — Governor transport now accepts a configured <code>ureq::Agent</code>; implemented <code>emit_lifecycle_webhook()</code> with HMAC signing and finding-opened / finding-resolved payloads; added lifecycle transport tests</li>
+<li><code>README.md</code> <em>(modified)</em> — version string synced to <code>v10.1.0-alpha.2</code></li>
+<li><code>docs/index.md</code> <em>(modified)</em> — version string synced to <code>v10.1.0-alpha.2</code></li>
+<li><code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed resolved P0-2 / P0-3 items; P1-1 now explicitly tracks C# / Ruby / PHP / Swift taint-spine expansion</li>
+<li><code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry</li>
+</ul>
+<p><strong>Verification</strong>: pending <code>cargo test --workspace -- --test-threads=1</code> | <code>just audit</code>
+<strong>Release</strong>: pending <code>just fast-release 10.1.0-alpha.2</code></p>
 <h2 id="2026-04-10-v1010-alpha1-governance-seal-o1-incremental-engine">2026-04-10 — v10.1.0-alpha.1: Governance Seal &amp; O(1) Incremental Engine</h2>
 <p><strong>Directive</strong>: Sovereign Directive — close P0-1 (Signed Policy Lifecycle) and P0-5 (Incremental Scan) from the GA Teardown Audit.</p>
 <h3 id="p0-1-signed-policy-lifecycle">P0-1: Signed Policy Lifecycle ✓</h3>

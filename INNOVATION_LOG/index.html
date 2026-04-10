@@ -625,24 +625,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-2-mutual-tls-mtls-governor-transport" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2: Mutual TLS (mTLS) Governor Transport
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-aspm-bidirectional-sync-jira-servicenow-linear" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: ASPM Bidirectional Sync (JIRA / ServiceNow / Linear)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-4-role-based-access-control-rbac-for-suppressions" class="md-nav__link">
     <span class="md-ellipsis">
       P0-4: Role-Based Access Control (RBAC) for Suppressions
@@ -676,9 +658,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-deep-intra-file-taint-for-all-kev-languages" class="md-nav__link">
+  <a href="#p1-1-deep-intra-file-taint-for-c-ruby-php-swift-and-the-remaining-kev-languages" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Deep Intra-File Taint for All KEV Languages
+      P1-1: Deep Intra-File Taint for C#, Ruby, PHP, Swift, and the Remaining KEV Languages
     </span>
   </a>
   
@@ -868,24 +850,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-2-mutual-tls-mtls-governor-transport" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-2: Mutual TLS (mTLS) Governor Transport
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p0-3-aspm-bidirectional-sync-jira-servicenow-linear" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-3: ASPM Bidirectional Sync (JIRA / ServiceNow / Linear)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-4-role-based-access-control-rbac-for-suppressions" class="md-nav__link">
     <span class="md-ellipsis">
       P0-4: Role-Based Access Control (RBAC) for Suppressions
@@ -919,9 +883,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-deep-intra-file-taint-for-all-kev-languages" class="md-nav__link">
+  <a href="#p1-1-deep-intra-file-taint-for-c-ruby-php-swift-and-the-remaining-kev-languages" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: Deep Intra-File Taint for All KEV Languages
+      P1-1: Deep Intra-File Taint for C#, Ruby, PHP, Swift, and the Remaining KEV Languages
     </span>
   </a>
   
@@ -1061,46 +1025,6 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
   HTTP 403 <code>policy_drift_detected</code> on hash mismatch. <code>policy_hash</code> now computed from
   canonical struct fields (not raw TOML bytes) — resilient to whitespace/comment edits.</li>
 </ul>
-<h3 id="p0-2-mutual-tls-mtls-governor-transport">P0-2: Mutual TLS (mTLS) Governor Transport</h3>
-<ul>
-<li><strong>Class</strong>: Network Security / Zero Trust</li>
-<li><strong>Observation</strong>: Governor communication uses bearer-token auth over TLS. For
-  DoD IL5/IL6, FedRAMP High, and ITAR environments, mTLS is mandatory. Snyk
-  cannot operate air-gapped at all. Checkmarx supports on-prem but not
-  cryptographic channel binding. This is our moat.</li>
-<li><strong>Proposal</strong>: Add client-certificate support to the Governor transport layer.
-  CLI loads a PEM client cert + key from <code>JANITOR_MTLS_CERT</code> / <code>JANITOR_MTLS_KEY</code>
-  env vars (or <code>janitor.toml [forge] mtls_cert / mtls_key</code> paths). Governor
-  validates against a CA bundle configured at deployment.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/common/src/policy.rs</code>: <code>ForgeConfig</code> gains <code>mtls_cert: Option&lt;String&gt;</code>,
-    <code>mtls_key: Option&lt;String&gt;</code>.</li>
-<li><code>crates/cli/src/main.rs</code>: <code>build_ureq_agent()</code> helper constructs a <code>ureq::Agent</code>
-    with rustls client auth when mTLS paths are present.</li>
-<li><code>crates/cli/src/report.rs</code>: <code>post_bounce_result</code> uses the mTLS agent.</li>
-<li>Governor (Fly.io / self-hosted): nginx/envoy sidecar with <code>ssl_verify_client on</code>.</li>
-</ul>
-<h3 id="p0-3-aspm-bidirectional-sync-jira-servicenow-linear">P0-3: ASPM Bidirectional Sync (JIRA / ServiceNow / Linear)</h3>
-<ul>
-<li><strong>Class</strong>: Product / Integration</li>
-<li><strong>Observation</strong>: Gartner predicts 40%+ ASPM adoption by 2026. ASPM platforms
-  (Apiiro, ArmorCode, Phoenix Security) ingest findings from multiple scanners.
-  We currently emit SARIF and ndjson — sufficient for GitHub Code Scanning
-  upload but missing the bidirectional lifecycle: create ticket on finding →
-  mark resolved when fix merges → re-open on regression.</li>
-<li><strong>Proposal</strong>: Implement a webhook-driven finding lifecycle. On bounce with
-  <code>slop_score &gt; threshold</code>, POST a normalised finding payload to the configured
-  ASPM/ticketing endpoint. On subsequent clean bounce for same file+rule, POST
-  a resolution event. Use the existing <code>WebhookConfig</code> as the transport.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/common/src/policy.rs</code>: <code>WebhookConfig</code> gains <code>lifecycle_events: bool</code>
-    (default false), <code>ticket_project: Option&lt;String&gt;</code>.</li>
-<li><code>crates/cli/src/main.rs</code>: <code>cmd_bounce</code> emits <code>finding_opened</code> / <code>finding_resolved</code>
-    events keyed by <code>(file, rule, line_range)</code> triple.</li>
-<li><code>crates/cli/src/report.rs</code>: new <code>emit_lifecycle_webhook()</code> with HMAC-signed payload.</li>
-<li>SARIF enrichment: <code>relatedLocations</code> populated with prior bounce log entries
-    for the same rule to show regression history.</li>
-</ul>
 <h3 id="p0-4-role-based-access-control-rbac-for-suppressions">P0-4: Role-Based Access Control (RBAC) for Suppressions</h3>
 <ul>
 <li><strong>Class</strong>: Governance / Compliance</li>
@@ -1128,11 +1052,12 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
 </ul>
 <hr />
 <h2 id="p1-taint-spine-expansion">P1 — Taint Spine Expansion</h2>
-<h3 id="p1-1-deep-intra-file-taint-for-all-kev-languages">P1-1: Deep Intra-File Taint for All KEV Languages</h3>
+<h3 id="p1-1-deep-intra-file-taint-for-c-ruby-php-swift-and-the-remaining-kev-languages">P1-1: Deep Intra-File Taint for C#, Ruby, PHP, Swift, and the Remaining KEV Languages</h3>
 <ul>
 <li><strong>Class</strong>: Detection Depth</li>
 <li><strong>Observation</strong>: Full intra-file SQLi/SSRF/path-traversal taint analysis
-  exists for Python, JS/TS, Java, Go, and C#. Ruby, PHP, Kotlin, Scala, Swift,
+  exists for Python, JS/TS, Java, Go, and baseline C#. Interprocedural taint
+  spine expansion is still required for C#, Ruby, PHP, Swift, Kotlin, Scala,
   Lua, Bash, Nix, GDScript, Objective-C, C/C++, GLSL, and Rust have AST
   antipattern walks but lack taint source→sink propagation. Semgrep's Feb 2026
   release specifically improved taint tracking — this is the competitive
