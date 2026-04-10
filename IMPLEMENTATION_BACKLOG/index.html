@@ -456,6 +456,26 @@
   
   
     <li class="md-nav__item">
+      <a href="../pricing_faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pricing FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../terms/" class="md-nav__link">
         
   
@@ -510,10 +530,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
         
           
-          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -524,8 +544,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
             <span class="md-nav__icon md-icon"></span>
             R&D and Telemetry
           </label>
@@ -603,6 +623,15 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#2026-04-09-operator-ergonomics-threat-sync-v1000-rc17" class="md-nav__link">
@@ -1232,6 +1261,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-09-operator-ergonomics-threat-sync-v1000-rc17" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-09 — Operator Ergonomics &amp; Threat Sync (v10.0.0-rc.17)
@@ -1837,6 +1875,18 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-10-commercial-coherence-sarif-enrichment-v1000-rc18">2026-04-10 — Commercial Coherence &amp; SARIF Enrichment (v10.0.0-rc.18)</h2>
+<p><strong>Directive:</strong> Resolve P1-1 (pricing contradiction — "Up to 25 seats" vs. "No per-seat limits"), P1-4 (finding explainability — <code>remediation</code> + <code>docs_url</code> on <code>StructuredFinding</code>; SARIF <code>rule.help.markdown</code> / <code>helpUri</code> wiring for top 3 critical detectors).</p>
+<p><strong>Files modified:</strong>
+- <code>README.md</code> <em>(modified)</em> — Team tier "Up to 25 seats." → "No per-seat limits."
+- <code>docs/index.md</code> <em>(modified)</em> — same in pricing table; Team Specialist table row "Up to 25 seats" → "No per-seat limits"; Industrial Core "Unlimited seats" → "No per-seat limits".
+- <code>docs/pricing_faq.md</code> <em>(created)</em> — 3-question FAQ: why no per-seat pricing, Sovereign/Air-Gap tier definition, OSS free-forever guarantee.
+- <code>mkdocs.yml</code> <em>(modified)</em> — <code>Pricing FAQ: pricing_faq.md</code> added to nav.
+- <code>crates/common/src/slop.rs</code> <em>(modified)</em> — <code>StructuredFinding</code> gains <code>pub remediation: Option&lt;String&gt;</code> and <code>pub docs_url: Option&lt;String&gt;</code> (both <code>#[serde(default, skip_serializing_if = "Option::is_none")]</code>).
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>StructuredFinding</code> construction site updated with <code>remediation: None, docs_url: None</code>.
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>rule_help(label: &amp;str)</code> static lookup added for <code>slopsquat_injection</code>, <code>phantom_payload_evasion</code>, and <code>ncd_anomaly</code>; <code>render_sarif</code> rules array wired to emit <code>help.markdown</code>, <code>help.text</code>, and <code>helpUri</code> when enrichment is available.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.0.0-rc.18</code>.</p>
 <hr />
 <h2 id="2026-04-09-operator-ergonomics-threat-sync-v1000-rc17">2026-04-09 — Operator Ergonomics &amp; Threat Sync (v10.0.0-rc.17)</h2>
 <p><strong>Directive:</strong> Implement P1-3 (Wasm BYOR Ergonomics — <code>wasm-pin</code> / <code>wasm-verify</code>), P1-2 (OSS Maintainer Onboarding — <code>janitor init</code>), and audit Phase 3 (CISA KEV URL — confirmed correct, no changes needed).</p>

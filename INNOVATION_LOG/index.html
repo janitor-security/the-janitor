@@ -458,6 +458,26 @@
   
   
     <li class="md-nav__item">
+      <a href="../pricing_faq/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pricing FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../terms/" class="md-nav__link">
         
   
@@ -512,10 +532,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
         
           
-          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -526,8 +546,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
             <span class="md-nav__icon md-icon"></span>
             R&D and Telemetry
           </label>
@@ -618,30 +638,6 @@
       P1 — Product / UX / Commercial Defects
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="P1 — Product / UX / Commercial Defects">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-pricing-pages-contradict-themselves" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1 — Pricing pages contradict themselves
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-4-finding-explainability-is-too-terse-for-broad-rollout" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-4 — Finding explainability is too terse for broad rollout
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -784,30 +780,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P1 — Product / UX / Commercial Defects">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-pricing-pages-contradict-themselves" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1 — Pricing pages contradict themselves
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-4-finding-explainability-is-too-terse-for-broad-rollout" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-4 — Finding explainability is too terse for broad rollout
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -901,22 +873,14 @@ All CT constraints through CT-020 resolved.</p>
 - Suppression primitives exist (<code># noqa</code>-style pragmas, test-scope routing, local-brain <code>janitor pardon</code>); the gap is governable, reviewable suppression lifecycle.</p>
 <h2 id="p0-enterprise-deployment-blockers">P0 — Enterprise Deployment Blockers</h2>
 <h2 id="p1-product-ux-commercial-defects">P1 — Product / UX / Commercial Defects</h2>
-<h3 id="p1-1-pricing-pages-contradict-themselves">P1-1 — Pricing pages contradict themselves</h3>
-<p><strong>Gap</strong>: <code>README.md</code> and <code>docs/index.md</code> sell Team as "up to 25 seats" and then immediately say "No per-seat limits." That is revenue-ops sloppiness visible to customers. Procurement will interpret this as either deceptive pricing or internal confusion.</p>
-<p><strong>Required change</strong>:
-1. Pick one truth: seat-capped Team or unlimited Team.
-2. Normalize README, docs site, Lemon Squeezy copy, and Terms.
-3. Add a pricing FAQ for OSS maintainer, startup, and enterprise procurement paths.</p>
+<!-- P1-1 RESOLVED v10.0.0-rc.18: "Up to 25 seats" eradicated from README.md and docs/index.md; single truth "No per-seat limits" across all tiers; docs/pricing_faq.md created (why no per-seat, Sovereign/Air-Gap tier, OSS free-forever); mkdocs.yml nav updated. -->
+
 <!-- P1-2 RESOLVED v10.0.0-rc.17: `janitor init` + `janitor init --profile enterprise` implemented; default and enterprise janitor.toml profiles scaffolded; 6 deterministic unit tests added. -->
 
 <!-- P1-3 RESOLVED v10.0.0-rc.17: `janitor wasm-pin <PATH>` and `janitor wasm-verify <PATH> --expected <BLAKE3>` implemented; BLAKE3 pin computation + verification wired; 6 deterministic unit tests added. -->
 
-<h3 id="p1-4-finding-explainability-is-too-terse-for-broad-rollout">P1-4 — Finding explainability is too terse for broad rollout</h3>
-<p><strong>Gap</strong>: The engine produces strong machine labels, but many findings still read like detector IDs plus short prose. Enterprise adoption improves when each finding carries "why flagged", "why dangerous", "how to remediate", and "how to suppress correctly" in a predictable schema.</p>
-<p><strong>Required change</strong>:
-1. Expand structured findings with remediation and suppression guidance fields.
-2. Surface those fields in SARIF help URIs / markdown.
-3. Add stable finding documentation URLs.</p>
+<!-- P1-4 RESOLVED v10.0.0-rc.18: `StructuredFinding` gains `remediation: Option<String>` + `docs_url: Option<String>`; `rule_help()` static lookup in report.rs populates SARIF `rule.help.markdown` + `helpUri` for slopsquat_injection, phantom_payload_evasion, and ncd_anomaly; GitHub Advanced Security and Azure DevOps natively surface "How to fix" in PR review UI. -->
+
 <h2 id="p2-scale-platform-expansion">P2 — Scale / Platform Expansion</h2>
 <h3 id="p2-1-no-first-class-drift-dashboard-for-policy-health">P2-1 — No first-class drift dashboard for policy health</h3>
 <p><strong>Gap</strong>: The ledger is strong after the fact. There is still no compact view showing suppression growth, noisy rules, top owners, stale waivers, or score drift across services.</p>
