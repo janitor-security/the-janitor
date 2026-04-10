@@ -5,6 +5,17 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-10 — CodeQL Exorcism & Ergonomic Platform Polish (v10.0.0-rc.19)
+
+**Directive:** Phase 1 — CodeQL taint suppression for `slop_score` aggregate integer printout (false-positive `cleartext-logging` alerts). Phase 2 — Innovation Log hard compaction (eradicate all RESOLVED HTML comments). Phase 3 — P2-1 (`janitor policy-health` drift dashboard; `--format json`). Phase 4 — P2-2 (`janitor init --profile oss` solo-maintainer minimal-noise mode). Phase 5 — Release rc.19.
+
+**Files modified:**
+- `crates/cli/src/main.rs` *(modified)* — 3 `// codeql[rust/cleartext-logging]` suppressions added above `score.score()` printouts in `cmd_bounce`; `PolicyHealth` subcommand added with `cmd_policy_health()` implementation (aggregates total PRs, failed PRs, top 3 rules, top 3 authors); `janitor init --profile oss` added to `cmd_init` with `min_slop_score = 200`, `require_issue_link = false`, `pqc_enforced = false`; 3 new unit tests (`policy_health_empty_log_text_exits_cleanly`, `policy_health_empty_log_json_exits_cleanly`, `init_creates_janitor_toml_oss`).
+- `docs/INNOVATION_LOG.md` *(modified)* — all RESOLVED HTML comment blocks purged; only active P2-1 and P2-2 items remain.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.19`.
+
+---
+
 ## 2026-04-10 — Commercial Coherence & SARIF Enrichment (v10.0.0-rc.18)
 
 **Directive:** Resolve P1-1 (pricing contradiction — "Up to 25 seats" vs. "No per-seat limits"), P1-4 (finding explainability — `remediation` + `docs_url` on `StructuredFinding`; SARIF `rule.help.markdown` / `helpUri` wiring for top 3 critical detectors).
