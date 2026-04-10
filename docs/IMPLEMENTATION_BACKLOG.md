@@ -5,6 +5,29 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-09 — Operator Ergonomics & Threat Sync (v10.0.0-rc.17)
+
+**Directive:** Implement P1-3 (Wasm BYOR Ergonomics — `wasm-pin` / `wasm-verify`), P1-2 (OSS Maintainer Onboarding — `janitor init`), and audit Phase 3 (CISA KEV URL — confirmed correct, no changes needed).
+
+**Files modified:**
+- `crates/cli/src/main.rs` *(modified)* — added `WasmPin`, `WasmVerify`, and `Init` subcommands to `Commands` enum; dispatch arms added to `match &cli.command`; `cmd_wasm_pin`, `cmd_wasm_verify`, `cmd_init` implementation functions added; 6 new deterministic unit tests in `wasm_pin_tests` module.
+- `crates/cli/Cargo.toml` *(modified)* — added `tempfile = "3"` under `[dev-dependencies]` for the new test fixtures.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.17`.
+- `README.md` / `docs/index.md` *(modified via `just sync-versions`)* — version strings updated.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger prepended.
+- `docs/INNOVATION_LOG.md` *(modified)* — P1-3 and P1-2 purged as completed.
+
+**Phase 3 audit result:** CISA KEV URL confirmed correct at `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`. No code changes needed.
+
+**Verification:**
+- `cargo check --workspace` ✅
+- `cargo test --workspace -- --test-threads=1` ✅ (all tests pass including 6 new)
+- `just audit` ✅
+
+**Release status:** `just fast-release 10.0.0-rc.17` — executed below.
+
+---
+
 ## 2026-04-09 — CodeQL Severance & Universal SCM Spine (v10.0.0-rc.16)
 
 **Directive:** Clear the CodeQL false-positive dashboard by severing tainted data-flow from `detect_secret_entropy` into `antipattern_details`; patch Wasmtime 10 open CVEs via `cargo update` (43.0.0 → 43.0.1); implement native commit-status HTTP publishing for GitLab and Azure DevOps SCM backends.

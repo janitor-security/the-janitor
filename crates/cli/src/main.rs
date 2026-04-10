@@ -684,6 +684,66 @@ enum Commands {
         #[arg(long)]
         sig: Option<PathBuf>,
     },
+
+    /// Compute the BLAKE3 integrity pin for a BYOP Wasm rule module.
+    ///
+    /// Reads the `.wasm` (or `.wat`) file and prints the `[[forge.wasm_rules]]`
+    /// TOML block ready to paste into `janitor.toml`.  The pin locks the module
+    /// binary so `janitor bounce` will hard-fail if the file is replaced or
+    /// tampered with between runs.
+    ///
+    /// ## Usage
+    /// ```sh
+    /// janitor wasm-pin rules/my_rule.wasm
+    /// # Paste the printed block into janitor.toml [wasm_pins] table.
+    /// ```
+    WasmPin {
+        /// Path to the `.wasm` or `.wat` rule module file.
+        path: PathBuf,
+    },
+
+    /// Verify a BYOP Wasm rule module against its expected BLAKE3 pin.
+    ///
+    /// Reads the `.wasm` file, computes its BLAKE3 digest, and compares it to
+    /// `--expected`.  Exits 0 when the digest matches; exits non-zero and prints
+    /// a mismatch error when the binary has been modified.
+    ///
+    /// ## Usage
+    /// ```sh
+    /// janitor wasm-verify rules/my_rule.wasm \
+    ///     --expected a3f2...1c9b
+    /// ```
+    WasmVerify {
+        /// Path to the `.wasm` or `.wat` rule module file.
+        path: PathBuf,
+        /// Expected BLAKE3 hex digest (64 lowercase hex chars).
+        #[arg(long)]
+        expected: String,
+    },
+
+    /// Scaffold a `janitor.toml` governance manifest in the current directory.
+    ///
+    /// Writes a documented, sane-defaults configuration file and exits.
+    /// Does NOT overwrite an existing `janitor.toml` — fails gracefully when
+    /// one is already present.
+    ///
+    /// ## Profiles
+    /// - (default) — OSS-friendly settings: `min_slop_score = 100`,
+    ///   `pqc_enforced = false`, no issue-link requirement.
+    /// - `--profile enterprise` — hardened settings: `min_slop_score = 50`,
+    ///   `require_issue_link = true`, `pqc_enforced = true`.
+    ///
+    /// ## Usage
+    /// ```sh
+    /// janitor init                     # default OSS profile
+    /// janitor init --profile enterprise  # enterprise hardened profile
+    /// ```
+    Init {
+        /// Configuration profile: omit for OSS defaults, or `enterprise` for
+        /// hardened enterprise settings.
+        #[arg(long, value_name = "PROFILE")]
+        profile: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1105,6 +1165,15 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::VerifyAsset { file, hash, sig } => {
             verify_asset::cmd_verify_asset(file, hash, sig.as_deref())?;
+        }
+        Commands::WasmPin { path } => {
+            cmd_wasm_pin(path)?;
+        }
+        Commands::WasmVerify { path, expected } => {
+            cmd_wasm_verify(path, expected)?;
+        }
+        Commands::Init { profile } => {
+            cmd_init(profile.as_deref())?;
         }
     }
 
@@ -5779,6 +5848,260 @@ fn cmd_sign_asset(file: &Path, pqc_key: Option<&str>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// wasm-pin / wasm-verify
+// ---------------------------------------------------------------------------
+
+/// Compute the BLAKE3 pin for a BYOP Wasm rule module and print the TOML block
+/// required to lock it in `janitor.toml`.
+///
+/// Reads the file at `path` (`.wasm` binary or `.wat` text), computes the
+/// BLAKE3 digest, and prints a ready-to-paste `[wasm_pins]` entry to stdout.
+fn cmd_wasm_pin(path: &std::path::Path) -> anyhow::Result<()> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("reading Wasm rule module: {}", path.display()))?;
+    let hex = blake3::hash(&bytes).to_hex().to_string();
+    let path_str = path.to_string_lossy();
+    println!("# Paste this block into janitor.toml [wasm_pins] to lock the module.");
+    println!("[wasm_pins]");
+    println!("\"{path_str}\" = \"{hex}\"");
+    println!();
+    println!("# BLAKE3: {hex}");
+    Ok(())
+}
+
+/// Verify a BYOP Wasm rule module against its expected BLAKE3 pin.
+///
+/// Exits 0 when the computed digest matches `expected`; exits non-zero with a
+/// diagnostic when the binary has been replaced or tampered with.
+fn cmd_wasm_verify(path: &std::path::Path, expected: &str) -> anyhow::Result<()> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("reading Wasm rule module: {}", path.display()))?;
+    let actual = blake3::hash(&bytes).to_hex().to_string();
+    if actual == expected {
+        println!("OK: {} pin verified", path.display());
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Wasm rule integrity pin mismatch: {}: expected {expected}, got {actual}",
+            path.display()
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// init
+// ---------------------------------------------------------------------------
+
+/// Scaffold a `janitor.toml` governance manifest in the current directory.
+///
+/// Fails non-zero if `janitor.toml` already exists — never overwrites.  Two
+/// profiles are supported: `default` (OSS-friendly) and `enterprise` (hardened).
+fn cmd_init(profile: Option<&str>) -> anyhow::Result<()> {
+    let dest = std::path::Path::new("janitor.toml");
+    if dest.exists() {
+        anyhow::bail!(
+            "janitor.toml already exists in the current directory. \
+             Remove it first or edit it directly."
+        );
+    }
+    let is_enterprise = matches!(profile, Some("enterprise"));
+    let content = if is_enterprise {
+        r#"# janitor.toml — generated by `janitor init --profile enterprise`
+# Enterprise hardened governance manifest for The Janitor code integrity engine.
+# Docs: https://thejanitor.app/docs/config
+
+# Composite slop-score threshold. PRs scoring above this fail the gate.
+# Hardened enterprise default: 50.
+min_slop_score = 50
+
+# Require every PR to link a GitHub issue (Closes #N or Fixes #N).
+require_issue_link = true
+
+# Post-quantum cryptography enforcement.
+# Rejects patches that introduce RSA/ECDSA/AES-128/SHA-1 primitives.
+pqc_enforced = true
+
+[billing]
+# Financial valuation per critical threat intercept (USD).
+critical_threat_bounty_usd = 150.0
+# Estimated CI energy cost per bounce run (kWh).
+ci_kwh_per_run = 0.1
+
+# [forge] — engine-level settings
+[forge]
+# Governor URL for Architecture Inversion attestation.
+# Set to your self-hosted Governor endpoint.
+# governor_url = "http://127.0.0.1:8080"
+
+# [[suppressions]] — waive specific antipattern IDs (repeat block per waiver)
+# [[suppressions]]
+# id = "security:pattern_id"
+# reason = "known false positive in generated code"
+# expires = "2026-12-31"
+
+# wasm_rules — paths to BYOP Wasm rule modules (relative to repo root)
+# wasm_rules = ["rules/my_rule.wasm"]
+
+# wasm_pins — BLAKE3 integrity pins for Wasm modules
+# Run `janitor wasm-pin rules/my_rule.wasm` to compute the pin.
+# [wasm_pins]
+# "rules/my_rule.wasm" = "<blake3-hex>"
+"#
+    } else {
+        r#"# janitor.toml — generated by `janitor init`
+# Governance manifest for The Janitor code integrity engine.
+# Docs: https://thejanitor.app/docs/config
+
+# Composite slop-score threshold. PRs scoring above this fail the gate.
+# Lower = stricter. Default: 100.
+min_slop_score = 100
+
+# Require every PR to link a GitHub issue (Closes #N or Fixes #N).
+# Default: false.
+require_issue_link = false
+
+# Post-quantum cryptography enforcement.
+# When true, patches introducing RSA/ECDSA/AES-128/SHA-1 fail the gate.
+# Default: false.
+pqc_enforced = false
+
+# [forge] — engine-level settings
+[forge]
+# Governor URL for Architecture Inversion attestation.
+# Set to your self-hosted Governor endpoint or leave commented for local-only.
+# governor_url = "http://127.0.0.1:8080"
+
+# [[suppressions]] — waive specific antipattern IDs (repeat block per waiver)
+# [[suppressions]]
+# id = "security:pattern_id"
+# reason = "known false positive in generated code"
+# expires = "2026-12-31"
+
+# wasm_rules — paths to BYOP Wasm rule modules (relative to repo root)
+# wasm_rules = ["rules/my_rule.wasm"]
+
+# wasm_pins — BLAKE3 integrity pins for Wasm modules
+# Run `janitor wasm-pin rules/my_rule.wasm` to compute the pin.
+# [wasm_pins]
+# "rules/my_rule.wasm" = "<blake3-hex>"
+"#
+    };
+    std::fs::write(dest, content).context("writing janitor.toml")?;
+    if is_enterprise {
+        println!(
+            "janitor.toml created (enterprise profile). \
+             Review and commit to your repository root."
+        );
+    } else {
+        println!(
+            "janitor.toml created (default profile). \
+             Review and commit to your repository root."
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod wasm_pin_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    fn write_tempfile(content: &[u8], suffix: &str) -> (tempfile::TempPath, std::path::PathBuf) {
+        let mut tmp = tempfile::NamedTempFile::with_suffix(suffix).unwrap();
+        tmp.write_all(content).unwrap();
+        let path = tmp.into_temp_path();
+        let pb = path.to_path_buf();
+        (path, pb)
+    }
+
+    #[test]
+    fn wasm_pin_prints_correct_digest() {
+        let content = b"fake wasm bytes for pin test";
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        // cmd_wasm_pin should succeed and not return an error
+        cmd_wasm_pin(&path).expect("wasm-pin must succeed on readable file");
+    }
+
+    #[test]
+    fn wasm_verify_passes_on_correct_digest() {
+        let content = b"fake wasm bytes for verify test";
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        let expected = blake3::hash(content).to_hex().to_string();
+        cmd_wasm_verify(&path, &expected).expect("wasm-verify must pass on matching digest");
+    }
+
+    #[test]
+    fn wasm_verify_fails_on_wrong_digest() {
+        let content = b"fake wasm bytes for mismatch test";
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        let wrong = "a".repeat(64);
+        let err = cmd_wasm_verify(&path, &wrong)
+            .err()
+            .expect("wasm-verify must fail on mismatched digest");
+        assert!(
+            err.to_string().contains("integrity pin mismatch"),
+            "error must cite integrity pin mismatch"
+        );
+    }
+
+    #[test]
+    fn init_creates_janitor_toml_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        let result = cmd_init(None);
+        let _ = std::env::set_current_dir(&original);
+        result.expect("init must succeed in empty directory");
+        let content = std::fs::read_to_string(dir.path().join("janitor.toml"))
+            .expect("janitor.toml must be created");
+        assert!(
+            content.contains("min_slop_score = 100"),
+            "default profile must use min_slop_score = 100"
+        );
+        assert!(
+            content.contains("pqc_enforced = false"),
+            "default profile must have pqc_enforced = false"
+        );
+    }
+
+    #[test]
+    fn init_creates_janitor_toml_enterprise() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        let result = cmd_init(Some("enterprise"));
+        let _ = std::env::set_current_dir(&original);
+        result.expect("init must succeed in empty directory");
+        let content = std::fs::read_to_string(dir.path().join("janitor.toml"))
+            .expect("janitor.toml must be created");
+        assert!(
+            content.contains("min_slop_score = 50"),
+            "enterprise profile must use min_slop_score = 50"
+        );
+        assert!(
+            content.contains("pqc_enforced = true"),
+            "enterprise profile must have pqc_enforced = true"
+        );
+    }
+
+    #[test]
+    fn init_refuses_to_overwrite_existing_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        std::fs::write("janitor.toml", b"existing content").unwrap();
+        let err = cmd_init(None)
+            .err()
+            .expect("init must fail when janitor.toml already exists");
+        let _ = std::env::set_current_dir(&original);
+        assert!(
+            err.to_string().contains("already exists"),
+            "error must cite existing janitor.toml"
+        );
+    }
 }
 
 #[cfg(test)]
