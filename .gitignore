@@ -90,6 +90,7 @@ SOVEREIGN_BRIEFING.md
 .cursor/
 .windsurf/
 # Machine-local Claude Code state — never commit.
+.claude/
 .claude/settings.local.json
 .claude/mcp.json
 # Internal R&D intelligence — never push to public repo.
