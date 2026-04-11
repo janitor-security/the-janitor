@@ -649,18 +649,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-2-cross-file-taint-remaining-18-grammars" class="md-nav__link">
+  <a href="#p1-2-cross-file-taint-remaining-18-grammars-resolved-v1010-alpha4" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: Cross-File Taint — Remaining 18 Grammars
+      P1-2: Cross-File Taint — Remaining 18 Grammars — [RESOLVED v10.1.0-alpha.4]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-3-bitbucket-build-status-api-publisher" class="md-nav__link">
+  <a href="#p1-3-bitbucket-build-status-api-publisher-resolved-v1010-alpha4" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-3: Bitbucket Build Status API Publisher
+      P1-3: Bitbucket Build Status API Publisher — [RESOLVED v10.1.0-alpha.4]
     </span>
   </a>
   
@@ -856,18 +856,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-2-cross-file-taint-remaining-18-grammars" class="md-nav__link">
+  <a href="#p1-2-cross-file-taint-remaining-18-grammars-resolved-v1010-alpha4" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: Cross-File Taint — Remaining 18 Grammars
+      P1-2: Cross-File Taint — Remaining 18 Grammars — [RESOLVED v10.1.0-alpha.4]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-3-bitbucket-build-status-api-publisher" class="md-nav__link">
+  <a href="#p1-3-bitbucket-build-status-api-publisher-resolved-v1010-alpha4" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-3: Bitbucket Build Status API Publisher
+      P1-3: Bitbucket Build Status API Publisher — [RESOLVED v10.1.0-alpha.4]
     </span>
   </a>
   
@@ -999,36 +999,21 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
 </ul>
 <hr />
 <h2 id="p1-taint-spine-expansion">P1 — Taint Spine Expansion</h2>
-<h3 id="p1-2-cross-file-taint-remaining-18-grammars">P1-2: Cross-File Taint — Remaining 18 Grammars</h3>
+<h3 id="p1-2-cross-file-taint-remaining-18-grammars-resolved-v1010-alpha4">P1-2: Cross-File Taint — Remaining 18 Grammars — <strong>[RESOLVED v10.1.0-alpha.4]</strong></h3>
 <ul>
 <li><strong>Class</strong>: Detection Depth</li>
-<li><strong>Observation</strong>: Cross-file taint (<code>taint_catalog.rs</code>) covers Python, JS,
-  Java, TS, and Go. The remaining 18 grammars have no cross-file taint at all.
-  Checkmarx's primary differentiator is cross-file/cross-method taint.</li>
-<li><strong>Proposal</strong>: Extend <code>scan_cross_file_sinks</code> dispatch to Ruby, PHP, C#,
-  Kotlin, C/C++, Rust, Swift, Scala (8 highest-CVE-density languages).</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/forge/src/taint_catalog.rs</code>: new <code>scan_ruby()</code>, <code>scan_php()</code>,
-    <code>scan_csharp()</code>, <code>scan_kotlin()</code>, <code>scan_cpp()</code>, <code>scan_rust()</code>,
-    <code>scan_swift()</code>, <code>scan_scala()</code> functions.</li>
-<li>Each follows the established pattern: walk call nodes, match against
-    <code>CatalogView</code> exported taint records, emit <code>CrossFileSinkFinding</code>.</li>
+<li><strong>Resolved</strong>: <code>scan_cross_file_sinks</code> dispatch extended with 8 new arms: Ruby,
+  PHP, C#, Kotlin, C/C++, Rust, Swift, Scala. Each scanner walks call nodes using
+  grammar-confirmed node types, emits <code>CrossFileSinkFinding</code> on catalog matches.
+  16+ true-positive/true-negative tests pass. Depth guards (&gt;100) on all walkers.</li>
 </ul>
-<h3 id="p1-3-bitbucket-build-status-api-publisher">P1-3: Bitbucket Build Status API Publisher</h3>
+<h3 id="p1-3-bitbucket-build-status-api-publisher-resolved-v1010-alpha4">P1-3: Bitbucket Build Status API Publisher — <strong>[RESOLVED v10.1.0-alpha.4]</strong></h3>
 <ul>
 <li><strong>Class</strong>: SCM Integration</li>
-<li><strong>Observation</strong>: GitHub (annotations), GitLab (Commit Status API), and Azure
-  DevOps (Git Status API) have native verdict publishing. Bitbucket has env
-  detection and stderr annotation only — no native API call. Bitbucket Cloud
-  and Bitbucket Server are significant in enterprise (Atlassian stack).</li>
-<li><strong>Proposal</strong>: Implement <code>BitbucketStatusPublisher::publish_verdict</code> using the
-  Bitbucket Build Status REST API (<code>POST /2.0/repositories/{workspace}/{slug}/
-  commit/{sha}/statuses/build</code>).</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/common/src/scm.rs</code>: <code>ScmContext::from_pairs</code> captures
-    <code>BITBUCKET_ACCESS_TOKEN</code>; <code>BitbucketStatusPublisher::publish_verdict</code>
-    POSTs to the Build Status API.</li>
-<li>1 new unit test: <code>bitbucket_context_captures_api_credentials</code>.</li>
+<li><strong>Resolved</strong>: <code>ScmContext::from_pairs</code> captures <code>BITBUCKET_ACCESS_TOKEN</code>,
+  <code>BITBUCKET_WORKSPACE</code>, <code>BITBUCKET_REPO_SLUG</code>. <code>BitbucketStatusPublisher::publish_verdict</code>
+  POSTs to <code>https://api.bitbucket.org/2.0/repositories/{workspace}/{slug}/commit/{sha}/statuses/build</code>
+  with Bearer auth. Unit test <code>bitbucket_context_captures_api_credentials</code> added.</li>
 </ul>
 <h3 id="p1-4-marketplace-extensions-github-app-gitlab-integration-azdo-extension">P1-4: Marketplace Extensions (GitHub App / GitLab Integration / AzDO Extension)</h3>
 <ul>
