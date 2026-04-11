@@ -19,6 +19,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 - `docs/INNOVATION_LOG.md` *(modified)* — resolved `P1-4` and `P2-1` purged; new `P1-5` taint-spine expansion entry for Zig/Nim added.
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
 
+## 2026-04-11 — OSV.dev Synchronization & Slopsquat Expansion (v10.1.0-alpha.7)
+
+**Directive:** Replace the hardcoded slopsquat corpus with an OSV.dev-backed malicious package feed, persist the corpus as rkyv runtime state, rewire zero-copy slopsquat interception to a memory-mapped automaton, verify single-threaded workspace tests plus `just audit`, and prepare `10.1.0-alpha.7`.
+
+**Files modified:**
+- `.gitignore` *(modified)* — `.claude/` added so local agent state cannot pollute the worktree.
+- `crates/common/src/wisdom.rs` *(modified)* — `SlopsquatCorpus` added with serde+rkyv derives; corpus path/load helpers added for `.janitor/slopsquat_corpus.rkyv`.
+- `crates/cli/src/main.rs` *(modified)* — new `update-slopsquat` subcommand added; OSV malicious advisory index/record ingestion implemented for npm, PyPI, and crates.io; corpus persisted with the atomic write pattern; `update-wisdom` now refreshes the OSV slopsquat corpus instead of embedding a hardcoded list; deterministic parser/persistence tests added.
+- `crates/forge/src/slop_hunter.rs` *(modified)* — hardcoded slopsquat array removed; slopsquat detection now memory-maps `.janitor/slopsquat_corpus.rkyv`, builds a dynamic Aho-Corasick exact-match automaton, and fails safe to a minimal built-in corpus when runtime state is absent.
+- `crates/crucible/src/main.rs` *(modified)* — slopsquat regression fixtures now emit both `wisdom.rkyv` and `slopsquat_corpus.rkyv`, keeping Crucible aligned with the new runtime path.
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.6` to `10.1.0-alpha.7`.
+- `docs/INNOVATION_LOG.md` *(modified)* — resolved `P2-2` removed from the active innovation queue.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
 ## 2026-04-11 — Agentic Recon Interceptor & Zig Hardening (v10.1.0-alpha.5)
 
 **Directive:** IAC Snowflake Defense (wildcard IAM, unauthenticated Snowflake stages, hardcoded provider secrets) + Glassworm Defense (Zig grammar, `std.os.execv*`/`std.process.exec*` byte scan, `@cImport`+`system()` FFI bridge, `detect_secret_entropy` Zig multiline string fix).

@@ -1725,8 +1725,21 @@ mod tests {
     use super::*;
     use common::bloom::SlopsquatFilter;
     use common::deps::DependencyEcosystem;
-    use common::wisdom::{KevDependencyRule, WisdomSet};
+    use common::wisdom::{KevDependencyRule, SlopsquatCorpus, WisdomSet};
     use std::fs;
+
+    fn write_slopsquat_fixture(janitor_dir: &std::path::Path, packages: &[&str]) {
+        let mut wisdom = WisdomSet::default();
+        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus(packages);
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
+        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+
+        let corpus = SlopsquatCorpus {
+            package_names: packages.iter().map(|pkg| pkg.to_string()).collect(),
+        };
+        let corpus_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus).unwrap();
+        fs::write(janitor_dir.join("slopsquat_corpus.rkyv"), corpus_bytes).unwrap();
+    }
 
     /// Full gallery must pass — any detector regression here blocks `just audit`.
     #[test]
@@ -1842,14 +1855,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "node-express-secure-template",
+            ],
+        );
 
         let patch = "diff --git a/app.py b/app.py\n\
                      index 0000000..1111111 100644\n\
@@ -1882,14 +1895,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "node-express-secure-template",
+            ],
+        );
 
         let patch = "diff --git a/app.py b/app.py\n\
                      index 0000000..1111111 100644\n\
@@ -1918,14 +1931,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "node-express-secure-template",
+            ],
+        );
 
         let patch = "diff --git a/index.js b/index.js\n\
                      index 0000000..1111111 100644\n\
@@ -1958,14 +1971,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "node-express-secure-template",
+            ],
+        );
 
         let patch = "diff --git a/index.js b/index.js\n\
                      index 0000000..1111111 100644\n\
@@ -1994,14 +2007,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "django-tailwind-fast",
+            ],
+        );
 
         let patch = "diff --git a/src/lib.rs b/src/lib.rs\n\
                      index 0000000..1111111 100644\n\
@@ -2034,14 +2047,14 @@ index 1111111..2222222 100644
         let janitor_dir = dir.path().join(".janitor");
         fs::create_dir_all(&janitor_dir).unwrap();
 
-        let mut wisdom = WisdomSet::default();
-        wisdom.slopsquat_filter = SlopsquatFilter::from_seed_corpus([
-            "py-react-vsc",
-            "django-tailwind-fast",
-            "node-express-secure-template",
-        ]);
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).unwrap();
-        fs::write(janitor_dir.join("wisdom.rkyv"), wisdom_bytes).unwrap();
+        write_slopsquat_fixture(
+            &janitor_dir,
+            &[
+                "py-react-vsc",
+                "django-tailwind-fast",
+                "node-express-secure-template",
+            ],
+        );
 
         let patch = "diff --git a/src/lib.rs b/src/lib.rs\n\
                      index 0000000..1111111 100644\n\

@@ -67,6 +67,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use aho_corasick::{AhoCorasick, AhoCorasickKind, MatchKind};
+use memmap2::Mmap;
 use tree_sitter::{Language, Node};
 
 use crate::deobfuscate::normalize_payload;
@@ -422,11 +423,27 @@ impl QueryEngine {
 static ENGINE: OnceLock<Option<QueryEngine>> = OnceLock::new();
 thread_local! {
     static CURRENT_WISDOM_PATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    static CURRENT_SLOPSQUAT_MATCHER: RefCell<Option<SlopsquatMatcher>> = const { RefCell::new(None) };
+}
+
+const FALLBACK_SLOPSQUAT_PACKAGES: &[&str] = &[
+    "py-react-vsc",
+    "node-express-secure-template",
+    "tokio-async-std",
+];
+
+struct SlopsquatMatcher {
+    corpus_path: PathBuf,
+    _mmap: Option<Mmap>,
+    automaton: AhoCorasick,
 }
 
 pub fn set_current_wisdom_path(path: Option<&Path>) {
     CURRENT_WISDOM_PATH.with(|slot| {
         *slot.borrow_mut() = path.map(Path::to_path_buf);
+    });
+    CURRENT_SLOPSQUAT_MATCHER.with(|slot| {
+        slot.borrow_mut().take();
     });
 }
 
@@ -434,10 +451,108 @@ fn current_wisdom_path() -> Option<PathBuf> {
     CURRENT_WISDOM_PATH.with(|slot| slot.borrow().clone())
 }
 
+impl SlopsquatMatcher {
+    fn for_wisdom_path(wisdom_path: &Path) -> Self {
+        let corpus_path = common::wisdom::slopsquat_corpus_path_from_wisdom_path(wisdom_path);
+        match Self::load_from_archive(&corpus_path) {
+            Some(matcher) => matcher,
+            None => {
+                eprintln!(
+                    "warning: slopsquat corpus unavailable at {}; using minimal fallback corpus",
+                    corpus_path.display()
+                );
+                Self::fallback(corpus_path)
+            }
+        }
+    }
+
+    fn load_from_archive(corpus_path: &Path) -> Option<Self> {
+        let file = std::fs::File::open(corpus_path).ok()?;
+        // Zero-copy corpus load: keep the mmap resident for the lifetime of the matcher.
+        let mmap = unsafe { Mmap::map(&file).ok()? };
+        let archived =
+            rkyv::access::<common::wisdom::ArchivedSlopsquatCorpus, rkyv::rancor::Error>(&mmap)
+                .ok()?;
+        let patterns: Vec<String> = archived
+            .package_names
+            .iter()
+            .map(|name| slopsquat_pattern(name.as_str()))
+            .collect();
+        if patterns.is_empty() {
+            return None;
+        }
+
+        let automaton = build_slopsquat_automaton(patterns.iter().map(String::as_str))?;
+        Some(Self {
+            corpus_path: corpus_path.to_path_buf(),
+            _mmap: Some(mmap),
+            automaton,
+        })
+    }
+
+    fn fallback(corpus_path: PathBuf) -> Self {
+        let automaton = build_slopsquat_automaton(FALLBACK_SLOPSQUAT_PACKAGES.iter().copied())
+            .unwrap_or_else(|| {
+                AhoCorasick::builder()
+                    .kind(Some(AhoCorasickKind::DFA))
+                    .match_kind(MatchKind::LeftmostFirst)
+                    .build(["\npy-react-vsc\n"])
+                    .expect("slop_hunter: fallback slopsquat automaton build cannot fail")
+            });
+        Self {
+            corpus_path,
+            _mmap: None,
+            automaton,
+        }
+    }
+
+    fn contains(&self, package_name: &str) -> bool {
+        self.automaton
+            .is_match(slopsquat_pattern(package_name).as_bytes())
+    }
+}
+
+fn normalize_slopsquat_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase().replace('_', "-")
+}
+
+fn slopsquat_pattern(name: &str) -> String {
+    format!("\n{}\n", normalize_slopsquat_name(name))
+}
+
+fn build_slopsquat_automaton<'a, I>(patterns: I) -> Option<AhoCorasick>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let collected: Vec<&'a str> = patterns.into_iter().collect();
+    if collected.is_empty() {
+        return None;
+    }
+    AhoCorasick::builder()
+        .kind(Some(AhoCorasickKind::DFA))
+        .match_kind(MatchKind::LeftmostFirst)
+        .build(collected)
+        .ok()
+}
+
 fn slopsquat_wisdom_hit(name: &str) -> bool {
-    current_wisdom_path()
-        .as_deref()
-        .is_some_and(|path| common::wisdom::slopsquat_hit(name, path))
+    let Some(wisdom_path) = current_wisdom_path() else {
+        return false;
+    };
+
+    CURRENT_SLOPSQUAT_MATCHER.with(|slot| {
+        let should_reload = slot.borrow().as_ref().is_none_or(|matcher| {
+            matcher.corpus_path
+                != common::wisdom::slopsquat_corpus_path_from_wisdom_path(&wisdom_path)
+        });
+        if should_reload {
+            *slot.borrow_mut() = Some(SlopsquatMatcher::for_wisdom_path(&wisdom_path));
+        }
+
+        slot.borrow()
+            .as_ref()
+            .is_some_and(|matcher| matcher.contains(name))
+    })
 }
 
 fn js_package_name(raw: &str) -> Option<String> {

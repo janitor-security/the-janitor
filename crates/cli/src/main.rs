@@ -1,7 +1,7 @@
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -573,6 +573,11 @@ enum Commands {
         /// the KEV catalog across runs without parsing binary rkyv data.
         #[arg(long, default_value_t = false)]
         ci_mode: bool,
+    },
+    /// Synchronize the OSV malicious-package corpus into `.janitor/slopsquat_corpus.rkyv`.
+    UpdateSlopsquat {
+        /// Project root (writes .janitor/slopsquat_corpus.rkyv).
+        path: PathBuf,
     },
     /// Export bounce log as a CSV file for spreadsheet or notebook analysis.
     ///
@@ -1232,6 +1237,7 @@ async fn main() -> anyhow::Result<()> {
             daemon::unix::serve(std::path::Path::new(socket), &registry_path).await?;
         }
         Commands::UpdateWisdom { path, ci_mode } => cmd_update_wisdom(path, *ci_mode)?,
+        Commands::UpdateSlopsquat { path } => cmd_update_slopsquat(path)?,
         Commands::Export {
             repo,
             out,
@@ -4620,14 +4626,6 @@ fn cmd_update_wisdom_with_urls(
     if let Some(receipt) = mirror_receipt.as_ref() {
         write_wisdom_mirror_receipt(&janitor_dir, receipt)?;
     }
-    if ci_mode {
-        common::wisdom::validate_wisdom_archive(&wisdom_path).with_context(|| {
-            format!(
-                "update-wisdom --ci-mode: authoritative archive validation failed for {}",
-                wisdom_path.display()
-            )
-        })?;
-    }
 
     println!("\u{1f9e0} Wisdom Registry synchronized with Janitor Sentinel.");
 
@@ -4687,71 +4685,217 @@ fn cmd_update_wisdom_with_urls(
             janitor_dir.join("wisdom_manifest.json").display()
         );
     }
-
-    let mut wisdom = common::wisdom::load_wisdom_set(&wisdom_path).unwrap_or_default();
-    // Expanded slopsquat seed corpus — 30+ known AI-hallucinated and
-    // typographical package names that do not exist in authoritative registries
-    // (PyPI, npm, crates.io) but appear frequently in LLM-generated code.
-    // Seeded into the Bloom filter so that `janitor bounce` fires
-    // `security:slopsquat_dependency` when a manifest references one of these.
-    wisdom.slopsquat_filter = common::bloom::SlopsquatFilter::from_seed_corpus([
-        // Python hallucinations (PyPI ghost packages)
-        "py-react-vsc",
-        "django-tailwind-fast",
-        "requests-promise",
-        "fastapi-cors-middleware",
-        "py-yaml-safe",
-        "tensor-flow-gpu",
-        "scikit-learn-gpu",
-        "pandas-utils",
-        "numpy-extended",
-        "flask-restful-api",
-        "python-dotenv-safe",
-        "pydantic-settings-env",
-        "celery-redis-async",
-        "sqlalchemy-async-orm",
-        "pytest-async-fixtures",
-        "langchain-openai-llm",
-        "openai-python-client",
-        "huggingface-hub-api",
-        // JavaScript/Node hallucinations (npm ghost packages)
-        "node-express-secure-template",
-        "react-router-dom-v6",
-        "node-fetch-native-tls",
-        "express-async-middleware",
-        "axios-retry-interceptor",
-        "next-auth-providers",
-        "prisma-client-js-ext",
-        "typescript-eslint-utils",
-        "jest-dom-matchers",
-        "webpack-dev-server-proxy",
-        "vite-plugin-react-swc",
-        "tailwindcss-forms-plugin",
-        "shadcn-ui-components",
-        // Rust hallucinations (crates.io ghost crates)
-        "tokio-async-std",
-        "serde-json-utils",
-        "reqwest-blocking-client",
-        "axum-middleware-tower",
-        "sqlx-postgres-async",
-    ]);
-    wisdom.sort();
-    let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {
-        anyhow::anyhow!("update-wisdom: serializing slopsquat-seeded archive failed: {e}")
-    })?;
-    std::fs::write(&wisdom_path, wisdom_bytes.as_slice())
-        .with_context(|| format!("writing {}", wisdom_path.display()))?;
-    println!("\u{1f6e1}\u{fe0f} Slopsquat seed corpus installed.");
+    let osv_agent = ureq::Agent::new_with_defaults();
+    cmd_update_slopsquat_with_agent(project_root, &osv_agent)?;
 
     if ci_mode {
         common::wisdom::validate_wisdom_archive(&wisdom_path).with_context(|| {
             format!(
-                "update-wisdom --ci-mode: seeded archive validation failed for {}",
+                "update-wisdom --ci-mode: authoritative archive validation failed for {}",
                 wisdom_path.display()
             )
         })?;
     }
 
+    Ok(())
+}
+
+const OSV_DUMP_BASE_URL: &str = "https://storage.googleapis.com/osv-vulnerabilities";
+const OSV_API_BASE_URL: &str = "https://api.osv.dev/v1/vulns";
+const OSV_MALICIOUS_ECOSYSTEMS: &[(&str, &str)] =
+    &[("npm", "npm"), ("PyPI", "PyPI"), ("crates.io", "crates.io")];
+
+#[derive(Debug, serde::Deserialize)]
+struct OsvVulnerability {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(default)]
+    affected: Vec<OsvAffected>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OsvAffected {
+    #[serde(default)]
+    package: Option<OsvPackage>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OsvPackage {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    ecosystem: String,
+}
+
+fn cmd_update_slopsquat(project_root: &Path) -> anyhow::Result<()> {
+    let agent = ureq::Agent::new_with_defaults();
+    cmd_update_slopsquat_with_agent(project_root, &agent)
+}
+
+fn cmd_update_slopsquat_with_agent(project_root: &Path, agent: &ureq::Agent) -> anyhow::Result<()> {
+    let janitor_dir = project_root.join(".janitor");
+    std::fs::create_dir_all(&janitor_dir)
+        .with_context(|| format!("creating {}", janitor_dir.display()))?;
+
+    let corpus = fetch_osv_slopsquat_corpus(agent)?;
+    let corpus_path = common::wisdom::slopsquat_corpus_path(&janitor_dir);
+    let corpus_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus)
+        .map_err(|e| anyhow::anyhow!("update-slopsquat: serializing corpus failed: {e}"))?;
+    write_atomic_bytes(&corpus_path, corpus_bytes.as_slice())?;
+
+    let wisdom_path = janitor_dir.join("wisdom.rkyv");
+    if let Some(mut wisdom) = common::wisdom::load_wisdom_set(&wisdom_path) {
+        wisdom.slopsquat_filter =
+            common::bloom::SlopsquatFilter::from_seed_corpus(corpus.package_names.iter());
+        wisdom.sort();
+        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {
+            anyhow::anyhow!("update-slopsquat: serializing wisdom archive failed: {e}")
+        })?;
+        write_atomic_bytes(&wisdom_path, wisdom_bytes.as_slice())?;
+    }
+
+    println!(
+        "\u{1f6e1}\u{fe0f} OSV slopsquat corpus synchronized: {} packages \u{2192} {}",
+        corpus.package_names.len(),
+        corpus_path.display()
+    );
+    Ok(())
+}
+
+fn fetch_osv_slopsquat_corpus(
+    agent: &ureq::Agent,
+) -> anyhow::Result<common::wisdom::SlopsquatCorpus> {
+    let mut packages = BTreeSet::new();
+    for (dump_dir, ecosystem) in OSV_MALICIOUS_ECOSYSTEMS {
+        let index_url = format!("{OSV_DUMP_BASE_URL}/{dump_dir}/modified_id.csv");
+        let mut response = agent
+            .get(&index_url)
+            .call()
+            .map_err(|_e| anyhow::anyhow!("update-slopsquat: OSV advisory index fetch failed"))?;
+        let index_bytes = response.body_mut().read_to_vec().map_err(|_e| {
+            anyhow::anyhow!("update-slopsquat: reading OSV advisory index response failed")
+        })?;
+
+        for advisory_id in parse_osv_modified_ids(&index_bytes) {
+            let advisory = fetch_osv_vulnerability(agent, dump_dir, &advisory_id)?;
+            for package_name in parse_osv_malicious_package_names(&advisory, ecosystem) {
+                packages.insert(package_name);
+            }
+        }
+    }
+
+    anyhow::ensure!(
+        !packages.is_empty(),
+        "update-slopsquat: OSV synchronization produced an empty malicious package corpus"
+    );
+
+    Ok(common::wisdom::SlopsquatCorpus {
+        package_names: packages.into_iter().collect(),
+    })
+}
+
+fn fetch_osv_vulnerability(
+    agent: &ureq::Agent,
+    dump_dir: &str,
+    advisory_id: &str,
+) -> anyhow::Result<OsvVulnerability> {
+    let dump_url = format!("{OSV_DUMP_BASE_URL}/{dump_dir}/{advisory_id}.json");
+    match agent.get(&dump_url).call() {
+        Ok(mut response) => response
+            .body_mut()
+            .read_json::<OsvVulnerability>()
+            .map_err(|_e| anyhow::anyhow!("update-slopsquat: parsing OSV advisory JSON failed")),
+        Err(_) => {
+            let api_url = format!("{OSV_API_BASE_URL}/{advisory_id}");
+            let mut response = agent
+                .get(&api_url)
+                .call()
+                .map_err(|_e| anyhow::anyhow!("update-slopsquat: OSV advisory fetch failed"))?;
+            response
+                .body_mut()
+                .read_json::<OsvVulnerability>()
+                .map_err(|_e| anyhow::anyhow!("update-slopsquat: parsing OSV advisory JSON failed"))
+        }
+    }
+}
+
+fn parse_osv_modified_ids(index_bytes: &[u8]) -> Vec<String> {
+    let Ok(index) = std::str::from_utf8(index_bytes) else {
+        return Vec::new();
+    };
+
+    let mut ids = BTreeSet::new();
+    for line in index.lines() {
+        let advisory_id = line.split(',').next().unwrap_or_default().trim();
+        if advisory_id.is_empty() || advisory_id.eq_ignore_ascii_case("id") {
+            continue;
+        }
+        if advisory_id.starts_with("MAL-") {
+            ids.insert(advisory_id.to_string());
+        }
+    }
+    ids.into_iter().collect()
+}
+
+fn parse_osv_malicious_package_names(record: &OsvVulnerability, ecosystem: &str) -> Vec<String> {
+    let is_malicious = record.id.starts_with("MAL-")
+        || record.aliases.iter().any(|alias| alias.starts_with("MAL-"));
+    if !is_malicious {
+        return Vec::new();
+    }
+
+    let mut names = BTreeSet::new();
+    for affected in &record.affected {
+        let Some(package) = affected.package.as_ref() else {
+            continue;
+        };
+        if !package.ecosystem.eq_ignore_ascii_case(ecosystem) {
+            continue;
+        }
+        let normalized = package.name.trim().to_ascii_lowercase().replace('_', "-");
+        if !normalized.is_empty() {
+            names.insert(normalized);
+        }
+    }
+
+    names.into_iter().collect()
+}
+
+fn write_atomic_bytes(path: &Path, content: &[u8]) -> anyhow::Result<()> {
+    use std::io::Write as _;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            anyhow::bail!(
+                "write rejected: {} is a symlink — potential symlink overwrite attack",
+                path.display()
+            );
+        }
+    }
+
+    let tmp_path = path.with_extension(format!(
+        "{}.tmp",
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("bin")
+    ));
+    {
+        let mut tmp = std::fs::File::create(&tmp_path)
+            .with_context(|| format!("creating {}", tmp_path.display()))?;
+        tmp.write_all(content)
+            .with_context(|| format!("writing to {}", tmp_path.display()))?;
+        tmp.sync_all()
+            .with_context(|| format!("sync_all on {}", tmp_path.display()))?;
+    }
+    std::fs::rename(&tmp_path, path)
+        .with_context(|| format!("atomic rename {} → {}", tmp_path.display(), path.display()))?;
     Ok(())
 }
 
@@ -6592,5 +6736,55 @@ mod sign_asset_tests {
             expected,
             "BLAKE3 hash file must match blake3::hash output"
         );
+    }
+}
+
+#[cfg(test)]
+mod slopsquat_sync_tests {
+    use super::*;
+
+    #[test]
+    fn parse_osv_modified_ids_filters_to_mal_prefixes() {
+        let csv = b"id,modified\nMAL-2026-1,2026-04-10T00:00:00Z\nGHSA-123,2026-04-10T00:00:00Z\nMAL-2026-2,2026-04-11T00:00:00Z\n";
+        let ids = parse_osv_modified_ids(csv);
+        assert_eq!(
+            ids,
+            vec!["MAL-2026-1".to_string(), "MAL-2026-2".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_osv_malicious_package_names_extracts_target_ecosystem() {
+        let advisory_json = serde_json::json!({
+            "id": "MAL-2026-2048",
+            "aliases": ["GHSA-test"],
+            "affected": [
+                { "package": { "ecosystem": "npm", "name": "@Acme/Public-API-SDK" } },
+                { "package": { "ecosystem": "PyPI", "name": "Ignored-Python" } },
+                { "package": { "ecosystem": "npm", "name": "@acme/public_api_sdk" } }
+            ]
+        });
+        let advisory: OsvVulnerability =
+            serde_json::from_value(advisory_json).expect("advisory JSON must deserialize");
+
+        let package_names = parse_osv_malicious_package_names(&advisory, "npm");
+        assert_eq!(package_names, vec!["@acme/public-api-sdk".to_string()]);
+    }
+
+    #[test]
+    fn update_slopsquat_persists_rkyv_corpus() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let corpus = common::wisdom::SlopsquatCorpus {
+            package_names: vec!["py-react-vsc".to_string(), "tokio-async-std".to_string()],
+        };
+        let corpus_path = common::wisdom::slopsquat_corpus_path(&dir.path().join(".janitor"));
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus)
+            .expect("corpus serialization must succeed");
+
+        write_atomic_bytes(&corpus_path, bytes.as_slice()).expect("atomic write must succeed");
+
+        let loaded =
+            common::wisdom::load_slopsquat_corpus(&corpus_path).expect("corpus must deserialize");
+        assert_eq!(loaded, corpus);
     }
 }

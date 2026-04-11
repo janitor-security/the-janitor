@@ -103,6 +103,28 @@ pub struct WisdomSet {
 #[derive(
     Debug,
     Clone,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Archive,
+    Deserialize,
+    Serialize,
+    SerdeSerialize,
+    SerdeDeserialize,
+    CheckBytes,
+)]
+#[rkyv(derive(Debug, PartialEq, Eq, PartialOrd, Ord))]
+#[repr(C)]
+pub struct SlopsquatCorpus {
+    #[serde(default)]
+    pub package_names: Vec<String>,
+}
+
+#[derive(
+    Debug,
+    Clone,
     PartialEq,
     Eq,
     PartialOrd,
@@ -333,6 +355,23 @@ pub fn slopsquat_hit(name: &str, wisdom_db: &Path) -> bool {
         return false;
     };
     wisdom.slopsquat_filter.probably_contains(name)
+}
+
+pub fn slopsquat_corpus_path(janitor_dir: &Path) -> PathBuf {
+    janitor_dir.join("slopsquat_corpus.rkyv")
+}
+
+pub fn slopsquat_corpus_path_from_wisdom_path(wisdom_path: &Path) -> PathBuf {
+    wisdom_path
+        .parent()
+        .map(slopsquat_corpus_path)
+        .unwrap_or_else(|| PathBuf::from(".janitor").join("slopsquat_corpus.rkyv"))
+}
+
+pub fn load_slopsquat_corpus(path: &Path) -> Option<SlopsquatCorpus> {
+    let bytes = std::fs::read(path).ok()?;
+    let archived = rkyv::access::<ArchivedSlopsquatCorpus, rkyv::rancor::Error>(&bytes).ok()?;
+    rkyv::deserialize::<SlopsquatCorpus, rkyv::rancor::Error>(archived).ok()
 }
 
 /// Resolve and validate the KEV dependency database under `janitor_dir`.
