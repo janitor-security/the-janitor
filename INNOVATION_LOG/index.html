@@ -691,15 +691,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-2-llm-hallucination-firewall-phantom-dependency-detector" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: LLM Hallucination Firewall (Phantom Dependency Detector)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p2-3-wasm-rule-marketplace" class="md-nav__link">
     <span class="md-ellipsis">
       P2-3: Wasm Rule Marketplace
@@ -889,15 +880,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-2-llm-hallucination-firewall-phantom-dependency-detector" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: LLM Hallucination Firewall (Phantom Dependency Detector)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p2-3-wasm-rule-marketplace" class="md-nav__link">
     <span class="md-ellipsis">
       P2-3: Wasm Rule Marketplace
@@ -1015,25 +997,6 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
 </ul>
 <hr />
 <h2 id="p2-the-unfair-advantage">P2 — The Unfair Advantage</h2>
-<h3 id="p2-2-llm-hallucination-firewall-phantom-dependency-detector">P2-2: LLM Hallucination Firewall (Phantom Dependency Detector)</h3>
-<ul>
-<li><strong>Class</strong>: AI Supply Chain / Slopsquat</li>
-<li><strong>Observation</strong>: LLMs hallucinate package names that don't exist on registries.
-  Attackers register these hallucinated names and publish malware (slopsquatting).
-  We already detect known slopsquat imports in Python/JS/Rust via corpus match.
-  The corpus (43 entries) is tiny. Semgrep's supply chain tool uses the OSV.dev
-  malicious package database.</li>
-<li><strong>Proposal</strong>: Expand the slopsquat corpus to 500+ entries by ingesting the
-  OSV.dev malicious-packages dataset. Add a <code>janitor update-slopsquat</code> command
-  that fetches the latest OSV malicious-package advisories and rebuilds the
-  AhoCorasick automaton.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/cli/src/main.rs</code>: <code>cmd_update_slopsquat</code> fetches OSV API
-    (<code>/v1/query</code> with <code>ecosystem</code> filter for npm, PyPI, crates.io).</li>
-<li><code>crates/forge/src/slop_hunter.rs</code>: slopsquat corpus loaded from
-    <code>.janitor/slopsquat_corpus.rkyv</code> (rkyv zero-copy) instead of hardcoded array.</li>
-<li><code>crates/common/src/wisdom.rs</code>: <code>SlopsquatCorpus</code> struct with rkyv derives.</li>
-</ul>
 <h3 id="p2-3-wasm-rule-marketplace">P2-3: Wasm Rule Marketplace</h3>
 <ul>
 <li><strong>Class</strong>: Platform / Ecosystem</li>

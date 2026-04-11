@@ -634,6 +634,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-osvdev-synchronization-slopsquat-expansion-v1010-alpha7" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — OSV.dev Synchronization &amp; Slopsquat Expansion (v10.1.0-alpha.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)
@@ -1375,6 +1384,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-osvdev-synchronization-slopsquat-expansion-v1010-alpha7" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — OSV.dev Synchronization &amp; Slopsquat Expansion (v10.1.0-alpha.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)
@@ -2097,6 +2115,20 @@ implemented as a result. Maintained by the Evolution Tracker skill.</p>
 - <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped from <code>10.1.0-alpha.5</code> to <code>10.1.0-alpha.6</code>.
 - <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — resolved <code>P1-4</code> and <code>P2-1</code> purged; new <code>P1-5</code> taint-spine expansion entry for Zig/Nim added.
 - <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
+<h2 id="2026-04-11-osvdev-synchronization-slopsquat-expansion-v1010-alpha7">2026-04-11 — OSV.dev Synchronization &amp; Slopsquat Expansion (v10.1.0-alpha.7)</h2>
+<p><strong>Directive:</strong> Replace the hardcoded slopsquat corpus with an OSV.dev-backed malicious package feed, persist the corpus as rkyv runtime state, rewire zero-copy slopsquat interception to a memory-mapped automaton, verify single-threaded workspace tests plus <code>just audit</code>, and prepare <code>10.1.0-alpha.7</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>.gitignore</code> <em>(modified)</em> — <code>.claude/</code> added so local agent state cannot pollute the worktree.
+- <code>crates/common/src/wisdom.rs</code> <em>(modified)</em> — <code>SlopsquatCorpus</code> added with serde+rkyv derives; corpus path/load helpers added for <code>.janitor/slopsquat_corpus.rkyv</code>.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — new <code>update-slopsquat</code> subcommand added; OSV malicious advisory index/record ingestion implemented for npm, PyPI, and crates.io; corpus persisted with the atomic write pattern; <code>update-wisdom</code> now refreshes the OSV slopsquat corpus instead of embedding a hardcoded list; deterministic parser/persistence tests added.
+- <code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — hardcoded slopsquat array removed; slopsquat detection now memory-maps <code>.janitor/slopsquat_corpus.rkyv</code>, builds a dynamic Aho-Corasick exact-match automaton, and fails safe to a minimal built-in corpus when runtime state is absent.
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — slopsquat regression fixtures now emit both <code>wisdom.rkyv</code> and <code>slopsquat_corpus.rkyv</code>, keeping Crucible aligned with the new runtime path.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped from <code>10.1.0-alpha.6</code> to <code>10.1.0-alpha.7</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — resolved <code>P2-2</code> removed from the active innovation queue.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅</p>
 <h2 id="2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5">2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)</h2>
 <p><strong>Directive:</strong> IAC Snowflake Defense (wildcard IAM, unauthenticated Snowflake stages, hardcoded provider secrets) + Glassworm Defense (Zig grammar, <code>std.os.execv*</code>/<code>std.process.exec*</code> byte scan, <code>@cImport</code>+<code>system()</code> FFI bridge, <code>detect_secret_entropy</code> Zig multiline string fix).</p>
 <p><strong>Files modified:</strong>
