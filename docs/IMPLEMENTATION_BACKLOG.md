@@ -5,6 +5,19 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — Agentic Recon Interceptor & Zig Hardening (v10.1.0-alpha.5)
+
+**Directive:** IAC Snowflake Defense (wildcard IAM, unauthenticated Snowflake stages, hardcoded provider secrets) + Glassworm Defense (Zig grammar, `std.os.execv*`/`std.process.exec*` byte scan, `@cImport`+`system()` FFI bridge, `detect_secret_entropy` Zig multiline string fix).
+
+**Files modified:**
+- `Cargo.toml` — `tree-sitter-zig = "1.1.2"` workspace dep; version `10.1.0-alpha.4` → `10.1.0-alpha.5`
+- `crates/polyglot/Cargo.toml` — `tree-sitter-zig.workspace = true`
+- `crates/polyglot/src/lib.rs` — `ZIG` OnceLock static; `"zig"` extension arm; test array updated
+- `crates/forge/src/slop_hunter.rs` — `find_iac_agentic_recon_slop` (IAM wildcard, Snowflake unauth stage, provider hardcoded secret) called from `find_hcl_slop`; `find_zig_slop` (ZIG_EXEC_PATTERNS AC automaton + `@cImport`+`system()` gate) + `"zig"` dispatch arm; `detect_secret_entropy` Zig `\\` prefix strip
+- `crates/crucible/src/main.rs` — 7 new entries: 3 IAC-1/2/3 true-positive + 3 true-negative + 1 Zig TN; Zig ZIG-1/ZIG-2/ZIG-3 true-positives
+
+---
+
 ## 2026-04-10 — Atlassian Integration & Legacy Taint Sweep (v10.1.0-alpha.4)
 
 **Directive:** Expand cross-file taint detection to 8 additional grammars (Ruby, PHP, C#, Kotlin, C/C++, Rust, Swift, Scala) and implement Bitbucket Cloud Build Status API verdict publishing.

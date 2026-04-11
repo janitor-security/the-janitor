@@ -19,6 +19,11 @@
 //! | CMake | `execute_process(COMMAND ${VAR})` | Variable-driven command execution enables search-path / command injection |
 //! | HCL/Terraform | Open CIDR `0.0.0.0/0` | Wildcard ingress rule exposes resource to the entire internet |
 //! | HCL/Terraform | `public-read` S3 ACL | Public S3 bucket exposes data to the internet |
+//! | HCL/Terraform | `aws_iam_role` + `Action "*"` / `Resource "*"` | Wildcard IAM privilege escalation — agentic recon target |
+//! | HCL/Terraform | `snowflake_stage` + `url` without auth | Unauthenticated external stage — data exfil vector |
+//! | HCL/Terraform | Literal `password`/`secret_key` in `provider` block | Hardcoded cloud credential — git-clone exfil |
+//! | Zig | `std.os.execv*`, `std.process.exec*` | Process exec with dynamic args — Glassworm lateral movement |
+//! | Zig | `@cImport` + C `system()` | FFI bridge to shell exec sink — bypasses Zig safety |
 //! | Python | `subprocess` with `shell=True` | Potential shell injection when combined with string concatenation |
 //! | JS/TS | `innerHTML` assignment | Direct DOM XSS vector — use `textContent` or sanitize input |
 //! | JS/TS | `.__proto__`, `["__proto__"]`, `[constructor][prototype]` | Prototype pollution via direct proto key access (Layer A AhoCorasick) |
@@ -581,6 +586,8 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "nix" => find_nix_slop(eng, parsed),
         "gd" => find_gdscript_slop(eng, parsed),
         "m" | "mm" => find_objc_slop(eng, parsed),
+        // Glassworm Defense: Zig process-execution and FFI-bridge byte scan
+        "zig" => find_zig_slop(source),
         "cs" => {
             let mut f = find_csharp_sqli_slop(source);
             f.extend(find_csharp_slop_fast(source));
@@ -1114,7 +1121,166 @@ fn find_hcl_slop(source: &[u8]) -> Vec<SlopFinding> {
     let mut findings = Vec::new();
     find_hcl_open_cidr(source, &mut findings);
     find_hcl_s3_public_acl(source, &mut findings);
+    findings.extend(find_iac_agentic_recon_slop(source));
     findings
+}
+
+// ---------------------------------------------------------------------------
+// HCL/Terraform: Agentic Reconnaissance Interceptor (IAC-Snowflake Defense)
+// ---------------------------------------------------------------------------
+
+/// Detect overly permissive IAM roles, unauthenticated Snowflake stages, and
+/// hardcoded provider credentials — the three cloud resource primitives that
+/// autonomous agents probe first when mapping exploitable attack surface.
+///
+/// Each finding fires at `KevCritical` (+150 pts) because a merged Terraform
+/// file containing any of these patterns grants immediate lateral movement
+/// capability to any actor with cloud read access.
+///
+/// ## Patterns detected
+///
+/// | Pattern | Threat |
+/// |---------|--------|
+/// | `aws_iam_role` + `Action "*"` / `Resource "*"` | Wildcard privilege escalation pivot |
+/// | `snowflake_stage` + `url` without `storage_integration`/`credentials` | Unauthenticated external stage |
+/// | `provider` block with literal `password` / `secret_key` | Hardcoded cloud credential |
+pub fn find_iac_agentic_recon_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let mut findings = Vec::new();
+    find_iam_wildcard_action(source, &mut findings);
+    find_snowflake_unauth_stage(source, &mut findings);
+    find_provider_hardcoded_secret(source, &mut findings);
+    findings
+}
+
+/// Detect `aws_iam_role` with wildcard `Action` or `Resource` value.
+///
+/// Autonomous agents enumerate IAM roles with wildcard privileges as the
+/// highest-priority lateral-movement pivot in a cloud environment — one
+/// compromised EC2 instance with `"Action": "*"` becomes unrestricted root.
+fn find_iam_wildcard_action(source: &[u8], findings: &mut Vec<SlopFinding>) {
+    const IAM_ROLE: &[u8] = b"aws_iam_role";
+    if !source.windows(IAM_ROLE.len()).any(|w| w == IAM_ROLE) {
+        return;
+    }
+    // Wildcard value inside an Action or Resource JSON stanza.
+    const WILDCARD: &[u8] = b"\"*\"";
+    for (i, _) in source
+        .windows(WILDCARD.len())
+        .enumerate()
+        .filter(|(_, w)| *w == WILDCARD)
+    {
+        let window_start = i.saturating_sub(512);
+        let context = &source[window_start..i];
+        let has_action = context.windows(b"Action".len()).any(|w| w == b"Action");
+        let has_resource = context.windows(b"Resource".len()).any(|w| w == b"Resource");
+        if has_action || has_resource {
+            findings.push(SlopFinding {
+                start_byte: i,
+                end_byte: i + WILDCARD.len(),
+                description: "security:iac_agentic_recon_target — aws_iam_role with \
+                    wildcard Action or Resource (\"*\") grants unrestricted privilege; \
+                    autonomous agents enumerate this as the highest-priority lateral-movement \
+                    pivot — restrict to the minimum required action set and specific ARNs"
+                    .to_string(),
+                domain: DOMAIN_ALL,
+                severity: Severity::KevCritical,
+            });
+            return; // One finding per file prevents noise on policy documents with multiple stanzas.
+        }
+    }
+}
+
+/// Detect a Snowflake external stage with a `url` attribute and no
+/// `storage_integration` or `credentials` block.
+///
+/// An unauthenticated Snowflake stage with an external URL exposes cloud
+/// storage to enumeration without IAM controls — an agent scanning for
+/// open data stores can retrieve any object the stage points to.
+fn find_snowflake_unauth_stage(source: &[u8], findings: &mut Vec<SlopFinding>) {
+    const SNOWFLAKE_STAGE: &[u8] = b"snowflake_stage";
+    if !source
+        .windows(SNOWFLAKE_STAGE.len())
+        .any(|w| w == SNOWFLAKE_STAGE)
+    {
+        return;
+    }
+    const URL_FIELD: &[u8] = b"url";
+    if !source.windows(URL_FIELD.len()).any(|w| w == URL_FIELD) {
+        return;
+    }
+    const AUTH_MARKERS: &[&[u8]] = &[b"storage_integration", b"credentials"];
+    let has_auth = AUTH_MARKERS
+        .iter()
+        .any(|m| source.windows(m.len()).any(|w| w == *m));
+    if has_auth {
+        return;
+    }
+    let pos = source
+        .windows(SNOWFLAKE_STAGE.len())
+        .position(|w| w == SNOWFLAKE_STAGE)
+        .unwrap_or(0);
+    findings.push(SlopFinding {
+        start_byte: pos,
+        end_byte: pos + SNOWFLAKE_STAGE.len(),
+        description: "security:iac_agentic_recon_target — snowflake_stage with external \
+            url and no storage_integration or credentials block; the stage allows \
+            unauthenticated enumeration of external cloud storage — \
+            add a storage_integration referencing a restricted IAM role"
+            .to_string(),
+        domain: DOMAIN_ALL,
+        severity: Severity::KevCritical,
+    });
+}
+
+/// Detect hardcoded `password` or `secret_key` literal values inside a
+/// Terraform provider block.
+///
+/// Provider blocks with inline credentials are the canonical exfiltration
+/// path for autonomous agents: a single `git clone` yields cloud access
+/// without requiring any runtime exploitation.
+fn find_provider_hardcoded_secret(source: &[u8], findings: &mut Vec<SlopFinding>) {
+    const PROVIDER: &[u8] = b"provider ";
+    if !source.windows(PROVIDER.len()).any(|w| w == PROVIDER) {
+        return;
+    }
+    const SECRET_FIELDS: &[&[u8]] = &[b"password", b"secret_key"];
+    for &field in SECRET_FIELDS {
+        let Some(field_pos) = source.windows(field.len()).position(|w| w == field) else {
+            continue;
+        };
+        let scan_end = std::cmp::min(field_pos + 64, source.len());
+        let after = &source[field_pos..scan_end];
+        let Some(eq_pos) = after.iter().position(|&b| b == b'=') else {
+            continue;
+        };
+        let rest = &after[eq_pos + 1..];
+        // Trim leading whitespace manually — avoids std::str dependency.
+        let mut start = 0;
+        while start < rest.len() && (rest[start] == b' ' || rest[start] == b'\t') {
+            start += 1;
+        }
+        let rest = &rest[start..];
+        // Literal value: starts with `"` but not `"${"` (interpolation) or `""` (empty).
+        if rest.starts_with(b"\"")
+            && !rest.starts_with(b"\"${")
+            && rest.len() > 1
+            && rest[1] != b'"'
+        {
+            findings.push(SlopFinding {
+                start_byte: field_pos,
+                end_byte: field_pos + field.len(),
+                description: "security:iac_agentic_recon_target — hardcoded credential \
+                    in Terraform provider block (password or secret_key with a literal \
+                    string value); agents extract provider blocks to harvest cloud \
+                    credentials — use environment variables or a secrets manager \
+                    reference (e.g. var.secret or data.aws_secretsmanager_secret_version)"
+                    .to_string(),
+                domain: DOMAIN_ALL,
+                severity: Severity::KevCritical,
+            });
+            return; // One finding per file.
+        }
+    }
 }
 
 /// Detect wildcard CIDR `0.0.0.0/0` inside a security-group context in HCL.
@@ -4828,6 +4994,11 @@ pub fn detect_secret_entropy(patch: &str) -> usize {
             continue;
         }
         let src = &line[1..];
+        // Zig multiline string syntax: each line begins with `\\` followed by
+        // the string content.  Strip the prefix so that the entropy scan sees
+        // the raw token — otherwise the `\\` non-alphanumeric bytes silently
+        // truncate the run and a 40-char secret in a `\\` literal is missed.
+        let src = src.trim_start().strip_prefix("\\\\").unwrap_or(src);
         let bytes = src.as_bytes();
         let mut run_start: Option<usize> = None;
 
@@ -8083,6 +8254,116 @@ fn find_hcl_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
     for child in node.children(&mut cursor) {
         find_hcl_danger_nodes(child, source, findings);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Zig: Glassworm Defense — dangerous stdlib call byte scan
+//
+// ZIG-1: std.os.execv / std.os.execve / std.process.exec → zig_exec_injection
+// ZIG-2: @cImport + system() in same file → zig_cimport_exec_bridge
+// ZIG-3: High-entropy multiline string (`\\`) — complements detect_secret_entropy
+// ---------------------------------------------------------------------------
+
+/// AhoCorasick patterns for dangerous Zig stdlib call sites.
+///
+/// Seeded with call patterns observed in Glassworm-variant samples and the
+/// Zig stdlib dangerous-execution surface:
+///
+/// | Pattern | Threat Class |
+/// |---------|-------------|
+/// | `std.os.execv` | POSIX process replacement — no shell needed; any arg is exec |
+/// | `std.os.execve` | POSIX exec with env — same threat, env poisoning vector |
+/// | `std.process.exec` | Cross-platform process spawn — widely misused with dynamic args |
+/// | `std.process.execv` | Alias path for the same POSIX exec syscall |
+/// | `@cImport` + `system` | C FFI bridge → shell exec without Zig type safety |
+const ZIG_EXEC_PATTERNS: &[(&[u8], &str)] = &[
+    (
+        b"std.os.execv(",
+        "security:zig_exec_injection — std.os.execv() performs POSIX exec; \
+         if the executable path or argument array derives from user input, \
+         this is an arbitrary command execution sink — use only with \
+         statically known paths and vetted argument lists",
+    ),
+    (
+        b"std.os.execve(",
+        "security:zig_exec_injection — std.os.execve() performs POSIX exec \
+         with environment; environment poisoning (PATH, LD_PRELOAD) combined \
+         with a dynamic path enables privilege escalation — validate all inputs",
+    ),
+    (
+        b"std.process.exec(",
+        "security:zig_exec_injection — std.process.exec() spawns a child process; \
+         user-controlled argv enables command injection — use only with \
+         comptime-known command strings",
+    ),
+    (
+        b"std.process.execv(",
+        "security:zig_exec_injection — std.process.execv() replaces the current \
+         process image; dynamic path from untrusted input is an arbitrary code \
+         execution sink — restrict to statically verified paths",
+    ),
+];
+
+static ZIG_EXEC_AC: OnceLock<AhoCorasick> = OnceLock::new();
+
+fn zig_exec_automaton() -> &'static AhoCorasick {
+    ZIG_EXEC_AC.get_or_init(|| {
+        AhoCorasick::builder()
+            .kind(Some(AhoCorasickKind::DFA))
+            .match_kind(MatchKind::LeftmostFirst)
+            .build(ZIG_EXEC_PATTERNS.iter().map(|(p, _)| p))
+            .expect("slop_hunter: zig_exec AhoCorasick build cannot fail on static patterns")
+    })
+}
+
+/// Scan a Zig source file for dangerous process execution call sites.
+///
+/// Implements the Glassworm Defense: autonomous agents written in Zig use
+/// `std.os.execv*` and `std.process.exec*` as primary lateral-movement
+/// primitives.  These calls with dynamic arguments are semantically
+/// equivalent to `shell=True` in Python — direct command injection sinks.
+///
+/// Additionally detects `@cImport` combined with a C `system()` call —
+/// a FFI bridge that bypasses Zig's type system to reach a shell exec sink.
+pub fn find_zig_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let mut findings = Vec::new();
+
+    // ZIG-1 / ZIG-2: AhoCorasick scan for exec call sites.
+    let ac = zig_exec_automaton();
+    for mat in ac.find_iter(source) {
+        findings.push(SlopFinding {
+            start_byte: mat.start(),
+            end_byte: mat.end(),
+            description: ZIG_EXEC_PATTERNS[mat.pattern().as_usize()].1.to_owned(),
+            domain: DOMAIN_ALL,
+            severity: Severity::KevCritical,
+        });
+    }
+
+    // ZIG-3: @cImport + system() FFI bridge.
+    const CIMPORT: &[u8] = b"@cImport";
+    const C_SYSTEM: &[u8] = b"system(";
+    if source.windows(CIMPORT.len()).any(|w| w == CIMPORT)
+        && source.windows(C_SYSTEM.len()).any(|w| w == C_SYSTEM)
+    {
+        let pos = source
+            .windows(C_SYSTEM.len())
+            .position(|w| w == C_SYSTEM)
+            .unwrap_or(0);
+        findings.push(SlopFinding {
+            start_byte: pos,
+            end_byte: pos + C_SYSTEM.len(),
+            description: "security:zig_cimport_exec_bridge — @cImport combined with C \
+                system() call; this pattern bridges from Zig into a shell exec sink \
+                that bypasses Zig's safety guarantees — replace system() with a \
+                direct std.process.Child invocation with explicit argument validation"
+                .to_string(),
+            domain: DOMAIN_ALL,
+            severity: Severity::KevCritical,
+        });
+    }
+
+    findings
 }
 
 // ---------------------------------------------------------------------------

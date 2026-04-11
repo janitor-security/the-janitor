@@ -1358,6 +1358,125 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+
+    // ── IAC Agentic Recon Interceptor (Snowflake Defense) ─────────────────────
+    Entry {
+        name: "HCL/IAM wildcard Action+Resource — INTERCEPT (IAC-1)",
+        lang: "tf",
+        source: b"\
+resource \"aws_iam_role\" \"pentester\" {\n\
+  assume_role_policy = jsonencode({\n\
+    Statement = [{\n\
+      Action   = \"*\"\n\
+      Resource = \"*\"\n\
+      Effect   = \"Allow\"\n\
+    }]\n\
+  })\n\
+}\n",
+        must_intercept: true,
+        desc_fragment: Some("iac_agentic_recon_target"),
+    },
+    Entry {
+        name: "HCL/IAM scoped Action — SAFE (IAC-1 TN)",
+        lang: "tf",
+        source: b"\
+resource \"aws_iam_role\" \"reader\" {\n\
+  assume_role_policy = jsonencode({\n\
+    Statement = [{\n\
+      Action   = \"s3:GetObject\"\n\
+      Resource = \"arn:aws:s3:::my-bucket/*\"\n\
+      Effect   = \"Allow\"\n\
+    }]\n\
+  })\n\
+}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "HCL/Snowflake unauth stage — INTERCEPT (IAC-2)",
+        lang: "tf",
+        source: b"\
+resource \"snowflake_stage\" \"ext\" {\n\
+  name     = \"my_ext_stage\"\n\
+  database = \"mydb\"\n\
+  schema   = \"public\"\n\
+  url      = \"s3://my-bucket/prefix/\"\n\
+}\n",
+        must_intercept: true,
+        desc_fragment: Some("iac_agentic_recon_target"),
+    },
+    Entry {
+        name: "HCL/Snowflake stage with storage_integration — SAFE (IAC-2 TN)",
+        lang: "tf",
+        source: b"\
+resource \"snowflake_stage\" \"ext\" {\n\
+  name                = \"my_ext_stage\"\n\
+  database            = \"mydb\"\n\
+  schema              = \"public\"\n\
+  url                 = \"s3://my-bucket/prefix/\"\n\
+  storage_integration = snowflake_storage_integration.s3_int.name\n\
+}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "HCL/provider hardcoded secret_key — INTERCEPT (IAC-3)",
+        lang: "tf",
+        source: b"\
+provider \"aws\" {\n\
+  region     = \"us-east-1\"\n\
+  access_key = \"AKIAIOSFODNN7EXAMPLE\"\n\
+  secret_key = \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"\n\
+}\n",
+        must_intercept: true,
+        desc_fragment: Some("iac_agentic_recon_target"),
+    },
+    Entry {
+        name: "HCL/provider env-var credential — SAFE (IAC-3 TN)",
+        lang: "tf",
+        source: b"\
+provider \"aws\" {\n\
+  region     = \"us-east-1\"\n\
+  access_key = var.aws_access_key\n\
+  secret_key = var.aws_secret_key\n\
+}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+
+    // ── Zig: Glassworm Defense ─────────────────────────────────────────────────
+    Entry {
+        name: "Zig/std.os.execv dynamic path — INTERCEPT (ZIG-1)",
+        lang: "zig",
+        source: b"\
+const std = @import(\"std\");\npub fn run(path: []const u8, argv: []const []const u8) !void {\n    try std.os.execv(path, argv);\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("zig_exec_injection"),
+    },
+    Entry {
+        name: "Zig/std.process.exec dynamic — INTERCEPT (ZIG-2)",
+        lang: "zig",
+        source: b"\
+const std = @import(\"std\");\npub fn run(argv: []const []const u8, alloc: std.mem.Allocator) !void {\n    _ = try std.process.exec(.{ .allocator = alloc, .argv = argv });\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("zig_exec_injection"),
+    },
+    Entry {
+        name: "Zig/@cImport + system() FFI bridge — INTERCEPT (ZIG-3)",
+        lang: "zig",
+        source: b"\
+const c = @cImport(@cInclude(\"stdlib.h\"));\npub fn run(cmd: [*:0]const u8) void {\n    _ = c.system(cmd);\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("zig_cimport_exec_bridge"),
+    },
+    Entry {
+        name: "Zig/std.fs.openFile safe file op — SAFE (ZIG TN)",
+        lang: "zig",
+        source: b"\
+const std = @import(\"std\");\npub fn read_config(path: []const u8, alloc: std.mem.Allocator) ![]u8 {\n    const file = try std.fs.openFile(path, .{ .mode = .read_only });\n    defer file.close();\n    return try file.readToEndAlloc(alloc, 1024 * 1024);\n}\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

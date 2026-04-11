@@ -7,7 +7,7 @@
 //! ## Supported Languages
 //! Python, Rust, TypeScript, TSX, JavaScript, JSX, C++, C, Java, C#, Go,
 //! GLSL (vertex/fragment shaders), Objective-C/C++, YAML, Bash, Scala,
-//! Ruby, PHP, Swift, Lua, HCL/Terraform, Nix, GDScript, Kotlin.
+//! Ruby, PHP, Swift, Lua, HCL/Terraform, Nix, GDScript, Kotlin, Zig.
 //!
 //! ## Usage
 //! ```ignore
@@ -49,6 +49,7 @@ static HCL: OnceLock<Language> = OnceLock::new();
 static NIX: OnceLock<Language> = OnceLock::new();
 static GDSCRIPT: OnceLock<Language> = OnceLock::new();
 static KOTLIN: OnceLock<Language> = OnceLock::new();
+static ZIG: OnceLock<Language> = OnceLock::new();
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -102,6 +103,7 @@ impl LazyGrammarRegistry {
             "nix" => Some(NIX.get_or_init(|| tree_sitter_nix::LANGUAGE.into())),
             "gd" => Some(GDSCRIPT.get_or_init(|| tree_sitter_gdscript::LANGUAGE.into())),
             "kt" | "kts" => Some(KOTLIN.get_or_init(|| tree_sitter_kotlin_ng::LANGUAGE.into())),
+            "zig" => Some(ZIG.get_or_init(|| tree_sitter_zig::LANGUAGE.into())),
             _ => None,
         }
     }
@@ -152,7 +154,7 @@ mod tests {
             "cs", "go", "glsl", "vert", "frag", "m", "mm", "yaml", "yml", "sh", "bash", "cmd",
             "zsh", "scala", // Tier-1 mobile / legacy enterprise
             "rb", "php", "swift", "lua", // Gauntlet grammars
-            "tf", "hcl", "nix", "gd", "kt", "kts",
+            "tf", "hcl", "nix", "gd", "kt", "kts", "zig",
         ];
         for ext in supported {
             assert!(

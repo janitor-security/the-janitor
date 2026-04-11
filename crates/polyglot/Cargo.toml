@@ -29,3 +29,4 @@ tree-sitter-hcl.workspace = true
 tree-sitter-nix.workspace = true
 tree-sitter-gdscript.workspace = true
 tree-sitter-kotlin-ng.workspace = true
+tree-sitter-zig.workspace = true
