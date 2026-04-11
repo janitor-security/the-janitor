@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)
@@ -1375,6 +1384,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)
@@ -2104,6 +2122,20 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8">2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)</h2>
+<p><strong>Directive:</strong> OSV bulk ZIP ingestion fix, CodeQL terminal output amputation, P2-4 MCP IDE Linter (<code>janitor_lint_file</code>), P2-5 SBOM Drift Daemon (<code>janitor watch-sbom</code>), VS Code extension scaffold.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.7</code> → <code>10.1.0-alpha.8</code>; <code>zip = "2"</code> and <code>notify = "6.1"</code> added as workspace deps.
+- <code>crates/cli/Cargo.toml</code> <em>(modified)</em> — <code>zip.workspace = true</code>, <code>notify.workspace = true</code> added.
+- <code>crates/mcp/Cargo.toml</code> <em>(modified)</em> — <code>polyglot</code> path dep added for language detection in <code>janitor_lint_file</code>.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <strong>Phase 1:</strong> <code>fetch_osv_slopsquat_corpus</code> rewritten to use bulk <code>all.zip</code> download (per-advisory CSV+JSON chain eliminated); <code>extract_mal_packages_from_zip</code> added (ZIP extraction + MAL- filter loop); <code>OSV_DUMP_BASE_URL</code> corrected to <code>osv-vulnerabilities.storage.googleapis.com</code>. <strong>Phase 2:</strong> <code>score.score()</code> and <code>effective_gate</code> removed from all terminal <code>println!</code>; PATCH CLEAN/REJECTED messages replaced with static strings; slop score table row shows <code>[see bounce_log]</code>. <strong>Phase 4:</strong> <code>WatchSbom { path }</code> subcommand added; <code>cmd_watch_sbom</code> implemented with <code>notify::RecommendedWatcher</code> + debounce loop; <code>snapshot_lockfile_packages</code> reads Cargo.lock / package-lock.json / poetry.lock.
+- <code>crates/cli/src/report.rs</code> <em>(modified)</em> — <code>emit_sbom_drift_webhook</code> added; fires <code>sbom_drift</code> HMAC-signed webhook event for new packages.
+- <code>crates/mcp/src/lib.rs</code> <em>(modified)</em> — <strong>Phase 3:</strong> <code>janitor_lint_file</code> tool added to <code>tool_list()</code> (10 tools total); <code>run_lint_file</code>, <code>ext_to_lang_tag</code>, <code>byte_offset_to_line</code>, <code>finding_id_from_description</code> helpers added; dispatch arm added; 6 new unit tests.
+- <code>tools/vscode-extension/package.json</code> <em>(created)</em> — VS Code extension manifest with <code>janitor.serverPath</code> + <code>janitor.enableOnSave</code> config, <code>@modelcontextprotocol/sdk</code> dep.
+- <code>tools/vscode-extension/src/extension.ts</code> <em>(created)</em> — TypeScript extension: launches <code>janitor serve --mcp</code>, wires <code>onDidSaveTextDocument</code> → <code>janitor_lint_file</code> → VS Code Diagnostics.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅</p>
 <h2 id="2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6">2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)</h2>
 <p><strong>Directive:</strong> Execute P1-4 marketplace distribution templates for GitLab/Azure DevOps, implement the Sha1-Hulud <code>package.json</code> propagation interceptor, add Crucible true-positive coverage, update the innovation ledger, run single-threaded verification, and cut <code>10.1.0-alpha.6</code>.</p>
 <p><strong>Files modified:</strong>

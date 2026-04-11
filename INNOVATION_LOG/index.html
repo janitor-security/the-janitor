@@ -700,18 +700,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-4-real-time-taint-visualization-ide-extension" class="md-nav__link">
+  <a href="#p2-4-real-time-taint-visualization-ide-extension-resolved-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-4: Real-Time Taint Visualization (IDE Extension)
+      P2-4: Real-Time Taint Visualization (IDE Extension) — [RESOLVED v10.1.0-alpha.8]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-5-sbom-drift-monitor" class="md-nav__link">
+  <a href="#p2-5-sbom-drift-monitor-resolved-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-5: SBOM Drift Monitor
+      P2-5: SBOM Drift Monitor — [RESOLVED v10.1.0-alpha.8]
     </span>
   </a>
   
@@ -889,18 +889,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-4-real-time-taint-visualization-ide-extension" class="md-nav__link">
+  <a href="#p2-4-real-time-taint-visualization-ide-extension-resolved-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-4: Real-Time Taint Visualization (IDE Extension)
+      P2-4: Real-Time Taint Visualization (IDE Extension) — [RESOLVED v10.1.0-alpha.8]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p2-5-sbom-drift-monitor" class="md-nav__link">
+  <a href="#p2-5-sbom-drift-monitor-resolved-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-5: SBOM Drift Monitor
+      P2-5: SBOM Drift Monitor — [RESOLVED v10.1.0-alpha.8]
     </span>
   </a>
   
@@ -1013,38 +1013,13 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
 <li><code>crates/vault/src/lib.rs</code>: Ed25519 signature verification for rule packages.</li>
 <li>Web: static site at <code>rules.thejanitor.app</code> with rule metadata + download links.</li>
 </ul>
-<h3 id="p2-4-real-time-taint-visualization-ide-extension">P2-4: Real-Time Taint Visualization (IDE Extension)</h3>
+<h3 id="p2-4-real-time-taint-visualization-ide-extension-resolved-v1010-alpha8">P2-4: Real-Time Taint Visualization (IDE Extension) — <strong>[RESOLVED v10.1.0-alpha.8]</strong></h3>
 <ul>
-<li><strong>Class</strong>: Developer Experience</li>
-<li><strong>Observation</strong>: Checkmarx and Snyk have VS Code extensions showing taint
-  paths inline. Our TUI dashboard exists but is post-hoc. Real-time feedback
-  during development catches issues before commit, not after push.</li>
-<li><strong>Proposal</strong>: Build a VS Code extension using LSP that runs <code>janitor bounce</code>
-  on file save and renders inline taint annotations. Use the existing MCP
-  server as the communication layer.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>tools/vscode-extension/</code>: TypeScript extension, LSP client.</li>
-<li><code>crates/mcp/src/lib.rs</code>: new <code>janitor_lint_file</code> tool (single-file bounce
-    returning SARIF-like finding array).</li>
-<li>Extension renders diagnostics from MCP response.</li>
+<li><strong>Resolved</strong>: <code>janitor_lint_file</code> MCP tool added; VS Code extension scaffold in <code>tools/vscode-extension/</code> wires on-save detection to inline diagnostics via <code>janitor serve --mcp</code>.</li>
 </ul>
-<h3 id="p2-5-sbom-drift-monitor">P2-5: SBOM Drift Monitor</h3>
+<h3 id="p2-5-sbom-drift-monitor-resolved-v1010-alpha8">P2-5: SBOM Drift Monitor — <strong>[RESOLVED v10.1.0-alpha.8]</strong></h3>
 <ul>
-<li><strong>Class</strong>: Compliance / Continuous</li>
-<li><strong>Observation</strong>: We generate CycloneDX v1.6 CBOMs at bounce time. But SBOMs
-  are point-in-time snapshots. Between bounces, dependencies can change (lockfile
-  updates, transitive upgrades). No competitor offers continuous SBOM drift
-  detection.</li>
-<li><strong>Proposal</strong>: <code>janitor watch-sbom</code> daemon mode that monitors <code>Cargo.lock</code> /
-  <code>package-lock.json</code> / <code>poetry.lock</code> for changes via inotify/kqueue, re-generates
-  the CBOM diff, and emits a webhook if new components appear that weren't in
-  the last attested CBOM.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/cli/src/daemon.rs</code>: <code>SbomWatcher</code> using <code>notify</code> crate (already
-    a transitive dep via <code>watchexec</code> patterns).</li>
-<li><code>crates/anatomist/src/manifest.rs</code>: <code>diff_sbom()</code> comparing two
-    <code>DependencyRegistry</code> snapshots.</li>
-<li>Webhook: uses existing <code>WebhookConfig</code> with event type <code>sbom_drift</code>.</li>
+<li><strong>Resolved</strong>: <code>janitor watch-sbom</code> subcommand implemented; <code>notify::RecommendedWatcher</code> monitors <code>Cargo.lock</code> / <code>package-lock.json</code> / <code>poetry.lock</code>; <code>emit_sbom_drift_webhook</code> fires <code>sbom_drift</code> event via existing <code>WebhookConfig</code>.</li>
 </ul>
 <h3 id="p2-6-post-quantum-certificate-transparency-for-wasm-rules">P2-6: Post-Quantum Certificate Transparency for Wasm Rules</h3>
 <ul>
