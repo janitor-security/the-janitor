@@ -1,0 +1,43 @@
+jobs:
+  - job: janitor_bounce
+    displayName: "Janitor Bounce"
+    pool:
+      vmImage: "ubuntu-latest"
+    variables:
+      JANITOR_BOOTSTRAP_TAG: "v10.0.0-rc.9"
+      JANITOR_INSTALL_DIR: "$(Agent.TempDirectory)/janitor-bin"
+    steps:
+      - checkout: self
+        fetchDepth: 0
+
+      - bash: |
+          set -euo pipefail
+          mkdir -p "${JANITOR_INSTALL_DIR}"
+          BASE_URL="https://github.com/janitor-security/the-janitor/releases/latest/download"
+          curl -fsSL "${BASE_URL}/janitor" -o "${JANITOR_INSTALL_DIR}/janitor"
+          curl -fsSL "${BASE_URL}/janitor.b3" -o "${JANITOR_INSTALL_DIR}/janitor.b3"
+          curl -fsSL "${BASE_URL}/janitor.sig" -o "${JANITOR_INSTALL_DIR}/janitor.sig" || true
+
+          BOOTSTRAP_BIN="${JANITOR_INSTALL_DIR}/janitor-bootstrap"
+          BOOTSTRAP_URL="https://github.com/janitor-security/the-janitor/releases/download/${JANITOR_BOOTSTRAP_TAG}/janitor"
+          curl -fsSL "${BOOTSTRAP_URL}" -o "${BOOTSTRAP_BIN}"
+          chmod +x "${BOOTSTRAP_BIN}"
+
+          if [ -f "${JANITOR_INSTALL_DIR}/janitor.sig" ]; then
+            "${BOOTSTRAP_BIN}" verify-asset \
+              --file "${JANITOR_INSTALL_DIR}/janitor" \
+              --hash "${JANITOR_INSTALL_DIR}/janitor.b3" \
+              --sig "${JANITOR_INSTALL_DIR}/janitor.sig"
+          else
+            "${BOOTSTRAP_BIN}" verify-asset \
+              --file "${JANITOR_INSTALL_DIR}/janitor" \
+              --hash "${JANITOR_INSTALL_DIR}/janitor.b3"
+          fi
+
+          chmod +x "${JANITOR_INSTALL_DIR}/janitor"
+          TARGET_REF="${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}"
+          git fetch origin "${TARGET_REF}"
+          git diff "origin/${TARGET_REF}...HEAD" > .janitor-pr.patch
+          "${JANITOR_INSTALL_DIR}/janitor" bounce . --patch .janitor-pr.patch
+        displayName: "Verify latest Janitor release and execute bounce"
+        condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))

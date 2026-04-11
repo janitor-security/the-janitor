@@ -404,6 +404,134 @@ pub fn detect_hallucinated_fix(
     })
 }
 
+/// Audit `package.json` diff hunks for the Sha1-Hulud self-propagation triad.
+///
+/// Emits `security:npm_worm_propagation` at [`crate::slop_hunter::Severity::KevCritical`]
+/// when a single `package.json` patch section contains all three signals:
+///
+/// 1. A version bump (`"version": "X"` changed to a different value)
+/// 2. An added `preinstall` or `postinstall` lifecycle script
+/// 3. `npm publish` or `npm token` inside the added lifecycle script payload
+pub fn package_json_lifecycle_audit(patch: &str) -> Vec<crate::slop_hunter::SlopFinding> {
+    #[derive(Default)]
+    struct PackageJsonTriadState {
+        file_path: String,
+        old_version: Option<String>,
+        new_version: Option<String>,
+        added_lifecycle_script: bool,
+        malicious_publish: bool,
+    }
+
+    fn extract_json_string_field(line: &str, key: &str) -> Option<String> {
+        let trimmed = line.trim().trim_end_matches(',');
+        let prefix = format!("\"{key}\":");
+        let rest = trimmed.strip_prefix(&prefix)?.trim_start();
+        if !rest.starts_with('"') {
+            return None;
+        }
+        let value = &rest[1..];
+        let end = value.find('"')?;
+        Some(value[..end].to_string())
+    }
+
+    fn extract_lifecycle_payload(line: &str) -> Option<(&'static str, String)> {
+        for key in ["preinstall", "postinstall"] {
+            if let Some(value) = extract_json_string_field(line, key) {
+                return Some((key, value));
+            }
+        }
+        None
+    }
+
+    fn finalize(state: PackageJsonTriadState) -> Option<crate::slop_hunter::SlopFinding> {
+        let version_bumped = matches!(
+            (state.old_version.as_deref(), state.new_version.as_deref()),
+            (Some(old), Some(new)) if old != new
+        );
+        if !(version_bumped && state.added_lifecycle_script && state.malicious_publish) {
+            return None;
+        }
+
+        Some(crate::slop_hunter::SlopFinding {
+            start_byte: 0,
+            end_byte: 0,
+            description: format!(
+                "security:npm_worm_propagation — package.json lifecycle diff in `{}` matches Sha1-Hulud propagation triad: version bump + added preinstall/postinstall + npm publish/token payload",
+                state.file_path
+            ),
+            domain: DOMAIN_ALL,
+            severity: crate::slop_hunter::Severity::KevCritical,
+        })
+    }
+
+    let mut findings = Vec::new();
+    let mut current: Option<PackageJsonTriadState> = None;
+
+    for line in patch.lines() {
+        if let Some(path) = line
+            .strip_prefix("+++ b/")
+            .or_else(|| line.strip_prefix("+++ "))
+            .map(str::trim)
+        {
+            if let Some(state) = current.take() {
+                if let Some(finding) = finalize(state) {
+                    findings.push(finding);
+                }
+            }
+
+            if path.ends_with("package.json") && path != "/dev/null" {
+                current = Some(PackageJsonTriadState {
+                    file_path: path.to_string(),
+                    ..PackageJsonTriadState::default()
+                });
+            } else {
+                current = None;
+            }
+            continue;
+        }
+
+        let Some(state) = current.as_mut() else {
+            continue;
+        };
+
+        if line.starts_with("@@") || line.starts_with("diff --git ") || line.starts_with("--- ") {
+            continue;
+        }
+
+        let (sign, body) = match line.as_bytes().first().copied() {
+            Some(b'+') if !line.starts_with("+++") => ('+', &line[1..]),
+            Some(b'-') if !line.starts_with("---") => ('-', &line[1..]),
+            _ => continue,
+        };
+
+        if let Some(version) = extract_json_string_field(body, "version") {
+            if sign == '+' {
+                state.new_version = Some(version);
+            } else {
+                state.old_version = Some(version);
+            }
+        }
+
+        if sign == '+' {
+            if let Some((_hook, payload)) = extract_lifecycle_payload(body) {
+                state.added_lifecycle_script = true;
+                let lower = payload.to_ascii_lowercase();
+                if lower.contains("npm publish") || lower.contains("npm token") {
+                    state.malicious_publish = true;
+                }
+            }
+        }
+    }
+
+    if let Some(state) = current {
+        if let Some(finding) = finalize(state) {
+            findings.push(finding);
+        }
+    }
+
+    findings
+}
+
 // ---------------------------------------------------------------------------
 // Banned phrase catalogue
 // ---------------------------------------------------------------------------
@@ -1100,6 +1228,76 @@ diff --git a/src/lib.rs b/src/lib.rs
         assert!(
             detect_hallucinated_fix(body, &exts_yaml, "acme/myapp").is_none(),
             ".yaml is code — GitHub Action bump must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_package_json_lifecycle_audit_detects_sha1_hulud_triad() {
+        let patch = "\
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+-  \"version\": \"1.0.1\",
++  \"version\": \"1.0.2\",
+   \"scripts\": {
+-    \"test\": \"vitest\"
++    \"postinstall\": \"node worm.js && npm publish\"
+   }
+ }
+";
+        let findings = package_json_lifecycle_audit(patch);
+        assert_eq!(findings.len(), 1, "Sha1-Hulud triad must fire exactly once");
+        assert_eq!(
+            findings[0].severity,
+            crate::slop_hunter::Severity::KevCritical
+        );
+        assert!(findings[0]
+            .description
+            .contains("security:npm_worm_propagation"));
+    }
+
+    #[test]
+    fn test_package_json_lifecycle_audit_ignores_lifecycle_without_publish() {
+        let patch = "\
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+-  \"version\": \"1.0.1\",
++  \"version\": \"1.0.2\",
+   \"scripts\": {
+-    \"test\": \"vitest\"
++    \"postinstall\": \"node ./scripts/setup.js\"
+   }
+ }
+";
+        assert!(
+            package_json_lifecycle_audit(patch).is_empty(),
+            "benign lifecycle hooks must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_package_json_lifecycle_audit_ignores_publish_without_version_bump() {
+        let patch = "\
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   \"version\": \"1.0.1\",
+   \"scripts\": {
+-    \"test\": \"vitest\"
++    \"preinstall\": \"npm token list && npm publish\"
+   }
+ }
+";
+        assert!(
+            package_json_lifecycle_audit(patch).is_empty(),
+            "publish lifecycle without version bump must not match the triad"
         );
     }
 

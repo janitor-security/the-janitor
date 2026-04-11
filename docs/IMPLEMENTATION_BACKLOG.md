@@ -5,6 +5,20 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — Frictionless Distribution & Sha1-Hulud Interceptor (v10.1.0-alpha.6)
+
+**Directive:** Execute P1-4 marketplace distribution templates for GitLab/Azure DevOps, implement the Sha1-Hulud `package.json` propagation interceptor, add Crucible true-positive coverage, update the innovation ledger, run single-threaded verification, and cut `10.1.0-alpha.6`.
+
+**Files modified:**
+- `tools/ci-templates/gitlab-ci-template.yml` *(created)* — reusable GitLab CI job downloads the latest Janitor release, bootstraps trust from `v10.0.0-rc.9`, verifies BLAKE3 and optional ML-DSA-65 signature, extracts the MR patch with `git diff`, and executes `janitor bounce`.
+- `tools/ci-templates/azure-pipelines-task.yml` *(created)* — reusable Azure Pipelines job mirrors the same SLSA 4 bootstrap-verification chain and `janitor bounce` execution path for PR validation.
+- `crates/forge/src/metadata.rs` *(modified)* — `package_json_lifecycle_audit()` added; detects the Sha1-Hulud triad (version bump + added pre/postinstall + `npm publish`/`npm token`) and emits `security:npm_worm_propagation` at `KevCritical`; deterministic unit tests added.
+- `crates/forge/src/slop_filter.rs` *(modified)* — PatchBouncer now folds metadata lifecycle findings into the accepted antipattern stream; integration test added to prove `KevCritical` scoring survives the bounce path.
+- `crates/crucible/src/main.rs` *(modified)* — true-positive `package.json` bounce fixture added to the Blast Radius gallery and dedicated regression test added.
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.5` to `10.1.0-alpha.6`.
+- `docs/INNOVATION_LOG.md` *(modified)* — resolved `P1-4` and `P2-1` purged; new `P1-5` taint-spine expansion entry for Zig/Nim added.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
 ## 2026-04-11 — Agentic Recon Interceptor & Zig Hardening (v10.1.0-alpha.5)
 
 **Directive:** IAC Snowflake Defense (wildcard IAM, unauthenticated Snowflake stages, hardcoded provider secrets) + Glassworm Defense (Zig grammar, `std.os.execv*`/`std.process.exec*` byte scan, `@cImport`+`system()` FFI bridge, `detect_secret_entropy` Zig multiline string fix).

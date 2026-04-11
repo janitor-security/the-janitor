@@ -1619,6 +1619,12 @@ const BOUNCE_GALLERY: &[BounceEntry] = &[
         must_intercept: false,
         desc_fragment: None,
     },
+    BounceEntry {
+        name: "Sha1-Hulud/package.json triad — INTERCEPT",
+        paths: &["package.json"],
+        must_intercept: true,
+        desc_fragment: Some("npm_worm_propagation"),
+    },
 ];
 
 /// Run the Blast Radius Bounce Gallery.
@@ -1632,7 +1638,24 @@ pub fn run_bounce_gallery() -> bool {
     let mut failed: usize = 0;
 
     for entry in BOUNCE_GALLERY {
-        let patch = make_multi_dir_patch(entry.paths);
+        let patch = if entry.name == "Sha1-Hulud/package.json triad — INTERCEPT" {
+            "diff --git a/package.json b/package.json\n\
+             index 1111111..2222222 100644\n\
+             --- a/package.json\n\
+             +++ b/package.json\n\
+             @@ -1,7 +1,7 @@\n\
+              {\n\
+             -  \"version\": \"1.0.1\",\n\
+             +  \"version\": \"1.0.2\",\n\
+                \"scripts\": {\n\
+             -    \"test\": \"vitest\"\n\
+             +    \"postinstall\": \"node worm.js && npm publish\"\n\
+                }\n\
+              }\n"
+            .to_string()
+        } else {
+            make_multi_dir_patch(entry.paths)
+        };
         let score: SlopScore = match bouncer.bounce(&patch, &registry) {
             Ok(s) => s,
             Err(e) => {
@@ -1712,6 +1735,37 @@ mod tests {
         assert!(
             run_gallery(),
             "Crucible: Threat Gallery breach — one or more detectors failed"
+        );
+    }
+
+    #[test]
+    fn sha1_hulud_bounce_fixture_intercepted() {
+        let patch = "diff --git a/package.json b/package.json\n\
+                     index 1111111..2222222 100644\n\
+                     --- a/package.json\n\
+                     +++ b/package.json\n\
+                     @@ -1,7 +1,7 @@\n\
+                      {\n\
+                     -  \"version\": \"1.0.1\",\n\
+                     +  \"version\": \"1.0.2\",\n\
+                        \"scripts\": {\n\
+                     -    \"test\": \"vitest\"\n\
+                     +    \"postinstall\": \"node worm.js && npm publish\"\n\
+                        }\n\
+                      }\n";
+        let score = forge::slop_filter::PatchBouncer::default()
+            .bounce(patch, &common::registry::SymbolRegistry::default())
+            .unwrap();
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:npm_worm_propagation")),
+            "Crucible: Sha1-Hulud triad must be intercepted by PatchBouncer"
+        );
+        assert!(
+            score.antipattern_score >= forge::slop_hunter::Severity::KevCritical.points(),
+            "Crucible: Sha1-Hulud triad must preserve KevCritical scoring"
         );
     }
 

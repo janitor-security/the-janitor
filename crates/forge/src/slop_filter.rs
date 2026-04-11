@@ -845,10 +845,27 @@ impl PRBouncer for PatchBouncer {
                 })
                 .collect()
         };
+        let metadata_findings = crate::metadata::package_json_lifecycle_audit(patch);
 
         let cfg = match lang_for_ext(ext) {
             Some(c) => c,
             None => {
+                if !metadata_findings.is_empty() {
+                    let antipattern_score = metadata_findings
+                        .iter()
+                        .map(|finding| finding.severity.points())
+                        .sum();
+                    return Ok(SlopScore {
+                        antipatterns_found: metadata_findings.len() as u32,
+                        antipattern_score,
+                        antipattern_details: metadata_findings
+                            .into_iter()
+                            .map(|finding| finding.description)
+                            .collect(),
+                        ..SlopScore::default()
+                    });
+                }
+
                 // Source-text bypass: extensions that are definitively human-readable
                 // source or configuration — never binary blobs.  Two categories:
                 //
@@ -1266,6 +1283,7 @@ impl PRBouncer for PatchBouncer {
         if let Some(finding) = crate::slop_hunter::check_logic_regression(patch) {
             raw_findings.push(finding);
         }
+        raw_findings.extend(metadata_findings);
 
         let mut suppressed_by_domain: u32 = 0;
         let mut antipattern_score: u32 = 0;
@@ -2596,6 +2614,37 @@ mod tests {
         };
         assert_eq!(s.score(), 100);
         assert!(!s.is_clean());
+    }
+
+    #[test]
+    fn test_package_json_lifecycle_audit_flows_through_patch_bouncer() {
+        let patch = "diff --git a/package.json b/package.json\n\
+                     index 1111111..2222222 100644\n\
+                     --- a/package.json\n\
+                     +++ b/package.json\n\
+                     @@ -1,7 +1,7 @@\n\
+                      {\n\
+                     -  \"version\": \"1.0.1\",\n\
+                     +  \"version\": \"1.0.2\",\n\
+                        \"scripts\": {\n\
+                     -    \"test\": \"vitest\"\n\
+                     +    \"postinstall\": \"node worm.js && npm publish\"\n\
+                        }\n\
+                      }\n";
+        let score = PatchBouncer::default()
+            .bounce(patch, &empty_registry())
+            .unwrap();
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|d| d.contains("security:npm_worm_propagation")),
+            "PatchBouncer must surface the Sha1-Hulud interceptor"
+        );
+        assert!(
+            score.antipattern_score >= crate::slop_hunter::Severity::KevCritical.points(),
+            "worm propagation triad must contribute KevCritical points"
+        );
     }
 
     #[test]
