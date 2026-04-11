@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)
@@ -1357,6 +1366,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)
@@ -2068,6 +2086,17 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-11-frictionless-distribution-sha1-hulud-interceptor-v1010-alpha6">2026-04-11 — Frictionless Distribution &amp; Sha1-Hulud Interceptor (v10.1.0-alpha.6)</h2>
+<p><strong>Directive:</strong> Execute P1-4 marketplace distribution templates for GitLab/Azure DevOps, implement the Sha1-Hulud <code>package.json</code> propagation interceptor, add Crucible true-positive coverage, update the innovation ledger, run single-threaded verification, and cut <code>10.1.0-alpha.6</code>.</p>
+<p><strong>Files modified:</strong>
+- <code>tools/ci-templates/gitlab-ci-template.yml</code> <em>(created)</em> — reusable GitLab CI job downloads the latest Janitor release, bootstraps trust from <code>v10.0.0-rc.9</code>, verifies BLAKE3 and optional ML-DSA-65 signature, extracts the MR patch with <code>git diff</code>, and executes <code>janitor bounce</code>.
+- <code>tools/ci-templates/azure-pipelines-task.yml</code> <em>(created)</em> — reusable Azure Pipelines job mirrors the same SLSA 4 bootstrap-verification chain and <code>janitor bounce</code> execution path for PR validation.
+- <code>crates/forge/src/metadata.rs</code> <em>(modified)</em> — <code>package_json_lifecycle_audit()</code> added; detects the Sha1-Hulud triad (version bump + added pre/postinstall + <code>npm publish</code>/<code>npm token</code>) and emits <code>security:npm_worm_propagation</code> at <code>KevCritical</code>; deterministic unit tests added.
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — PatchBouncer now folds metadata lifecycle findings into the accepted antipattern stream; integration test added to prove <code>KevCritical</code> scoring survives the bounce path.
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — true-positive <code>package.json</code> bounce fixture added to the Blast Radius gallery and dedicated regression test added.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped from <code>10.1.0-alpha.5</code> to <code>10.1.0-alpha.6</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — resolved <code>P1-4</code> and <code>P2-1</code> purged; new <code>P1-5</code> taint-spine expansion entry for Zig/Nim added.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.</p>
 <h2 id="2026-04-11-agentic-recon-interceptor-zig-hardening-v1010-alpha5">2026-04-11 — Agentic Recon Interceptor &amp; Zig Hardening (v10.1.0-alpha.5)</h2>
 <p><strong>Directive:</strong> IAC Snowflake Defense (wildcard IAM, unauthenticated Snowflake stages, hardcoded provider secrets) + Glassworm Defense (Zig grammar, <code>std.os.execv*</code>/<code>std.process.exec*</code> byte scan, <code>@cImport</code>+<code>system()</code> FFI bridge, <code>detect_secret_entropy</code> Zig multiline string fix).</p>
 <p><strong>Files modified:</strong>

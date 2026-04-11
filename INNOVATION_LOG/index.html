@@ -667,9 +667,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-4-marketplace-extensions-github-app-gitlab-integration-azdo-extension" class="md-nav__link">
+  <a href="#p1-5-full-taint-spine-for-emerging-systems-languages-zig-nim" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-4: Marketplace Extensions (GitHub App / GitLab Integration / AzDO Extension)
+      P1-5: Full Taint Spine for Emerging Systems Languages (Zig, Nim)
     </span>
   </a>
   
@@ -689,15 +689,6 @@
   
     <nav class="md-nav" aria-label="P2 — The Unfair Advantage">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-agentic-supply-chain-worm-detector-sha1-hulud-defense" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Agentic Supply Chain Worm Detector (Sha1-Hulud Defense)
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p2-2-llm-hallucination-firewall-phantom-dependency-detector" class="md-nav__link">
@@ -874,9 +865,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#p1-4-marketplace-extensions-github-app-gitlab-integration-azdo-extension" class="md-nav__link">
+  <a href="#p1-5-full-taint-spine-for-emerging-systems-languages-zig-nim" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-4: Marketplace Extensions (GitHub App / GitLab Integration / AzDO Extension)
+      P1-5: Full Taint Spine for Emerging Systems Languages (Zig, Nim)
     </span>
   </a>
   
@@ -896,15 +887,6 @@
   
     <nav class="md-nav" aria-label="P2 — The Unfair Advantage">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p2-1-agentic-supply-chain-worm-detector-sha1-hulud-defense" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-1: Agentic Supply Chain Worm Detector (Sha1-Hulud Defense)
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p2-2-llm-hallucination-firewall-phantom-dependency-detector" class="md-nav__link">
@@ -1015,46 +997,24 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.</p>
   POSTs to <code>https://api.bitbucket.org/2.0/repositories/{workspace}/{slug}/commit/{sha}/statuses/build</code>
   with Bearer auth. Unit test <code>bitbucket_context_captures_api_credentials</code> added.</li>
 </ul>
-<h3 id="p1-4-marketplace-extensions-github-app-gitlab-integration-azdo-extension">P1-4: Marketplace Extensions (GitHub App / GitLab Integration / AzDO Extension)</h3>
+<h3 id="p1-5-full-taint-spine-for-emerging-systems-languages-zig-nim">P1-5: Full Taint Spine for Emerging Systems Languages (Zig, Nim)</h3>
 <ul>
-<li><strong>Class</strong>: Distribution / GTM</li>
-<li><strong>Observation</strong>: Our GitHub integration is a composite Action. Competitors
-  (Snyk, Semgrep, Checkmarx) distribute as GitHub Apps with one-click install,
-  marketplace listings, and RBAC scoping. GitLab has a native integration
-  directory. Azure DevOps has the VS Marketplace.</li>
-<li><strong>Proposal</strong>: Phase 1 — GitHub App marketplace listing (we already have the
-  App; it needs a marketplace page with usage limits / billing). Phase 2 —
-  GitLab CI template published to GitLab's template gallery. Phase 3 — Azure
-  DevOps extension wrapping our action.yml logic.</li>
+<li><strong>Class</strong>: Detection Depth</li>
+<li><strong>Observation</strong>: We already have baseline AST parsing and dropper-pattern
+  detection for emerging systems languages, but not full interprocedural taint
+  propagation through their call graphs. That leaves a depth gap once those
+  languages move from niche tooling into enterprise backend surfaces.</li>
+<li><strong>Proposal</strong>: Defer full taint-spine expansion for Zig and Nim until their
+  backend adoption crosses critical mass, then extend the existing cross-file
+  taint engine with grammar-native call/source/sink walkers instead of
+  heuristic byte scans.</li>
 <li><strong>Implementation Path</strong>:</li>
-<li>Governor: implement OAuth callback for GitHub App installation events.</li>
-<li><code>tools/gitlab-ci-template.yml</code>: reusable <code>.gitlab-ci.yml</code> include.</li>
-<li><code>tools/azdo-extension/</code>: Azure DevOps extension manifest + task wrapper.</li>
+<li><code>crates/forge/src/taint_catalog.rs</code>: add Zig and Nim dispatch arms.</li>
+<li><code>crates/polyglot/src/lib.rs</code>: ensure grammar registry parity for both.</li>
+<li><code>crates/crucible/src/main.rs</code>: add true-positive and true-negative taint fixtures.</li>
 </ul>
 <hr />
 <h2 id="p2-the-unfair-advantage">P2 — The Unfair Advantage</h2>
-<h3 id="p2-1-agentic-supply-chain-worm-detector-sha1-hulud-defense">P2-1: Agentic Supply Chain Worm Detector (Sha1-Hulud Defense)</h3>
-<ul>
-<li><strong>Class</strong>: AI Supply Chain / Zero-Day</li>
-<li><strong>Observation</strong>: The Sha1-Hulud npm worm (2025–2026) self-propagates by
-  stealing npm tokens, enumerating publishable packages, and republishing
-  infected versions. Semgrep responded with MCP server integration and agent
-  swarms for TTP hunting. Current Janitor detection covers <code>postinstall</code> script
-  hooks and credential entropy — but not the self-propagation pattern (version
-  bump + npm publish in lifecycle scripts).</li>
-<li><strong>Proposal</strong>: Implement a <code>detect_supply_chain_worm</code> gate in
-  <code>slop_hunter.rs</code> that fires at KevCritical severity when a <code>package.json</code>
-  diff introduces: (a) <code>npm publish</code> or <code>npm token</code> in lifecycle scripts,
-  (b) version bump + new <code>postinstall</code>/<code>preinstall</code> in the same diff,
-  (c) obfuscated require chains resolving to <code>child_process.exec</code>.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/forge/src/slop_hunter.rs</code>: new <code>find_npm_worm_slop(source)</code>
-    AhoCorasick + AST walk.</li>
-<li><code>crates/forge/src/metadata.rs</code>: <code>package_json_lifecycle_audit()</code> extracts
-    and classifies lifecycle script payloads.</li>
-<li><code>crates/crucible/src/main.rs</code>: Sha1-Hulud true-positive fixture (version
-    bump + npm publish in postinstall) + true-negative (normal postinstall).</li>
-</ul>
 <h3 id="p2-2-llm-hallucination-firewall-phantom-dependency-detector">P2-2: LLM Hallucination Firewall (Phantom Dependency Detector)</h3>
 <ul>
 <li><strong>Class</strong>: AI Supply Chain / Slopsquat</li>
