@@ -189,9 +189,11 @@ impl ScmContext {
                 base_ref: get(&map, "BITBUCKET_PR_DESTINATION_BRANCH"),
                 head_ref: get(&map, "BITBUCKET_BRANCH"),
                 api_base_url: None,
-                api_token: None,
-                project_id: None,
-                repo_id: None,
+                // BITBUCKET_ACCESS_TOKEN — OAuth or App Password for Build Status API.
+                api_token: get(&map, "BITBUCKET_ACCESS_TOKEN"),
+                // workspace and repo_slug are required for the Build Status URL path.
+                project_id: get(&map, "BITBUCKET_WORKSPACE"),
+                repo_id: get(&map, "BITBUCKET_REPO_SLUG"),
             };
         }
 
@@ -341,6 +343,43 @@ impl StatusPublisher for BitbucketStatusPublisher {
             scoped_target(ctx).trim(),
             verdict.summary
         )
+    }
+
+    fn publish_verdict(&self, ctx: &ScmContext, verdict: &StatusVerdict) -> Result<()> {
+        // Attempt native Bitbucket Build Status API POST when credentials are present.
+        // project_id holds BITBUCKET_WORKSPACE; repo_id holds BITBUCKET_REPO_SLUG.
+        if let (Some(workspace), Some(slug), Some(sha), Some(token)) = (
+            ctx.project_id.as_deref(),
+            ctx.repo_id.as_deref(),
+            ctx.commit_sha.as_deref(),
+            ctx.api_token.as_deref(),
+        ) {
+            let state = match verdict.level {
+                VerdictLevel::Success => "SUCCESSFUL",
+                VerdictLevel::Warning => "INPROGRESS",
+                VerdictLevel::Failure => "FAILED",
+            };
+            let url = format!(
+                "https://api.bitbucket.org/2.0/repositories/{workspace}/{slug}/commit/{sha}/statuses/build"
+            );
+            let body = serde_json::json!({
+                "state": state,
+                "key": "the-janitor",
+                "name": "The Janitor",
+                "description": verdict.summary
+            });
+            // Best-effort — network failure is non-fatal; fall through to stderr annotation.
+            let _ = ureq::post(&url)
+                .header("Authorization", &format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
+                .send(body.to_string().as_str());
+            return Ok(());
+        }
+        // Fallback: emit annotation line to stderr for local runs / missing creds.
+        let line = self.render_verdict(ctx, verdict);
+        std::io::stderr().write_all(line.as_bytes())?;
+        std::io::stderr().write_all(b"\n")?;
+        Ok(())
     }
 }
 
@@ -632,6 +671,33 @@ mod tests {
         assert!(line.contains("janitor-gitlab-status"));
         assert!(line.contains("success"));
         assert!(line.contains("Patch accepted"));
+    }
+
+    #[test]
+    fn bitbucket_context_captures_api_credentials() {
+        let ctx = ScmContext::from_pairs([
+            ("BITBUCKET_BUILD_NUMBER", "42"),
+            ("BITBUCKET_COMMIT", "cafef00d"),
+            ("BITBUCKET_REPO_FULL_NAME", "acme/service"),
+            ("BITBUCKET_PR_ID", "77"),
+            ("BITBUCKET_PR_DESTINATION_BRANCH", "main"),
+            ("BITBUCKET_BRANCH", "feature/atlassian"),
+            ("BITBUCKET_WORKSPACE", "acme"),
+            ("BITBUCKET_REPO_SLUG", "service"),
+            ("BITBUCKET_ACCESS_TOKEN", "bbt-secret-token"),
+        ]);
+        assert_eq!(ctx.provider, ScmProvider::Bitbucket);
+        assert_eq!(ctx.commit_sha.as_deref(), Some("cafef00d"));
+        // workspace stored in project_id, slug stored in repo_id
+        assert_eq!(ctx.project_id.as_deref(), Some("acme"));
+        assert_eq!(ctx.repo_id.as_deref(), Some("service"));
+        assert_eq!(ctx.api_token.as_deref(), Some("bbt-secret-token"));
+        // api_base_url unused for Bitbucket (hardcoded URL in publish_verdict)
+        assert!(ctx.api_base_url.is_none());
+        // pr_number and refs still captured
+        assert_eq!(ctx.pr_number, Some(77));
+        assert_eq!(ctx.base_ref.as_deref(), Some("main"));
+        assert_eq!(ctx.head_ref.as_deref(), Some("feature/atlassian"));
     }
 
     #[test]

@@ -5,6 +5,17 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-10 — Atlassian Integration & Legacy Taint Sweep (v10.1.0-alpha.4)
+
+**Directive:** Expand cross-file taint detection to 8 additional grammars (Ruby, PHP, C#, Kotlin, C/C++, Rust, Swift, Scala) and implement Bitbucket Cloud Build Status API verdict publishing.
+
+**Files modified:**
+- `crates/common/src/scm.rs` *(modified)* — `ScmContext::from_pairs` captures `BITBUCKET_ACCESS_TOKEN`, `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_SLUG`; `BitbucketStatusPublisher::publish_verdict` POSTs to Bitbucket Build Status REST API with Bearer auth; 1 new unit test `bitbucket_context_captures_api_credentials`.
+- `crates/forge/src/taint_catalog.rs` *(modified)* — `scan_cross_file_sinks` dispatch extended with 8 new arms; `scan_ruby`, `scan_php`, `scan_csharp`, `scan_kotlin`, `scan_cpp`, `scan_rust`, `scan_swift`, `scan_scala` implemented with depth guards; 16+ true-positive/true-negative unit tests added.
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.3` to `10.1.0-alpha.4`.
+- `docs/INNOVATION_LOG.md` *(modified)* — P1-2 and P1-3 purged as resolved.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+
 ## 2026-04-10 — Absolute Taint Severance (v10.0.1)
 
 **Directive:** Replace string-bearing secret entropy findings with a primitive count, isolate the PatchBouncer aggregation boundary to static redacted labels only, verify under single-threaded tests, and cut the `v10.0.1` release.
