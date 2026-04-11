@@ -261,6 +261,41 @@ pub fn emit_lifecycle_webhook(
 }
 
 // ---------------------------------------------------------------------------
+// SBOM drift webhook emitter
+// ---------------------------------------------------------------------------
+
+/// Emit an `sbom_drift` webhook event listing newly detected package names.
+///
+/// Fires best-effort (non-blocking, errors suppressed) on the configured webhook
+/// URL with the `sbom_drift` event name.  Skips silently when no URL is configured
+/// or `sbom_drift` is not in the allowed events list.
+pub fn emit_sbom_drift_webhook(new_packages: &[String], policy: &common::policy::JanitorPolicy) {
+    let cfg = &policy.webhook;
+    if cfg.url.is_empty() {
+        return;
+    }
+    if !cfg.events.is_empty() && !cfg.events.iter().any(|e| e == "sbom_drift") {
+        return;
+    }
+    let payload = serde_json::json!({
+        "event": "sbom_drift",
+        "new_packages": new_packages,
+        "new_package_count": new_packages.len(),
+        "emitted_at": crate::utc_now_iso8601(),
+    });
+    let payload_str = match serde_json::to_string(&payload) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("warning: failed to serialise sbom_drift webhook payload: {e}");
+            return;
+        }
+    };
+    let secret = resolve_webhook_secret(cfg);
+    let sig = sign_webhook_payload(&secret, &payload_str);
+    spawn_signed_webhook_post(cfg.url.clone(), "sbom_drift", payload_str, sig);
+}
+
+// ---------------------------------------------------------------------------
 // webhook-test command
 // ---------------------------------------------------------------------------
 

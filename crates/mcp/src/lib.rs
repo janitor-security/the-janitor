@@ -1,6 +1,6 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes nine tools over the MCP stdio JSON-RPC protocol:
+//! Exposes ten tools over the MCP stdio JSON-RPC protocol:
 //! - `janitor_scan`              — Run the 6-stage dead-symbol pipeline on a project path.
 //! - `janitor_dedup`             — Detect structurally-cloned symbols in a project.
 //! - `janitor_clean`             — Report dead symbols eligible for removal (dry-run).
@@ -10,6 +10,7 @@
 //! - `janitor_provenance`        — Return last analysis duration and source-vs-egress byte ratio.
 //! - `janitor_wopr_snapshot`     — ASCII health snapshot of the repository derived from the bounce log.
 //! - `janitor_visualize_ledger`  — Mermaid pie chart + TEI markdown table from the actuarial ledger.
+//! - `janitor_lint_file`         — Real-time single-file antipattern scan for IDE integration.
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -245,6 +246,24 @@ fn tool_list() -> serde_json::Value {
                         }
                     },
                     "required": ["path"]
+                }
+            },
+            {
+                "name": "janitor_lint_file",
+                "description": "Real-time single-file security antipattern scan for IDE integration. Takes a file path and raw buffer contents (unsaved), runs the Slop Hunter detector suite, and returns an array of StructuredFindings with line numbers and remediation guidance. Designed for on-save feedback loops in VS Code / JetBrains via the MCP protocol.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path (used to infer language from extension, e.g. `src/main.rs`)."
+                        },
+                        "contents": {
+                            "type": "string",
+                            "description": "Raw file contents as a UTF-8 string (may be unsaved buffer state from the IDE)."
+                        }
+                    },
+                    "required": ["path", "contents"]
                 }
             }
         ]
@@ -887,6 +906,109 @@ fn run_visualize_ledger(path: &str) -> Result<serde_json::Value> {
     }))
 }
 
+/// Real-time single-file antipattern scan for IDE integration.
+///
+/// Infers the language from `file_path`'s extension, runs
+/// [`forge::slop_hunter::find_slop`] on `contents`, and converts each
+/// [`forge::slop_hunter::SlopFinding`] into a [`common::slop::StructuredFinding`]
+/// with a best-effort line number (derived from byte offset scan of `contents`).
+///
+/// Returns an empty array for unknown file types — never errors on language
+/// mismatch so the IDE client does not surface spurious errors on binary blobs.
+fn run_lint_file(file_path: &str, contents: &str) -> Result<serde_json::Value> {
+    // Infer language tag from file extension.
+    let ext = std::path::Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let lang = ext_to_lang_tag(ext);
+
+    let source = contents.as_bytes();
+    let unit = forge::slop_hunter::ParsedUnit::unparsed(source);
+    let raw_findings = forge::slop_hunter::find_slop(lang, &unit);
+
+    // Convert SlopFinding (byte offsets) → StructuredFinding (line numbers).
+    let findings: Vec<common::slop::StructuredFinding> = raw_findings
+        .iter()
+        .map(|f| {
+            let line = byte_offset_to_line(source, f.start_byte);
+            common::slop::StructuredFinding {
+                id: finding_id_from_description(&f.description),
+                file: Some(file_path.to_owned()),
+                line: Some(line),
+                fingerprint: String::new(),
+                remediation: None,
+                docs_url: None,
+            }
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "file": file_path,
+        "language": lang,
+        "finding_count": findings.len(),
+        "findings": findings,
+        "is_clean": findings.is_empty(),
+    }))
+}
+
+/// Map a file extension to the language tag accepted by `slop_hunter::find_slop`.
+fn ext_to_lang_tag(ext: &str) -> &'static str {
+    match ext {
+        "rs" => "rs",
+        "py" | "pyw" => "py",
+        "js" | "mjs" | "cjs" => "js",
+        "ts" => "ts",
+        "tsx" => "tsx",
+        "jsx" => "jsx",
+        "cpp" | "cxx" | "cc" | "c++" => "cpp",
+        "c" => "c",
+        "h" | "hpp" => "cpp",
+        "java" => "java",
+        "cs" => "cs",
+        "go" => "go",
+        "rb" => "rb",
+        "sh" | "bash" => "sh",
+        "yaml" | "yml" => "yaml",
+        "tf" | "hcl" => "tf",
+        "zig" => "zig",
+        "lua" => "lua",
+        "kt" => "kt",
+        "scala" => "scala",
+        "php" => "php",
+        "swift" => "swift",
+        "proto" => "proto",
+        "cmake" => "cmake",
+        "xml" => "xml",
+        "nix" => "nix",
+        "gd" => "gd",
+        _ => "unknown",
+    }
+}
+
+/// Convert a byte offset in `source` to a 1-indexed line number.
+fn byte_offset_to_line(source: &[u8], byte_offset: usize) -> u32 {
+    let safe_end = byte_offset.min(source.len());
+    let newlines = source[..safe_end].iter().filter(|&&b| b == b'\n').count();
+    (newlines as u32) + 1
+}
+
+/// Extract a machine-readable finding ID from a human-readable description string.
+///
+/// Descriptions from the Slop Hunter embed structured IDs in the form
+/// `"security:command_injection — ..."`.  This extractor returns the leading
+/// `category:subcategory` token for downstream consumption.
+fn finding_id_from_description(description: &str) -> String {
+    description
+        .split(" — ")
+        .next()
+        .unwrap_or(description)
+        .split(' ')
+        .next()
+        .unwrap_or(description)
+        .to_owned()
+}
+
 // ---------------------------------------------------------------------------
 // Server entry point
 // ---------------------------------------------------------------------------
@@ -1078,6 +1200,23 @@ fn dispatch(req: Request) -> Response {
                     }
                 }
 
+                "janitor_lint_file" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    let contents = match args.get("contents").and_then(|v| v.as_str()) {
+                        Some(c) => c.to_owned(),
+                        None => {
+                            return Response::err(req.id, -32602, "missing `contents` argument")
+                        }
+                    };
+                    match run_lint_file(&path, &contents) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
                 _ => Response::err(req.id, -32601, format!("unknown tool: {tool}")),
             }
         }
@@ -1107,10 +1246,10 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_nine_tools() {
+    fn test_tools_list_contains_ten_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 9);
+        assert_eq!(tools.len(), 10);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
@@ -1121,6 +1260,7 @@ mod tests {
         assert!(names.contains(&"janitor_provenance"));
         assert!(names.contains(&"janitor_wopr_snapshot"));
         assert!(names.contains(&"janitor_visualize_ledger"));
+        assert!(names.contains(&"janitor_lint_file"));
     }
 
     #[test]
@@ -1466,5 +1606,77 @@ mod tests {
         let tei_table = result["tei_table"].as_str().unwrap();
         assert!(tei_table.contains("$320"), "TEI table must show total $320");
         assert_eq!(result["status"], "critical", "status must be critical");
+    }
+
+    // ── janitor_lint_file tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_lint_file_clean_rust_returns_no_findings() {
+        let src = "fn add(a: i32, b: i32) -> i32 { a + b }\n";
+        let result = run_lint_file("src/lib.rs", src).unwrap();
+        assert_eq!(
+            result["finding_count"], 0,
+            "clean Rust must produce zero findings"
+        );
+        assert_eq!(result["is_clean"], true);
+        assert_eq!(result["language"], "rs");
+    }
+
+    #[test]
+    fn test_lint_file_unknown_extension_returns_empty() {
+        let result = run_lint_file("binary.wasm", "not utf8 safe content\x00").unwrap();
+        assert_eq!(
+            result["finding_count"], 0,
+            "unknown extension must produce no findings"
+        );
+        assert_eq!(result["is_clean"], true);
+    }
+
+    #[test]
+    fn test_lint_file_missing_path_rejected() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(50),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_lint_file",
+                "arguments": { "contents": "fn main() {}" }
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_lint_file_missing_contents_rejected() {
+        let req = Request {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(51),
+            method: "tools/call".into(),
+            params: serde_json::json!({
+                "name": "janitor_lint_file",
+                "arguments": { "path": "src/main.rs" }
+            }),
+        };
+        let resp = dispatch(req);
+        assert!(resp.result.is_none());
+        assert_eq!(resp.error.as_ref().unwrap().code, -32602);
+    }
+
+    #[test]
+    fn test_byte_offset_to_line_first_line() {
+        let src = b"line1\nline2\nline3\n";
+        assert_eq!(byte_offset_to_line(src, 0), 1, "offset 0 is line 1");
+    }
+
+    #[test]
+    fn test_byte_offset_to_line_second_line() {
+        let src = b"line1\nline2\nline3\n";
+        assert_eq!(
+            byte_offset_to_line(src, 6),
+            2,
+            "offset 6 (after first newline) is line 2"
+        );
     }
 }

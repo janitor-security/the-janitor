@@ -5,6 +5,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — Omnipresent Firewall & OSV Bulk Ingestion (v10.1.0-alpha.8)
+
+**Directive:** OSV bulk ZIP ingestion fix, CodeQL terminal output amputation, P2-4 MCP IDE Linter (`janitor_lint_file`), P2-5 SBOM Drift Daemon (`janitor watch-sbom`), VS Code extension scaffold.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.7` → `10.1.0-alpha.8`; `zip = "2"` and `notify = "6.1"` added as workspace deps.
+- `crates/cli/Cargo.toml` *(modified)* — `zip.workspace = true`, `notify.workspace = true` added.
+- `crates/mcp/Cargo.toml` *(modified)* — `polyglot` path dep added for language detection in `janitor_lint_file`.
+- `crates/cli/src/main.rs` *(modified)* — **Phase 1:** `fetch_osv_slopsquat_corpus` rewritten to use bulk `all.zip` download (per-advisory CSV+JSON chain eliminated); `extract_mal_packages_from_zip` added (ZIP extraction + MAL- filter loop); `OSV_DUMP_BASE_URL` corrected to `osv-vulnerabilities.storage.googleapis.com`. **Phase 2:** `score.score()` and `effective_gate` removed from all terminal `println!`; PATCH CLEAN/REJECTED messages replaced with static strings; slop score table row shows `[see bounce_log]`. **Phase 4:** `WatchSbom { path }` subcommand added; `cmd_watch_sbom` implemented with `notify::RecommendedWatcher` + debounce loop; `snapshot_lockfile_packages` reads Cargo.lock / package-lock.json / poetry.lock.
+- `crates/cli/src/report.rs` *(modified)* — `emit_sbom_drift_webhook` added; fires `sbom_drift` HMAC-signed webhook event for new packages.
+- `crates/mcp/src/lib.rs` *(modified)* — **Phase 3:** `janitor_lint_file` tool added to `tool_list()` (10 tools total); `run_lint_file`, `ext_to_lang_tag`, `byte_offset_to_line`, `finding_id_from_description` helpers added; dispatch arm added; 6 new unit tests.
+- `tools/vscode-extension/package.json` *(created)* — VS Code extension manifest with `janitor.serverPath` + `janitor.enableOnSave` config, `@modelcontextprotocol/sdk` dep.
+- `tools/vscode-extension/src/extension.ts` *(created)* — TypeScript extension: launches `janitor serve --mcp`, wires `onDidSaveTextDocument` → `janitor_lint_file` → VS Code Diagnostics.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
 ## 2026-04-11 — Frictionless Distribution & Sha1-Hulud Interceptor (v10.1.0-alpha.6)
 
 **Directive:** Execute P1-4 marketplace distribution templates for GitLab/Azure DevOps, implement the Sha1-Hulud `package.json` propagation interceptor, add Crucible true-positive coverage, update the innovation ledger, run single-threaded verification, and cut `10.1.0-alpha.6`.

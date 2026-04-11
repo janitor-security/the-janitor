@@ -1,0 +1,50 @@
+{
+  "name": "janitor-security",
+  "displayName": "The Janitor — Structural Security",
+  "description": "Real-time structural security antipattern detection via the Janitor MCP server.",
+  "version": "0.1.0",
+  "publisher": "janitor-security",
+  "license": "BUSL-1.1",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Linters", "Other"],
+  "activationEvents": ["onLanguage:rust", "onLanguage:python", "onLanguage:javascript",
+    "onLanguage:typescript", "onLanguage:go", "onLanguage:java", "onLanguage:c",
+    "onLanguage:cpp", "onLanguage:yaml", "onLanguage:terraform"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "janitor.lintFile",
+        "title": "Janitor: Scan Current File"
+      }
+    ],
+    "configuration": {
+      "title": "The Janitor",
+      "properties": {
+        "janitor.serverPath": {
+          "type": "string",
+          "default": "janitor",
+          "description": "Absolute path to the `janitor` binary. Defaults to PATH lookup."
+        },
+        "janitor.enableOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run janitor_lint_file on every file save."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

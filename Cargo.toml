@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "10.1.0-alpha.7"
+version = "10.1.0-alpha.8"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -120,6 +120,12 @@ git2 = "0.20"
 
 # Data parallelism
 rayon = "1.10"
+
+# ZIP archive extraction — OSV bulk corpus download (in-memory, no temp files)
+zip = "2"
+
+# File-system watch — SBOM drift daemon (inotify/kqueue via OS-native backend)
+notify = "6.1"
 
 # Progress reporting
 indicatif = "0.17"

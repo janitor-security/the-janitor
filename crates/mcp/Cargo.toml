@@ -9,6 +9,7 @@ repository.workspace = true
 anatomist = { path = "../anatomist" }
 common = { path = "../common" }
 forge = { path = "../forge" }
+polyglot = { path = "../polyglot" }
 vault = { path = "../vault" }
 anyhow.workspace = true
 serde.workspace = true
