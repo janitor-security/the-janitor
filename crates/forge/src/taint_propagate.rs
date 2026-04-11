@@ -44,6 +44,7 @@ pub struct TaintFlow {
 /// Go `database/sql` method names whose first argument must not be a dynamic
 /// string concatenation (mirrors the Go-3 gate in `slop_hunter.rs`).
 const GO_SQL_METHODS: &[&str] = &["Query", "Exec", "QueryRow", "QueryContext", "ExecContext"];
+const PHP_SQL_METHODS: &[&str] = &["query", "real_query"];
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -70,6 +71,57 @@ pub fn track_taint_go_sqli(source: &[u8], root: Node<'_>) -> Vec<TaintFlow> {
     let mut flows: Vec<TaintFlow> = Vec::new();
     find_tainted_sql_sinks(root, source, &params, &mut flows, 0);
     flows
+}
+
+/// Collect Ruby method parameters from the parsed AST.
+pub fn collect_ruby_params(root: Node<'_>, source: &[u8]) -> Vec<String> {
+    let mut params = Vec::new();
+    collect_named_params_by_kind(root, source, "method_parameters", &mut params, 0);
+    params
+}
+
+/// Track Ruby ActiveRecord SQLi flows from method parameters into `where("#{...}")`.
+pub fn find_tainted_ruby_sql_sinks(
+    root: Node<'_>,
+    source: &[u8],
+    params: &[String],
+) -> Vec<TaintFlow> {
+    let mut flows = Vec::new();
+    find_ruby_sql_sinks(root, source, params, &mut flows, 0);
+    flows
+}
+
+/// Collect PHP function or method parameters from the parsed AST.
+pub fn collect_php_params(root: Node<'_>, source: &[u8]) -> Vec<String> {
+    let mut params = Vec::new();
+    collect_php_parameter_names(root, source, &mut params, 0);
+    params
+}
+
+/// Track PHP SQLi flows into raw PDO / mysqli query concatenation.
+pub fn find_tainted_php_sql_sinks(
+    root: Node<'_>,
+    source: &[u8],
+    params: &[String],
+) -> Vec<TaintFlow> {
+    let mut flows = Vec::new();
+    find_php_sql_sinks(root, source, params, &mut flows, 0);
+    flows
+}
+
+/// Kotlin taint stub — reserved for a subsequent release.
+pub fn collect_kotlin_params(_root: Node<'_>, _source: &[u8]) -> Vec<String> {
+    Vec::new()
+}
+
+/// C/C++ taint stub — reserved for a subsequent release.
+pub fn collect_cpp_params(_root: Node<'_>, _source: &[u8]) -> Vec<String> {
+    Vec::new()
+}
+
+/// Swift taint stub — reserved for a subsequent release.
+pub fn collect_swift_params(_root: Node<'_>, _source: &[u8]) -> Vec<String> {
+    Vec::new()
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +157,69 @@ fn collect_go_params(node: Node<'_>, source: &[u8], params: &mut Vec<String>, de
     let mut cur = node.walk();
     for child in node.children(&mut cur) {
         collect_go_params(child, source, params, depth + 1);
+    }
+}
+
+fn collect_named_params_by_kind(
+    node: Node<'_>,
+    source: &[u8],
+    param_list_kind: &str,
+    params: &mut Vec<String>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == param_list_kind {
+        let mut cur = node.walk();
+        for child in node.named_children(&mut cur) {
+            if child.kind() == "identifier" {
+                if let Ok(name) = child.utf8_text(source) {
+                    if !name.is_empty() {
+                        params.push(name.to_string());
+                    }
+                }
+            }
+        }
+        return;
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        collect_named_params_by_kind(child, source, param_list_kind, params, depth + 1);
+    }
+}
+
+fn collect_php_parameter_names(
+    node: Node<'_>,
+    source: &[u8],
+    params: &mut Vec<String>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "simple_parameter" || node.kind() == "variadic_parameter" {
+        let name = node
+            .child_by_field_name("name")
+            .or_else(|| {
+                let mut cur = node.walk();
+                let child = node
+                    .named_children(&mut cur)
+                    .find(|child| child.kind().contains("variable"));
+                child
+            })
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("")
+            .trim_start_matches('$')
+            .to_string();
+        if !name.is_empty() {
+            params.push(name);
+        }
+        return;
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        collect_php_parameter_names(child, source, params, depth + 1);
     }
 }
 
@@ -163,6 +278,120 @@ fn find_tainted_sql_sinks(
     }
 }
 
+fn find_ruby_sql_sinks(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    flows: &mut Vec<TaintFlow>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "call" {
+        let method_text = node
+            .child_by_field_name("method")
+            .and_then(|n| n.utf8_text(source).ok())
+            .unwrap_or("");
+        if method_text == "where" {
+            if let Some(args) = node.child_by_field_name("arguments") {
+                if let Some(first_arg) = args.named_children(&mut args.walk()).next() {
+                    if let Ok(arg_text) = first_arg.utf8_text(source) {
+                        if let Some(param) = params
+                            .iter()
+                            .find(|param| arg_text.contains(&format!("#{{{param}}}")))
+                        {
+                            flows.push(TaintFlow {
+                                taint_source: param.clone(),
+                                sink_byte: node.start_byte(),
+                                sink_end_byte: node.end_byte(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        find_ruby_sql_sinks(child, source, params, flows, depth + 1);
+    }
+}
+
+fn find_php_sql_sinks(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    flows: &mut Vec<TaintFlow>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    match node.kind() {
+        "function_call_expression" => {
+            let func_text = node
+                .child_by_field_name("function")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            if func_text == "mysqli_query" {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    let mut arg_walk = args.walk();
+                    let mut named = args.named_children(&mut arg_walk);
+                    let _conn = named.next();
+                    if let Some(query_arg) = named.next() {
+                        record_php_taint_flow(node, query_arg, source, params, flows);
+                    }
+                }
+            }
+        }
+        "member_call_expression" | "method_call_expression" => {
+            let method_text = node
+                .child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("member"))
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            if PHP_SQL_METHODS.contains(&method_text) {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    if let Some(query_arg) = args.named_children(&mut args.walk()).next() {
+                        record_php_taint_flow(node, query_arg, source, params, flows);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        find_php_sql_sinks(child, source, params, flows, depth + 1);
+    }
+}
+
+fn record_php_taint_flow(
+    sink_node: Node<'_>,
+    arg_node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    flows: &mut Vec<TaintFlow>,
+) {
+    let Ok(arg_text) = arg_node.utf8_text(source) else {
+        return;
+    };
+    if !arg_text.contains('.') && !arg_text.contains('{') {
+        return;
+    }
+    if let Some(param) = params.iter().find(|param| {
+        arg_text.contains(&format!("${param}"))
+            && (arg_text.contains('.') || arg_text.contains(&format!("{{${param}}}")))
+    }) {
+        flows.push(TaintFlow {
+            taint_source: param.clone(),
+            sink_byte: sink_node.start_byte(),
+            sink_end_byte: sink_node.end_byte(),
+        });
+    }
+}
+
 /// Recursively inspect `binary_expression` operands to find a parameter name.
 ///
 /// Handles nested concatenation: `"prefix" + table + " WHERE " + filter`
@@ -216,6 +445,26 @@ mod tests {
         parser
             .parse(source.as_bytes(), None)
             .expect("Go source must parse")
+    }
+
+    fn parse_ruby(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_ruby::LANGUAGE.into())
+            .expect("Ruby grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("Ruby source must parse")
+    }
+
+    fn parse_php(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_php::LANGUAGE_PHP.into())
+            .expect("PHP grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("PHP source must parse")
     }
 
     /// True positive: named parameter directly concatenated into db.Query.
@@ -293,5 +542,59 @@ var q = "SELECT 1"
             flows.is_empty(),
             "no functions means no parameters and no taint flows"
         );
+    }
+
+    #[test]
+    fn ruby_taint_confirmed_for_where_interpolation() {
+        let src = r#"def fetch_user(user_id)
+  User.where("id = #{user_id}")
+end
+"#;
+        let tree = parse_ruby(src);
+        let params = collect_ruby_params(tree.root_node(), src.as_bytes());
+        let flows = find_tainted_ruby_sql_sinks(tree.root_node(), src.as_bytes(), &params);
+        assert_eq!(params, vec!["user_id".to_string()]);
+        assert_eq!(flows.len(), 1);
+        assert_eq!(flows[0].taint_source, "user_id");
+    }
+
+    #[test]
+    fn ruby_taint_not_confirmed_for_literal_where() {
+        let src = r#"def fetch_user
+  User.where("active = true")
+end
+"#;
+        let tree = parse_ruby(src);
+        let params = collect_ruby_params(tree.root_node(), src.as_bytes());
+        let flows = find_tainted_ruby_sql_sinks(tree.root_node(), src.as_bytes(), &params);
+        assert!(flows.is_empty());
+    }
+
+    #[test]
+    fn php_taint_confirmed_for_mysqli_query_concat() {
+        let src = r#"<?php
+function fetch_user($conn, $user) {
+    mysqli_query($conn, "SELECT * FROM users WHERE name = '" . $user . "'");
+}
+"#;
+        let tree = parse_php(src);
+        let params = collect_php_params(tree.root_node(), src.as_bytes());
+        let flows = find_tainted_php_sql_sinks(tree.root_node(), src.as_bytes(), &params);
+        assert!(params.iter().any(|param| param == "user"));
+        assert_eq!(flows.len(), 1);
+        assert_eq!(flows[0].taint_source, "user");
+    }
+
+    #[test]
+    fn php_taint_not_confirmed_for_literal_query() {
+        let src = r#"<?php
+function fetch_user($conn) {
+    mysqli_query($conn, "SELECT * FROM users");
+}
+"#;
+        let tree = parse_php(src);
+        let params = collect_php_params(tree.root_node(), src.as_bytes());
+        let flows = find_tainted_php_sql_sinks(tree.root_node(), src.as_bytes(), &params);
+        assert!(flows.is_empty());
     }
 }

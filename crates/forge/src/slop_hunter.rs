@@ -3598,7 +3598,14 @@ const RUBY_DANGEROUS_EXEC_METHODS: &[&str] = &["eval", "system", "exec", "spawn"
 fn find_ruby_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     let source = parsed.source;
     // Fast pre-filter: skip files missing any dangerous keyword.
-    const RUBY_MARKERS: &[&[u8]] = &[b"eval", b"system", b"Marshal.load", b"Marshal.restore"];
+    const RUBY_MARKERS: &[&[u8]] = &[
+        b"eval",
+        b"system",
+        b"Marshal.load",
+        b"Marshal.restore",
+        b".where(",
+        b"#{",
+    ];
     if !RUBY_MARKERS
         .iter()
         .any(|m| source.windows(m.len()).any(|w| w == *m))
@@ -3614,6 +3621,21 @@ fn find_ruby_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding
 
     let mut findings = Vec::new();
     find_ruby_danger_nodes(tree.root_node(), source, false, &mut findings);
+    let params = crate::taint_propagate::collect_ruby_params(tree.root_node(), source);
+    for flow in
+        crate::taint_propagate::find_tainted_ruby_sql_sinks(tree.root_node(), source, &params)
+    {
+        findings.push(SlopFinding {
+            start_byte: flow.sink_byte,
+            end_byte: flow.sink_end_byte,
+            description: format!(
+                "security:sqli_concatenation — Ruby ActiveRecord `where(...)` interpolates tainted parameter `{}` into SQL; use parameter binding (`where(\"id = ?\", value)`) instead",
+                flow.taint_source
+            ),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::KevCritical,
+        });
+    }
     findings
 }
 
@@ -3825,6 +3847,8 @@ fn find_php_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding>
         b"system(",
         b"exec(",
         b"shell_exec(",
+        b"mysqli_query(",
+        b"->query(",
     ];
     if !PHP_MARKERS
         .iter()
@@ -3839,6 +3863,21 @@ fn find_php_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding>
     };
     let mut findings = Vec::new();
     find_php_danger_nodes(tree.root_node(), source, false, &mut findings);
+    let params = crate::taint_propagate::collect_php_params(tree.root_node(), source);
+    for flow in
+        crate::taint_propagate::find_tainted_php_sql_sinks(tree.root_node(), source, &params)
+    {
+        findings.push(SlopFinding {
+            start_byte: flow.sink_byte,
+            end_byte: flow.sink_end_byte,
+            description: format!(
+                "security:sqli_concatenation — PHP raw query concatenates tainted parameter `{}` into SQL; use prepared statements with bound parameters instead",
+                flow.taint_source
+            ),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::KevCritical,
+        });
+    }
     findings
 }
 
@@ -7021,6 +7060,30 @@ mod phase4_rd_tests {
     }
 
     #[test]
+    fn test_ruby_where_interpolation_fires_sqli() {
+        let src = b"def fetch_user(user_id)\n  User.where(\"id = #{user_id}\")\nend\n";
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("sqli_concatenation")),
+            "ActiveRecord where interpolation must fire sqli_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_ruby_where_parameterized_is_safe() {
+        let src = b"def fetch_user(user_id)\n  User.where(\"id = ?\", user_id)\nend\n";
+        let findings = find_ruby_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "ActiveRecord where parameter binding must not fire sqli_concatenation"
+        );
+    }
+
+    #[test]
     fn test_find_slop_rb_dispatches_phase4() {
         let src = b"eval(params[:cmd])\n";
         let findings = find_slop("rb", src);
@@ -7194,6 +7257,31 @@ mod phase5_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("command_injection")),
             "PHP shell_exec with string literal must not fire"
+        );
+    }
+
+    #[test]
+    fn test_php_mysqli_query_concat_fires_sqli() {
+        let src = b"<?php\nfunction fetch_user($conn, $user) {\n    mysqli_query($conn, \"SELECT * FROM users WHERE name = '\" . $user . \"'\");\n}\n";
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("sqli_concatenation")),
+            "mysqli_query with concatenated tainted parameter must fire sqli_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_php_mysqli_query_literal_is_safe() {
+        let src =
+            b"<?php\nfunction fetch_user($conn) {\n    mysqli_query($conn, \"SELECT * FROM users\");\n}\n";
+        let findings = find_php_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "literal mysqli_query must not fire sqli_concatenation"
         );
     }
 

@@ -962,6 +962,20 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: false,
         desc_fragment: None,
     },
+    Entry {
+        name: "Ruby/ActiveRecord where interpolation — INTERCEPT",
+        lang: "rb",
+        source: b"def fetch_user(user_id)\n  User.where(\"id = #{user_id}\")\nend\n",
+        must_intercept: true,
+        desc_fragment: Some("sqli_concatenation"),
+    },
+    Entry {
+        name: "Ruby/ActiveRecord parameter binding — SAFE",
+        lang: "rb",
+        source: b"def fetch_user(user_id)\n  User.where(\"id = ?\", user_id)\nend\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 
     // ── Phase 4 R&D: Bash AST Walk ───────────────────────────────────────────
     Entry {
@@ -1033,6 +1047,20 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         name: "PHP/shell_exec() literal arg — SAFE (PHP-3 TN)",
         lang: "php",
         source: b"<?php\n$out = shell_exec('ls -la');\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
+    Entry {
+        name: "PHP/mysqli_query concat — INTERCEPT (PHP SQLi)",
+        lang: "php",
+        source: b"<?php\nfunction fetch_user($conn, $user) {\n    mysqli_query($conn, \"SELECT * FROM users WHERE name = '\" . $user . \"'\");\n}\n",
+        must_intercept: true,
+        desc_fragment: Some("sqli_concatenation"),
+    },
+    Entry {
+        name: "PHP/mysqli_query literal — SAFE (PHP SQLi TN)",
+        lang: "php",
+        source: b"<?php\nfunction fetch_user($conn) {\n    mysqli_query($conn, \"SELECT * FROM users\");\n}\n",
         must_intercept: false,
         desc_fragment: None,
     },
@@ -2402,7 +2430,7 @@ index 1111111..2222222 100644
     }
 
     #[test]
-    fn policy_suppression_waives_patch_finding() {
+    fn unauthorized_suppression_attempt_is_intercepted() {
         let patch = "\
 diff --git a/app.py b/app.py
 --- a/app.py
@@ -2439,10 +2467,23 @@ reason = "temporary waiver"
         let waived = forge::slop_filter::PatchBouncer::for_workspace(dir.path())
             .bounce(patch, &registry)
             .expect("suppressed patch must analyze");
-        assert_eq!(waived.score(), 0, "active suppression must zero the score");
         assert!(
-            waived.structured_findings.is_empty(),
-            "waived finding must be removed from structured results"
+            waived
+                .structured_findings
+                .iter()
+                .any(|finding| finding.id.contains("security:dynamic_eval")),
+            "unapproved waiver must retain the original finding"
+        );
+        assert!(
+            waived
+                .structured_findings
+                .iter()
+                .any(|finding| finding.id.contains("security:unauthorized_suppression")),
+            "rogue waiver attempt must be surfaced as a structured critical finding"
+        );
+        assert!(
+            waived.score() >= forge::slop_hunter::Severity::KevCritical.points(),
+            "rogue waiver attempt must contribute the critical suppression score"
         );
     }
 

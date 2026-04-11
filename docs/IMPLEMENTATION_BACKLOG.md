@@ -1541,8 +1541,29 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - `docs/INNOVATION_LOG.md` *(modified)* — removed resolved P0-2 / P0-3 items; P1-1 now explicitly tracks C# / Ruby / PHP / Swift taint-spine expansion
 - `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
 
-**Verification**: pending `cargo test --workspace -- --test-threads=1` | `just audit`
-**Release**: pending `just fast-release 10.1.0-alpha.2`
+**Verification**: `cargo test --workspace -- --test-threads=1` | `just audit`
+**Release**: `just fast-release 10.1.0-alpha.2`
+
+
+## 2026-04-10 — v10.1.0-alpha.3: RBAC Waiver Governance & Legacy Taint Strike
+
+**Directive**: Sovereign Directive — close P0-4 (RBAC Suppressions) and P1-1 (Ruby/PHP intra-file taint spine expansion).
+
+- `Cargo.toml` *(modified)* — version bumped to `10.1.0-alpha.3`
+- `crates/common/src/policy.rs` *(modified)* — `Suppression` gains runtime-only `approved: bool`; serialization tests prove approval state is not persisted into policy TOML
+- `crates/gov/src/main.rs` *(modified)* — added RC-phase `/v1/verify-suppressions` endpoint and Governor-side authorization filtering tests
+- `crates/cli/src/main.rs` *(modified)* — `cmd_bounce` now sends suppression IDs to Governor and marks approved waivers before finding filtering
+- `crates/forge/src/slop_filter.rs` *(modified)* — unapproved matching waivers no longer suppress findings; they emit `security:unauthorized_suppression` at KevCritical severity while preserving the original finding
+- `crates/forge/src/taint_propagate.rs` *(modified)* — implemented Ruby and PHP parameter collection plus intra-file SQL sink propagation; added Kotlin, C/C++, and Swift stubs for subsequent releases
+- `crates/forge/src/slop_hunter.rs` *(modified)* — Ruby and PHP slop scans now surface tainted ActiveRecord interpolation and raw mysqli/PDO query concatenation as `security:sqli_concatenation`
+- `crates/crucible/src/main.rs` *(modified)* — added Ruby SQLi TP/TN, PHP SQLi TP/TN, and unauthorized suppression regression fixtures
+- `README.md` *(modified)* — version string synced to `v10.1.0-alpha.3`
+- `docs/index.md` *(modified)* — version string synced to `v10.1.0-alpha.3`
+- `docs/INNOVATION_LOG.md` *(modified)* — removed completed P0-4 and P1-1 roadmap items
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry
+
+**Verification**: `cargo test --workspace -- --test-threads=1` | `just audit`
+**Release**: blocked — `just fast-release 10.1.0-alpha.3` halted because the local GPG signing key is locked (`gpg-unlock` / `JANITOR_GPG_PASSPHRASE` required)
 
 
 ## 2026-04-10 — v10.1.0-alpha.1: Governance Seal & O(1) Incremental Engine

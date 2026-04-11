@@ -3396,7 +3396,7 @@ mod tests {
 mod webhook_tests {
     use super::*;
     use common::policy::WebhookConfig;
-    use std::io::{Read, Write};
+    use std::io::Write;
     use std::net::TcpListener;
     use std::sync::mpsc;
     use std::time::Duration;
@@ -3478,15 +3478,18 @@ mod webhook_tests {
 
     #[test]
     fn lifecycle_webhook_emits_finding_opened() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("listener must bind");
+        let listener = match TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("listener must bind: {err}"),
+        };
         let addr = listener.local_addr().expect("listener must expose address");
         let (tx, rx) = mpsc::channel();
 
         std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept must succeed");
-            let mut buf = [0_u8; 8192];
-            let n = stream.read(&mut buf).expect("request read must succeed");
-            tx.send(String::from_utf8_lossy(&buf[..n]).to_string())
+            let request = read_http_request(&mut stream);
+            tx.send(String::from_utf8_lossy(&request).to_string())
                 .expect("request send must succeed");
             write!(
                 stream,
@@ -3527,12 +3530,14 @@ mod webhook_tests {
             .expect("lifecycle webhook request must arrive");
         let request_lower = request.to_ascii_lowercase();
         assert!(request_lower.contains("x-janitor-event: finding_opened"));
-        assert!(request.contains("\"event\":\"finding_opened\""));
-        assert!(request.contains("\"ticket_project\":\"SEC\""));
         let body = request
             .split("\r\n\r\n")
             .nth(1)
             .expect("request must contain body");
+        let payload: serde_json::Value =
+            serde_json::from_str(body).expect("lifecycle request body must be valid JSON");
+        assert_eq!(payload["event"], "finding_opened");
+        assert_eq!(payload["ticket_project"], "SEC");
         let expected_sig = sign_webhook_payload("transport-secret", body);
         assert!(request_lower.contains(&format!(
             "x-janitor-signature-256: {}",
@@ -3542,15 +3547,18 @@ mod webhook_tests {
 
     #[test]
     fn lifecycle_webhook_emits_finding_resolved() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("listener must bind");
+        let listener = match TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("listener must bind: {err}"),
+        };
         let addr = listener.local_addr().expect("listener must expose address");
         let (tx, rx) = mpsc::channel();
 
         std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept must succeed");
-            let mut buf = [0_u8; 8192];
-            let n = stream.read(&mut buf).expect("request read must succeed");
-            tx.send(String::from_utf8_lossy(&buf[..n]).to_string())
+            let request = read_http_request(&mut stream);
+            tx.send(String::from_utf8_lossy(&request).to_string())
                 .expect("request send must succeed");
             write!(
                 stream,
@@ -3589,6 +3597,13 @@ mod webhook_tests {
             .expect("resolved lifecycle webhook request must arrive");
         let request_lower = request.to_ascii_lowercase();
         assert!(request_lower.contains("x-janitor-event: finding_resolved"));
+        let body = request
+            .split("\r\n\r\n")
+            .nth(1)
+            .expect("request must contain body");
+        let payload: serde_json::Value =
+            serde_json::from_str(body).expect("lifecycle request body must be valid JSON");
+        assert_eq!(payload["event"], "finding_resolved");
     }
 }
 
@@ -3740,8 +3755,37 @@ mod soft_fail_tests {
         .to_string();
         std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept must succeed");
-            let mut buf = [0_u8; 2048];
-            let _ = stream.read(&mut buf);
+            let mut request = Vec::new();
+            let mut buf = [0_u8; 1024];
+            let header_end = loop {
+                let n = stream.read(&mut buf).expect("request read must succeed");
+                if n == 0 {
+                    panic!("request must contain headers");
+                }
+                request.extend_from_slice(&buf[..n]);
+                if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                    break pos + 4;
+                }
+            };
+            let content_length = String::from_utf8_lossy(&request[..header_end])
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    if name.eq_ignore_ascii_case("content-length") {
+                        value.trim().parse::<usize>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            let body_len = request.len().saturating_sub(header_end);
+            if body_len < content_length {
+                let mut remaining = vec![0_u8; content_length - body_len];
+                stream
+                    .read_exact(&mut remaining)
+                    .expect("request body must be readable");
+                request.extend_from_slice(&remaining);
+            }
             write!(
                 stream,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -3766,4 +3810,42 @@ mod soft_fail_tests {
         assert_eq!(attestation.inclusion_proof.chained_hash, "abc123");
         attestation.decision_receipt.verify().unwrap();
     }
+}
+
+#[cfg(test)]
+fn read_http_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
+    use std::io::Read as _;
+
+    let mut request = Vec::new();
+    let mut buf = [0_u8; 1024];
+    let header_end = loop {
+        let n = stream.read(&mut buf).expect("request read must succeed");
+        if n == 0 {
+            panic!("request must contain headers");
+        }
+        request.extend_from_slice(&buf[..n]);
+        if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+            break pos + 4;
+        }
+    };
+    let content_length = String::from_utf8_lossy(&request[..header_end])
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+    let body_len = request.len().saturating_sub(header_end);
+    if body_len < content_length {
+        let mut remaining = vec![0_u8; content_length - body_len];
+        stream
+            .read_exact(&mut remaining)
+            .expect("request body must be readable");
+        request.extend_from_slice(&remaining);
+    }
+    request
 }

@@ -88,6 +88,53 @@ fn build_ureq_agent(policy: &common::policy::JanitorPolicy) -> anyhow::Result<ur
         .new_agent())
 }
 
+#[derive(Debug, serde::Serialize)]
+struct VerifySuppressionsRequest<'a> {
+    suppression_ids: Vec<&'a str>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct VerifySuppressionsResponse {
+    approved_ids: Vec<String>,
+}
+
+fn verify_suppressions_with_governor(
+    agent: &ureq::Agent,
+    governor_base_url: &str,
+    suppressions: &mut [common::policy::Suppression],
+) {
+    if suppressions.is_empty() {
+        return;
+    }
+
+    let url = format!(
+        "{}/v1/verify-suppressions",
+        governor_base_url.trim_end_matches('/')
+    );
+    let body = VerifySuppressionsRequest {
+        suppression_ids: suppressions.iter().map(|s| s.id.as_str()).collect(),
+    };
+    let approved_ids = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .send(
+            serde_json::to_string(&body).unwrap_or_else(|_| "{\"suppression_ids\":[]}".to_string()),
+        )
+        .ok()
+        .and_then(|mut response| {
+            response
+                .body_mut()
+                .read_json::<VerifySuppressionsResponse>()
+                .ok()
+        })
+        .map(|payload| payload.approved_ids)
+        .unwrap_or_default();
+
+    for suppression in suppressions {
+        suppression.approved = approved_ids.iter().any(|id| id == &suppression.id);
+    }
+}
+
 fn find_prior_bounce_entry<'a>(
     prior_entries: &'a [report::BounceLogEntry],
     repo_slug: &str,
@@ -3011,7 +3058,7 @@ fn cmd_bounce(
     let bounce_start = std::time::Instant::now();
 
     // Load governance manifest — absent = defaults OK; malformed = hard fail.
-    let policy = JanitorPolicy::load(project_root)?;
+    let mut policy = JanitorPolicy::load(project_root)?;
     let scm_context = common::scm::ScmContext::from_env();
     let resolved_pr_number = pr_number.or(scm_context.pr_number);
     let resolved_repo_slug = repo_slug
@@ -3027,6 +3074,9 @@ fn cmd_bounce(
     let deep_scan = deep_scan_flag || policy.forge.deep_scan;
     let governor_url = report::resolve_governor_url(governor_url, &policy);
     let governor_agent = build_ureq_agent(&policy)?;
+    if let Some(suppressions) = policy.suppressions.as_mut() {
+        verify_suppressions_with_governor(&governor_agent, &governor_url, suppressions);
+    }
 
     // PQC enforcement gate (Phase 2 — Hard-Fail Mandate).
     // When pqc_enforced = true in janitor.toml, the operator has declared that

@@ -272,6 +272,8 @@ pub struct Suppression {
     pub expires: Option<String>,
     pub owner: String,
     pub reason: String,
+    #[serde(skip)]
+    pub approved: bool,
 }
 
 impl Suppression {
@@ -878,6 +880,7 @@ mod tests {
                 expires: Some("4102444800".to_string()),
                 owner: "appsec".to_string(),
                 reason: "test fixture".to_string(),
+                approved: false,
             }]),
         };
         let serialised = toml::to_string(&original).unwrap();
@@ -894,6 +897,7 @@ mod tests {
             expires: Some("4102444800".to_string()),
             owner: "secops".to_string(),
             reason: "accepted risk".to_string(),
+            approved: false,
         };
         assert!(suppression.matches("security:command_injection", "src/main.rs", 1_900_000_000));
         assert!(!suppression.matches("security:command_injection", "tests/main.rs", 1_900_000_000));
@@ -908,6 +912,7 @@ mod tests {
             expires: Some("2026-04-10T00:00:00Z".to_string()),
             owner: "secops".to_string(),
             reason: "temporary waiver".to_string(),
+            approved: false,
         };
         assert!(suppression.is_active_at(1_775_779_199));
         assert!(!suppression.is_active_at(1_775_779_200));

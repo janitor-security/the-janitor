@@ -117,6 +117,16 @@ struct AnalysisTokenResponse<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct VerifySuppressionsRequest {
+    suppression_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct VerifySuppressionsResponse {
+    approved_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 enum GovLogEvent {
     Report {
@@ -379,6 +389,28 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
                 ),
             }
         }
+        ("POST", "/v1/verify-suppressions") => {
+            match serde_json::from_slice::<VerifySuppressionsRequest>(&request.body) {
+                Ok(req) => {
+                    let approved_ids: Vec<String> = req
+                        .suppression_ids
+                        .into_iter()
+                        .filter(|id| approved_suppression_ids().contains(id.as_str()))
+                        .collect();
+                    json_response(
+                        200,
+                        serde_json::to_value(VerifySuppressionsResponse { approved_ids })
+                            .unwrap_or_else(|_| serde_json::json!({ "approved_ids": [] })),
+                    )
+                }
+                Err(err) => json_response(
+                    400,
+                    serde_json::json!({
+                        "error": format!("invalid verify-suppressions payload: {err}"),
+                    }),
+                ),
+            }
+        }
         _ => json_response(
             404,
             serde_json::json!({
@@ -386,6 +418,13 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
             }),
         ),
     }
+}
+
+fn approved_suppression_ids() -> &'static std::collections::HashSet<&'static str> {
+    static IDS: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+    IDS.get_or_init(|| {
+        std::collections::HashSet::from(["waive-eval", "approved-ruby-sqli", "approved-php-sqli"])
+    })
 }
 
 fn build_signed_receipt(
@@ -561,6 +600,29 @@ mod tests {
         assert_eq!(payload.inclusion_proof.sequence_index, 0);
         payload.decision_receipt.verify().unwrap();
         assert_eq!(payload.decision_receipt.receipt.repo_slug, "owner/repo");
+    }
+
+    #[test]
+    fn verify_suppressions_returns_only_authorized_ids() {
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/verify-suppressions".to_string(),
+            body: serde_json::to_vec(&VerifySuppressionsRequest {
+                suppression_ids: vec![
+                    "waive-eval".to_string(),
+                    "rogue-waiver".to_string(),
+                    "approved-php-sqli".to_string(),
+                ],
+            })
+            .unwrap(),
+        };
+        let response = route_request(&request);
+        assert_eq!(response.status, 200);
+        let payload: VerifySuppressionsResponse = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(
+            payload.approved_ids,
+            vec!["waive-eval".to_string(), "approved-php-sqli".to_string()]
+        );
     }
 }
 

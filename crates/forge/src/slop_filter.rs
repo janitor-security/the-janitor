@@ -1277,12 +1277,31 @@ impl PRBouncer for PatchBouncer {
             .as_secs();
         for f in raw_findings {
             let rule_id = extract_rule_id(&f.description);
-            if self
+            let matching_suppressions: Vec<&Suppression> = self
                 .suppressions
                 .iter()
-                .any(|suppression| suppression.matches(rule_id, &file_path, now_unix_secs))
-            {
-                continue;
+                .filter(|suppression| suppression.matches(rule_id, &file_path, now_unix_secs))
+                .collect();
+            if !matching_suppressions.is_empty() {
+                let approved_match = matching_suppressions
+                    .iter()
+                    .any(|suppression| suppression.approved);
+                if approved_match {
+                    continue;
+                }
+                for suppression in &matching_suppressions {
+                    accepted.push(crate::slop_hunter::SlopFinding {
+                        start_byte: f.start_byte,
+                        end_byte: f.end_byte,
+                        description: format!(
+                            "security:unauthorized_suppression — waiver `{}` for rule `{}` on `{}` is not Governor-approved; owner=`{}` attempted self-service security bypass",
+                            suppression.id, suppression.rule, file_path, suppression.owner
+                        ),
+                        domain: crate::metadata::DOMAIN_FIRST_PARTY,
+                        severity: crate::slop_hunter::Severity::KevCritical,
+                    });
+                    antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
+                }
             }
             let passes_domain = (f.domain & file_domain) != 0;
             // Test domain exemption (Phase 3): on test-path files, Warning and Lint
@@ -2087,6 +2106,64 @@ mod tests {
         let score = bouncer.bounce("", &empty_registry()).unwrap();
         assert!(score.is_clean());
         assert_eq!(score.score(), 0);
+    }
+
+    #[test]
+    fn test_unapproved_suppression_emits_critical_finding() {
+        let patch = make_patch("app.py", "def inject(user_input):\n    eval(user_input)\n");
+        let bouncer = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+            Path::new("."),
+            vec![Suppression {
+                id: "rogue-waiver".to_string(),
+                rule: "security:dynamic_eval".to_string(),
+                path_glob: "app.py".to_string(),
+                expires: Some("4102444800".to_string()),
+                owner: "dev".to_string(),
+                reason: "self-approved".to_string(),
+                approved: false,
+            }],
+            false,
+        );
+        let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert!(
+            score
+                .structured_findings
+                .iter()
+                .any(|finding| finding.id.contains("security:dynamic_eval")),
+            "unapproved suppression must not erase the original finding"
+        );
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .any(|detail| detail.contains("security:unauthorized_suppression")),
+            "unapproved suppression must emit a rogue-waiver finding"
+        );
+        assert!(
+            score.score() >= crate::slop_hunter::Severity::KevCritical.points(),
+            "rogue-waiver finding must contribute the critical suppression score"
+        );
+    }
+
+    #[test]
+    fn test_approved_suppression_still_waives_finding() {
+        let patch = make_patch("app.py", "def inject(user_input):\n    eval(user_input)\n");
+        let bouncer = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+            Path::new("."),
+            vec![Suppression {
+                id: "approved-waiver".to_string(),
+                rule: "security:dynamic_eval".to_string(),
+                path_glob: "app.py".to_string(),
+                expires: Some("4102444800".to_string()),
+                owner: "appsec".to_string(),
+                reason: "approved".to_string(),
+                approved: true,
+            }],
+            false,
+        );
+        let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert_eq!(score.score(), 0);
+        assert!(score.structured_findings.is_empty());
     }
 
     #[test]
