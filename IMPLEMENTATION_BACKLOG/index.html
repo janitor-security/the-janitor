@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)
@@ -1384,6 +1393,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)
@@ -2121,6 +2139,26 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9">2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)</h2>
+<p><strong>Directive:</strong> Phase 1 — threat intel GC audit (OSV ZIP / wisdom download disk artifact hygiene). Phase 2 — justfile omni-strike consolidation (<code>run-gauntlet</code> + <code>hyper-gauntlet</code> deleted; <code>just strike</code> is the sole batch command). Phase 3 — dead-code audit + Innovation Log rewrite (top-3 DoD/Enterprise features). Phase 4 — bump + release.</p>
+<p><strong>Files modified:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.8</code> → <code>10.1.0-alpha.9</code>.
+- <code>justfile</code> <em>(modified)</em> — <code>run-gauntlet</code> and <code>hyper-gauntlet</code> recipes deleted. <code>just strike</code> is now the canonical single-repo and batch orchestration command. Both deleted recipes were superseded: <code>generate_client_package.sh</code> (invoked by <code>just strike</code>) already uses <code>gauntlet-runner --hyper</code> (libgit2 packfile mode, zero <code>gh pr diff</code> subshells).
+- <code>RUNBOOK.md</code> <em>(modified)</em> — Quick reference table purged of deleted recipes. Section 6 rewritten as "Threat Intel Synchronization" documenting <code>janitor update-wisdom</code> and <code>janitor update-slopsquat</code>. Section 10a "Consolidation note" replaced with accurate single-command framing. Section 12 "Remote Surveillance" updated to <code>just strike</code> invocation examples.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — Purged: P1-5 (Zig/Nim taint spine — low commercial urgency), P2-3 (Wasm Rule Marketplace — ecosystem play, deferred). Rewrote as top-3 DoD/Enterprise contract-closing features: P0-1 Governor RBAC, P1-1 ASPM Jira Sync, P2-6 Post-Quantum CT for Wasm Rules.</p>
+<p><strong>Phase 1 audit finding — GC CLEAN:</strong>
+- <code>fetch_osv_slopsquat_corpus</code>: ZIPs downloaded entirely in-memory via <code>read_to_vec()</code> → <code>Vec&lt;u8&gt;</code>; never written to disk. Zero disk artifacts on error path.
+- <code>cmd_update_wisdom_with_urls</code>: wisdom/KEV bytes also in-memory; final write via <code>write_atomic_bytes</code> (<code>.tmp</code> → <code>rename</code>).
+- No code changes required. GC is already correct by design.</p>
+<p><strong>Phase 3 dead-code audit finding — ALL CLEAN:</strong>
+- <code>#[allow(dead_code)] YAML_K8S_WILDCARD_HOSTS_QUERY</code> — documented architectural reference (tree-sitter predicate limitation).
+- <code>#[allow(dead_code)] Request.jsonrpc</code> — protocol-required field, not accessed in dispatch.
+- <code>#[allow(dead_code)] HotRegistry.path</code> / <code>HotRegistry::reload()</code> — forward-declared hot-swap API.
+- All annotations are legitimate. Zero removals.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅</p>
 <hr />
 <h2 id="2026-04-11-omnipresent-firewall-osv-bulk-ingestion-v1010-alpha8">2026-04-11 — Omnipresent Firewall &amp; OSV Bulk Ingestion (v10.1.0-alpha.8)</h2>
 <p><strong>Directive:</strong> OSV bulk ZIP ingestion fix, CodeQL terminal output amputation, P2-4 MCP IDE Linter (<code>janitor_lint_file</code>), P2-5 SBOM Drift Daemon (<code>janitor watch-sbom</code>), VS Code extension scaffold.</p>
