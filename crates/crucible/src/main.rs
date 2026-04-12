@@ -2554,8 +2554,9 @@ index 1111111..2222222 100644
     #[test]
     fn wasm_host_loop_roundtrip() {
         let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/mock_rule.wat");
-        let host = forge::wasm_host::WasmHost::new(&[fixture], &std::collections::HashMap::new())
-            .expect("mock_rule.wat must compile without error");
+        let host =
+            forge::wasm_host::WasmHost::new(&[fixture], &std::collections::HashMap::new(), None)
+                .expect("mock_rule.wat must compile without error");
 
         // Execute against non-trivial source bytes to exercise the src write path.
         let findings = host.run(b"fn main() { println!(\"hello\"); }");
@@ -2626,8 +2627,9 @@ index 1111111..2222222 100644
         let path = tmp.path().to_str().unwrap().to_owned();
         let tmp_path = tmp.into_temp_path();
 
-        let host = forge::wasm_host::WasmHost::new(&[&path], &std::collections::HashMap::new())
-            .expect("infinite-loop WAT must compile");
+        let host =
+            forge::wasm_host::WasmHost::new(&[&path], &std::collections::HashMap::new(), None)
+                .expect("infinite-loop WAT must compile");
 
         let start = Instant::now();
         let result = host.run(b"fn main() {}");

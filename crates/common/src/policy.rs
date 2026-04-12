@@ -196,7 +196,7 @@ impl WebhookConfig {
 /// Credentials are sourced from the environment:
 /// - `JANITOR_JIRA_USER`
 /// - `JANITOR_JIRA_TOKEN`
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct JiraConfig {
     /// Jira base URL, e.g. `https://corp.atlassian.net`.
@@ -204,12 +204,33 @@ pub struct JiraConfig {
 
     /// Jira project key, e.g. `SEC`.
     pub project_key: String,
+
+    /// Skip ticket creation when an open ticket with the same finding fingerprint already exists.
+    ///
+    /// Queries the Jira search API before creation; fails open on search errors.
+    /// Default: `true`.
+    #[serde(default = "JiraConfig::default_dedup")]
+    pub dedup: bool,
+}
+
+impl Default for JiraConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            project_key: String::new(),
+            dedup: Self::default_dedup(),
+        }
+    }
 }
 
 impl JiraConfig {
     /// Returns `true` when Jira issue creation is configured.
     pub fn is_configured(&self) -> bool {
         !self.url.is_empty() && !self.project_key.is_empty()
+    }
+
+    fn default_dedup() -> bool {
+        true
     }
 }
 
@@ -563,6 +584,20 @@ pub struct JanitorPolicy {
     #[serde(default)]
     pub wasm_pins: HashMap<String, String>,
 
+    /// ML-DSA-65 publisher public key for Wasm rule signature verification.
+    ///
+    /// When set, every `.wasm` rule loaded at runtime must have an accompanying
+    /// `<path>.sig` file containing a base64-encoded ML-DSA-65 detached signature
+    /// over the BLAKE3 hash of the module bytes (context: `janitor-wasm-rule`).
+    /// Modules without a valid signature are rejected before compilation.
+    ///
+    /// The key is base64-encoded (standard alphabet, padded).  Generate with
+    /// `janitor sign-asset` or any ML-DSA-65 keygen tool.
+    ///
+    /// Default: `None` (no publisher verification).
+    #[serde(default)]
+    pub wasm_pqc_pub_key: Option<String>,
+
     /// Repository-governed waivers for individual findings.
     #[serde(default)]
     pub suppressions: Option<Vec<Suppression>>,
@@ -594,6 +629,7 @@ impl Default for JanitorPolicy {
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
             wasm_pins: HashMap::new(),
+            wasm_pqc_pub_key: None,
             suppressions: None,
             rbac: RbacConfig::default(),
         }
@@ -926,6 +962,7 @@ impl JanitorPolicy {
             "trusted_bot_authors": trusted_sorted,
             "wasm_rules": self.wasm_rules,
             "wasm_pins": pins_sorted,
+            "wasm_pqc_pub_key": self.wasm_pqc_pub_key,
             "suppressions": self.suppressions,
         });
         blake3::hash(canonical.to_string().as_bytes())
@@ -1000,6 +1037,7 @@ mod tests {
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
             wasm_pins: HashMap::new(),
+            wasm_pqc_pub_key: None,
             suppressions: Some(vec![Suppression {
                 id: "waive-1".to_string(),
                 rule: "security:test".to_string(),

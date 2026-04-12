@@ -5,6 +5,25 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-12 — Jira Deduplication & Wasm PQC Sealing (v10.1.0-alpha.15)
+
+**Directive:** Phase 1 (P1-1 enhancement) — State-aware ASPM deduplication gate; Phase 2 (P2-6) — Post-quantum publisher signing for Wasm rules.
+
+**Files modified:**
+- `crates/common/src/policy.rs` *(modified)* — `JiraConfig.dedup: bool` (default `true`) added; `#[derive(Default)]` replaced with manual `impl Default`; `wasm_pqc_pub_key: Option<String>` added to `JanitorPolicy`; `content_hash` canonical JSON updated; test struct literals patched.
+- `crates/common/src/pqc.rs` *(modified)* — `JANITOR_WASM_RULE_CONTEXT` domain-separator constant added; `verify_wasm_rule_ml_dsa_signature` function added; 3 new tests (distinct context, roundtrip, wrong-context rejection).
+- `crates/forge/src/wasm_host.rs` *(modified)* — `WasmHost::new` gains `pqc_pub_key: Option<&str>`; publisher verification reads `<path>.sig`, decodes base64 pub key, calls `verify_wasm_rule_ml_dsa_signature`; bails on missing sig or invalid signature; 2 new tests (missing sig, wrong-length sig).
+- `crates/forge/src/slop_filter.rs` *(modified)* — `run_wasm_rules` gains `pqc_pub_key: Option<&str>` and passes to `WasmHost::new`.
+- `crates/forge/Cargo.toml` *(modified)* — `fips204` added to `[dev-dependencies]` for wasm_host PQC roundtrip tests.
+- `crates/cli/src/jira.rs` *(modified)* — `JiraIssueSender` trait gains `search_total` method; `UreqJiraSender` implements it via Jira REST search API; dedup check added in `spawn_jira_ticket_with_sender`; `build_jql_search_url` helper added; `MockJiraSender` gains `search_total_value`; 1 new test `dedup_skips_creation_when_open_ticket_exists`.
+- `crates/cli/src/main.rs` *(modified)* — `run_wasm_rules` call updated to pass `policy.wasm_pqc_pub_key.as_deref()`.
+- `crates/crucible/src/main.rs` *(modified)* — 2 `WasmHost::new` call sites updated with `None` third argument.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.14` → `10.1.0-alpha.15`.
+- `docs/INNOVATION_LOG.md` *(modified)* — P2-6 marked COMPLETED.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry.
+
+---
+
 ## 2026-04-12 — Air-Gap Autonomy & Zero-Trust Resilience (v10.1.0-alpha.14)
 
 **Directive:** P1-2 — Implement three-layer resilience for threat intelligence fetchers so The Janitor survives network partitions without crashing CI pipelines.

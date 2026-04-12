@@ -3458,8 +3458,12 @@ cross-reference GitHub Actor ID against commit author email and GPG signatures t
                 .flat_map(|v| v.iter().copied())
                 .collect();
             let paths: Vec<&str> = effective_wasm_rules.iter().map(|s| s.as_str()).collect();
-            let wasm_result =
-                forge::slop_filter::run_wasm_rules(&paths, &policy.wasm_pins, &wasm_src);
+            let wasm_result = forge::slop_filter::run_wasm_rules(
+                &paths,
+                &policy.wasm_pins,
+                policy.wasm_pqc_pub_key.as_deref(),
+                &wasm_src,
+            );
             for f in &wasm_result.findings {
                 score
                     .antipattern_details

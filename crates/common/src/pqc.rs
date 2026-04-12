@@ -13,6 +13,11 @@ pub const JANITOR_CBOM_CONTEXT: &[u8] = b"janitor-cbom";
 /// Distinct from [`JANITOR_CBOM_CONTEXT`] so that a CBOM signature cannot be
 /// replayed against a release binary and vice versa.
 pub const JANITOR_ASSET_CONTEXT: &[u8] = b"janitor-release-asset";
+/// Domain-separation context for Wasm rule package signatures.
+///
+/// A Wasm rule signature cannot be replayed as a CBOM or release-asset
+/// signature and vice versa.
+pub const JANITOR_WASM_RULE_CONTEXT: &[u8] = b"janitor-wasm-rule";
 pub const ML_DSA_PRIVATE_KEY_LEN: usize = 4032;
 pub const ML_DSA_PUBLIC_KEY_LEN: usize = 1952;
 pub const SLH_DSA_PRIVATE_KEY_LEN: usize = slh_dsa_shake_192s::SK_LEN;
@@ -205,6 +210,37 @@ pub fn verify_asset_ml_dsa_signature(
     Ok(pk.verify(hash_bytes, &sig_array, JANITOR_ASSET_CONTEXT))
 }
 
+/// Verify an ML-DSA-65 signature over a Wasm rule module BLAKE3 hash.
+///
+/// Uses [`JANITOR_WASM_RULE_CONTEXT`] — distinct from CBOM and release-asset
+/// contexts — so that a Wasm rule signature cannot be replayed as either.
+///
+/// `hash_bytes` is the raw 32-byte BLAKE3 digest of the `.wasm` bytes.
+/// `sig_b64` is the base64-encoded ML-DSA-65 signature from the `.wasm.sig` file.
+pub fn verify_wasm_rule_ml_dsa_signature(
+    hash_bytes: &[u8; 32],
+    public_key_bytes: &[u8],
+    sig_b64: &str,
+) -> anyhow::Result<bool> {
+    let pk_array: [u8; ML_DSA_PUBLIC_KEY_LEN] = public_key_bytes.try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "ML-DSA-65 Wasm publisher key must be exactly {ML_DSA_PUBLIC_KEY_LEN} bytes"
+        )
+    })?;
+    let pk = ml_dsa_65::PublicKey::try_from_bytes(pk_array)
+        .map_err(|e| anyhow::anyhow!("invalid ML-DSA-65 Wasm publisher key: {e}"))?;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(sig_b64)
+        .context("base64 decode of ML-DSA-65 Wasm rule signature failed")?;
+    let sig_array: [u8; ml_dsa_65::SIG_LEN] = sig_bytes.try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "ML-DSA-65 Wasm rule signature must decode to exactly {} bytes",
+            ml_dsa_65::SIG_LEN
+        )
+    })?;
+    Ok(pk.verify(hash_bytes, &sig_array, JANITOR_WASM_RULE_CONTEXT))
+}
+
 /// Sign a release-asset BLAKE3 hash using the PQC private key bundle at `path`.
 ///
 /// `hash_bytes` is the 32-byte raw BLAKE3 digest of the release asset.
@@ -292,8 +328,13 @@ fn private_key_bundle_from_bytes(bytes: &[u8]) -> anyhow::Result<PqcPrivateKeyBu
 mod tests {
     use super::PqcKeySource;
     use super::{sign_cbom_dual_from_keys, verify_ml_dsa_signature, PqcPrivateKeyBundle};
+    use super::{
+        verify_wasm_rule_ml_dsa_signature, JANITOR_ASSET_CONTEXT, JANITOR_CBOM_CONTEXT,
+        JANITOR_WASM_RULE_CONTEXT,
+    };
+    use base64::Engine as _;
     use fips204::ml_dsa_65;
-    use fips204::traits::{KeyGen as MlKeyGen, SerDes as MlSerDes};
+    use fips204::traits::{KeyGen as MlKeyGen, SerDes as MlSerDes, Signer as MlSigner};
     use std::path::PathBuf;
 
     #[test]
@@ -398,6 +439,44 @@ mod tests {
             err.to_string()
                 .contains("unsupported PQC private key bundle length"),
             "slh-only key bundle must be rejected as a partial bundle"
+        );
+    }
+
+    #[test]
+    fn wasm_rule_context_distinct_from_asset_and_cbom_contexts() {
+        assert_ne!(JANITOR_WASM_RULE_CONTEXT, JANITOR_ASSET_CONTEXT);
+        assert_ne!(JANITOR_WASM_RULE_CONTEXT, JANITOR_CBOM_CONTEXT);
+    }
+
+    #[test]
+    fn wasm_rule_signature_roundtrip_verifies() {
+        let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("ML-DSA keygen must succeed");
+        let fake_hash = [0x42u8; 32];
+        let sig = sk
+            .try_sign(&fake_hash, JANITOR_WASM_RULE_CONTEXT)
+            .expect("ML-DSA Wasm rule signing must succeed");
+        let sig_b64 = base64::engine::general_purpose::STANDARD.encode(sig.as_ref());
+        assert!(
+            verify_wasm_rule_ml_dsa_signature(&fake_hash, &pk.into_bytes(), &sig_b64)
+                .expect("verify must succeed"),
+            "valid wasm rule signature must verify"
+        );
+    }
+
+    #[test]
+    fn wasm_rule_signature_wrong_context_rejected() {
+        // Signing with JANITOR_ASSET_CONTEXT must not verify under JANITOR_WASM_RULE_CONTEXT.
+        let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("ML-DSA keygen must succeed");
+        let fake_hash = [0x42u8; 32];
+        let sig = sk
+            .try_sign(&fake_hash, JANITOR_ASSET_CONTEXT)
+            .expect("asset signing must succeed");
+        let sig_b64 = base64::engine::general_purpose::STANDARD.encode(sig.as_ref());
+        let result = verify_wasm_rule_ml_dsa_signature(&fake_hash, &pk.into_bytes(), &sig_b64)
+            .expect("verify call must not error");
+        assert!(
+            !result,
+            "asset-context signature must not verify under wasm-rule context"
         );
     }
 

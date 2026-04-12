@@ -9,6 +9,11 @@ use std::path::Path;
 
 trait JiraIssueSender {
     fn send(&self, url: &str, auth: &str, payload: &str) -> anyhow::Result<()>;
+    /// Return the total number of Jira issues matching the given search URL.
+    ///
+    /// Used for deduplication: if > 0, a ticket with the same fingerprint is
+    /// already open and creation can be skipped.
+    fn search_total(&self, url: &str, auth: &str) -> anyhow::Result<u32>;
 }
 
 struct UreqJiraSender;
@@ -27,6 +32,22 @@ impl JiraIssueSender for UreqJiraSender {
             Err(err) => Err(anyhow::anyhow!(
                 "jira issue create transport failure: {err}"
             )),
+        }
+    }
+
+    fn search_total(&self, url: &str, auth: &str) -> anyhow::Result<u32> {
+        match ureq::get(url).header("Authorization", auth).call() {
+            Ok(response) => {
+                let body: serde_json::Value = response
+                    .into_body()
+                    .read_json()
+                    .context("jira search response JSON parse failed")?;
+                Ok(body["total"].as_u64().unwrap_or(0) as u32)
+            }
+            Err(ureq::Error::StatusCode(code)) => {
+                anyhow::bail!("jira search failed with HTTP {code}")
+            }
+            Err(err) => Err(anyhow::anyhow!("jira search transport failure: {err}")),
         }
     }
 }
@@ -100,6 +121,27 @@ fn build_issue_payload(config: &JiraConfig, finding: &StructuredFinding) -> serd
     })
 }
 
+/// Build the Jira REST search URL for deduplication.
+///
+/// The JQL query looks for the finding's BLAKE3 fingerprint in the description
+/// of open (not Done) tickets within the configured project.
+fn build_jql_search_url(config: &JiraConfig, fingerprint: &str) -> String {
+    let jql = format!(
+        "project={} AND description~\"{}\" AND statusCategory != Done",
+        config.project_key, fingerprint
+    );
+    let jql_encoded = jql
+        .replace(' ', "%20")
+        .replace('"', "%22")
+        .replace('!', "%21")
+        .replace('=', "%3D");
+    format!(
+        "{}/rest/api/2/search?jql={}&maxResults=1",
+        config.url.trim_end_matches('/'),
+        jql_encoded
+    )
+}
+
 pub fn spawn_jira_ticket(config: &JiraConfig, finding: &StructuredFinding) -> anyhow::Result<()> {
     spawn_jira_ticket_with_sender(config, finding, &UreqJiraSender)
 }
@@ -114,6 +156,23 @@ fn spawn_jira_ticket_with_sender(
     }
 
     let auth = jira_auth_header()?;
+
+    // Dedup: skip creation if an open ticket with this fingerprint already exists.
+    if config.dedup {
+        let search_url = build_jql_search_url(config, &finding.fingerprint);
+        match sender.search_total(&search_url, &auth) {
+            Ok(total) if total > 0 => {
+                eprintln!("jira dedup: open ticket found for fingerprint, skipping creation");
+                return Ok(());
+            }
+            Err(e) => {
+                // Fail open: log the search failure and proceed with creation.
+                eprintln!("jira dedup: search failed, proceeding with creation: {e}");
+            }
+            Ok(_) => {} // no existing tickets — proceed with creation
+        }
+    }
+
     let payload = build_issue_payload(config, finding);
     let url = format!("{}/rest/api/2/issue", config.url.trim_end_matches('/'));
     let body = serde_json::to_string(&payload)
@@ -184,12 +243,24 @@ mod tests {
     #[derive(Clone)]
     struct MockJiraSender {
         outcomes: Arc<Mutex<VecDeque<anyhow::Result<()>>>>,
+        search_total_value: u32,
     }
 
     impl MockJiraSender {
         fn new(outcomes: Vec<anyhow::Result<()>>) -> Self {
             Self {
                 outcomes: Arc::new(Mutex::new(VecDeque::from(outcomes))),
+                search_total_value: 0,
+            }
+        }
+
+        fn new_with_search_total(
+            outcomes: Vec<anyhow::Result<()>>,
+            search_total_value: u32,
+        ) -> Self {
+            Self {
+                outcomes: Arc::new(Mutex::new(VecDeque::from(outcomes))),
+                search_total_value,
             }
         }
     }
@@ -202,6 +273,10 @@ mod tests {
                 .pop_front()
                 .unwrap_or_else(|| Ok(()))
         }
+
+        fn search_total(&self, _url: &str, _auth: &str) -> anyhow::Result<u32> {
+            Ok(self.search_total_value)
+        }
     }
 
     #[test]
@@ -209,6 +284,7 @@ mod tests {
         let config = JiraConfig {
             url: "https://corp.atlassian.net".to_string(),
             project_key: "SEC".to_string(),
+            dedup: true,
         };
         let finding = StructuredFinding {
             id: "security:ai_prompt_injection".to_string(),
@@ -240,6 +316,7 @@ mod tests {
         let config = JiraConfig {
             url: "https://corp.atlassian.net".to_string(),
             project_key: "SEC".to_string(),
+            dedup: false, // disable dedup so mock only needs send outcomes
         };
         let findings = vec![
             StructuredFinding {
@@ -311,5 +388,53 @@ mod tests {
         assert!(diag.contains("finding-500"));
         assert!(diag.contains("HTTP 401"));
         assert!(diag.contains("timeout"));
+    }
+
+    #[test]
+    fn dedup_skips_creation_when_open_ticket_exists() {
+        let _guard_user = std::env::set_var("JANITOR_JIRA_USER", "operator@example.com");
+        let _guard_token = std::env::set_var("JANITOR_JIRA_TOKEN", "token");
+
+        let config = JiraConfig {
+            url: "https://corp.atlassian.net".to_string(),
+            project_key: "SEC".to_string(),
+            dedup: true,
+        };
+        let finding = StructuredFinding {
+            id: "security:ai_prompt_injection".to_string(),
+            file: Some("docs/review.md".to_string()),
+            line: Some(7),
+            fingerprint: "abc123dedup".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: None,
+            docs_url: None,
+        };
+
+        // search_total = 1 → open ticket exists → send must not be called.
+        let sender = MockJiraSender::new_with_search_total(vec![Ok(())], 1);
+        let janitor_tmp = tempdir().expect("tempdir");
+        let janitor_dir = janitor_tmp.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).expect("create .janitor");
+        let warnings = Arc::new(Mutex::new(Vec::new()));
+        let warnings_sink = Arc::clone(&warnings);
+
+        let result = sync_findings_to_jira_with_sender_and_logger(
+            &config,
+            &[finding],
+            &janitor_dir,
+            &sender,
+            move |msg| warnings_sink.lock().expect("warnings mutex").push(msg),
+        );
+
+        assert!(result.is_ok(), "dedup skip must succeed");
+        let warnings = warnings.lock().expect("warnings mutex");
+        assert!(warnings.is_empty(), "no warnings when dedup fires cleanly");
+        // send was never called — the Ok(()) outcome remains unconsumed.
+        let remaining = sender.outcomes.lock().expect("outcomes mutex");
+        assert_eq!(
+            remaining.len(),
+            1,
+            "send must not be called when dedup fires"
+        );
     }
 }

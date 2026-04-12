@@ -26,6 +26,7 @@
 //! [`common::slop::StructuredFinding`] object per line.
 
 use anyhow::{Context, Result};
+use base64::Engine as _;
 use common::slop::StructuredFinding;
 use common::wasm_receipt::WasmPolicyReceipt;
 use std::collections::HashMap;
@@ -91,18 +92,46 @@ impl WasmHost {
     /// Cargo feature is enabled).
     ///
     /// Returns an error if any path is unreadable or fails to compile.
-    pub fn new(wasm_paths: &[&str], wasm_pins: &HashMap<String, String>) -> Result<Self> {
+    pub fn new(
+        wasm_paths: &[&str],
+        wasm_pins: &HashMap<String, String>,
+        pqc_pub_key: Option<&str>,
+    ) -> Result<Self> {
         let engine = shared_engine()?;
         let mut modules = Vec::with_capacity(wasm_paths.len());
         for path in wasm_paths {
             let bytes =
                 std::fs::read(path).with_context(|| format!("reading Wasm rule module: {path}"))?;
-            let module_digest = blake3::hash(&bytes).to_hex().to_string();
+            let blake3_hash = blake3::hash(&bytes);
+            let module_digest = blake3_hash.to_hex().to_string();
             if let Some(expected_digest) = wasm_pins.get(*path) {
                 if module_digest != *expected_digest {
                     anyhow::bail!(
                         "Wasm rule integrity pin mismatch: {path}: expected {expected_digest}, got {module_digest}"
                     );
+                }
+            }
+            // PQC publisher verification: if a publisher key is configured, every Wasm rule
+            // must carry a detached ML-DSA-65 signature file at `<path>.sig`.
+            if let Some(pub_key_b64) = pqc_pub_key {
+                let sig_path = format!("{path}.sig");
+                let sig_b64 = std::fs::read_to_string(&sig_path).with_context(|| {
+                    format!(
+                        "Wasm rule signature file not found: {sig_path}; PQC verification required"
+                    )
+                })?;
+                let sig_b64 = sig_b64.trim();
+                let pub_key_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(pub_key_b64)
+                    .context("Wasm publisher ML-DSA-65 public key base64 decode failed")?;
+                let hash_bytes: [u8; 32] = *blake3_hash.as_bytes();
+                let valid = common::pqc::verify_wasm_rule_ml_dsa_signature(
+                    &hash_bytes,
+                    &pub_key_bytes,
+                    sig_b64,
+                )?;
+                if !valid {
+                    anyhow::bail!("Wasm rule PQC signature verification failed for: {path}");
                 }
             }
             let module = Module::new(engine.as_ref(), &bytes)
@@ -320,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_empty_rules_returns_empty() {
-        let host = WasmHost::new(&[], &HashMap::new()).unwrap();
+        let host = WasmHost::new(&[], &HashMap::new(), None).unwrap();
         let result = host.run(b"fn foo() {}");
         assert!(
             result.findings.is_empty(),
@@ -335,7 +364,7 @@ mod tests {
     #[test]
     fn test_empty_source_returns_empty() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
-        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new(), None).unwrap();
         let result = host.run(b"");
         assert!(
             result.findings.is_empty(),
@@ -350,7 +379,7 @@ mod tests {
     #[test]
     fn test_mock_rule_fires_on_source() {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
-        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new(), None).unwrap();
         let result = host.run(b"fn foo() {}");
         assert_eq!(
             result.findings.len(),
@@ -384,7 +413,7 @@ mod tests {
   )
 )"#;
         let (_tmp, path) = wat_to_tempfile(infinite_wat);
-        let host = WasmHost::new(&[&path], &HashMap::new()).unwrap();
+        let host = WasmHost::new(&[&path], &HashMap::new(), None).unwrap();
         // Must not hang — fuel exhaustion skips the module and returns empty.
         let result = host.run(b"int main() {}");
         assert!(
@@ -403,7 +432,7 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         let mut pins = HashMap::new();
         pins.insert(path.clone(), blake3::hash(&bytes).to_hex().to_string());
-        let host = WasmHost::new(&[&path], &pins).unwrap();
+        let host = WasmHost::new(&[&path], &pins, None).unwrap();
         let result = host.run(b"fn foo() {}");
         assert_eq!(result.findings.len(), 1, "pinned module must still execute");
     }
@@ -413,12 +442,49 @@ mod tests {
         let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
         let mut pins = HashMap::new();
         pins.insert(path.clone(), "deadbeef".repeat(8));
-        let err = WasmHost::new(&[&path], &pins)
+        let err = WasmHost::new(&[&path], &pins, None)
             .err()
             .expect("mismatched pin must fail module initialisation");
         assert!(
             err.to_string().contains("integrity pin mismatch"),
             "mismatched pin must hard-fail module initialisation"
         );
+    }
+
+    #[test]
+    fn test_wasm_rule_pqc_missing_sig_file_rejected() {
+        let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
+        // Any valid-length base64 pub key — error occurs at sig-file read, before key parse.
+        let fake_pub_key = base64::engine::general_purpose::STANDARD
+            .encode([0u8; common::pqc::ML_DSA_PUBLIC_KEY_LEN]);
+        let err = WasmHost::new(&[&path], &HashMap::new(), Some(&fake_pub_key))
+            .err()
+            .expect("missing .sig file must fail module initialisation");
+        assert!(
+            err.to_string()
+                .contains("Wasm rule signature file not found"),
+            "missing sig file must report signature file not found"
+        );
+    }
+
+    #[test]
+    fn test_wasm_rule_pqc_wrong_length_sig_rejected() {
+        use fips204::ml_dsa_65;
+        use fips204::traits::{KeyGen as MlKeyGen, SerDes as MlSerDes};
+        let (pk, _sk) = ml_dsa_65::KG::try_keygen().expect("ML-DSA keygen must succeed");
+        let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
+        let sig_path = format!("{path}.sig");
+        // Write a signature that is far too short — must fail length check.
+        let short_sig = base64::engine::general_purpose::STANDARD.encode([0u8; 10]);
+        std::fs::write(&sig_path, short_sig.as_bytes()).unwrap();
+        let pub_key_b64 = base64::engine::general_purpose::STANDARD.encode(pk.into_bytes());
+        let err = WasmHost::new(&[&path], &HashMap::new(), Some(&pub_key_b64))
+            .err()
+            .expect("wrong-length signature must fail module initialisation");
+        assert!(
+            err.to_string().contains("exactly"),
+            "wrong-length sig must report expected byte length"
+        );
+        let _ = std::fs::remove_file(&sig_path);
     }
 }

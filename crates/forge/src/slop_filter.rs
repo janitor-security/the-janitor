@@ -2057,12 +2057,13 @@ pub fn bounce_git(
 pub fn run_wasm_rules(
     wasm_paths: &[&str],
     wasm_pins: &HashMap<String, String>,
+    pqc_pub_key: Option<&str>,
     src: &[u8],
 ) -> crate::wasm_host::WasmExecutionResult {
     if wasm_paths.is_empty() {
         return crate::wasm_host::WasmExecutionResult::default();
     }
-    match crate::wasm_host::WasmHost::new(wasm_paths, wasm_pins) {
+    match crate::wasm_host::WasmHost::new(wasm_paths, wasm_pins, pqc_pub_key) {
         Ok(host) => host.run(src),
         Err(e) => {
             eprintln!("slop_filter: failed to initialise Wasm rule host: {e:#}");
