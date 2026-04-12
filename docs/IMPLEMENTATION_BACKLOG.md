@@ -5,6 +5,27 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-12 — Air-Gap Autonomy & Zero-Trust Resilience (v10.1.0-alpha.14)
+
+**Directive:** P1-2 — Implement three-layer resilience for threat intelligence fetchers so The Janitor survives network partitions without crashing CI pipelines.
+
+**Files modified:**
+- `crates/cli/build.rs` *(created)* — generates `slopsquat_corpus.rkyv` (32 confirmed MAL-advisory seed packages) and `wisdom.rkyv` (empty WisdomSet baseline) in `OUT_DIR` at compile time; both embedded into the binary via `include_bytes!`.
+- `crates/cli/Cargo.toml` *(modified)* — added `[build-dependencies]` block: `common` and `rkyv` for `build.rs`.
+- `crates/cli/src/main.rs` *(modified)* — `EMBEDDED_SLOPSQUAT` and `EMBEDDED_WISDOM` static bytes added; `cmd_update_slopsquat_with_agent` refactored into `cmd_update_slopsquat_impl` with configurable `osv_base_url` + `stale_days` params; 3-attempt exponential backoff (1s/2s/4s) wraps `fetch_osv_slopsquat_corpus_from`; `apply_slopsquat_offline_fallback` deploys embedded baseline on first boot or emits `[JANITOR DEGRADED]` for stale corpus; `cmd_update_wisdom_with_urls` adds non-ci-mode wisdom baseline fallback; 3 new unit tests.
+- `crates/common/src/policy.rs` *(modified)* — `ForgeConfig.corpus_stale_days: u32` (default 7) added; `#[derive(Default)]` replaced with manual `impl Default`; two test struct literals updated; serde default function `default_corpus_stale_days()` added.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.13` → `10.1.0-alpha.14`.
+- `docs/INNOVATION_LOG.md` *(modified)* — P1-2 marked COMPLETED.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this entry.
+
+**Key invariants:**
+- Network failure never propagates as `Err` from `update-slopsquat` (non-ci-mode).
+- First boot in air-gapped environment: embedded seed corpus (32 packages) deployed, CI runs immediately.
+- Stale corpus (>7 days): `[JANITOR DEGRADED]` warning to stderr, exit 0.
+- `corpus_stale_days` TOML-configurable per enterprise.
+
+---
+
 ## 2026-04-12 — ASPM Jira Sync & Final Dashboard Scrub (v10.1.0-alpha.12)
 
 **Directive:** Exorcise the final CodeQL aggregate-count false positive, implement enterprise Jira ticket synchronization for `KevCritical` findings, verify under single-threaded tests, and cut `10.1.0-alpha.12` without rewriting prior release history.

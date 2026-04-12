@@ -49,5 +49,9 @@ ed25519-dalek.workspace = true
 zip.workspace = true
 notify.workspace = true
 
+[build-dependencies]
+common = { path = "../common" }
+rkyv = { version = "0.8", features = ["std", "bytecheck"] }
+
 [dev-dependencies]
 tempfile = "3"

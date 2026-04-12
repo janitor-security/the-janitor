@@ -4619,9 +4619,9 @@ fn cmd_update_wisdom_with_urls(
     let policy = common::policy::JanitorPolicy::load(project_root)?;
     let quorum = &policy.wisdom.quorum;
     let threshold = quorum.threshold.max(1);
-    let (bytes, normalized_signature, verified_feed_hash, mirror_receipt) =
+    let fetch_result: anyhow::Result<(Vec<u8>, String, String, Option<_>)> =
         if quorum.mirrors.is_empty() {
-            let fetched = fetch_verified_wisdom_payload(
+            fetch_verified_wisdom_payload(
                 wisdom_url,
                 wisdom_sig_url,
                 if ci_mode {
@@ -4629,11 +4629,31 @@ fn cmd_update_wisdom_with_urls(
                 } else {
                     "update-wisdom"
                 },
-            )?;
-            (fetched.bytes, fetched.signature, fetched.hash, None)
+            )
+            .map(|f| (f.bytes, f.signature, f.hash, None))
         } else {
-            fetch_verified_wisdom_quorum(quorum, threshold)?
+            fetch_verified_wisdom_quorum(quorum, threshold)
         };
+
+    let (bytes, normalized_signature, verified_feed_hash, mirror_receipt) = match fetch_result {
+        Ok(tuple) => tuple,
+        Err(e) => {
+            if ci_mode {
+                return Err(e);
+            }
+            // Non-ci-mode: network unavailable — deploy embedded empty baseline
+            // so wisdom.rkyv always deserialises on first boot.
+            let wisdom_path = janitor_dir.join("wisdom.rkyv");
+            if !wisdom_path.exists() {
+                write_atomic_bytes(&wisdom_path, EMBEDDED_WISDOM)?;
+                eprintln!(
+                    "[JANITOR BOOTSTRAPPED] Empty wisdom baseline deployed. \
+                     Run `janitor update-wisdom` to fetch live KEV data."
+                );
+            }
+            return Ok(());
+        }
+    };
 
     let wisdom_path = janitor_dir.join("wisdom.rkyv");
     std::fs::write(&wisdom_path, &bytes)
@@ -4727,6 +4747,17 @@ const OSV_DUMP_BASE_URL: &str = "https://osv-vulnerabilities.storage.googleapis.
 const OSV_MALICIOUS_ECOSYSTEMS: &[(&str, &str)] =
     &[("npm", "npm"), ("PyPI", "PyPI"), ("crates.io", "crates.io")];
 
+/// Embedded offline-baseline slopsquat corpus produced by `build.rs`.
+/// Deployed when the OSV network endpoint is unreachable and no on-disk
+/// corpus exists.  Contains a curated seed of confirmed MAL-advisory packages.
+static EMBEDDED_SLOPSQUAT: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/slopsquat_corpus.rkyv"));
+
+/// Embedded empty wisdom baseline produced by `build.rs`.
+/// Provides a deserialise-safe fallback so `wisdom.rkyv` always exists on
+/// first boot.  No KEV coverage until `janitor update-wisdom` is run.
+static EMBEDDED_WISDOM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/wisdom.rkyv"));
+
 #[derive(Debug, serde::Deserialize)]
 struct OsvVulnerability {
     #[serde(default)]
@@ -4757,46 +4788,114 @@ fn cmd_update_slopsquat(project_root: &Path) -> anyhow::Result<()> {
 }
 
 fn cmd_update_slopsquat_with_agent(project_root: &Path, agent: &ureq::Agent) -> anyhow::Result<()> {
+    let stale_days = common::policy::JanitorPolicy::load(project_root)
+        .ok()
+        .map(|p| p.forge.corpus_stale_days)
+        .unwrap_or(7);
+    cmd_update_slopsquat_impl(project_root, agent, OSV_DUMP_BASE_URL, stale_days)
+}
+
+/// Internal implementation for `update-slopsquat`.
+///
+/// `osv_base_url` is configurable to allow unit tests to point at an
+/// unreachable address without live network calls.  `stale_days` controls the
+/// staleness threshold for the offline-fallback path.
+fn cmd_update_slopsquat_impl(
+    project_root: &Path,
+    agent: &ureq::Agent,
+    osv_base_url: &str,
+    stale_days: u32,
+) -> anyhow::Result<()> {
     let janitor_dir = project_root.join(".janitor");
     std::fs::create_dir_all(&janitor_dir)
         .with_context(|| format!("creating {}", janitor_dir.display()))?;
-
-    let corpus = fetch_osv_slopsquat_corpus(agent)?;
     let corpus_path = common::wisdom::slopsquat_corpus_path(&janitor_dir);
-    let corpus_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus)
-        .map_err(|e| anyhow::anyhow!("update-slopsquat: serializing corpus failed: {e}"))?;
-    write_atomic_bytes(&corpus_path, corpus_bytes.as_slice())?;
 
-    let wisdom_path = janitor_dir.join("wisdom.rkyv");
-    if let Some(mut wisdom) = common::wisdom::load_wisdom_set(&wisdom_path) {
-        wisdom.slopsquat_filter =
-            common::bloom::SlopsquatFilter::from_seed_corpus(corpus.package_names.iter());
-        wisdom.sort();
-        let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {
-            anyhow::anyhow!("update-slopsquat: serializing wisdom archive failed: {e}")
-        })?;
-        write_atomic_bytes(&wisdom_path, wisdom_bytes.as_slice())?;
+    // 3-attempt exponential backoff: 1 s → 2 s → 4 s.
+    let mut network_ok = false;
+    for attempt in 0u32..3 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(1u64 << (attempt - 1)));
+        }
+        if let Ok(corpus) = fetch_osv_slopsquat_corpus_from(agent, osv_base_url) {
+            let corpus_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus)
+                .map_err(|e| anyhow::anyhow!("update-slopsquat: serializing corpus failed: {e}"))?;
+            write_atomic_bytes(&corpus_path, corpus_bytes.as_slice())?;
+
+            let wisdom_path = janitor_dir.join("wisdom.rkyv");
+            if let Some(mut wisdom) = common::wisdom::load_wisdom_set(&wisdom_path) {
+                wisdom.slopsquat_filter =
+                    common::bloom::SlopsquatFilter::from_seed_corpus(corpus.package_names.iter());
+                wisdom.sort();
+                let wisdom_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&wisdom).map_err(|e| {
+                    anyhow::anyhow!("update-slopsquat: serializing wisdom archive failed: {e}")
+                })?;
+                write_atomic_bytes(&wisdom_path, wisdom_bytes.as_slice())?;
+            }
+
+            println!(
+                "\u{1f6e1}\u{fe0f} OSV slopsquat corpus synchronized: {} packages \u{2192} {}",
+                corpus.package_names.len(),
+                corpus_path.display()
+            );
+            network_ok = true;
+            break;
+        } // else: retry
     }
 
-    println!(
-        "\u{1f6e1}\u{fe0f} OSV slopsquat corpus synchronized: {} packages \u{2192} {}",
-        corpus.package_names.len(),
-        corpus_path.display()
-    );
+    if network_ok {
+        return Ok(());
+    }
+
+    // All 3 attempts exhausted — apply offline fallback.
+    apply_slopsquat_offline_fallback(&corpus_path, stale_days)
+}
+
+/// Offline fallback invoked when all network attempts for `update-slopsquat` fail.
+///
+/// - If a corpus already exists on disk: check its age.  Stale corpora (older
+///   than `stale_days`) emit a degraded warning but still exit `Ok(())`.
+/// - If no corpus exists: deploy the embedded build-time baseline and print
+///   a bootstrap notice.
+fn apply_slopsquat_offline_fallback(
+    corpus_path: &std::path::Path,
+    stale_days: u32,
+) -> anyhow::Result<()> {
+    if corpus_path.exists() {
+        let meta = std::fs::metadata(corpus_path)
+            .with_context(|| format!("reading metadata for {}", corpus_path.display()))?;
+        let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let age = std::time::SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or(std::time::Duration::from_secs(u64::MAX));
+        let stale_threshold =
+            std::time::Duration::from_secs(u64::from(stale_days).saturating_mul(86_400));
+        if age >= stale_threshold {
+            eprintln!(
+                "[JANITOR DEGRADED] Threat intelligence corpus is stale (network unreachable)."
+            );
+        }
+        return Ok(());
+    }
+
+    // No corpus on disk — deploy the embedded seed baseline.
+    write_atomic_bytes(corpus_path, EMBEDDED_SLOPSQUAT)?;
+    eprintln!("[JANITOR BOOTSTRAPPED] Offline baseline deployed.");
     Ok(())
 }
 
 /// Download the bulk `all.zip` for each ecosystem and extract MAL- advisory package names.
 ///
-/// Uses the OSV GCS bulk-export endpoint: `{OSV_DUMP_BASE_URL}/{ecosystem}/all.zip`.
+/// Uses the OSV GCS bulk-export endpoint: `{base_url}/{ecosystem}/all.zip`.
 /// Each `.zip` entry is a UTF-8 JSON advisory; we parse in-memory (no temp files) and
 /// filter for `id.starts_with("MAL-")` before extracting affected package names.
-fn fetch_osv_slopsquat_corpus(
+fn fetch_osv_slopsquat_corpus_from(
     agent: &ureq::Agent,
+    base_url: &str,
 ) -> anyhow::Result<common::wisdom::SlopsquatCorpus> {
     let mut packages = BTreeSet::new();
     for (dump_dir, ecosystem) in OSV_MALICIOUS_ECOSYSTEMS {
-        let zip_url = format!("{OSV_DUMP_BASE_URL}/{dump_dir}/all.zip");
+        let zip_url = format!("{base_url}/{dump_dir}/all.zip");
         let mut response = agent
             .get(&zip_url)
             .call()
@@ -6979,6 +7078,64 @@ mod slopsquat_sync_tests {
         let loaded =
             common::wisdom::load_slopsquat_corpus(&corpus_path).expect("corpus must deserialize");
         assert_eq!(loaded, corpus);
+    }
+
+    /// When every network attempt fails (port 1 is always refused), the function
+    /// must exit `Ok(())` and deploy the embedded build-time baseline to disk.
+    #[test]
+    fn network_failure_deploys_embedded_baseline_to_disk() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let agent = ureq::Agent::new_with_defaults();
+        // Port 1 is privileged and always connection-refused on Linux/WSL —
+        // ensures all 3 retry attempts fail without touching the live network.
+        let result = cmd_update_slopsquat_impl(dir.path(), &agent, "http://127.0.0.1:1", 7);
+        assert!(
+            result.is_ok(),
+            "network failure must not propagate as Err — offline fallback must absorb it"
+        );
+        let corpus_path = common::wisdom::slopsquat_corpus_path(&dir.path().join(".janitor"));
+        assert!(
+            corpus_path.exists(),
+            "embedded baseline must be written to disk when no on-disk corpus exists"
+        );
+        let loaded = common::wisdom::load_slopsquat_corpus(&corpus_path)
+            .expect("embedded baseline must deserialise");
+        assert!(
+            !loaded.package_names.is_empty(),
+            "embedded baseline must contain seed packages"
+        );
+    }
+
+    /// When an on-disk corpus already exists and is fresh, network failure exits
+    /// `Ok(())` without touching the corpus.
+    #[test]
+    fn network_failure_with_fresh_corpus_exits_gracefully() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let janitor_dir = dir.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).expect(".janitor dir must be created");
+        let corpus_path = common::wisdom::slopsquat_corpus_path(&janitor_dir);
+        // Write a recognisable corpus to disk.
+        let corpus = common::wisdom::SlopsquatCorpus {
+            package_names: vec!["existing-package".to_string()],
+        };
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus)
+            .expect("corpus serialization must succeed");
+        write_atomic_bytes(&corpus_path, bytes.as_slice()).expect("atomic write must succeed");
+
+        let agent = ureq::Agent::new_with_defaults();
+        let result = cmd_update_slopsquat_impl(dir.path(), &agent, "http://127.0.0.1:1", 7);
+        assert!(
+            result.is_ok(),
+            "network failure with fresh on-disk corpus must exit Ok"
+        );
+        // Corpus must be unchanged — the fallback path must not overwrite it.
+        let loaded =
+            common::wisdom::load_slopsquat_corpus(&corpus_path).expect("corpus must deserialise");
+        assert_eq!(
+            loaded.package_names,
+            vec!["existing-package".to_string()],
+            "fresh on-disk corpus must not be overwritten"
+        );
     }
 }
 

@@ -221,7 +221,7 @@ impl JiraConfig {
 ///
 /// These settings control the slop-detection engine's behaviour independently
 /// of the governance gate thresholds that live at the top level of the manifest.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ForgeConfig {
     /// Ecosystem-specific automation account handles that are exempt from the
@@ -259,6 +259,33 @@ pub struct ForgeConfig {
     /// Raises bounce analysis budgets from the default 1 MiB / 500 ms path to
     /// the deep-scan 32 MiB / 30 s path for AST-evasion-resistant analysis.
     pub deep_scan: bool,
+    /// Number of days before the on-disk threat corpus is considered stale
+    /// after a network-partition event.  When the corpus exceeds this age
+    /// and no fresh download succeeded, the CLI warns and exits gracefully.
+    ///
+    /// Default: 7.  Air-gapped enterprises may lower this to increase
+    /// sensitivity to corpus drift.
+    #[serde(default = "ForgeConfig::default_corpus_stale_days")]
+    pub corpus_stale_days: u32,
+}
+
+impl Default for ForgeConfig {
+    fn default() -> Self {
+        Self {
+            automation_accounts: Vec::new(),
+            governor_url: None,
+            mtls_cert: None,
+            mtls_key: None,
+            deep_scan: false,
+            corpus_stale_days: Self::default_corpus_stale_days(),
+        }
+    }
+}
+
+impl ForgeConfig {
+    fn default_corpus_stale_days() -> u32 {
+        7
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1134,6 +1161,7 @@ mod tests {
                 mtls_cert: None,
                 mtls_key: None,
                 deep_scan: false,
+                corpus_stale_days: 7,
             },
             ..Default::default()
         };
@@ -1170,6 +1198,7 @@ mod tests {
                 mtls_cert: None,
                 mtls_key: None,
                 deep_scan: false,
+                corpus_stale_days: 7,
             },
             ..Default::default()
         };
