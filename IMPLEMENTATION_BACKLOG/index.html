@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)
@@ -1429,6 +1438,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)
@@ -2211,6 +2229,22 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14">2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)</h2>
+<p><strong>Directive:</strong> P1-2 — Implement three-layer resilience for threat intelligence fetchers so The Janitor survives network partitions without crashing CI pipelines.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/build.rs</code> <em>(created)</em> — generates <code>slopsquat_corpus.rkyv</code> (32 confirmed MAL-advisory seed packages) and <code>wisdom.rkyv</code> (empty WisdomSet baseline) in <code>OUT_DIR</code> at compile time; both embedded into the binary via <code>include_bytes!</code>.
+- <code>crates/cli/Cargo.toml</code> <em>(modified)</em> — added <code>[build-dependencies]</code> block: <code>common</code> and <code>rkyv</code> for <code>build.rs</code>.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>EMBEDDED_SLOPSQUAT</code> and <code>EMBEDDED_WISDOM</code> static bytes added; <code>cmd_update_slopsquat_with_agent</code> refactored into <code>cmd_update_slopsquat_impl</code> with configurable <code>osv_base_url</code> + <code>stale_days</code> params; 3-attempt exponential backoff (1s/2s/4s) wraps <code>fetch_osv_slopsquat_corpus_from</code>; <code>apply_slopsquat_offline_fallback</code> deploys embedded baseline on first boot or emits <code>[JANITOR DEGRADED]</code> for stale corpus; <code>cmd_update_wisdom_with_urls</code> adds non-ci-mode wisdom baseline fallback; 3 new unit tests.
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>ForgeConfig.corpus_stale_days: u32</code> (default 7) added; <code>#[derive(Default)]</code> replaced with manual <code>impl Default</code>; two test struct literals updated; serde default function <code>default_corpus_stale_days()</code> added.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.13</code> → <code>10.1.0-alpha.14</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P1-2 marked COMPLETED.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry.</p>
+<p><strong>Key invariants:</strong>
+- Network failure never propagates as <code>Err</code> from <code>update-slopsquat</code> (non-ci-mode).
+- First boot in air-gapped environment: embedded seed corpus (32 packages) deployed, CI runs immediately.
+- Stale corpus (&gt;7 days): <code>[JANITOR DEGRADED]</code> warning to stderr, exit 0.
+- <code>corpus_stale_days</code> TOML-configurable per enterprise.</p>
 <hr />
 <h2 id="2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12">2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)</h2>
 <p><strong>Directive:</strong> Exorcise the final CodeQL aggregate-count false positive, implement enterprise Jira ticket synchronization for <code>KevCritical</code> findings, verify under single-threaded tests, and cut <code>10.1.0-alpha.12</code> without rewriting prior release history.</p>

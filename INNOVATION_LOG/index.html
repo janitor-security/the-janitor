@@ -696,9 +696,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance" class="md-nav__link">
+  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)
+      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance) — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -858,9 +858,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance" class="md-nav__link">
+  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)
+      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance) — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -943,31 +943,12 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 <li>Closed structural gap: PR metadata and Markdown review surfaces previously lacked a dedicated hidden-block scanner for LLM-only prompt-injection payloads. <code>security:ai_prompt_injection</code> now covers invisible HTML comments and hidden spans/divs. Remaining expansion path: extend the same hidden-block heuristic to issue comments fetched via SCM API ingestion so review-thread payloads detonate before reaching downstream AI triage.</li>
 </ul>
 <hr />
-<h2 id="p1-2-osv-bulk-corpus-resilience-network-fault-tolerance">P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)</h2>
-<ul>
-<li><strong>Class</strong>: Threat Intel Infrastructure / Reliability</li>
-<li><strong>TAM</strong>: Live-fire audit (2026-04-11) confirmed <code>update-slopsquat</code> fails silently in air-gapped or
-  network-restricted environments (WSL, corporate proxies, GCS-blocked egress): "reading OSV bulk ZIP
-  response failed". No disk artifacts left (GC clean), but the command exits with an unrecoverable error
-  and leaves the slopsquat corpus stale. Enterprises running in air-gapped CI have zero slopsquat
-  protection after first install if the initial corpus fetch fails.</li>
-<li><strong>Observation</strong>: <code>fetch_osv_slopsquat_corpus</code> in <code>crates/cli/src/main.rs</code> makes a single synchronous
-  HTTP request to <code>osv-vulnerabilities.storage.googleapis.com</code>. No retry, no fallback mirror, no
-  embedded seed corpus. Failure leaves <code>.janitor/slopsquat_corpus.rkyv</code> absent rather than stale.
-  The <code>update-wisdom</code> path has the same single-point-of-failure pattern against the Ed25519-signed
-  wisdom URL.</li>
-<li><strong>Proposal</strong>: Add three-layer resilience:</li>
-<li><strong>Embedded seed corpus</strong>: bundle a curated <code>slopsquat_corpus.rkyv</code> snapshot in the binary
-     (behind <code>include_bytes!</code>) as a last-resort fallback when network is unavailable.</li>
-<li><strong>Exponential backoff</strong>: 3 retries with 1 s / 2 s / 4 s delay before declaring failure.</li>
-<li><strong>Stale-corpus warning</strong>: if the corpus file is older than 7 days and a refresh attempt fails,
-     emit <code>[JANITOR DEGRADED] slopsquat corpus is stale</code> to stderr and exit 0 (soft-fail) rather
-     than exit 1, matching the <code>soft_fail</code> policy semantics already in <code>JanitorPolicy</code>.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/cli/src/main.rs</code>: <code>fetch_osv_slopsquat_corpus</code> gains retry loop + embedded fallback.</li>
-<li><code>crates/common/src/policy.rs</code>: <code>ForgeConfig</code> gains <code>corpus_stale_days: u32</code> (default 7).</li>
-<li><code>build.rs</code> (cli): <code>include_bytes!</code> of a baked seed corpus generated at release time.</li>
-</ul>
+<h2 id="p1-2-osv-bulk-corpus-resilience-network-fault-tolerance-completed-2026-04-12">P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance) — [COMPLETED 2026-04-12]</h2>
+<p>Implemented in v10.1.0-alpha.14: <code>crates/cli/build.rs</code> generates embedded seed corpus +
+empty wisdom baseline; 3-attempt exponential backoff (1s/2s/4s) in <code>cmd_update_slopsquat_impl</code>;
+offline fallback path writes embedded baseline on first boot or emits <code>[JANITOR DEGRADED]</code> for
+stale corpus; <code>ForgeConfig.corpus_stale_days</code> (default 7) configures staleness threshold;
+wisdom network failure in non-ci-mode deploys embedded empty baseline; 3 new unit tests.</p>
 
 
 
