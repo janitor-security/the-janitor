@@ -937,6 +937,7 @@ fn run_lint_file(file_path: &str, contents: &str) -> Result<serde_json::Value> {
                 file: Some(file_path.to_owned()),
                 line: Some(line),
                 fingerprint: String::new(),
+                severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
             }

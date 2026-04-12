@@ -1359,6 +1359,7 @@ impl PRBouncer for PatchBouncer {
                     &file_path,
                     finding_fingerprint_span(source, f.start_byte, f.end_byte),
                 ),
+                severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
             });

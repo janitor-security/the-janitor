@@ -134,6 +134,7 @@ fn structured_findings_from_entry(entry: &BounceLogEntry) -> Vec<common::slop::S
             )
             .to_hex()
             .to_string(),
+            severity: None,
             remediation: None,
             docs_url: None,
         })
@@ -3554,6 +3555,7 @@ mod webhook_tests {
             file: Some("src/lib.rs".to_string()),
             line: Some(42),
             fingerprint: "fp-open".to_string(),
+            severity: Some("KevCritical".to_string()),
             remediation: Some("Rotate the credential and remove it from the patch.".to_string()),
             docs_url: None,
         }];

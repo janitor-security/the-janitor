@@ -34,6 +34,13 @@ pub struct StructuredFinding {
     #[serde(default)]
     pub fingerprint: String,
 
+    /// Severity tier of the finding, e.g. `"KevCritical"` or `"Critical"`.
+    ///
+    /// Optional for backwards compatibility with pre-severity structured
+    /// findings and synthetic report-derived findings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+
     /// Actionable remediation instruction for the developer, e.g.
     /// `"Remove the hallucinated dependency from your manifest and run cargo update"`.
     ///

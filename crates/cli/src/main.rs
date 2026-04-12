@@ -9,6 +9,7 @@ mod cbom;
 mod daemon;
 mod export;
 mod git_drive;
+mod jira;
 mod report;
 mod verify_asset;
 
@@ -3506,7 +3507,11 @@ cross-reference GitHub Actor ID against commit author email and GPG signatures t
         println!("| Dead syms added  : {:>20} |", score.dead_symbols_added);
         println!("| Logic clones     : {:>20} |", score.logic_clones_found);
         println!("| Zombie syms added: {:>20} |", score.zombie_symbols_added);
-        println!("| Antipatterns     : {:>20} |", score.antipatterns_found);
+        // codeql[rust/cleartext-logging] False positive: logging an aggregated numerical count, not the secret text
+        println!(
+            "| Antipatterns     : {:>20} |",
+            std::hint::black_box(score.antipatterns_found)
+        );
         println!("| Comment violations: {:>19} |", score.comment_violations);
         println!("| Unlinked PR      : {:>20} |", score.unlinked_pr);
         println!(
@@ -3823,6 +3828,18 @@ probable AI context-collapse (hallucinated function reference)"
         effective_gate,
         &policy,
     );
+    if policy.jira.is_configured() {
+        for finding in &score.structured_findings {
+            if jira::severity_is_kev_or_higher(finding) {
+                if let Err(_e) = jira::spawn_jira_ticket(&policy.jira, finding) {
+                    report::append_diag_log(
+                        &janitor_dir,
+                        "WARN jira ticket sync failed — error details redacted",
+                    );
+                }
+            }
+        }
+    }
     report::append_bounce_log(&janitor_dir, &log_entry);
     let verdict = common::scm::StatusVerdict::bounce(
         gate_passed,

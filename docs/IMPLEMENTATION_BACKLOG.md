@@ -5,6 +5,24 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-12 — ASPM Jira Sync & Final Dashboard Scrub (v10.1.0-alpha.12)
+
+**Directive:** Exorcise the final CodeQL aggregate-count false positive, implement enterprise Jira ticket synchronization for `KevCritical` findings, verify under single-threaded tests, and cut `10.1.0-alpha.12` without rewriting prior release history.
+
+**Files modified:**
+- `crates/cli/src/main.rs` *(modified)* — added the exact CodeQL suppression comment above the antipattern-count dashboard print and wrapped the logged count with `std::hint::black_box(score.antipatterns_found)`; wired fail-safe Jira synchronization for `KevCritical` structured findings after bounce analysis.
+- `crates/cli/src/jira.rs` *(created)* — added Jira REST payload builder, Basic Auth header construction from `JANITOR_JIRA_USER` / `JANITOR_JIRA_TOKEN`, `spawn_jira_ticket`, severity gate helper, and deterministic JSON payload unit coverage.
+- `crates/common/src/policy.rs` *(modified)* — added `[jira]` support via `JiraConfig { url, project_key }` on `JanitorPolicy`.
+- `crates/common/src/slop.rs` *(modified)* — `StructuredFinding` now carries optional severity metadata for downstream enterprise routing.
+- `crates/forge/src/slop_filter.rs` / `crates/mcp/src/lib.rs` / `crates/cli/src/report.rs` *(modified)* — propagated structured finding severity through the pipeline and updated test fixtures.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.11` → `10.1.0-alpha.12`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — appended this session ledger.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` — pending execution below.
+- `just audit` — pending execution below.
+- `just fast-release 10.1.0-alpha.12` — pending execution below.
+
 ## 2026-04-11 — Multi-Tenant RBAC & Threat Intel Verification (v10.1.0-alpha.11)
 
 **Directive:** Phase 1 — live-fire threat intel audit (GC hygiene, OSV network fault). Phase 2 — implement Governor RBAC (P0-1). Phase 3 — verification & release.

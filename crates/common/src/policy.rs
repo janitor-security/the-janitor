@@ -188,6 +188,32 @@ impl WebhookConfig {
 }
 
 // ---------------------------------------------------------------------------
+// JiraConfig — [jira] sub-table
+// ---------------------------------------------------------------------------
+
+/// Configuration for Jira issue creation on high-severity findings.
+///
+/// Credentials are sourced from the environment:
+/// - `JANITOR_JIRA_USER`
+/// - `JANITOR_JIRA_TOKEN`
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct JiraConfig {
+    /// Jira base URL, e.g. `https://corp.atlassian.net`.
+    pub url: String,
+
+    /// Jira project key, e.g. `SEC`.
+    pub project_key: String,
+}
+
+impl JiraConfig {
+    /// Returns `true` when Jira issue creation is configured.
+    pub fn is_configured(&self) -> bool {
+        !self.url.is_empty() && !self.project_key.is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ForgeConfig — [forge] sub-table
 // ---------------------------------------------------------------------------
 
@@ -453,6 +479,12 @@ pub struct JanitorPolicy {
     #[serde(default)]
     pub billing: BillingConfig,
 
+    /// Enterprise ticketing integration for actionable security findings.
+    ///
+    /// Configure in `[jira]` TOML table.  See [`JiraConfig`].
+    #[serde(default)]
+    pub jira: JiraConfig,
+
     /// Allow the pipeline to proceed when the Governor endpoint is unreachable.
     ///
     /// When `true` and a Governor POST fails (timeout, 5xx, network error),
@@ -530,6 +562,7 @@ impl Default for JanitorPolicy {
             forge: ForgeConfig::default(),
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
+            jira: JiraConfig::default(),
             soft_fail: false,
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
@@ -935,6 +968,7 @@ mod tests {
             forge: ForgeConfig::default(),
             webhook: WebhookConfig::default(),
             billing: BillingConfig::default(),
+            jira: JiraConfig::default(),
             soft_fail: false,
             wisdom: WisdomConfig::default(),
             wasm_rules: Vec::new(),
