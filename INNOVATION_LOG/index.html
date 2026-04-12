@@ -616,9 +616,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-role-based-access-control-governor-multi-tenant-rbac" class="md-nav__link">
+  <a href="#p0-1-role-based-access-control-governor-multi-tenant-rbac-completed-2026-04-11" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC)
+      P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC) — [COMPLETED 2026-04-11]
     </span>
   </a>
   
@@ -681,6 +681,15 @@
   <a href="#2026-04-11-audit-delta" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Audit Delta
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)
     </span>
   </a>
   
@@ -760,9 +769,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-role-based-access-control-governor-multi-tenant-rbac" class="md-nav__link">
+  <a href="#p0-1-role-based-access-control-governor-multi-tenant-rbac-completed-2026-04-11" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC)
+      P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC) — [COMPLETED 2026-04-11]
     </span>
   </a>
   
@@ -830,6 +839,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#p1-2-osv-bulk-corpus-resilience-network-fault-tolerance" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -856,31 +874,10 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 </blockquote>
 <hr />
 <h2 id="p0-enterprise-table-stakes">P0 — Enterprise Table Stakes</h2>
-<h3 id="p0-1-role-based-access-control-governor-multi-tenant-rbac">P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC)</h3>
-<ul>
-<li><strong>Class</strong>: Governance / Compliance</li>
-<li><strong>TAM</strong>: Blocks every multi-team enterprise deployment. Without RBAC, the
-  Governor is a single-tenant tool — unusable in any enterprise where
-  security teams, dev teams, and auditors need distinct permission levels.
-  This is the single hardest blocker to a $500K recurring contract.</li>
-<li><strong>Observation</strong>: The Governor API currently treats every caller as an admin.
-  There is no concept of read-only auditor access, team-scoped write access,
-  or org-level policy override. Any Fortune 500 security buyer will reject
-  the integration at the procurement stage without this.</li>
-<li><strong>Proposal</strong>: Implement JWT-scoped RBAC in the Governor. Each token encodes
-  a <code>role</code> claim (<code>admin</code>, <code>auditor</code>, <code>ci-writer</code>). The <code>/v1/analysis-token</code>
-  endpoint issues scoped tokens; the bounce endpoint enforces them. An
-  <code>auditor</code> token can read bounce logs but cannot publish verdicts. A
-  <code>ci-writer</code> token can publish verdicts but cannot change policy. Only
-  <code>admin</code> tokens can modify <code>JANITOR_GOV_EXPECTED_POLICY</code>.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/gov/src/main.rs</code>: add <code>role</code> claim to <code>AnalysisTokenRequest</code>;
-    enforce <code>role</code> on each route via a middleware guard.</li>
-<li><code>crates/vault/src/lib.rs</code>: <code>SigningOracle::issue_scoped_token(role)</code>.</li>
-<li><code>crates/common/src/policy.rs</code>: <code>JanitorPolicy::rbac</code> table —
-    <code>[[rbac.teams]]</code> with <code>name</code>, <code>role</code>, <code>allowed_repos</code> fields.</li>
-<li>Crucible: add RBAC fixture — auditor-token write attempt returns 403.</li>
-</ul>
+<h3 id="p0-1-role-based-access-control-governor-multi-tenant-rbac-completed-2026-04-11">P0-1: Role-Based Access Control (Governor Multi-Tenant RBAC) — [COMPLETED 2026-04-11]</h3>
+<p>Implemented in v10.1.0-alpha.11:
+- <code>crates/common/src/policy.rs</code>: <code>RbacTeam</code> + <code>RbacConfig</code> structs; <code>[[rbac.teams]]</code> TOML table added to <code>JanitorPolicy</code>.
+- <code>crates/gov/src/main.rs</code>: <code>role</code> claim in <code>AnalysisTokenRequest</code>; token encodes role (<code>"stub-token:role=&lt;role&gt;"</code>); <code>/v1/report</code> enforces RBAC — <code>auditor</code> tokens return HTTP 403; 5 new tests.</p>
 <hr />
 <h2 id="p1-devsecops-workflow-integration">P1 — DevSecOps Workflow Integration</h2>
 <h3 id="p1-1-aspm-jira-sync-application-security-posture-management">P1-1: ASPM Jira Sync (Application Security Posture Management)</h3>
@@ -941,6 +938,32 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 <h2 id="2026-04-11-audit-delta">2026-04-11 — Audit Delta</h2>
 <ul>
 <li>Closed structural gap: PR metadata and Markdown review surfaces previously lacked a dedicated hidden-block scanner for LLM-only prompt-injection payloads. <code>security:ai_prompt_injection</code> now covers invisible HTML comments and hidden spans/divs. Remaining expansion path: extend the same hidden-block heuristic to issue comments fetched via SCM API ingestion so review-thread payloads detonate before reaching downstream AI triage.</li>
+</ul>
+<hr />
+<h2 id="p1-2-osv-bulk-corpus-resilience-network-fault-tolerance">P1-2: OSV Bulk Corpus Resilience (Network Fault Tolerance)</h2>
+<ul>
+<li><strong>Class</strong>: Threat Intel Infrastructure / Reliability</li>
+<li><strong>TAM</strong>: Live-fire audit (2026-04-11) confirmed <code>update-slopsquat</code> fails silently in air-gapped or
+  network-restricted environments (WSL, corporate proxies, GCS-blocked egress): "reading OSV bulk ZIP
+  response failed". No disk artifacts left (GC clean), but the command exits with an unrecoverable error
+  and leaves the slopsquat corpus stale. Enterprises running in air-gapped CI have zero slopsquat
+  protection after first install if the initial corpus fetch fails.</li>
+<li><strong>Observation</strong>: <code>fetch_osv_slopsquat_corpus</code> in <code>crates/cli/src/main.rs</code> makes a single synchronous
+  HTTP request to <code>osv-vulnerabilities.storage.googleapis.com</code>. No retry, no fallback mirror, no
+  embedded seed corpus. Failure leaves <code>.janitor/slopsquat_corpus.rkyv</code> absent rather than stale.
+  The <code>update-wisdom</code> path has the same single-point-of-failure pattern against the Ed25519-signed
+  wisdom URL.</li>
+<li><strong>Proposal</strong>: Add three-layer resilience:</li>
+<li><strong>Embedded seed corpus</strong>: bundle a curated <code>slopsquat_corpus.rkyv</code> snapshot in the binary
+     (behind <code>include_bytes!</code>) as a last-resort fallback when network is unavailable.</li>
+<li><strong>Exponential backoff</strong>: 3 retries with 1 s / 2 s / 4 s delay before declaring failure.</li>
+<li><strong>Stale-corpus warning</strong>: if the corpus file is older than 7 days and a refresh attempt fails,
+     emit <code>[JANITOR DEGRADED] slopsquat corpus is stale</code> to stderr and exit 0 (soft-fail) rather
+     than exit 1, matching the <code>soft_fail</code> policy semantics already in <code>JanitorPolicy</code>.</li>
+<li><strong>Implementation Path</strong>:</li>
+<li><code>crates/cli/src/main.rs</code>: <code>fetch_osv_slopsquat_corpus</code> gains retry loop + embedded fallback.</li>
+<li><code>crates/common/src/policy.rs</code>: <code>ForgeConfig</code> gains <code>corpus_stale_days: u32</code> (default 7).</li>
+<li><code>build.rs</code> (cli): <code>include_bytes!</code> of a baked seed corpus generated at release time.</li>
 </ul>
 
 

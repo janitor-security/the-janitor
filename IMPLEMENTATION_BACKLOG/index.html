@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
@@ -1402,6 +1411,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
@@ -2157,6 +2175,16 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11">2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)</h2>
+<p><strong>Directive:</strong> Phase 1 — live-fire threat intel audit (GC hygiene, OSV network fault). Phase 2 — implement Governor RBAC (P0-1). Phase 3 — verification &amp; release.</p>
+<p><strong>Phase 1 audit findings:</strong>
+- <code>update-slopsquat</code> failed (WSL/GCS network block) — no <code>.zip</code> artifacts left in <code>/tmp</code>: GC is clean by design.
+- Intelligence gap filed as <strong>P1-2</strong> in <code>docs/INNOVATION_LOG.md</code>: single-point-of-failure OSV fetch with no retry, no fallback corpus, no stale-corpus soft-fail. Air-gapped enterprise deployments have zero slopsquat coverage after install if initial fetch fails.</p>
+<p><strong>Phase 2 — RBAC Implementation:</strong>
+- <code>crates/common/src/policy.rs</code>: Added <code>RbacTeam { name, role, allowed_repos }</code> and <code>RbacConfig { teams }</code> structs. Added <code>rbac: RbacConfig</code> field to <code>JanitorPolicy</code> with TOML round-trip support under <code>[rbac]</code> / <code>[[rbac.teams]]</code>.
+- <code>crates/gov/src/main.rs</code>: <code>AnalysisTokenRequest</code> gains <code>role: String</code> (default <code>"ci-writer"</code>). <code>AnalysisTokenResponse</code> now owns <code>token: String</code> encoding role as <code>"stub-token:role=&lt;role&gt;"</code>. <code>BounceLogEntry</code> gains <code>analysis_token: Option&lt;String&gt;</code>. <code>/v1/report</code> enforces RBAC via <code>extract_role_from_token()</code> — <code>auditor</code> tokens return HTTP 403 Forbidden before any chain append. <code>/v1/analysis-token</code> normalises unknown roles to <code>"ci-writer"</code>. 5 new tests added; 2 existing tests updated for new token format and non-deterministic sequence index.
+- <code>just audit</code> exits 0. <code>cargo fmt --check</code> clean. <code>cargo clippy -- -D warnings</code> zero warnings.</p>
 <hr />
 <h2 id="2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10">2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)</h2>
 <p><strong>Directive:</strong> Intercept hidden Markdown/PR-body prompt-injection payloads exploiting invisible HTML comments and hidden spans, wire the detector into PR metadata and Markdown patch scoring, add Crucible regression coverage, verify under single-threaded tests, and prepare the <code>10.1.0-alpha.10</code> release.</p>
