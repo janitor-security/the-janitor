@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)
@@ -1438,6 +1447,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)
@@ -2229,6 +2247,21 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15">2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)</h2>
+<p><strong>Directive:</strong> Phase 1 (P1-1 enhancement) — State-aware ASPM deduplication gate; Phase 2 (P2-6) — Post-quantum publisher signing for Wasm rules.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — <code>JiraConfig.dedup: bool</code> (default <code>true</code>) added; <code>#[derive(Default)]</code> replaced with manual <code>impl Default</code>; <code>wasm_pqc_pub_key: Option&lt;String&gt;</code> added to <code>JanitorPolicy</code>; <code>content_hash</code> canonical JSON updated; test struct literals patched.
+- <code>crates/common/src/pqc.rs</code> <em>(modified)</em> — <code>JANITOR_WASM_RULE_CONTEXT</code> domain-separator constant added; <code>verify_wasm_rule_ml_dsa_signature</code> function added; 3 new tests (distinct context, roundtrip, wrong-context rejection).
+- <code>crates/forge/src/wasm_host.rs</code> <em>(modified)</em> — <code>WasmHost::new</code> gains <code>pqc_pub_key: Option&lt;&amp;str&gt;</code>; publisher verification reads <code>&lt;path&gt;.sig</code>, decodes base64 pub key, calls <code>verify_wasm_rule_ml_dsa_signature</code>; bails on missing sig or invalid signature; 2 new tests (missing sig, wrong-length sig).
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — <code>run_wasm_rules</code> gains <code>pqc_pub_key: Option&lt;&amp;str&gt;</code> and passes to <code>WasmHost::new</code>.
+- <code>crates/forge/Cargo.toml</code> <em>(modified)</em> — <code>fips204</code> added to <code>[dev-dependencies]</code> for wasm_host PQC roundtrip tests.
+- <code>crates/cli/src/jira.rs</code> <em>(modified)</em> — <code>JiraIssueSender</code> trait gains <code>search_total</code> method; <code>UreqJiraSender</code> implements it via Jira REST search API; dedup check added in <code>spawn_jira_ticket_with_sender</code>; <code>build_jql_search_url</code> helper added; <code>MockJiraSender</code> gains <code>search_total_value</code>; 1 new test <code>dedup_skips_creation_when_open_ticket_exists</code>.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>run_wasm_rules</code> call updated to pass <code>policy.wasm_pqc_pub_key.as_deref()</code>.
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — 2 <code>WasmHost::new</code> call sites updated with <code>None</code> third argument.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.14</code> → <code>10.1.0-alpha.15</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P2-6 marked COMPLETED.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this entry.</p>
 <hr />
 <h2 id="2026-04-12-air-gap-autonomy-zero-trust-resilience-v1010-alpha14">2026-04-12 — Air-Gap Autonomy &amp; Zero-Trust Resilience (v10.1.0-alpha.14)</h2>
 <p><strong>Directive:</strong> P1-2 — Implement three-layer resilience for threat intelligence fetchers so The Janitor survives network partitions without crashing CI pipelines.</p>

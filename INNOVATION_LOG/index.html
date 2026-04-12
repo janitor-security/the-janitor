@@ -673,9 +673,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-6-post-quantum-certificate-transparency-for-wasm-rules" class="md-nav__link">
+  <a href="#p2-6-post-quantum-certificate-transparency-for-wasm-rules-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-6: Post-Quantum Certificate Transparency for Wasm Rules
+      P2-6: Post-Quantum Certificate Transparency for Wasm Rules — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -835,9 +835,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-6-post-quantum-certificate-transparency-for-wasm-rules" class="md-nav__link">
+  <a href="#p2-6-post-quantum-certificate-transparency-for-wasm-rules-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-6: Post-Quantum Certificate Transparency for Wasm Rules
+      P2-6: Post-Quantum Certificate Transparency for Wasm Rules — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -912,31 +912,12 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 - <code>crates/common/src/slop.rs</code>: structured severity metadata added so enterprise workflow routing can gate on <code>KevCritical</code>.</p>
 <hr />
 <h2 id="p2-cryptographic-assurance">P2 — Cryptographic Assurance</h2>
-<h3 id="p2-6-post-quantum-certificate-transparency-for-wasm-rules">P2-6: Post-Quantum Certificate Transparency for Wasm Rules</h3>
-<ul>
-<li><strong>Class</strong>: Cryptographic Assurance / DoD Compliance</li>
-<li><strong>TAM</strong>: DoD CMMC Level 2+ and FedRAMP High mandate FIPS 140-3 module
-  integrity. Our release binaries are ML-DSA-65 + SLH-DSA-128s signed.
-  Wasm rules use BLAKE3 pinning only. A compromised rule registry could
-  serve a valid-hash rule that was replaced between pin creation and execution.
-  Closing this gap is a hard requirement for any DoD/IC procurement.</li>
-<li><strong>Observation</strong>: <code>crates/forge/src/wasm_host.rs</code> loads <code>.wasm</code> modules
-  from disk with BLAKE3 hash verification but no asymmetric signature check.
-  The publisher's identity is unverified — any party who can replace the file
-  and update the hash can inject arbitrary Wasm execution.</li>
-<li><strong>Proposal</strong>: Extend PQC signing to Wasm rule packages. Each <code>.wasm</code> is
-  accompanied by a <code>.wasm.sig</code> (ML-DSA-65 detached signature). The CLI
-  verifies the signature using the rule publisher's public key before loading.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/forge/src/wasm_host.rs</code>: <code>WasmHost::load_module</code> gains optional
-    <code>sig_path</code> + <code>publisher_key</code> verification before <code>Module::new</code>.</li>
-<li><code>crates/common/src/pqc.rs</code>: <code>verify_wasm_rule_signature()</code> using
-    <code>verify_asset_ml_dsa_signature</code> with a <code>JANITOR_WASM_RULE_CONTEXT</code>
-    domain separator.</li>
-<li><code>janitor.toml</code>: <code>[[wasm_publishers]]</code> table with publisher name + ML-DSA
-    verifying key.</li>
-<li>Crucible: <code>wasm_rule_rejected_without_valid_pqc_signature</code> entry.</li>
-</ul>
+<h3 id="p2-6-post-quantum-certificate-transparency-for-wasm-rules-completed-2026-04-12">P2-6: Post-Quantum Certificate Transparency for Wasm Rules — [COMPLETED 2026-04-12]</h3>
+<p>Implemented in v10.1.0-alpha.15:
+- <code>crates/common/src/pqc.rs</code>: <code>JANITOR_WASM_RULE_CONTEXT</code> domain-separator + <code>verify_wasm_rule_ml_dsa_signature</code>; 3 tests.
+- <code>crates/forge/src/wasm_host.rs</code>: <code>WasmHost::new</code> gains <code>pqc_pub_key: Option&lt;&amp;str&gt;</code>; reads <code>&lt;path&gt;.sig</code>, base64-decodes pub key, verifies ML-DSA-65 sig before <code>Module::new</code>; bails on missing or invalid sig; 2 new tests.
+- <code>crates/forge/src/slop_filter.rs</code>: <code>run_wasm_rules</code> passes <code>pqc_pub_key</code> through.
+- <code>crates/common/src/policy.rs</code>: <code>wasm_pqc_pub_key: Option&lt;String&gt;</code> added to <code>JanitorPolicy</code>.</p>
 <hr />
 <h2 id="2026-04-11-audit-delta">2026-04-11 — Audit Delta</h2>
 <ul>
