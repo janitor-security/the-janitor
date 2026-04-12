@@ -5,6 +5,25 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-12 — Marketplace Integration & Governor Provisioning (v10.1.0-alpha.16)
+
+**Directive:** Wire the Sovereign Governor as a GitHub App backend with authenticated installation webhooks, tenant-bound analysis token issuance, single-threaded verification, and release preparation.
+
+**Files modified:**
+- `crates/gov/Cargo.toml` *(modified)* — added `axum`, `dashmap`, `hmac`, `sha2`, `hex`, `tokio`, and `tower` test utility support for the webhook-capable Governor runtime.
+- `crates/gov/src/main.rs` *(modified)* — replaced the ad-hoc TCP server with Axum routing; added `GITHUB_WEBHOOK_SECRET` loading, constant-time `verify_github_signature`, `POST /v1/github/webhook`, `DashMap`-backed installation state, installation-aware `/v1/analysis-token`, and router-level tests for valid/invalid GitHub signatures plus installation gating.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.15` → `10.1.0-alpha.16`; `hex` promoted into `[workspace.dependencies]`.
+- `README.md` *(modified)* — release parity string updated to `v10.1.0-alpha.16`.
+- `docs/index.md` *(modified)* — documentation landing page version updated to `v10.1.0-alpha.16`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger appended.
+- `docs/INNOVATION_LOG.md` *(modified)* — `P1-0` purged after Governor marketplace provisioning landed.
+
+**Verification:**
+- `cargo test -p janitor-gov -- --test-threads=1` ✅ — 13 tests passed, including webhook 200/401 coverage and inactive-installation denial.
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+- `just fast-release 10.1.0-alpha.16` — pending.
+
 ## 2026-04-12 — Jira Deduplication & Wasm PQC Sealing (v10.1.0-alpha.15)
 
 **Directive:** Phase 1 (P1-1 enhancement) — State-aware ASPM deduplication gate; Phase 2 (P2-6) — Post-quantum publisher signing for Wasm rules.

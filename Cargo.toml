@@ -12,7 +12,7 @@ exclude = ["crates/experimental"]
 resolver = "2"
 
 [workspace.package]
-version = "10.1.0-alpha.15"
+version = "10.1.0-alpha.16"
 edition = "2021"
 repository = "https://github.com/janitor-security/the-janitor"
 license = "BUSL-1.1"
@@ -32,6 +32,7 @@ libfuzzer-sys = "0.4"
 blake3 = "1.5"
 hmac = "0.13.0"
 ed25519-dalek = "2.1"
+hex = "0.4"
 
 # Serialization (Zero-Copy)
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }

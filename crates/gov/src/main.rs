@@ -1,11 +1,20 @@
 use anyhow::Context as _;
+use axum::body::Bytes;
+use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::routing::post;
+use axum::{Json, Router};
 use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
+use dashmap::DashMap;
 use ed25519_dalek::SigningKey;
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Mutex, OnceLock};
+use sha2::Sha256;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, OnceLock};
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Provenance {
@@ -129,7 +138,7 @@ impl AnalysisTokenRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AnalysisTokenResponse {
-    /// Stub token string encoding the issued role: `"stub-token:role=<role>"`.
+    /// Stub token string encoding the issued role and installation binding.
     token: String,
     mode: String,
     expires_in_secs: u64,
@@ -155,6 +164,27 @@ enum GovLogEvent {
     AnalysisToken {
         request: AnalysisTokenRequest,
     },
+    GithubInstallation {
+        action: String,
+        installation_id: u64,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubInstallationWebhook {
+    action: String,
+    installation: GithubInstallation,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubInstallation {
+    id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GithubWebhookResponse {
+    status: String,
+    installation_id: u64,
 }
 
 #[derive(Debug, Default)]
@@ -176,6 +206,55 @@ impl Blake3HashChain {
         };
         self.next_index = self.next_index.saturating_add(1);
         proof
+    }
+}
+
+#[derive(Clone, Default)]
+struct AppState {
+    active_installations: Arc<DashMap<u64, ()>>,
+    github_webhook_secret: Option<Arc<Vec<u8>>>,
+}
+
+#[derive(Debug)]
+struct AppError {
+    status: StatusCode,
+    message: String,
+}
+
+impl AppError {
+    fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+        }
+    }
+
+    fn unauthorized(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::UNAUTHORIZED, message)
+    }
+
+    fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::FORBIDDEN, message)
+    }
+
+    fn bad_request(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, message)
+    }
+
+    fn internal(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(serde_json::json!({
+                "error": self.message,
+            })),
+        )
+            .into_response()
     }
 }
 
@@ -212,25 +291,20 @@ fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let bind_addr = resolve_bind_addr();
-    let listener = TcpListener::bind(&bind_addr)
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
+        .await
         .with_context(|| format!("binding janitor-gov to {bind_addr}"))?;
+    let app = build_router(AppState {
+        active_installations: Arc::new(DashMap::new()),
+        github_webhook_secret: resolve_github_webhook_secret().map(Arc::new),
+    });
     eprintln!("janitor-gov listening on http://{bind_addr}");
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                std::thread::spawn(|| {
-                    if let Err(err) = handle_connection(stream) {
-                        eprintln!("janitor-gov request failed: {err}");
-                    }
-                });
-            }
-            Err(err) => eprintln!("janitor-gov accept failed: {err}"),
-        }
-    }
-
+    axum::serve(listener, app)
+        .await
+        .context("serving janitor-gov")?;
     Ok(())
 }
 
@@ -249,220 +323,190 @@ fn resolve_bind_addr() -> String {
     format!("127.0.0.1:{port}")
 }
 
-fn handle_connection(mut stream: TcpStream) -> anyhow::Result<()> {
-    let request = read_http_request(&mut stream)?;
-    let response = route_request(&request);
-    write_http_response(&mut stream, response.status, &response.body)?;
-    Ok(())
+fn resolve_github_webhook_secret() -> Option<Vec<u8>> {
+    std::env::var("GITHUB_WEBHOOK_SECRET")
+        .ok()
+        .map(|value| value.trim().as_bytes().to_vec())
+        .filter(|value| !value.is_empty())
 }
 
-struct HttpRequest {
-    method: String,
-    path: String,
-    body: Vec<u8>,
+fn build_router(state: AppState) -> Router {
+    Router::new()
+        .route("/v1/report", post(report_handler))
+        .route("/v1/analysis-token", post(analysis_token_handler))
+        .route("/v1/verify-suppressions", post(verify_suppressions_handler))
+        .route("/v1/github/webhook", post(github_webhook_handler))
+        .with_state(state)
 }
 
-struct HttpResponse {
-    status: u16,
-    body: Vec<u8>,
-}
-
-fn read_http_request(stream: &mut TcpStream) -> anyhow::Result<HttpRequest> {
-    let mut reader = BufReader::new(stream);
-    let mut request_line = String::new();
-    reader
-        .read_line(&mut request_line)
-        .context("reading request line")?;
-    if request_line.trim().is_empty() {
-        anyhow::bail!("empty request line");
-    }
-
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default().to_string();
-    let path = parts.next().unwrap_or_default().to_string();
-    if method.is_empty() || path.is_empty() {
-        anyhow::bail!("malformed request line");
-    }
-
-    let mut headers = HashMap::new();
-    loop {
-        let mut line = String::new();
-        reader.read_line(&mut line).context("reading header")?;
-        let trimmed = line.trim_end();
-        if trimmed.is_empty() {
-            break;
-        }
-        if let Some((name, value)) = trimmed.split_once(':') {
-            headers.insert(name.trim().to_ascii_lowercase(), value.trim().to_string());
+async fn report_handler(
+    Json(entry): Json<BounceLogEntry>,
+) -> Result<Json<ReportResponse>, AppError> {
+    if let Some(token) = &entry.analysis_token {
+        if extract_role_from_token(token) == "auditor" {
+            return Err(AppError::forbidden(
+                "forbidden: auditor tokens cannot post bounce reports — use a ci-writer or admin token",
+            ));
         }
     }
 
-    let content_length = headers
-        .get("content-length")
-        .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(0);
-    let mut body = vec![0_u8; content_length];
-    reader
-        .read_exact(&mut body)
-        .context("reading request body")?;
+    let signature_material = report_signature_material(&entry);
+    let proof = match transparency_log().lock() {
+        Ok(mut chain) => chain.append(&signature_material),
+        Err(err) => {
+            return Err(AppError::internal(format!(
+                "transparency log poisoned: {err}"
+            )));
+        }
+    };
+    let decision_receipt = build_signed_receipt(&entry, &proof)
+        .map_err(|err| AppError::internal(format!("failed to sign decision receipt: {err}")))?;
 
-    Ok(HttpRequest { method, path, body })
+    emit_event(&GovLogEvent::Report {
+        entry: Box::new(entry),
+        inclusion_proof: proof.clone(),
+    });
+
+    Ok(Json(ReportResponse {
+        status: "accepted".to_string(),
+        mode: "stub".to_string(),
+        inclusion_proof: proof,
+        decision_receipt,
+    }))
 }
 
-fn route_request(request: &HttpRequest) -> HttpResponse {
-    match (request.method.as_str(), request.path.as_str()) {
-        ("POST", "/v1/report") => match serde_json::from_slice::<BounceLogEntry>(&request.body) {
-            Ok(entry) => {
-                // RBAC gate: auditor tokens have read-only access.
-                // Posting a bounce verdict requires at minimum a ci-writer token.
-                if let Some(token) = &entry.analysis_token {
-                    if extract_role_from_token(token) == "auditor" {
-                        return json_response(
-                            403,
-                            serde_json::json!({
-                                "error": "forbidden",
-                                "message": "auditor tokens cannot post bounce reports — use a ci-writer or admin token",
-                            }),
-                        );
-                    }
-                }
-                let signature_material = report_signature_material(&entry);
-                let proof = match transparency_log().lock() {
-                    Ok(mut chain) => chain.append(&signature_material),
-                    Err(err) => {
-                        return json_response(
-                            500,
-                            serde_json::json!({
-                                "error": format!("transparency log poisoned: {err}"),
-                            }),
-                        )
-                    }
-                };
-                let decision_receipt = match build_signed_receipt(&entry, &proof) {
-                    Ok(receipt) => receipt,
-                    Err(err) => {
-                        return json_response(
-                            500,
-                            serde_json::json!({
-                                "error": format!("failed to sign decision receipt: {err}"),
-                            }),
-                        )
-                    }
-                };
-                emit_event(&GovLogEvent::Report {
-                    entry: Box::new(entry),
-                    inclusion_proof: proof.clone(),
-                });
-                json_response(
-                    200,
-                    serde_json::to_value(ReportResponse {
-                        status: "accepted".to_string(),
-                        mode: "stub".to_string(),
-                        inclusion_proof: proof,
-                        decision_receipt,
-                    })
-                    .unwrap_or_else(|_| {
-                        serde_json::json!({
-                            "status": "accepted",
-                            "mode": "stub",
-                        })
-                    }),
-                )
-            }
-            Err(err) => json_response(
-                400,
-                serde_json::json!({
-                    "error": format!("invalid report payload: {err}"),
-                }),
-            ),
-        },
-        ("POST", "/v1/analysis-token") => {
-            match serde_json::from_slice::<AnalysisTokenRequest>(&request.body) {
-                Ok(req) => {
-                    // Policy-drift gate: when JANITOR_GOV_EXPECTED_POLICY is set,
-                    // the incoming policy_hash must match exactly.  A mismatch means
-                    // the repository's janitor.toml was modified without a Governor
-                    // re-configuration — fail-closed with HTTP 403.
-                    if let Ok(expected) = std::env::var("JANITOR_GOV_EXPECTED_POLICY") {
-                        let expected = expected.trim();
-                        if !expected.is_empty() && req.policy_hash != expected {
-                            return json_response(
-                                403,
-                                serde_json::json!({
-                                    "error": "policy_drift_detected",
-                                    "message": "policy_hash in request does not match \
-                                                JANITOR_GOV_EXPECTED_POLICY — token denied",
-                                }),
-                            );
-                        }
-                    }
-                    // Normalise role — unknown values fall back to minimum-privilege ci-writer.
-                    let role = match req.role.as_str() {
-                        "admin" | "ci-writer" | "auditor" => req.role.clone(),
-                        _ => "ci-writer".to_string(),
-                    };
-                    let token = format!("stub-token:role={role}");
-                    emit_event(&GovLogEvent::AnalysisToken { request: req });
-                    json_response(
-                        200,
-                        serde_json::to_value(AnalysisTokenResponse {
-                            token,
-                            mode: "stub".to_string(),
-                            expires_in_secs: 300,
-                        })
-                        .unwrap_or_else(|_| {
-                            serde_json::json!({
-                                "token": "stub-token:role=ci-writer",
-                                "mode": "stub",
-                                "expires_in_secs": 300_u64,
-                            })
-                        }),
-                    )
-                }
-                Err(err) => json_response(
-                    400,
-                    serde_json::json!({
-                        "error": format!("invalid analysis-token payload: {err}"),
-                    }),
-                ),
-            }
+async fn analysis_token_handler(
+    State(state): State<AppState>,
+    Json(req): Json<AnalysisTokenRequest>,
+) -> Result<Json<AnalysisTokenResponse>, AppError> {
+    if let Ok(expected) = std::env::var("JANITOR_GOV_EXPECTED_POLICY") {
+        let expected = expected.trim();
+        if !expected.is_empty() && req.policy_hash != expected {
+            return Err(AppError::forbidden(
+                "policy_drift_detected: policy_hash in request does not match JANITOR_GOV_EXPECTED_POLICY — token denied",
+            ));
         }
-        ("POST", "/v1/verify-suppressions") => {
-            match serde_json::from_slice::<VerifySuppressionsRequest>(&request.body) {
-                Ok(req) => {
-                    let approved_ids: Vec<String> = req
-                        .suppression_ids
-                        .into_iter()
-                        .filter(|id| approved_suppression_ids().contains(id.as_str()))
-                        .collect();
-                    json_response(
-                        200,
-                        serde_json::to_value(VerifySuppressionsResponse { approved_ids })
-                            .unwrap_or_else(|_| serde_json::json!({ "approved_ids": [] })),
-                    )
-                }
-                Err(err) => json_response(
-                    400,
-                    serde_json::json!({
-                        "error": format!("invalid verify-suppressions payload: {err}"),
-                    }),
-                ),
-            }
+    }
+
+    if req.installation_id != 0
+        && !state
+            .active_installations
+            .contains_key(&req.installation_id)
+    {
+        return Err(AppError::forbidden(format!(
+            "inactive_installation: installation_id {} is not provisioned",
+            req.installation_id
+        )));
+    }
+
+    let role = normalize_role(&req.role);
+    let token = format!(
+        "stub-token:role={role};installation_id={}",
+        req.installation_id
+    );
+
+    emit_event(&GovLogEvent::AnalysisToken { request: req });
+
+    Ok(Json(AnalysisTokenResponse {
+        token,
+        mode: "stub".to_string(),
+        expires_in_secs: 300,
+    }))
+}
+
+async fn verify_suppressions_handler(
+    Json(req): Json<VerifySuppressionsRequest>,
+) -> Result<Json<VerifySuppressionsResponse>, AppError> {
+    let approved_ids: Vec<String> = req
+        .suppression_ids
+        .into_iter()
+        .filter(|id| approved_suppression_ids().contains(id.as_str()))
+        .collect();
+    Ok(Json(VerifySuppressionsResponse { approved_ids }))
+}
+
+async fn github_webhook_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<GithubWebhookResponse>, AppError> {
+    verify_github_webhook_request(&state, &headers, &body)?;
+
+    let payload: GithubInstallationWebhook = serde_json::from_slice(&body)
+        .map_err(|err| AppError::bad_request(format!("invalid github webhook payload: {err}")))?;
+
+    let installation_id = payload.installation.id;
+    match payload.action.as_str() {
+        "created" => {
+            state.active_installations.insert(installation_id, ());
         }
-        _ => json_response(
-            404,
-            serde_json::json!({
-                "error": "not found",
-            }),
-        ),
+        "deleted" => {
+            state.active_installations.remove(&installation_id);
+        }
+        _ => {}
+    }
+
+    emit_event(&GovLogEvent::GithubInstallation {
+        action: payload.action.clone(),
+        installation_id,
+    });
+
+    Ok(Json(GithubWebhookResponse {
+        status: "accepted".to_string(),
+        installation_id,
+    }))
+}
+
+fn verify_github_webhook_request(
+    state: &AppState,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<(), AppError> {
+    let secret = state
+        .github_webhook_secret
+        .as_deref()
+        .ok_or_else(|| AppError::unauthorized("github webhook secret is not configured"))?;
+    let signature = headers
+        .get("x-hub-signature-256")
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| AppError::unauthorized("missing x-hub-signature-256 header"))?;
+
+    if verify_github_signature(secret.as_slice(), body, signature) {
+        Ok(())
+    } else {
+        Err(AppError::unauthorized(
+            "github webhook authentication failed: signature mismatch",
+        ))
     }
 }
 
-fn approved_suppression_ids() -> &'static std::collections::HashSet<&'static str> {
-    static IDS: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
-    IDS.get_or_init(|| {
-        std::collections::HashSet::from(["waive-eval", "approved-ruby-sqli", "approved-php-sqli"])
-    })
+fn verify_github_signature(secret: &[u8], payload: &[u8], signature_header: &str) -> bool {
+    let expected = match signature_header.strip_prefix("sha256=") {
+        Some(expected) => expected,
+        None => return false,
+    };
+    let expected_bytes = match hex::decode(expected) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    let mut mac = match HmacSha256::new_from_slice(secret) {
+        Ok(mac) => mac,
+        Err(_) => return false,
+    };
+    mac.update(payload);
+    mac.verify_slice(&expected_bytes).is_ok()
+}
+
+fn normalize_role(role: &str) -> &str {
+    match role {
+        "admin" | "ci-writer" | "auditor" => role,
+        _ => "ci-writer",
+    }
+}
+
+fn approved_suppression_ids() -> &'static HashSet<&'static str> {
+    static IDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    IDS.get_or_init(|| HashSet::from(["waive-eval", "approved-ruby-sqli", "approved-php-sqli"]))
 }
 
 fn build_signed_receipt(
@@ -507,9 +551,25 @@ fn report_signature_material(entry: &BounceLogEntry) -> String {
     parts.join("|")
 }
 
+/// Extracts the role claim from a stub token string
+/// (`"stub-token:role=<role>;installation_id=<id>"`).
+///
+/// Returns `"ci-writer"` (minimum-privilege default) when the token is
+/// absent, malformed, or contains an unrecognised role value.
+fn extract_role_from_token(token: &str) -> &str {
+    token
+        .strip_prefix("stub-token:role=")
+        .and_then(|claims| claims.split(';').next())
+        .filter(|role| matches!(*role, "admin" | "ci-writer" | "auditor"))
+        .unwrap_or("ci-writer")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::Request;
+    use tower::util::ServiceExt;
 
     const TEST_GOVERNOR_SIGNING_KEY_SEED: [u8; 32] = [
         0x23, 0x70, 0xde, 0x11, 0x87, 0xe8, 0xd5, 0x7e, 0x42, 0x3d, 0x3e, 0xe0, 0x38, 0x64, 0x2c,
@@ -564,54 +624,81 @@ mod tests {
         }
     }
 
-    #[test]
-    fn policy_drift_detected_returns_403() {
+    fn test_app() -> Router {
+        build_router(AppState {
+            active_installations: Arc::new(DashMap::new()),
+            github_webhook_secret: Some(Arc::new(b"dummy-webhook-secret".to_vec())),
+        })
+    }
+
+    fn sign_payload(secret: &[u8], payload: &[u8]) -> String {
+        let mut mac = HmacSha256::new_from_slice(secret).unwrap();
+        mac.update(payload);
+        format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
+    }
+
+    async fn response_body(response: Response) -> Vec<u8> {
+        to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .to_vec()
+    }
+
+    #[tokio::test]
+    async fn policy_drift_detected_returns_403() {
         std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "expected-hash-abc123");
-        let req_body = serde_json::to_vec(&serde_json::json!({
-            "repo": "owner/repo",
-            "pr": 1,
-            "head_sha": "deadbeef",
-            "policy_hash": "wrong-hash",
-        }))
-        .unwrap();
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/analysis-token".to_string(),
-            body: req_body,
-        };
-        let response = route_request(&request);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 1,
+                    "head_sha": "deadbeef",
+                    "policy_hash": "wrong-hash",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
-            response.status, 403,
-            "mismatched policy_hash must yield HTTP 403"
+            payload["error"],
+            "policy_drift_detected: policy_hash in request does not match JANITOR_GOV_EXPECTED_POLICY — token denied"
         );
-        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(payload["error"], "policy_drift_detected");
-        // Cleanup env so other tests are not affected.
         std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
     }
 
-    #[test]
-    fn matching_policy_hash_returns_token() {
+    #[tokio::test]
+    async fn matching_policy_hash_returns_token() {
         std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "correct-hash");
-        let req_body = serde_json::to_vec(&serde_json::json!({
-            "repo": "owner/repo",
-            "pr": 2,
-            "head_sha": "cafebabe",
-            "policy_hash": "correct-hash",
-        }))
-        .unwrap();
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/analysis-token".to_string(),
-            body: req_body,
-        };
-        let response = route_request(&request);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 2,
+                    "head_sha": "cafebabe",
+                    "policy_hash": "correct-hash",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
-            response.status, 200,
-            "matching policy_hash must yield HTTP 200"
+            payload["token"],
+            "stub-token:role=ci-writer;installation_id=0"
         );
-        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(payload["token"], "stub-token:role=ci-writer");
         std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
     }
 
@@ -625,189 +712,234 @@ mod tests {
         assert_ne!(first.chained_hash, second.chained_hash);
     }
 
-    #[test]
-    fn report_route_returns_inclusion_proof() {
+    #[tokio::test]
+    async fn report_route_returns_inclusion_proof() {
         set_test_signing_key();
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/report".to_string(),
-            body: serde_json::to_vec(&sample_entry()).unwrap(),
-        };
-        let response = route_request(&request);
-        assert_eq!(response.status, 200);
-        let payload: ReportResponse = serde_json::from_slice(&response.body).unwrap();
-        // sequence_index is a global counter shared across tests in this process;
-        // assert only that it is a plausible u64 (not a specific value).
-        assert!(
-            payload.inclusion_proof.sequence_index < 1_000,
-            "sequence_index must be a small monotonic value"
-        );
-        assert!(
-            !payload.inclusion_proof.chained_hash.is_empty(),
-            "chained_hash must be present"
-        );
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&sample_entry()).unwrap()))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: ReportResponse =
+            serde_json::from_slice(&response_body(response).await).unwrap();
+        assert!(payload.inclusion_proof.sequence_index < 1_000);
+        assert!(!payload.inclusion_proof.chained_hash.is_empty());
         payload.decision_receipt.verify().unwrap();
         assert_eq!(payload.decision_receipt.receipt.repo_slug, "owner/repo");
     }
 
     #[test]
     fn extract_role_from_token_returns_correct_role() {
-        assert_eq!(extract_role_from_token("stub-token:role=admin"), "admin");
         assert_eq!(
-            extract_role_from_token("stub-token:role=ci-writer"),
+            extract_role_from_token("stub-token:role=admin;installation_id=99"),
+            "admin"
+        );
+        assert_eq!(
+            extract_role_from_token("stub-token:role=ci-writer;installation_id=7"),
             "ci-writer"
         );
         assert_eq!(
-            extract_role_from_token("stub-token:role=auditor"),
+            extract_role_from_token("stub-token:role=auditor;installation_id=1"),
             "auditor"
         );
-        // Unknown role falls back to ci-writer.
         assert_eq!(
-            extract_role_from_token("stub-token:role=superuser"),
+            extract_role_from_token("stub-token:role=superuser;installation_id=4"),
             "ci-writer"
         );
-        // Malformed token falls back to ci-writer.
         assert_eq!(extract_role_from_token("stub-analysis-token"), "ci-writer");
         assert_eq!(extract_role_from_token(""), "ci-writer");
     }
 
-    #[test]
-    fn auditor_token_cannot_post_report_returns_403() {
+    #[tokio::test]
+    async fn auditor_token_cannot_post_report_returns_403() {
         set_test_signing_key();
         let mut entry = sample_entry();
-        entry.analysis_token = Some("stub-token:role=auditor".to_string());
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/report".to_string(),
-            body: serde_json::to_vec(&entry).unwrap(),
-        };
-        let response = route_request(&request);
+        entry.analysis_token = Some("stub-token:role=auditor;installation_id=0".to_string());
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&entry).unwrap()))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
-            response.status, 403,
-            "auditor token must be rejected with HTTP 403"
+            payload["error"],
+            "forbidden: auditor tokens cannot post bounce reports — use a ci-writer or admin token"
         );
-        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(payload["error"], "forbidden");
     }
 
-    #[test]
-    fn ci_writer_token_can_post_report_returns_200() {
+    #[tokio::test]
+    async fn ci_writer_token_can_post_report_returns_200() {
         set_test_signing_key();
         let mut entry = sample_entry();
-        entry.analysis_token = Some("stub-token:role=ci-writer".to_string());
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/report".to_string(),
-            body: serde_json::to_vec(&entry).unwrap(),
-        };
-        let response = route_request(&request);
-        assert_eq!(response.status, 200, "ci-writer token must be accepted");
+        entry.analysis_token = Some("stub-token:role=ci-writer;installation_id=0".to_string());
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&entry).unwrap()))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[test]
-    fn analysis_token_endpoint_embeds_role_in_token() {
-        let req_body = serde_json::to_vec(&serde_json::json!({
-            "repo": "owner/repo",
-            "pr": 3,
-            "head_sha": "deadbeef",
-            "role": "auditor",
-        }))
-        .unwrap();
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/analysis-token".to_string(),
-            body: req_body,
-        };
-        let response = route_request(&request);
-        assert_eq!(response.status, 200, "token request must return 200");
-        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    #[tokio::test]
+    async fn analysis_token_endpoint_embeds_role_in_token() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 3,
+                    "head_sha": "deadbeef",
+                    "role": "auditor",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
-            payload["token"], "stub-token:role=auditor",
-            "issued token must encode requested role"
+            payload["token"],
+            "stub-token:role=auditor;installation_id=0"
         );
     }
 
-    #[test]
-    fn analysis_token_defaults_to_ci_writer_when_role_absent() {
-        let req_body = serde_json::to_vec(&serde_json::json!({
-            "repo": "owner/repo",
-            "pr": 4,
-            "head_sha": "cafecafe",
-        }))
-        .unwrap();
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/analysis-token".to_string(),
-            body: req_body,
-        };
-        let response = route_request(&request);
+    #[tokio::test]
+    async fn analysis_token_defaults_to_ci_writer_when_role_absent() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 4,
+                    "head_sha": "cafecafe",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
-            response.status, 200,
-            "token request without role must return 200"
-        );
-        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(
-            payload["token"], "stub-token:role=ci-writer",
-            "token without explicit role must default to ci-writer"
+            payload["token"],
+            "stub-token:role=ci-writer;installation_id=0"
         );
     }
 
-    #[test]
-    fn verify_suppressions_returns_only_authorized_ids() {
-        let request = HttpRequest {
-            method: "POST".to_string(),
-            path: "/v1/verify-suppressions".to_string(),
-            body: serde_json::to_vec(&VerifySuppressionsRequest {
-                suppression_ids: vec![
-                    "waive-eval".to_string(),
-                    "rogue-waiver".to_string(),
-                    "approved-php-sqli".to_string(),
-                ],
-            })
-            .unwrap(),
-        };
-        let response = route_request(&request);
-        assert_eq!(response.status, 200);
-        let payload: VerifySuppressionsResponse = serde_json::from_slice(&response.body).unwrap();
+    #[tokio::test]
+    async fn verify_suppressions_returns_only_authorized_ids() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/verify-suppressions")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&VerifySuppressionsRequest {
+                    suppression_ids: vec![
+                        "waive-eval".to_string(),
+                        "rogue-waiver".to_string(),
+                        "approved-php-sqli".to_string(),
+                    ],
+                })
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: VerifySuppressionsResponse =
+            serde_json::from_slice(&response_body(response).await).unwrap();
         assert_eq!(
             payload.approved_ids,
             vec!["waive-eval".to_string(), "approved-php-sqli".to_string()]
         );
     }
-}
 
-/// Extracts the role claim from a stub token string (`"stub-token:role=<role>"`).
-///
-/// Returns `"ci-writer"` (minimum-privilege default) when the token is
-/// absent, malformed, or contains an unrecognised role value.
-fn extract_role_from_token(token: &str) -> &str {
-    token
-        .strip_prefix("stub-token:role=")
-        .filter(|r| matches!(*r, "admin" | "ci-writer" | "auditor"))
-        .unwrap_or("ci-writer")
-}
+    #[tokio::test]
+    async fn github_webhook_accepts_valid_signature_and_registers_installation() {
+        let state = AppState {
+            active_installations: Arc::new(DashMap::new()),
+            github_webhook_secret: Some(Arc::new(b"dummy-webhook-secret".to_vec())),
+        };
+        let app = build_router(state.clone());
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "action": "created",
+            "installation": {
+                "id": 4242
+            }
+        }))
+        .unwrap();
+        let signature = sign_payload(b"dummy-webhook-secret", &payload);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/github/webhook")
+            .header("content-type", "application/json")
+            .header("x-hub-signature-256", signature)
+            .body(Body::from(payload))
+            .unwrap();
 
-fn json_response(status: u16, value: serde_json::Value) -> HttpResponse {
-    let body =
-        serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"error\":\"serialization\"}".to_vec());
-    HttpResponse { status, body }
-}
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(state.active_installations.contains_key(&4242));
+    }
 
-fn write_http_response(stream: &mut TcpStream, status: u16, body: &[u8]) -> anyhow::Result<()> {
-    let reason = match status {
-        200 => "OK",
-        400 => "Bad Request",
-        403 => "Forbidden",
-        404 => "Not Found",
-        _ => "Internal Server Error",
-    };
-    write!(
-        stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )
-    .context("writing response header")?;
-    stream.write_all(body).context("writing response body")?;
-    stream.flush().context("flushing response")?;
-    Ok(())
+    #[tokio::test]
+    async fn github_webhook_rejects_bad_signature_with_401() {
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "action": "created",
+            "installation": {
+                "id": 999
+            }
+        }))
+        .unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/github/webhook")
+            .header("content-type", "application/json")
+            .header("x-hub-signature-256", "sha256=deadbeef")
+            .body(Body::from(payload))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn analysis_token_rejects_unprovisioned_installation() {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 5,
+                    "head_sha": "feedface",
+                    "installation_id": 12345,
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
 }
