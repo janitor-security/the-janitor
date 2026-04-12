@@ -5,6 +5,33 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — Omni-Strike Consolidation & Garbage Collection Audit (v10.1.0-alpha.9)
+
+**Directive:** Phase 1 — threat intel GC audit (OSV ZIP / wisdom download disk artifact hygiene). Phase 2 — justfile omni-strike consolidation (`run-gauntlet` + `hyper-gauntlet` deleted; `just strike` is the sole batch command). Phase 3 — dead-code audit + Innovation Log rewrite (top-3 DoD/Enterprise features). Phase 4 — bump + release.
+
+**Files modified:**
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.8` → `10.1.0-alpha.9`.
+- `justfile` *(modified)* — `run-gauntlet` and `hyper-gauntlet` recipes deleted. `just strike` is now the canonical single-repo and batch orchestration command. Both deleted recipes were superseded: `generate_client_package.sh` (invoked by `just strike`) already uses `gauntlet-runner --hyper` (libgit2 packfile mode, zero `gh pr diff` subshells).
+- `RUNBOOK.md` *(modified)* — Quick reference table purged of deleted recipes. Section 6 rewritten as "Threat Intel Synchronization" documenting `janitor update-wisdom` and `janitor update-slopsquat`. Section 10a "Consolidation note" replaced with accurate single-command framing. Section 12 "Remote Surveillance" updated to `just strike` invocation examples.
+- `docs/INNOVATION_LOG.md` *(modified)* — Purged: P1-5 (Zig/Nim taint spine — low commercial urgency), P2-3 (Wasm Rule Marketplace — ecosystem play, deferred). Rewrote as top-3 DoD/Enterprise contract-closing features: P0-1 Governor RBAC, P1-1 ASPM Jira Sync, P2-6 Post-Quantum CT for Wasm Rules.
+
+**Phase 1 audit finding — GC CLEAN:**
+- `fetch_osv_slopsquat_corpus`: ZIPs downloaded entirely in-memory via `read_to_vec()` → `Vec<u8>`; never written to disk. Zero disk artifacts on error path.
+- `cmd_update_wisdom_with_urls`: wisdom/KEV bytes also in-memory; final write via `write_atomic_bytes` (`.tmp` → `rename`).
+- No code changes required. GC is already correct by design.
+
+**Phase 3 dead-code audit finding — ALL CLEAN:**
+- `#[allow(dead_code)] YAML_K8S_WILDCARD_HOSTS_QUERY` — documented architectural reference (tree-sitter predicate limitation).
+- `#[allow(dead_code)] Request.jsonrpc` — protocol-required field, not accessed in dispatch.
+- `#[allow(dead_code)] HotRegistry.path` / `HotRegistry::reload()` — forward-declared hot-swap API.
+- All annotations are legitimate. Zero removals.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+---
+
 ## 2026-04-11 — Omnipresent Firewall & OSV Bulk Ingestion (v10.1.0-alpha.8)
 
 **Directive:** OSV bulk ZIP ingestion fix, CodeQL terminal output amputation, P2-4 MCP IDE Linter (`janitor_lint_file`), P2-5 SBOM Drift Daemon (`janitor watch-sbom`), VS Code extension scaffold.

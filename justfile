@@ -148,56 +148,7 @@ fast-release version:
 	just deploy-docs
 	echo "💀 Release v{{version}} deployed."
 
-# 5. MULTI-REPO GAUNTLET
-# Deterministic Rust orchestrator replacing ultimate_gauntlet.sh.
-# Reads gauntlet_targets.txt (one owner/repo per line), bounces PRs in parallel
-# within each repo (hardware-aware concurrency: auto-detected from system RAM),
-# then generates a global PDF + CSV export.
-#
-# Concurrency tiers (auto-detected via --concurrency 0):
-#   < 8 GiB RAM  → 2 workers (Safety Mode)
-#   8–16 GiB     → 4 workers
-#   16–32 GiB    → 8 workers
-#   > 32 GiB     → logical CPU count (Aggressive Mode)
-#
-# Usage:
-#   just run-gauntlet                             # defaults from gauntlet_targets.txt
-#   just run-gauntlet --pr-limit 50               # 50 PRs per repo
-#   just run-gauntlet --pr-limit 5000 --timeout 60
-#   just run-gauntlet --targets my_repos.txt --out-dir ~/Desktop
-#   just run-gauntlet --concurrency 4             # manual override
-#
-run-gauntlet *ARGS:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	if [[ -z "${IN_NIX_SHELL:-}" ]] && command -v nix &>/dev/null; then
-	    echo "↳ Entering Nix hermetic shell..."
-	    exec nix develop --command just run-gauntlet {{ARGS}}
-	fi
-	cargo build --release -p gauntlet-runner
-	./target/release/gauntlet-runner {{ARGS}}
-
-# Hyper-Gauntlet — libgit2 O(1) network-bypass global audit across all targets.
-#
-# Clones each repo once, populates refs/remotes/origin/pr/*, then
-# scores every PR directly from the packfile — zero `gh pr diff` subshells.
-#
-# Usage:
-#   just hyper-gauntlet                     # 5000 PRs per repo (default)
-#   just hyper-gauntlet --pr-limit 500      # custom limit
-#   just hyper-gauntlet --targets my.txt    # custom targets file
-#
-hyper-gauntlet *ARGS:
-	#!/usr/bin/env bash
-	set -euo pipefail
-	if [[ -z "${IN_NIX_SHELL:-}" ]] && command -v nix &>/dev/null; then
-	    echo "↳ Entering Nix hermetic shell..."
-	    exec nix develop --command just hyper-gauntlet {{ARGS}}
-	fi
-	cargo build --release -p gauntlet-runner -p cli
-	./target/release/gauntlet-runner --hyper --pr-limit 5000 {{ARGS}}
-
-# 6. SINGLE-REPO FORENSIC STRIKE
+# 5. SINGLE-REPO FORENSIC STRIKE
 #
 # Runs the full 7-artefact forensic pipeline against one repository:
 #   PDF intelligence report + 16-col CSV audit trail + aggregate JSON
