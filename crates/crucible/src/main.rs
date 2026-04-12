@@ -485,6 +485,13 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         must_intercept: true,
         desc_fragment: Some("obfuscated_payload_execution"),
     },
+    Entry {
+        name: "JS/obfuscated child_process exec — INTERCEPT",
+        lang: "js",
+        source: b"const cp = require('child' + '_process'); const blob = 'Qz9Lm4Nk8Vh2Yr7Pw1Sd6Tf0Ua3Xe8Bj5Kp9Rv2Cm7Hs8Wq4Zd1Jn6Mx0Kb3Yt5P'; cp['ex' + 'ec'](blob);\n",
+        must_intercept: true,
+        desc_fragment: Some("obfuscated_payload_execution"),
+    },
 
     // ── Supply Chain Integrity ────────────────────────────────────────────
     Entry {

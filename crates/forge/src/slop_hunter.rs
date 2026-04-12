@@ -668,6 +668,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
             f.extend(find_jsx_dangerous_html_slop(eng, parsed));
+            f.extend(find_js_obfuscated_exec_slop(eng, parsed));
             f.extend(find_js_deobfuscated_sink_payloads(eng, parsed));
             f.extend(find_js_phantom_payload_slop(eng, parsed));
             f.extend(find_js_slopsquat_imports(eng, parsed));
@@ -1606,6 +1607,31 @@ fn find_js_deobfuscated_sink_payloads(
     findings
 }
 
+fn find_js_obfuscated_exec_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    if !(source.windows(7).any(|w| w == b"require")
+        || source.windows(10).any(|w| w == b"globalThis")
+        || source.windows(5).any(|w| w == b"child")
+        || source.windows(6).any(|w| w == b"spawn(")
+        || source.windows(11).any(|w| w == b"postinstall")
+        || source.contains(&b'['))
+    {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let mut aliases = HashMap::new();
+    collect_js_child_process_aliases(tree.root_node(), source, &mut aliases);
+    let mut findings = Vec::new();
+    find_js_obfuscated_exec_calls(tree.root_node(), source, &aliases, &mut findings);
+    findings
+}
+
 fn find_js_phantom_payload_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     let source = parsed.source;
     if !source.windows(2).any(|w| w == b"if") {
@@ -1646,6 +1672,228 @@ fn find_js_deobfuscated_sinks(node: Node<'_>, source: &[u8], findings: &mut Vec<
     for child in node.children(&mut cursor) {
         find_js_deobfuscated_sinks(child, source, findings);
     }
+}
+
+fn collect_js_child_process_aliases(
+    node: Node<'_>,
+    source: &[u8],
+    aliases: &mut HashMap<String, bool>,
+) {
+    if matches!(node.kind(), "variable_declarator" | "pair_pattern") {
+        let name = node
+            .child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("left"))
+            .and_then(|n| n.utf8_text(source).ok());
+        let value = node
+            .child_by_field_name("value")
+            .or_else(|| node.child_by_field_name("right"))
+            .or_else(|| second_named_child(node));
+        if let (Some(name), Some(value)) = (name, value) {
+            if js_expression_resolves_child_process(value, source, aliases) {
+                aliases.insert(name.to_owned(), true);
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_js_child_process_aliases(child, source, aliases);
+    }
+}
+
+fn find_js_obfuscated_exec_calls(
+    node: Node<'_>,
+    source: &[u8],
+    aliases: &HashMap<String, bool>,
+    findings: &mut Vec<SlopFinding>,
+) {
+    if node.kind() == "call_expression" {
+        if let Some(function) = node.child_by_field_name("function") {
+            if let Some(finding) = js_obfuscated_exec_finding(node, function, source, aliases) {
+                findings.push(finding);
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_js_obfuscated_exec_calls(child, source, aliases, findings);
+    }
+}
+
+fn js_obfuscated_exec_finding(
+    call_node: Node<'_>,
+    function: Node<'_>,
+    source: &[u8],
+    aliases: &HashMap<String, bool>,
+) -> Option<SlopFinding> {
+    let mut obfuscated = false;
+    let mut child_process_context = false;
+    let sink = js_expression_resolves_exec_sink(
+        function,
+        source,
+        aliases,
+        &mut obfuscated,
+        &mut child_process_context,
+    )?;
+    if !matches!(sink.as_str(), "exec" | "spawn" | "execsync") {
+        return None;
+    }
+    let context = js_obfuscated_exec_context(source, child_process_context)?;
+    if !obfuscated {
+        return None;
+    }
+    Some(SlopFinding {
+        start_byte: call_node.start_byte(),
+        end_byte: call_node.end_byte(),
+        description: format!(
+            "security:obfuscated_payload_execution — JavaScript resolves `{}` through folded string fragments within {}; adversarial sink indirection is hiding payload execution",
+            if child_process_context {
+                format!("child_process.{sink}")
+            } else {
+                sink.clone()
+            },
+            context
+        ),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::KevCritical,
+    })
+}
+
+fn js_obfuscated_exec_context(source: &[u8], child_process_context: bool) -> Option<String> {
+    if source.windows(11).any(|w| w == b"postinstall") {
+        return Some("a `postinstall` execution path".to_owned());
+    }
+    if child_process_context {
+        return Some("a `child_process` execution path".to_owned());
+    }
+    if let Some((entropy, len)) = suspicious_dead_branch_string_literal(source) {
+        return Some(format!(
+            "a high-entropy staging block ({entropy:.2} bits/symbol, {len} chars)"
+        ));
+    }
+    None
+}
+
+fn js_expression_resolves_exec_sink(
+    node: Node<'_>,
+    source: &[u8],
+    aliases: &HashMap<String, bool>,
+    obfuscated: &mut bool,
+    child_process_context: &mut bool,
+) -> Option<String> {
+    if let Some(text) = js_stringish_text(node, source) {
+        let lower = text.to_ascii_lowercase();
+        if matches!(lower.as_str(), "exec" | "spawn" | "execsync") {
+            if fold_string_concat(node, source).is_some() || node.kind() == "subscript_expression" {
+                *obfuscated = true;
+            }
+            return Some(lower);
+        }
+        if lower == "child_process" {
+            *child_process_context = true;
+            if fold_string_concat(node, source).is_some() {
+                *obfuscated = true;
+            }
+        }
+    }
+
+    match node.kind() {
+        "subscript_expression" | "member_expression" => {
+            let object = node
+                .child_by_field_name("object")
+                .or_else(|| first_named_child(node))?;
+            let property = node
+                .child_by_field_name("property")
+                .or_else(|| node.child_by_field_name("index"))
+                .or_else(|| second_named_child(node))?;
+            let object_is_child_process =
+                js_expression_resolves_child_process(object, source, aliases);
+            let property_text = js_stringish_text(property, source)?;
+            let lower = property_text.to_ascii_lowercase();
+            if object_is_child_process {
+                *child_process_context = true;
+            }
+            if fold_string_concat(property, source).is_some()
+                || fold_string_concat(object, source).is_some()
+                || node.kind() == "subscript_expression"
+            {
+                *obfuscated = true;
+            }
+            matches!(lower.as_str(), "exec" | "spawn" | "execsync").then_some(lower)
+        }
+        _ => None,
+    }
+}
+
+fn js_expression_resolves_child_process(
+    node: Node<'_>,
+    source: &[u8],
+    aliases: &HashMap<String, bool>,
+) -> bool {
+    if let Some(text) = js_stringish_text(node, source) {
+        if text.eq_ignore_ascii_case("child_process") {
+            return true;
+        }
+        if aliases.contains_key(&text) {
+            return true;
+        }
+    }
+
+    match node.kind() {
+        "call_expression" => {
+            let Some(function) = node.child_by_field_name("function") else {
+                return false;
+            };
+            let function_text = function.utf8_text(source).unwrap_or("");
+            if function_text != "require" {
+                return false;
+            }
+            let Some(arguments) = node.child_by_field_name("arguments") else {
+                return false;
+            };
+            let first_arg = arguments.named_children(&mut arguments.walk()).next();
+            first_arg
+                .and_then(|arg| js_stringish_text(arg, source))
+                .is_some_and(|text| text.eq_ignore_ascii_case("child_process"))
+        }
+        "subscript_expression" | "member_expression" => {
+            let property = node
+                .child_by_field_name("property")
+                .or_else(|| node.child_by_field_name("index"));
+            property
+                .and_then(|property| js_stringish_text(property, source))
+                .is_some_and(|text| text.eq_ignore_ascii_case("child_process"))
+        }
+        _ => false,
+    }
+}
+
+fn js_stringish_text(node: Node<'_>, source: &[u8]) -> Option<String> {
+    if let Some(folded) = fold_string_concat(node, source) {
+        return Some(folded);
+    }
+    let text = node.utf8_text(source).ok()?.trim();
+    let stripped = text
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .or_else(|| text.strip_prefix('"').and_then(|s| s.strip_suffix('"')))
+        .or_else(|| text.strip_prefix('`').and_then(|s| s.strip_suffix('`')))
+        .unwrap_or(text);
+    Some(stripped.to_owned())
+}
+
+fn first_named_child(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    let mut children = node.named_children(&mut cursor);
+    children.next()
+}
+
+fn second_named_child(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    let mut children = node.named_children(&mut cursor);
+    children.next()?;
+    children.next()
 }
 
 fn walk_js_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
@@ -5454,6 +5702,28 @@ mod tests {
                 .description
                 .contains("security:obfuscated_payload_execution")),
             "eval(atob(...)) must fire obfuscated payload interception"
+        );
+    }
+
+    #[test]
+    fn test_js_obfuscated_child_process_exec_fires() {
+        let src = br#"const cp = require("child" + "_process"); const blob = "Qz9Lm4Nk8Vh2Yr7Pw1Sd6Tf0Ua3Xe8Bj5Kp9Rv2Cm7Hs8Wq4Zd1Jn6Mx0Kb3Yt5P"; cp["ex" + "ec"](blob);"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings.iter().any(|f| f
+                .description
+                .contains("security:obfuscated_payload_execution")),
+            "obfuscated child_process exec must fire payload execution interception"
+        );
+    }
+
+    #[test]
+    fn test_js_plain_child_process_exec_stays_silent() {
+        let src = br#"const cp = require("child_process"); cp.exec("git status");"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings.is_empty(),
+            "plain child_process.exec must not trip the obfuscated execution interceptor"
         );
     }
 

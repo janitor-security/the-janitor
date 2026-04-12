@@ -3828,17 +3828,13 @@ probable AI context-collapse (hallucinated function reference)"
         effective_gate,
         &policy,
     );
-    if policy.jira.is_configured() {
-        for finding in &score.structured_findings {
-            if jira::severity_is_kev_or_higher(finding) {
-                if let Err(_e) = jira::spawn_jira_ticket(&policy.jira, finding) {
-                    report::append_diag_log(
-                        &janitor_dir,
-                        "WARN jira ticket sync failed — error details redacted",
-                    );
-                }
-            }
-        }
+    if let Err(_e) =
+        jira::sync_findings_to_jira(&policy.jira, &score.structured_findings, &janitor_dir)
+    {
+        report::append_diag_log(
+            &janitor_dir,
+            "WARN jira sync pipeline failed — error details redacted",
+        );
     }
     report::append_bounce_log(&janitor_dir, &log_entry);
     let verdict = common::scm::StatusVerdict::bounce(

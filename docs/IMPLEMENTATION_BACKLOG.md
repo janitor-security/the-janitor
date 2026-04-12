@@ -1740,3 +1740,8 @@ provider-neutral SCM context extraction, and roll the portability work into the
 
 **Audit**: `cargo fmt --check` ✓ | `cargo clippy -- -D warnings` ✓ | `cargo test --workspace -- --test-threads=1` ✓ (all pass)
 **Release**: `just fast-release 10.1.0-alpha.1`
+## 2026-04-12 — Supply Chain Deep Inspection & Resiliency Proving (v10.1.0-alpha.13)
+
+- Extended the Sha1-Hulud interceptor to catch obfuscated JavaScript / TypeScript `child_process` execution chains where folded string fragments resolve to `exec`, `spawn`, `execSync`, or `child_process` within a suspicious execution context.
+- Centralized Jira fail-open synchronization in `crates/cli/src/jira.rs`, added deterministic warning emission plus diagnostic logging, and proved `HTTP 500`, `HTTP 401`, and timeout failures do not abort bounce execution.
+- Added Crucible coverage for obfuscated `child_process` payload execution and promoted the deferred GitHub App OAuth Marketplace Integration work item to top-priority `P1` in the innovation log.
