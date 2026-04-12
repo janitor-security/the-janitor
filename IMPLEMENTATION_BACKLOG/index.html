@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)
@@ -1393,6 +1402,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)
@@ -2140,6 +2158,19 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-11-camoleak-prompt-injection-interceptor-v1010-alpha10">2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)</h2>
+<p><strong>Directive:</strong> Intercept hidden Markdown/PR-body prompt-injection payloads exploiting invisible HTML comments and hidden spans, wire the detector into PR metadata and Markdown patch scoring, add Crucible regression coverage, verify under single-threaded tests, and prepare the <code>10.1.0-alpha.10</code> release.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/forge/src/metadata.rs</code> <em>(modified)</em> — added <code>detect_ai_prompt_injection(text)</code>; scans hidden HTML comments and hidden <code>&lt;div&gt;</code> / <code>&lt;span&gt;</code> blocks for imperative AI hijack heuristics (<code>ignore previous instructions</code>, <code>system prompt</code>, <code>search for</code>, <code>encode in base16</code>, <code>exfiltrate</code>, <code>AWS_ACCESS_KEY</code>); emits <code>security:ai_prompt_injection</code> at <code>KevCritical</code>; added deterministic true-positive/true-negative unit tests.
+- <code>crates/forge/src/slop_filter.rs</code> <em>(modified)</em> — Markdown patch blobs now flow through <code>detect_ai_prompt_injection</code>; added <code>check_ai_prompt_injection</code> helper so PR metadata findings increment <code>antipatterns_found</code>, <code>antipattern_score</code>, and <code>antipattern_details</code>; added unit coverage for PR-body scoring and Markdown patch interception.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — both patch mode and git-native mode now scan <code>pr_body</code> for hidden prompt-injection payloads before gate evaluation.
+- <code>crates/crucible/src/main.rs</code> <em>(modified)</em> — added CamoLeak true-positive and benign-comment true-negative fixtures to the bounce gallery.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.9</code> → <code>10.1.0-alpha.10</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — appended this session ledger.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> — pending execution below.
+- <code>just audit</code> — pending execution below.
+- <code>just fast-release 10.1.0-alpha.10</code> — pending execution below.</p>
 <h2 id="2026-04-11-omni-strike-consolidation-garbage-collection-audit-v1010-alpha9">2026-04-11 — Omni-Strike Consolidation &amp; Garbage Collection Audit (v10.1.0-alpha.9)</h2>
 <p><strong>Directive:</strong> Phase 1 — threat intel GC audit (OSV ZIP / wisdom download disk artifact hygiene). Phase 2 — justfile omni-strike consolidation (<code>run-gauntlet</code> + <code>hyper-gauntlet</code> deleted; <code>just strike</code> is the sole batch command). Phase 3 — dead-code audit + Innovation Log rewrite (top-3 DoD/Enterprise features). Phase 4 — bump + release.</p>
 <p><strong>Files modified:</strong>

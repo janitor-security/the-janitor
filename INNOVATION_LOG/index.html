@@ -677,6 +677,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-11-audit-delta" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Audit Delta
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -812,6 +821,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-11-audit-delta" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-11 — Audit Delta
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -918,6 +936,11 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 <li><code>janitor.toml</code>: <code>[[wasm_publishers]]</code> table with publisher name + ML-DSA
     verifying key.</li>
 <li>Crucible: <code>wasm_rule_rejected_without_valid_pqc_signature</code> entry.</li>
+</ul>
+<hr />
+<h2 id="2026-04-11-audit-delta">2026-04-11 — Audit Delta</h2>
+<ul>
+<li>Closed structural gap: PR metadata and Markdown review surfaces previously lacked a dedicated hidden-block scanner for LLM-only prompt-injection payloads. <code>security:ai_prompt_injection</code> now covers invisible HTML comments and hidden spans/divs. Remaining expansion path: extend the same hidden-block heuristic to issue comments fetched via SCM API ingestion so review-thread payloads detonate before reaching downstream AI triage.</li>
 </ul>
 
 
