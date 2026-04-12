@@ -1377,6 +1377,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-12-supply-chain-deep-inspection-resiliency-proving-v1010-alpha13" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Supply Chain Deep Inspection &amp; Resiliency Proving (v10.1.0-alpha.13)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2169,6 +2178,15 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-12-supply-chain-deep-inspection-resiliency-proving-v1010-alpha13" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Supply Chain Deep Inspection &amp; Resiliency Proving (v10.1.0-alpha.13)
+    </span>
+  </a>
   
 </li>
       
@@ -3605,6 +3623,12 @@ provider-neutral SCM context extraction, and roll the portability work into the
 </ul>
 <p><strong>Audit</strong>: <code>cargo fmt --check</code> ✓ | <code>cargo clippy -- -D warnings</code> ✓ | <code>cargo test --workspace -- --test-threads=1</code> ✓ (all pass)
 <strong>Release</strong>: <code>just fast-release 10.1.0-alpha.1</code></p>
+<h2 id="2026-04-12-supply-chain-deep-inspection-resiliency-proving-v1010-alpha13">2026-04-12 — Supply Chain Deep Inspection &amp; Resiliency Proving (v10.1.0-alpha.13)</h2>
+<ul>
+<li>Extended the Sha1-Hulud interceptor to catch obfuscated JavaScript / TypeScript <code>child_process</code> execution chains where folded string fragments resolve to <code>exec</code>, <code>spawn</code>, <code>execSync</code>, or <code>child_process</code> within a suspicious execution context.</li>
+<li>Centralized Jira fail-open synchronization in <code>crates/cli/src/jira.rs</code>, added deterministic warning emission plus diagnostic logging, and proved <code>HTTP 500</code>, <code>HTTP 401</code>, and timeout failures do not abort bounce execution.</li>
+<li>Added Crucible coverage for obfuscated <code>child_process</code> payload execution and promoted the deferred GitHub App OAuth Marketplace Integration work item to top-priority <code>P1</code> in the innovation log.</li>
+</ul>
 
 
 

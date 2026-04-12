@@ -640,6 +640,15 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#p1-0-github-app-oauth-marketplace-integration-governor" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-0: GitHub App OAuth Marketplace Integration (Governor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
       P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]
@@ -793,6 +802,15 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#p1-0-github-app-oauth-marketplace-integration-governor" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-0: GitHub App OAuth Marketplace Integration (Governor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
       P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]
@@ -880,6 +898,12 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 - <code>crates/gov/src/main.rs</code>: <code>role</code> claim in <code>AnalysisTokenRequest</code>; token encodes role (<code>"stub-token:role=&lt;role&gt;"</code>); <code>/v1/report</code> enforces RBAC — <code>auditor</code> tokens return HTTP 403; 5 new tests.</p>
 <hr />
 <h2 id="p1-devsecops-workflow-integration">P1 — DevSecOps Workflow Integration</h2>
+<h3 id="p1-0-github-app-oauth-marketplace-integration-governor">P1-0: GitHub App OAuth Marketplace Integration (Governor)</h3>
+<ul>
+<li><strong>Class</strong>: Governor Infrastructure / Enterprise Distribution</li>
+<li><strong>Priority</strong>: Top P1 for the next infrastructure sprint.</li>
+<li><strong>Directive</strong>: Defer implementation from the <code>v10.1.0-alpha.13</code> release train and land it in the dedicated Governor sprint with marketplace-safe OAuth flow, installation provenance, and tenant-bound token issuance.</li>
+</ul>
 <h3 id="p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12">P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]</h3>
 <p>Implemented in v10.1.0-alpha.12:
 - <code>crates/common/src/policy.rs</code>: <code>[jira]</code> TOML support via <code>JiraConfig { url, project_key }</code>.
