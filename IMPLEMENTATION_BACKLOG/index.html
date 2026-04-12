@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)
@@ -1411,6 +1420,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)
@@ -2176,6 +2194,20 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-12-aspm-jira-sync-final-dashboard-scrub-v1010-alpha12">2026-04-12 — ASPM Jira Sync &amp; Final Dashboard Scrub (v10.1.0-alpha.12)</h2>
+<p><strong>Directive:</strong> Exorcise the final CodeQL aggregate-count false positive, implement enterprise Jira ticket synchronization for <code>KevCritical</code> findings, verify under single-threaded tests, and cut <code>10.1.0-alpha.12</code> without rewriting prior release history.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — added the exact CodeQL suppression comment above the antipattern-count dashboard print and wrapped the logged count with <code>std::hint::black_box(score.antipatterns_found)</code>; wired fail-safe Jira synchronization for <code>KevCritical</code> structured findings after bounce analysis.
+- <code>crates/cli/src/jira.rs</code> <em>(created)</em> — added Jira REST payload builder, Basic Auth header construction from <code>JANITOR_JIRA_USER</code> / <code>JANITOR_JIRA_TOKEN</code>, <code>spawn_jira_ticket</code>, severity gate helper, and deterministic JSON payload unit coverage.
+- <code>crates/common/src/policy.rs</code> <em>(modified)</em> — added <code>[jira]</code> support via <code>JiraConfig { url, project_key }</code> on <code>JanitorPolicy</code>.
+- <code>crates/common/src/slop.rs</code> <em>(modified)</em> — <code>StructuredFinding</code> now carries optional severity metadata for downstream enterprise routing.
+- <code>crates/forge/src/slop_filter.rs</code> / <code>crates/mcp/src/lib.rs</code> / <code>crates/cli/src/report.rs</code> <em>(modified)</em> — propagated structured finding severity through the pipeline and updated test fixtures.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.11</code> → <code>10.1.0-alpha.12</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — appended this session ledger.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> — pending execution below.
+- <code>just audit</code> — pending execution below.
+- <code>just fast-release 10.1.0-alpha.12</code> — pending execution below.</p>
 <h2 id="2026-04-11-multi-tenant-rbac-threat-intel-verification-v1010-alpha11">2026-04-11 — Multi-Tenant RBAC &amp; Threat Intel Verification (v10.1.0-alpha.11)</h2>
 <p><strong>Directive:</strong> Phase 1 — live-fire threat intel audit (GC hygiene, OSV network fault). Phase 2 — implement Governor RBAC (P0-1). Phase 3 — verification &amp; release.</p>
 <p><strong>Phase 1 audit findings:</strong>

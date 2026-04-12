@@ -640,9 +640,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-aspm-jira-sync-application-security-posture-management" class="md-nav__link">
+  <a href="#p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: ASPM Jira Sync (Application Security Posture Management)
+      P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -793,9 +793,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p1-1-aspm-jira-sync-application-security-posture-management" class="md-nav__link">
+  <a href="#p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12" class="md-nav__link">
     <span class="md-ellipsis">
-      P1-1: ASPM Jira Sync (Application Security Posture Management)
+      P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]
     </span>
   </a>
   
@@ -880,33 +880,12 @@ Authoritative roadmap for post-GA expansion.  All prior entries purged.
 - <code>crates/gov/src/main.rs</code>: <code>role</code> claim in <code>AnalysisTokenRequest</code>; token encodes role (<code>"stub-token:role=&lt;role&gt;"</code>); <code>/v1/report</code> enforces RBAC — <code>auditor</code> tokens return HTTP 403; 5 new tests.</p>
 <hr />
 <h2 id="p1-devsecops-workflow-integration">P1 — DevSecOps Workflow Integration</h2>
-<h3 id="p1-1-aspm-jira-sync-application-security-posture-management">P1-1: ASPM Jira Sync (Application Security Posture Management)</h3>
-<ul>
-<li><strong>Class</strong>: SCM Integration / Workflow Automation</li>
-<li><strong>TAM</strong>: Every enterprise DevSecOps workflow terminates in a ticketing
-  system. Security findings that live only in The Janitor's bounce log are
-  invisible to sprint planning, SLA tracking, and CISO dashboards. Jira
-  integration closes the last-mile gap and is the single most-requested
-  enterprise feature in ASPM product evaluations.</li>
-<li><strong>Observation</strong>: We publish verdict webhooks and SCM commit statuses
-  (GitHub/GitLab/Azure DevOps/Bitbucket). We do not yet create Jira tickets
-  from <code>Critical</code> or <code>Necrotic</code> findings. This means security debt is
-  invisible to project management tooling and cannot be tracked to resolution.</li>
-<li><strong>Proposal</strong>: Add <code>[jira]</code> stanza to <code>janitor.toml</code>. When a bounce verdict
-  contains a <code>Critical</code> or <code>Necrotic</code> finding, <code>spawn_jira_ticket</code> fires
-  asynchronously: creates a Jira issue (type: <code>Bug</code>, priority: <code>Critical</code> /
-  <code>High</code>) with the finding ID, affected PR link, remediation text, and
-  <code>docs_url</code>. Deduplication by <code>finding_id + repo + pr_number</code> prevents
-  duplicate ticket storms on re-bounce.</li>
-<li><strong>Implementation Path</strong>:</li>
-<li><code>crates/common/src/policy.rs</code>: <code>JiraConfig { url, project_key,
-    api_token_env, severity_threshold }</code> in <code>JanitorPolicy</code>.</li>
-<li><code>crates/cli/src/report.rs</code>: <code>spawn_jira_ticket(finding, cfg)</code> — POST
-    to <code>{url}/rest/api/3/issue</code> with Bearer auth (token from env var).</li>
-<li><code>crates/cli/src/main.rs</code>: call <code>spawn_jira_ticket</code> from
-    <code>build_decision_capsule</code> for Critical/Necrotic findings.</li>
-<li>Unit test: <code>jira_ticket_not_created_when_config_absent</code>.</li>
-</ul>
+<h3 id="p1-1-aspm-jira-sync-application-security-posture-management-completed-2026-04-12">P1-1: ASPM Jira Sync (Application Security Posture Management) — [COMPLETED 2026-04-12]</h3>
+<p>Implemented in v10.1.0-alpha.12:
+- <code>crates/common/src/policy.rs</code>: <code>[jira]</code> TOML support via <code>JiraConfig { url, project_key }</code>.
+- <code>crates/cli/src/jira.rs</code>: Jira REST payload builder and Basic Auth POST using <code>JANITOR_JIRA_USER</code> / <code>JANITOR_JIRA_TOKEN</code>.
+- <code>crates/cli/src/main.rs</code>: fail-safe ticket creation for <code>KevCritical</code> structured findings after bounce processing.
+- <code>crates/common/src/slop.rs</code>: structured severity metadata added so enterprise workflow routing can gate on <code>KevCritical</code>.</p>
 <hr />
 <h2 id="p2-cryptographic-assurance">P2 — Cryptographic Assurance</h2>
 <h3 id="p2-6-post-quantum-certificate-transparency-for-wasm-rules">P2-6: Post-Quantum Certificate Transparency for Wasm Rules</h3>
