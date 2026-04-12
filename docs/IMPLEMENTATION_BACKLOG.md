@@ -5,6 +5,23 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
+
+**Directive:** Intercept hidden Markdown/PR-body prompt-injection payloads exploiting invisible HTML comments and hidden spans, wire the detector into PR metadata and Markdown patch scoring, add Crucible regression coverage, verify under single-threaded tests, and prepare the `10.1.0-alpha.10` release.
+
+**Files modified:**
+- `crates/forge/src/metadata.rs` *(modified)* — added `detect_ai_prompt_injection(text)`; scans hidden HTML comments and hidden `<div>` / `<span>` blocks for imperative AI hijack heuristics (`ignore previous instructions`, `system prompt`, `search for`, `encode in base16`, `exfiltrate`, `AWS_ACCESS_KEY`); emits `security:ai_prompt_injection` at `KevCritical`; added deterministic true-positive/true-negative unit tests.
+- `crates/forge/src/slop_filter.rs` *(modified)* — Markdown patch blobs now flow through `detect_ai_prompt_injection`; added `check_ai_prompt_injection` helper so PR metadata findings increment `antipatterns_found`, `antipattern_score`, and `antipattern_details`; added unit coverage for PR-body scoring and Markdown patch interception.
+- `crates/cli/src/main.rs` *(modified)* — both patch mode and git-native mode now scan `pr_body` for hidden prompt-injection payloads before gate evaluation.
+- `crates/crucible/src/main.rs` *(modified)* — added CamoLeak true-positive and benign-comment true-negative fixtures to the bounce gallery.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.9` → `10.1.0-alpha.10`.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — appended this session ledger.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` — pending execution below.
+- `just audit` — pending execution below.
+- `just fast-release 10.1.0-alpha.10` — pending execution below.
+
 ## 2026-04-11 — Omni-Strike Consolidation & Garbage Collection Audit (v10.1.0-alpha.9)
 
 **Directive:** Phase 1 — threat intel GC audit (OSV ZIP / wisdom download disk artifact hygiene). Phase 2 — justfile omni-strike consolidation (`run-gauntlet` + `hyper-gauntlet` deleted; `just strike` is the sole batch command). Phase 3 — dead-code audit + Innovation Log rewrite (top-3 DoD/Enterprise features). Phase 4 — bump + release.

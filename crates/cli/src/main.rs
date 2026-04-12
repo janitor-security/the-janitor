@@ -3185,6 +3185,7 @@ fn cmd_bounce(
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(merkle_root.as_bytes());
             // Hallucinated security fix check (git mode — extensions from snapshot blobs).
             if let Some(body) = pr_body {
+                forge::slop_filter::check_ai_prompt_injection(&mut score, body);
                 let exts: Vec<String> = {
                     use std::collections::HashSet;
                     blobs
@@ -3298,6 +3299,7 @@ fn cmd_bounce(
                 if scanner.is_pr_unlinked(body) && !author_is_automation {
                     score.unlinked_pr = 1;
                 }
+                forge::slop_filter::check_ai_prompt_injection(&mut score, body);
                 // Hallucinated security fix check (patch mode — all +++ b/ headers).
                 let changed_exts = forge::slop_filter::extract_all_patch_exts(&patch);
                 forge::slop_filter::check_hallucinated_fix(
