@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)
@@ -1447,6 +1456,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)
@@ -2248,6 +2266,21 @@
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <hr />
+<h2 id="2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16">2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)</h2>
+<p><strong>Directive:</strong> Wire the Sovereign Governor as a GitHub App backend with authenticated installation webhooks, tenant-bound analysis token issuance, single-threaded verification, and release preparation.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/gov/Cargo.toml</code> <em>(modified)</em> — added <code>axum</code>, <code>dashmap</code>, <code>hmac</code>, <code>sha2</code>, <code>hex</code>, <code>tokio</code>, and <code>tower</code> test utility support for the webhook-capable Governor runtime.
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em> — replaced the ad-hoc TCP server with Axum routing; added <code>GITHUB_WEBHOOK_SECRET</code> loading, constant-time <code>verify_github_signature</code>, <code>POST /v1/github/webhook</code>, <code>DashMap</code>-backed installation state, installation-aware <code>/v1/analysis-token</code>, and router-level tests for valid/invalid GitHub signatures plus installation gating.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.15</code> → <code>10.1.0-alpha.16</code>; <code>hex</code> promoted into <code>[workspace.dependencies]</code>.
+- <code>README.md</code> <em>(modified)</em> — release parity string updated to <code>v10.1.0-alpha.16</code>.
+- <code>docs/index.md</code> <em>(modified)</em> — documentation landing page version updated to <code>v10.1.0-alpha.16</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger appended.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — <code>P1-0</code> purged after Governor marketplace provisioning landed.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test -p janitor-gov -- --test-threads=1</code> ✅ — 13 tests passed, including webhook 200/401 coverage and inactive-installation denial.
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅
+- <code>just fast-release 10.1.0-alpha.16</code> — pending.</p>
 <h2 id="2026-04-12-jira-deduplication-wasm-pqc-sealing-v1010-alpha15">2026-04-12 — Jira Deduplication &amp; Wasm PQC Sealing (v10.1.0-alpha.15)</h2>
 <p><strong>Directive:</strong> Phase 1 (P1-1 enhancement) — State-aware ASPM deduplication gate; Phase 2 (P2-6) — Post-quantum publisher signing for Wasm rules.</p>
 <p><strong>Files modified:</strong>
