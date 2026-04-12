@@ -5,6 +5,21 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-11 — Multi-Tenant RBAC & Threat Intel Verification (v10.1.0-alpha.11)
+
+**Directive:** Phase 1 — live-fire threat intel audit (GC hygiene, OSV network fault). Phase 2 — implement Governor RBAC (P0-1). Phase 3 — verification & release.
+
+**Phase 1 audit findings:**
+- `update-slopsquat` failed (WSL/GCS network block) — no `.zip` artifacts left in `/tmp`: GC is clean by design.
+- Intelligence gap filed as **P1-2** in `docs/INNOVATION_LOG.md`: single-point-of-failure OSV fetch with no retry, no fallback corpus, no stale-corpus soft-fail. Air-gapped enterprise deployments have zero slopsquat coverage after install if initial fetch fails.
+
+**Phase 2 — RBAC Implementation:**
+- `crates/common/src/policy.rs`: Added `RbacTeam { name, role, allowed_repos }` and `RbacConfig { teams }` structs. Added `rbac: RbacConfig` field to `JanitorPolicy` with TOML round-trip support under `[rbac]` / `[[rbac.teams]]`.
+- `crates/gov/src/main.rs`: `AnalysisTokenRequest` gains `role: String` (default `"ci-writer"`). `AnalysisTokenResponse` now owns `token: String` encoding role as `"stub-token:role=<role>"`. `BounceLogEntry` gains `analysis_token: Option<String>`. `/v1/report` enforces RBAC via `extract_role_from_token()` — `auditor` tokens return HTTP 403 Forbidden before any chain append. `/v1/analysis-token` normalises unknown roles to `"ci-writer"`. 5 new tests added; 2 existing tests updated for new token format and non-deterministic sequence index.
+- `just audit` exits 0. `cargo fmt --check` clean. `cargo clippy -- -D warnings` zero warnings.
+
+---
+
 ## 2026-04-11 — CamoLeak Prompt Injection Interceptor (v10.1.0-alpha.10)
 
 **Directive:** Intercept hidden Markdown/PR-body prompt-injection payloads exploiting invisible HTML comments and hidden spans, wire the detector into PR metadata and Markdown patch scoring, add Crucible regression coverage, verify under single-threaded tests, and prepare the `10.1.0-alpha.10` release.

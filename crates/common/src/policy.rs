@@ -292,6 +292,63 @@ impl Suppression {
 }
 
 // ---------------------------------------------------------------------------
+// RbacConfig — [rbac] sub-table
+// ---------------------------------------------------------------------------
+
+/// A single team entry in the `[[rbac.teams]]` TOML array.
+///
+/// Each team binds a human-readable name to a Governor role and an optional
+/// set of repository slugs the team is permitted to access.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RbacTeam {
+    /// Human-readable team name (e.g. `"security-engineering"`).
+    pub name: String,
+
+    /// Governor role assigned to this team.
+    ///
+    /// Valid values:
+    /// - `"admin"` — full read/write access including policy override.
+    /// - `"ci-writer"` — may post bounce verdicts; cannot change policy.
+    /// - `"auditor"` — read-only; the `/v1/report` endpoint returns HTTP 403.
+    pub role: String,
+
+    /// Repository slugs (`"owner/repo"`) this team may access.
+    ///
+    /// An empty list permits all repos visible to the Governor.
+    #[serde(default)]
+    pub allowed_repos: Vec<String>,
+}
+
+/// Role-Based Access Control configuration for the Governor.
+///
+/// Configure under `[rbac]` in `janitor.toml`.
+///
+/// # Example
+///
+/// ```toml
+/// [[rbac.teams]]
+/// name         = "security-engineering"
+/// role         = "admin"
+/// allowed_repos = []
+///
+/// [[rbac.teams]]
+/// name         = "ci-runners"
+/// role         = "ci-writer"
+/// allowed_repos = ["acme/backend", "acme/frontend"]
+///
+/// [[rbac.teams]]
+/// name         = "external-auditors"
+/// role         = "auditor"
+/// allowed_repos = ["acme/backend"]
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct RbacConfig {
+    /// Team entries defining role assignments and repository scope.
+    pub teams: Vec<RbacTeam>,
+}
+
+// ---------------------------------------------------------------------------
 // JanitorPolicy
 // ---------------------------------------------------------------------------
 
@@ -450,6 +507,14 @@ pub struct JanitorPolicy {
     /// Repository-governed waivers for individual findings.
     #[serde(default)]
     pub suppressions: Option<Vec<Suppression>>,
+
+    /// Governor RBAC team assignments.
+    ///
+    /// Configure under `[rbac]` in `janitor.toml`.
+    /// Defines which teams may perform which operations against the Governor.
+    /// See [`RbacConfig`] for available fields.
+    #[serde(default)]
+    pub rbac: RbacConfig,
 }
 
 impl Default for JanitorPolicy {
@@ -470,6 +535,7 @@ impl Default for JanitorPolicy {
             wasm_rules: Vec::new(),
             wasm_pins: HashMap::new(),
             suppressions: None,
+            rbac: RbacConfig::default(),
         }
     }
 }
@@ -882,6 +948,7 @@ mod tests {
                 reason: "test fixture".to_string(),
                 approved: false,
             }]),
+            rbac: RbacConfig::default(),
         };
         let serialised = toml::to_string(&original).unwrap();
         let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();

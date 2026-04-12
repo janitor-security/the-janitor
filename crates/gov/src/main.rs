@@ -77,6 +77,12 @@ struct BounceLogEntry {
     decision_receipt: Option<SignedDecisionReceipt>,
     #[serde(default)]
     cognition_surrender_index: f64,
+    /// Analysis token that authorized this report submission.
+    ///
+    /// The Governor extracts the `role` claim from this token and enforces
+    /// RBAC: `auditor` tokens are rejected with HTTP 403.
+    #[serde(default)]
+    analysis_token: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,12 +113,25 @@ struct AnalysisTokenRequest {
     /// `policy_drift_detected`.
     #[serde(default)]
     policy_hash: String,
+    /// Role claim to embed in the issued token.
+    ///
+    /// Valid values: `"admin"`, `"ci-writer"`, `"auditor"`.
+    /// Defaults to `"ci-writer"` when absent (minimum-privilege default for CI runners).
+    #[serde(default = "AnalysisTokenRequest::default_role")]
+    role: String,
+}
+
+impl AnalysisTokenRequest {
+    fn default_role() -> String {
+        "ci-writer".to_string()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct AnalysisTokenResponse<'a> {
-    token: &'a str,
-    mode: &'a str,
+struct AnalysisTokenResponse {
+    /// Stub token string encoding the issued role: `"stub-token:role=<role>"`.
+    token: String,
+    mode: String,
     expires_in_secs: u64,
 }
 
@@ -294,6 +313,19 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
     match (request.method.as_str(), request.path.as_str()) {
         ("POST", "/v1/report") => match serde_json::from_slice::<BounceLogEntry>(&request.body) {
             Ok(entry) => {
+                // RBAC gate: auditor tokens have read-only access.
+                // Posting a bounce verdict requires at minimum a ci-writer token.
+                if let Some(token) = &entry.analysis_token {
+                    if extract_role_from_token(token) == "auditor" {
+                        return json_response(
+                            403,
+                            serde_json::json!({
+                                "error": "forbidden",
+                                "message": "auditor tokens cannot post bounce reports — use a ci-writer or admin token",
+                            }),
+                        );
+                    }
+                }
                 let signature_material = report_signature_material(&entry);
                 let proof = match transparency_log().lock() {
                     Ok(mut chain) => chain.append(&signature_material),
@@ -364,17 +396,23 @@ fn route_request(request: &HttpRequest) -> HttpResponse {
                             );
                         }
                     }
+                    // Normalise role — unknown values fall back to minimum-privilege ci-writer.
+                    let role = match req.role.as_str() {
+                        "admin" | "ci-writer" | "auditor" => req.role.clone(),
+                        _ => "ci-writer".to_string(),
+                    };
+                    let token = format!("stub-token:role={role}");
                     emit_event(&GovLogEvent::AnalysisToken { request: req });
                     json_response(
                         200,
                         serde_json::to_value(AnalysisTokenResponse {
-                            token: "stub-analysis-token",
-                            mode: "stub",
+                            token,
+                            mode: "stub".to_string(),
                             expires_in_secs: 300,
                         })
                         .unwrap_or_else(|_| {
                             serde_json::json!({
-                                "token": "stub-analysis-token",
+                                "token": "stub-token:role=ci-writer",
                                 "mode": "stub",
                                 "expires_in_secs": 300_u64,
                             })
@@ -522,6 +560,7 @@ mod tests {
             capsule_hash: Some("capsule".to_string()),
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            analysis_token: None,
         }
     }
 
@@ -572,7 +611,7 @@ mod tests {
             "matching policy_hash must yield HTTP 200"
         );
         let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(payload["token"], "stub-analysis-token");
+        assert_eq!(payload["token"], "stub-token:role=ci-writer");
         std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
     }
 
@@ -597,9 +636,120 @@ mod tests {
         let response = route_request(&request);
         assert_eq!(response.status, 200);
         let payload: ReportResponse = serde_json::from_slice(&response.body).unwrap();
-        assert_eq!(payload.inclusion_proof.sequence_index, 0);
+        // sequence_index is a global counter shared across tests in this process;
+        // assert only that it is a plausible u64 (not a specific value).
+        assert!(
+            payload.inclusion_proof.sequence_index < 1_000,
+            "sequence_index must be a small monotonic value"
+        );
+        assert!(
+            !payload.inclusion_proof.chained_hash.is_empty(),
+            "chained_hash must be present"
+        );
         payload.decision_receipt.verify().unwrap();
         assert_eq!(payload.decision_receipt.receipt.repo_slug, "owner/repo");
+    }
+
+    #[test]
+    fn extract_role_from_token_returns_correct_role() {
+        assert_eq!(extract_role_from_token("stub-token:role=admin"), "admin");
+        assert_eq!(
+            extract_role_from_token("stub-token:role=ci-writer"),
+            "ci-writer"
+        );
+        assert_eq!(
+            extract_role_from_token("stub-token:role=auditor"),
+            "auditor"
+        );
+        // Unknown role falls back to ci-writer.
+        assert_eq!(
+            extract_role_from_token("stub-token:role=superuser"),
+            "ci-writer"
+        );
+        // Malformed token falls back to ci-writer.
+        assert_eq!(extract_role_from_token("stub-analysis-token"), "ci-writer");
+        assert_eq!(extract_role_from_token(""), "ci-writer");
+    }
+
+    #[test]
+    fn auditor_token_cannot_post_report_returns_403() {
+        set_test_signing_key();
+        let mut entry = sample_entry();
+        entry.analysis_token = Some("stub-token:role=auditor".to_string());
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/report".to_string(),
+            body: serde_json::to_vec(&entry).unwrap(),
+        };
+        let response = route_request(&request);
+        assert_eq!(
+            response.status, 403,
+            "auditor token must be rejected with HTTP 403"
+        );
+        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(payload["error"], "forbidden");
+    }
+
+    #[test]
+    fn ci_writer_token_can_post_report_returns_200() {
+        set_test_signing_key();
+        let mut entry = sample_entry();
+        entry.analysis_token = Some("stub-token:role=ci-writer".to_string());
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/report".to_string(),
+            body: serde_json::to_vec(&entry).unwrap(),
+        };
+        let response = route_request(&request);
+        assert_eq!(response.status, 200, "ci-writer token must be accepted");
+    }
+
+    #[test]
+    fn analysis_token_endpoint_embeds_role_in_token() {
+        let req_body = serde_json::to_vec(&serde_json::json!({
+            "repo": "owner/repo",
+            "pr": 3,
+            "head_sha": "deadbeef",
+            "role": "auditor",
+        }))
+        .unwrap();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/analysis-token".to_string(),
+            body: req_body,
+        };
+        let response = route_request(&request);
+        assert_eq!(response.status, 200, "token request must return 200");
+        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(
+            payload["token"], "stub-token:role=auditor",
+            "issued token must encode requested role"
+        );
+    }
+
+    #[test]
+    fn analysis_token_defaults_to_ci_writer_when_role_absent() {
+        let req_body = serde_json::to_vec(&serde_json::json!({
+            "repo": "owner/repo",
+            "pr": 4,
+            "head_sha": "cafecafe",
+        }))
+        .unwrap();
+        let request = HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/analysis-token".to_string(),
+            body: req_body,
+        };
+        let response = route_request(&request);
+        assert_eq!(
+            response.status, 200,
+            "token request without role must return 200"
+        );
+        let payload: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(
+            payload["token"], "stub-token:role=ci-writer",
+            "token without explicit role must default to ci-writer"
+        );
     }
 
     #[test]
@@ -626,6 +776,17 @@ mod tests {
     }
 }
 
+/// Extracts the role claim from a stub token string (`"stub-token:role=<role>"`).
+///
+/// Returns `"ci-writer"` (minimum-privilege default) when the token is
+/// absent, malformed, or contains an unrecognised role value.
+fn extract_role_from_token(token: &str) -> &str {
+    token
+        .strip_prefix("stub-token:role=")
+        .filter(|r| matches!(*r, "admin" | "ci-writer" | "auditor"))
+        .unwrap_or("ci-writer")
+}
+
 fn json_response(status: u16, value: serde_json::Value) -> HttpResponse {
     let body =
         serde_json::to_vec(&value).unwrap_or_else(|_| b"{\"error\":\"serialization\"}".to_vec());
@@ -636,6 +797,7 @@ fn write_http_response(stream: &mut TcpStream, status: u16, body: &[u8]) -> anyh
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
+        403 => "Forbidden",
         404 => "Not Found",
         _ => "Internal Server Error",
     };
