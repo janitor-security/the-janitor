@@ -5,10 +5,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
+use base64::Engine as _;
 use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
 use dashmap::DashMap;
 use ed25519_dalek::SigningKey;
 use hmac::{Hmac, KeyInit, Mac};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384};
 use std::collections::HashSet;
@@ -452,7 +454,15 @@ async fn report_handler(
     Json(entry): Json<BounceLogEntry>,
 ) -> Result<Json<ReportResponse>, AppError> {
     if let Some(token) = &entry.analysis_token {
-        if extract_role_from_token(token) == "auditor" {
+        let role = if is_jwt(token) {
+            // Real EdDSA JWT: validate signature, issuer, and expiry (NIST IA-2, AC-3).
+            validate_jwt(token)
+                .map_err(|_| AppError::unauthorized("invalid or expired analysis token"))?
+        } else {
+            // Legacy stub token: parse role without crypto (backward compat).
+            extract_role_from_token(token).to_string()
+        };
+        if role == "auditor" {
             return Err(AppError::forbidden(
                 "forbidden: auditor tokens cannot post bounce reports — use a ci-writer or admin token",
             ));
@@ -511,10 +521,8 @@ async fn analysis_token_handler(
     }
 
     let role = normalize_role(&req.role);
-    let token = format!(
-        "stub-token:role={role};installation_id={}",
-        req.installation_id
-    );
+    let token = issue_jwt(&req.repo, role)
+        .map_err(|err| AppError::internal(format!("JWT issuance failed: {err}")))?;
 
     emit_event(&GovLogEvent::AnalysisToken {
         request: req,
@@ -523,7 +531,7 @@ async fn analysis_token_handler(
 
     Ok(Json(AnalysisTokenResponse {
         token,
-        mode: "stub".to_string(),
+        mode: "jwt".to_string(),
         expires_in_secs: 300,
     }))
 }
@@ -948,7 +956,7 @@ fn report_signature_material(entry: &BounceLogEntry) -> String {
     parts.join("|")
 }
 
-/// Extracts the role claim from a stub token string
+/// Extracts the role claim from a legacy stub token string
 /// (`"stub-token:role=<role>;installation_id=<id>"`).
 ///
 /// Returns `"ci-writer"` (minimum-privilege default) when the token is
@@ -959,6 +967,129 @@ fn extract_role_from_token(token: &str) -> &str {
         .and_then(|claims| claims.split(';').next())
         .filter(|role| matches!(*role, "admin" | "ci-writer" | "auditor"))
         .unwrap_or("ci-writer")
+}
+
+/// Claims embedded in issued EdDSA JWTs.
+#[derive(Debug, Serialize, Deserialize)]
+struct JwtClaims {
+    /// Subject: `repo` or installation binding.
+    sub: String,
+    /// Role claim: `"admin"`, `"ci-writer"`, or `"auditor"`.
+    role: String,
+    /// Issuer: always `"janitor-governor"`.
+    iss: String,
+    /// Issued-at epoch seconds (UTC).
+    iat: u64,
+    /// Expiry epoch seconds (UTC); tokens expire in 300 seconds.
+    exp: u64,
+}
+
+/// Returns `true` when `token` begins with a JWT header segment (`eyJ`),
+/// indicating it should be validated as an EdDSA JWT rather than a legacy
+/// stub token.
+fn is_jwt(token: &str) -> bool {
+    token.starts_with("eyJ")
+}
+
+/// Constructs a PKCS#8 v0 DER blob for an Ed25519 private key (RFC 8410)
+/// and base64-encodes it into PEM form (`-----BEGIN PRIVATE KEY-----`).
+///
+/// The 48-byte DER layout is:
+/// `SEQUENCE { INTEGER(0), SEQUENCE{OID 1.3.101.112}, OCTET_STRING{OCTET_STRING{seed}} }`
+fn ed25519_seed_to_pkcs8_pem(seed: &[u8; 32]) -> String {
+    let mut der = [0u8; 48];
+    der[..16].copy_from_slice(&[
+        0x30, 0x2e, // SEQUENCE (46 bytes)
+        0x02, 0x01, 0x00, // INTEGER version = 0
+        0x30, 0x05, // SEQUENCE (AlgorithmIdentifier)
+        0x06, 0x03, 0x2b, 0x65, 0x70, // OID 1.3.101.112 (id-Ed25519)
+        0x04, 0x22, // OCTET STRING (34 bytes, OneAsymmetricKey.privateKey)
+        0x04, 0x20, // OCTET STRING (32 bytes, CurvePrivateKey)
+    ]);
+    der[16..].copy_from_slice(seed);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(der);
+    format!("-----BEGIN PRIVATE KEY-----\n{b64}\n-----END PRIVATE KEY-----\n")
+}
+
+/// Constructs a SubjectPublicKeyInfo DER blob for an Ed25519 public key
+/// (RFC 8410) and base64-encodes it into PEM form (`-----BEGIN PUBLIC KEY-----`).
+///
+/// The 44-byte DER layout is:
+/// `SEQUENCE { SEQUENCE{OID 1.3.101.112}, BIT_STRING{0x00, pub_bytes} }`
+fn ed25519_pub_to_spki_pem(pub_bytes: &[u8; 32]) -> String {
+    let mut der = [0u8; 44];
+    der[..12].copy_from_slice(&[
+        0x30, 0x2a, // SEQUENCE (42 bytes)
+        0x30, 0x05, // SEQUENCE (AlgorithmIdentifier)
+        0x06, 0x03, 0x2b, 0x65, 0x70, // OID 1.3.101.112 (id-Ed25519)
+        0x03, 0x21, // BIT STRING (33 bytes)
+        0x00, // 0 padding bits
+    ]);
+    der[12..].copy_from_slice(pub_bytes);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(der);
+    format!("-----BEGIN PUBLIC KEY-----\n{b64}\n-----END PUBLIC KEY-----\n")
+}
+
+/// Returns the `EncodingKey` derived from the Governor's Ed25519 signing key.
+/// Initialised once; subsequent calls return the cached key.
+fn jwt_encoding_key() -> anyhow::Result<&'static EncodingKey> {
+    static KEY: OnceLock<anyhow::Result<EncodingKey>> = OnceLock::new();
+    KEY.get_or_init(|| {
+        let signing_key = governor_signing_key()?;
+        let seed = signing_key.to_bytes();
+        let pem = ed25519_seed_to_pkcs8_pem(&seed);
+        EncodingKey::from_ed_pem(pem.as_bytes())
+            .map_err(|e| anyhow::anyhow!("JWT EdDSA encoding key: {e}"))
+    })
+    .as_ref()
+    .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+/// Returns the `DecodingKey` derived from the Governor's Ed25519 verifying key.
+/// Initialised once; subsequent calls return the cached key.
+fn jwt_decoding_key() -> anyhow::Result<&'static DecodingKey> {
+    static KEY: OnceLock<anyhow::Result<DecodingKey>> = OnceLock::new();
+    KEY.get_or_init(|| {
+        let signing_key = governor_signing_key()?;
+        let pub_bytes = signing_key.verifying_key().to_bytes();
+        let pem = ed25519_pub_to_spki_pem(&pub_bytes);
+        DecodingKey::from_ed_pem(pem.as_bytes())
+            .map_err(|e| anyhow::anyhow!("JWT EdDSA decoding key: {e}"))
+    })
+    .as_ref()
+    .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+/// Issues a signed EdDSA JWT with a 300-second TTL.
+///
+/// Claims: `sub` (repo slug), `role`, `iss` (`"janitor-governor"`), `iat`, `exp`.
+fn issue_jwt(sub: &str, role: &str) -> anyhow::Result<String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| anyhow::anyhow!("system clock error: {e}"))?
+        .as_secs();
+    let claims = JwtClaims {
+        sub: sub.to_string(),
+        role: normalize_role(role).to_string(),
+        iss: "janitor-governor".to_string(),
+        iat: now,
+        exp: now + 300,
+    };
+    encode(&Header::new(Algorithm::EdDSA), &claims, jwt_encoding_key()?)
+        .map_err(|e| anyhow::anyhow!("JWT encoding failed: {e}"))
+}
+
+/// Validates an EdDSA JWT and returns the `role` claim on success.
+///
+/// Verifies: EdDSA signature, `iss == "janitor-governor"`, and `exp > now`.
+/// Returns `Err` for any invalid, expired, or tampered token.
+fn validate_jwt(token: &str) -> anyhow::Result<String> {
+    let mut validation = Validation::new(Algorithm::EdDSA);
+    validation.set_issuer(&["janitor-governor"]);
+    validation.set_required_spec_claims(&["exp", "iss", "sub"]);
+    let data = decode::<JwtClaims>(token, jwt_decoding_key()?, &validation)
+        .map_err(|e| anyhow::anyhow!("JWT validation failed: {e}"))?;
+    Ok(data.claims.role)
 }
 
 #[cfg(test)]
@@ -1083,6 +1214,7 @@ mod tests {
 
     #[tokio::test]
     async fn matching_policy_hash_returns_token() {
+        set_test_signing_key();
         std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "correct-hash");
         let request = Request::builder()
             .method("POST")
@@ -1103,9 +1235,20 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let payload: serde_json::Value =
             serde_json::from_slice(&response_body(response).await).unwrap();
+        // Token must be a real EdDSA JWT, not a stub string.
+        let token = payload["token"].as_str().unwrap();
+        assert!(is_jwt(token), "issued token must be a JWT");
+        // Decode and verify claims without expiry check (testing structure only).
+        let mut v = Validation::new(Algorithm::EdDSA);
+        v.set_issuer(&["janitor-governor"]);
+        v.set_required_spec_claims(&["exp", "iss", "sub"]);
+        let claims = decode::<JwtClaims>(token, jwt_decoding_key().unwrap(), &v)
+            .expect("issued JWT must be valid")
+            .claims;
+        assert_eq!(claims.role, "ci-writer", "default role must be ci-writer");
         assert_eq!(
-            payload["token"],
-            "stub-token:role=ci-writer;installation_id=0"
+            claims.iss, "janitor-governor",
+            "issuer must be janitor-governor"
         );
         std::env::remove_var("JANITOR_GOV_EXPECTED_POLICY");
     }
@@ -1227,6 +1370,7 @@ mod tests {
 
     #[tokio::test]
     async fn analysis_token_endpoint_embeds_role_in_token() {
+        set_test_signing_key();
         let request = Request::builder()
             .method("POST")
             .uri("/v1/analysis-token")
@@ -1246,14 +1390,20 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let payload: serde_json::Value =
             serde_json::from_slice(&response_body(response).await).unwrap();
-        assert_eq!(
-            payload["token"],
-            "stub-token:role=auditor;installation_id=0"
-        );
+        let token = payload["token"].as_str().unwrap();
+        assert!(is_jwt(token), "issued token must be a JWT");
+        let mut v = Validation::new(Algorithm::EdDSA);
+        v.set_issuer(&["janitor-governor"]);
+        v.set_required_spec_claims(&["exp", "iss", "sub"]);
+        let claims = decode::<JwtClaims>(token, jwt_decoding_key().unwrap(), &v)
+            .expect("issued JWT must be valid")
+            .claims;
+        assert_eq!(claims.role, "auditor", "role claim must be auditor");
     }
 
     #[tokio::test]
     async fn analysis_token_defaults_to_ci_writer_when_role_absent() {
+        set_test_signing_key();
         let request = Request::builder()
             .method("POST")
             .uri("/v1/analysis-token")
@@ -1272,9 +1422,17 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let payload: serde_json::Value =
             serde_json::from_slice(&response_body(response).await).unwrap();
+        let token = payload["token"].as_str().unwrap();
+        assert!(is_jwt(token), "issued token must be a JWT");
+        let mut v = Validation::new(Algorithm::EdDSA);
+        v.set_issuer(&["janitor-governor"]);
+        v.set_required_spec_claims(&["exp", "iss", "sub"]);
+        let claims = decode::<JwtClaims>(token, jwt_decoding_key().unwrap(), &v)
+            .expect("issued JWT must be valid")
+            .claims;
         assert_eq!(
-            payload["token"],
-            "stub-token:role=ci-writer;installation_id=0"
+            claims.role, "ci-writer",
+            "absent role must default to ci-writer"
         );
     }
 
@@ -1353,6 +1511,63 @@ mod tests {
 
         let response = test_app().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn expired_jwt_in_report_returns_401() {
+        set_test_signing_key();
+        // Craft a token whose exp is in the past (UNIX epoch + 1 second).
+        let claims = JwtClaims {
+            sub: "owner/repo".to_string(),
+            role: "ci-writer".to_string(),
+            iss: "janitor-governor".to_string(),
+            iat: 1,
+            exp: 1,
+        };
+        let expired_token = encode(
+            &Header::new(Algorithm::EdDSA),
+            &claims,
+            jwt_encoding_key().expect("test encoding key must be available"),
+        )
+        .expect("expired token encoding must succeed");
+
+        let mut entry = sample_entry();
+        entry.analysis_token = Some(expired_token);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&entry).unwrap()))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
+        assert_eq!(payload["error"], "invalid or expired analysis token");
+    }
+
+    #[tokio::test]
+    async fn valid_jwt_with_auditor_role_cannot_post_report_returns_403() {
+        set_test_signing_key();
+        let auditor_token = issue_jwt("owner/repo", "auditor").expect("JWT issuance must succeed");
+        let mut entry = sample_entry();
+        entry.analysis_token = Some(auditor_token);
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&entry).unwrap()))
+            .unwrap();
+
+        let response = test_app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response_body(response).await).unwrap();
+        assert_eq!(
+            payload["error"],
+            "forbidden: auditor tokens cannot post bounce reports — use a ci-writer or admin token"
+        );
     }
 
     #[tokio::test]

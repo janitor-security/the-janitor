@@ -3,6 +3,33 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.
 
+## 2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity & Ledger Proving
+
+**Directive:** Zero Trust Identity & Ledger Proving — Phase 1: live-fire HMAC-SHA-384 audit ledger verification; Phase 2: replace Governor stub tokens with real EdDSA JWTs; Phase 3: audit + release.
+
+**Phase 1 — Ledger Proving:**
+- Created `tools/test_ledger.sh` (temporary); constructed a 2-line NDJSON ledger with HMAC-SHA-384 records computed via Python `hmac.new(key, payload, sha384)`.
+- `cargo run -p cli -- verify-audit-log` accepted the valid ledger (exit 0) and rejected a byte-mutated tampered copy (exit 1, line 1 identified).
+- Script and temp files deleted post-proof. Implementation confirmed correct.
+
+**Phase 2 — Real JWT Token Issuance (P2-1):**
+- `crates/gov/Cargo.toml` *(modified)* — added `jsonwebtoken = "9"` and `base64.workspace = true`.
+- `crates/gov/src/main.rs` *(modified)*:
+  - `JwtClaims` struct: `sub`, `role`, `iss`, `iat`, `exp`.
+  - `ed25519_seed_to_pkcs8_pem()` — constructs RFC 8410 PKCS#8 DER (48 bytes) and base64-encodes to PEM; no `pkcs8` crate feature required.
+  - `ed25519_pub_to_spki_pem()` — constructs SPKI DER (44 bytes) for the verifying key.
+  - `jwt_encoding_key()` / `jwt_decoding_key()` — OnceLock-cached `EncodingKey`/`DecodingKey` derived from `governor_signing_key()`.
+  - `issue_jwt(sub, role)` — EdDSA JWT with 300 s TTL, `iss = "janitor-governor"`.
+  - `validate_jwt(token)` — verifies signature, issuer, expiry; returns `role` claim.
+  - `is_jwt(token)` — `token.starts_with("eyJ")` predicate.
+  - `analysis_token_handler` — issues real JWT instead of `stub-token:role=...` format string; `mode` changed from `"stub"` to `"jwt"`.
+  - `report_handler` — JWT-bearing entries now validated via `validate_jwt`; expired/tampered tokens return HTTP 401; legacy stub tokens continue to work via `extract_role_from_token` fallback path.
+  - 3 token-issuance tests updated to decode JWT and inspect claims.
+  - 2 new tests: `expired_jwt_in_report_returns_401`, `valid_jwt_with_auditor_role_cannot_post_report_returns_403`.
+- `docs/INNOVATION_LOG.md` *(modified)* — P2-1 marked RESOLVED.
+
+**Verification**: `cargo test -p janitor-gov -- --test-threads=1` → 17/17 ✓ | `just audit` → ✅ System Clean.
+
 ---
 
 ## 2026-04-13 — Automated Live-Fire Proving & FIPS 140-3 Scrub (v10.1.0-alpha.20)
