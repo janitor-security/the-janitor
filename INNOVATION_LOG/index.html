@@ -625,15 +625,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-release-asset-digest-migration-blake3-sha-384" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384" class="md-nav__link">
     <span class="md-ellipsis">
       P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384
@@ -761,6 +752,21 @@
       Completed Items
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Completed Items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2026-04-12-live-aspm-dedup-preflight-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Live ASPM Dedup Preflight Contract
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -847,15 +853,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-1-release-asset-digest-migration-blake3-sha-384" class="md-nav__link">
-    <span class="md-ellipsis">
-      P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384" class="md-nav__link">
     <span class="md-ellipsis">
       P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384
@@ -984,6 +981,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Completed Items">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#2026-04-12-live-aspm-dedup-preflight-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Live ASPM Dedup Preflight Contract
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1039,28 +1051,6 @@ civilian agency contracts valued at $2M–$50M/yr per deployment.</p>
 </table>
 <hr />
 <h2 id="p0-fips-140-3-cryptographic-boundary-remediation">P0 — FIPS 140-3 Cryptographic Boundary Remediation</h2>
-<h3 id="p0-1-release-asset-digest-migration-blake3-sha-384">P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384</h3>
-<p><strong>Status</strong>: OPEN — FedRAMP HARD BLOCK</p>
-<p><strong>Finding</strong>: <code>crates/common/src/pqc.rs::sign_asset_hash_from_file</code> and
-<code>verify_asset_ml_dsa_signature</code> sign and verify a <strong>BLAKE3</strong> digest.
-Under FIPS 140-3, the pre-hash fed into any approved signature algorithm
-MUST itself be a NIST-approved hash. BLAKE3 fails this requirement.</p>
-<p><strong>FIPS reference</strong>: NIST SP 800-131A Rev 2, Section 9 — Approved hash algorithms
-for digital signature generation: SHA-2 and SHA-3 families only.</p>
-<p><strong>Migration plan</strong>:
-1. Replace <code>blake3::hash(asset_bytes)</code> with <code>sha2::Sha384::digest(asset_bytes)</code> in
-   <code>crates/cli/src/main.rs::cmd_sign_asset</code>.
-2. Update <code>verify_asset_ml_dsa_signature</code> signature to accept <code>hash_bytes: &amp;[u8; 48]</code>
-   (SHA-384 is 48 bytes vs BLAKE3's 32 bytes).
-3. Update <code>action.yml</code> BLAKE3-verification step to compute SHA-384 instead.
-4. Update <code>justfile::fast-release</code> to generate <code>.sha384</code> alongside (or replacing) <code>.b3</code>.
-5. Add SHA-384 zero-preimage test + cross-context rejection test to Crucible.
-6. Bump workspace version — protocol change affects audit log semantics.</p>
-<p><strong>Estimated scope</strong>: <code>crates/common/src/pqc.rs</code>, <code>crates/cli/src/verify_asset.rs</code>,
-<code>crates/cli/src/main.rs</code> (~40 lines), <code>action.yml</code>, <code>justfile</code>.</p>
-<p><strong>Commercial justification</strong>: No FedRAMP 3PAO will approve an asset signing chain
-using a non-NIST hash. This single item blocks every federal contract.</p>
-<hr />
 <h3 id="p0-2-governor-transparency-log-chain-blake3-sha-384">P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384</h3>
 <p><strong>Status</strong>: OPEN — FedRAMP HARD BLOCK</p>
 <p><strong>Finding</strong>: <code>crates/gov/src/main.rs::Blake3HashChain::append</code> uses BLAKE3 to
@@ -1198,6 +1188,15 @@ with <code>lto = true</code> is currently NOT reproducible across different link
 <li>P2-6 (PQC CT): Wasm Rule Publisher Signing — [COMPLETED 2026-04-12 v10.1.0-alpha.15]</li>
 <li>Governor Marketplace: GitHub App webhook + installation gating — [COMPLETED 2026-04-12 v10.1.0-alpha.16]</li>
 </ul>
+<hr />
+<h3 id="2026-04-12-live-aspm-dedup-preflight-contract">2026-04-12 — Live ASPM Dedup Preflight Contract</h3>
+<p><strong>Status</strong>: OPEN</p>
+<p><strong>Finding</strong>: The Jira deduplication proof path is not self-validating. <code>bounce</code> reaches <code>KevCritical</code> detection, but the live ASPM workflow aborts before dedup search/create when <code>JANITOR_JIRA_USER</code> or <code>JANITOR_JIRA_TOKEN</code> are absent from the execution environment. This leaves the operator with detector proof but no production deduplication proof.</p>
+<p><strong>Implementation plan</strong>:
+1. Add an explicit preflight to <code>crates/cli/src/jira.rs</code> or <code>crates/cli/src/main.rs</code> that reports the exact missing Jira auth variables before scan execution when <code>[jira]</code> is configured.
+2. Add an integration harness that injects a deterministic mock Jira sender and asserts first-run create / second-run dedup skip semantics for a stable fingerprint.
+3. Emit a dedicated terminal line for dedup preflight state so operators can distinguish detector success from ASPM transport readiness without inspecting warning text.
+4. Add a Crucible or CLI regression covering the missing-auth fail-open path plus the successful dedup path.</p>
 
 
 

@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)
@@ -1408,6 +1417,24 @@
   <a href="#2026-04-12-supply-chain-deep-inspection-resiliency-proving-v1010-alpha13" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Supply Chain Deep Inspection &amp; Resiliency Proving (v10.1.0-alpha.13)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-12-live-fire-aspm-deduplication-proving-attempt" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Live-Fire ASPM Deduplication Proving Attempt
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-12-v1010-alpha18-sha-384-asset-boundary-jira-re-engagement" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary &amp; Jira Re-Engagement
     </span>
   </a>
   
@@ -1456,6 +1483,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)
@@ -2244,6 +2280,24 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-12-live-fire-aspm-deduplication-proving-attempt" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — Live-Fire ASPM Deduplication Proving Attempt
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-12-v1010-alpha18-sha-384-asset-boundary-jira-re-engagement" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary &amp; Jira Re-Engagement
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2265,6 +2319,36 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17">2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)</h2>
+<p><strong>Directive:</strong> Hostile DoD IL6 / FedRAMP audit. Identify cryptographic boundary violations,
+OOM vectors, shell discipline gaps. Eradicate slop. Rewrite INNOVATION_LOG as a
+strict FedRAMP High accreditation roadmap.</p>
+<p><strong>Audit findings:</strong>
+- BLAKE3 used as pre-hash digest in <code>sign_asset_hash_from_file</code> / <code>verify_asset_ml_dsa_signature</code>
+  — non-NIST at FIPS 140-3 boundary. Documented as P0-1 in INNOVATION_LOG (roadmap item).
+- <code>Blake3HashChain</code> in Governor uses BLAKE3 for audit log integrity — non-NIST.
+  Documented as P0-2 in INNOVATION_LOG.
+- <code>JanitorPolicy::content_hash()</code> uses BLAKE3 for security-decision hash — documented P0-3.
+- CBOM signing (<code>sign_cbom_dual_from_keys</code>) signs raw bytes via ML-DSA-65 (SHAKE-256 internal) — <strong>FIPS-compliant, no action needed</strong>.
+- Three unbounded <code>read_to_vec()</code> HTTP body reads: OSV bulk ZIP, CISA KEV, wisdom archive — OOM vectors.
+- <code>tools/mcp-wrapper.sh</code> missing <code>set -euo pipefail</code> — shell discipline violation.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/cli/src/main.rs</code> — Added <code>with_config().limit(N).read_to_vec()</code> circuit breakers on
+  three HTTP response body reads: OSV bulk ZIP (256 MiB), CISA KEV (32 MiB), wisdom archive
+  (64 MiB), wisdom signature (4 KiB).
+- <code>tools/mcp-wrapper.sh</code> — Added <code>set -euo pipefail</code> on line 2.
+- <code>docs/INNOVATION_LOG.md</code> — Fully rewritten as FedRAMP High / DoD IL6 accreditation roadmap:
+  P0 (FIPS cryptographic migrations), P1 (CEF/Syslog audit emission, write-once audit log),
+  P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
+- <code>Cargo.toml</code> — workspace version <code>10.1.0-alpha.16</code> → <code>10.1.0-alpha.17</code>.
+- <code>README.md</code>, <code>docs/index.md</code> — version parity sync.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> — this entry.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> ✅ — all tests pass
+- <code>just audit</code> ✅ — fmt + clippy + check + test + doc parity pass
+- <code>just fast-release 10.1.0-alpha.17</code> ✅ — tagged, GH Release published, docs deployed
+- BLAKE3: <code>016e9acd418f8f1e27846f47ecf140feb657e2eec6a0aa8b62e7b9836e24634a</code></p>
 <hr />
 <h2 id="2026-04-12-marketplace-integration-governor-provisioning-v1010-alpha16">2026-04-12 — Marketplace Integration &amp; Governor Provisioning (v10.1.0-alpha.16)</h2>
 <p><strong>Directive:</strong> Wire the Sovereign Governor as a GitHub App backend with authenticated installation webhooks, tenant-bound analysis token issuance, single-threaded verification, and release preparation.</p>
@@ -3729,6 +3813,27 @@ provider-neutral SCM context extraction, and roll the portability work into the
 <li>Centralized Jira fail-open synchronization in <code>crates/cli/src/jira.rs</code>, added deterministic warning emission plus diagnostic logging, and proved <code>HTTP 500</code>, <code>HTTP 401</code>, and timeout failures do not abort bounce execution.</li>
 <li>Added Crucible coverage for obfuscated <code>child_process</code> payload execution and promoted the deferred GitHub App OAuth Marketplace Integration work item to top-priority <code>P1</code> in the innovation log.</li>
 </ul>
+<h2 id="2026-04-12-live-fire-aspm-deduplication-proving-attempt">2026-04-12 — Live-Fire ASPM Deduplication Proving Attempt</h2>
+<ul>
+<li>Created a transient root <code>janitor.toml</code> pointing Jira sync at <code>https://ghrammr.atlassian.net</code> with project key <code>KAN</code> and <code>dedup = true</code>, then removed it after execution to avoid polluting the tree.</li>
+<li>Proved the live <code>bounce</code> gate rejects the repository’s canonical obfuscated JavaScript <code>child_process.exec</code> payload at <code>slop score 150</code> as <code>security:obfuscated_payload_execution</code> (<code>KevCritical</code> path).</li>
+<li>Live Jira deduplication did not execute because both bounce runs failed before search/create with <code>JANITOR_JIRA_USER is required for Jira sync</code>; second execution therefore repeated the same fail-open auth path instead of logging <code>jira dedup: open ticket found for fingerprint, skipping creation</code>.</li>
+<li>Build latency on first live-fire execution was dominated by fresh dependency acquisition and compilation; second execution reused the built artifact and returned immediately.</li>
+</ul>
+<h2 id="2026-04-12-v1010-alpha18-sha-384-asset-boundary-jira-re-engagement">2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary &amp; Jira Re-Engagement</h2>
+<p><strong>Directive:</strong> FIPS 140-3 Cryptographic Boundary &amp; Live-Fire Re-Engagement. Replace the release-asset BLAKE3 pre-hash with SHA-384, re-run the live Jira deduplication proof with inline credentials, verify the workspace under single-threaded test execution, and cut <code>10.1.0-alpha.18</code>.</p>
+<ul>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>cmd_sign_asset</code> now computes <code>Sha384::digest</code>, writes <code>&lt;asset&gt;.sha384</code>, emits <code>hash_algorithm = "SHA-384"</code>, and the hidden CLI help text now documents SHA-384 instead of BLAKE3 for the release-asset lane.</li>
+<li><code>crates/cli/src/verify_asset.rs</code> <em>(modified)</em> — release verification now enforces 96-char lowercase <code>.sha384</code> sidecars, recomputes SHA-384 for integrity, and verifies ML-DSA-65 against a 48-byte pre-hash; tests migrated from <code>.b3</code>/BLAKE3 expectations to <code>.sha384</code>/SHA-384 expectations.</li>
+<li><code>crates/common/src/pqc.rs</code> <em>(modified)</em> — <code>sign_asset_hash_from_file</code> and <code>verify_asset_ml_dsa_signature</code> now operate on <code>&amp;[u8; 48]</code>, moving the release-signature boundary onto a NIST-approved pre-hash without touching the performance BLAKE3 paths used elsewhere.</li>
+<li><code>crates/cli/Cargo.toml</code> <em>(modified)</em> — added <code>hex.workspace = true</code> for SHA-384 hex sidecar encoding; <code>crates/common/Cargo.toml</code> <em>(modified)</em> — added <code>sha2.workspace = true</code> to make the boundary dependency explicit.</li>
+<li><code>action.yml</code> <em>(modified)</em> — release downloads now fetch <code>janitor.sha384</code>, verify the sidecar with <code>sha384sum -c</code>, and then invoke the bootstrap verifier for ML-DSA-65 signature validation. <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> now ships <code>target/release/janitor.sha384</code> instead of <code>janitor.b3</code>.</li>
+<li><code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped to <code>10.1.0-alpha.18</code>. <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — removed implemented <code>P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384</code> from the active FedRAMP queue. <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this ledger entry.</li>
+</ul>
+<p><strong>Live-fire Jira re-engagement</strong>:
+- First inline-credential bounce run reached Jira transport, but dedup search failed with <code>HTTP 410</code> and issue creation failed with <code>HTTP 400</code>; the <code>KevCritical</code> finding still fired and blocked the patch at <code>slop score 150</code>.
+- Second identical run produced the same <code>HTTP 410</code> search failure and <code>HTTP 400</code> create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.</p>
+<p><strong>Verification</strong>: <code>cargo test --workspace -- --test-threads=1</code> ✓ | <code>just audit</code> ✓</p>
 
 
 
