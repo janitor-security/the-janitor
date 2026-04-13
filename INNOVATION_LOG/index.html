@@ -658,9 +658,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6" class="md-nav__link">
+  <a href="#p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6-resolved-v1010-alpha22" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6)
+      P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6) — RESOLVED v10.1.0-alpha.22
     </span>
   </a>
   
@@ -853,9 +853,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6" class="md-nav__link">
+  <a href="#p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6-resolved-v1010-alpha22" class="md-nav__link">
     <span class="md-ellipsis">
-      P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6)
+      P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6) — RESOLVED v10.1.0-alpha.22
     </span>
   </a>
   
@@ -997,24 +997,11 @@ doc comment updated to SHA-256. Existing policy drift tokens are invalidated —
 operators must refresh <code>JANITOR_GOV_EXPECTED_POLICY</code> after upgrading.</p>
 <hr />
 <h2 id="p2-identity-access-management-fedramp-ia-ac-controls">P2 — Identity &amp; Access Management (FedRAMP IA / AC Controls)</h2>
-<h3 id="p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6">P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6)</h3>
-<p><strong>Status</strong>: OPEN — Required for FedRAMP Low and above</p>
-<p><strong>Finding</strong>: The Governor issues stub tokens of the form <code>stub-token:role=...</code>.
-FedRAMP requires cryptographically signed, expiry-bearing tokens. The stub
-format is acceptable for development; a production ATO requires real JWTs.</p>
-<p><strong>Implementation plan</strong>:
-1. Add <code>jsonwebtoken</code> crate to <code>crates/gov/Cargo.toml</code>.
-2. Implement <code>issue_jwt(claims: JwtClaims, signing_key: &amp;SigningKey) -&gt; String</code>
-   using Ed25519 (or ECDSA P-384 for FIPS compliance).
-3. <code>JwtClaims</code>: <code>sub</code> (installation_id), <code>repo</code>, <code>role</code>, <code>exp</code> (5-min TTL),
-   <code>iss</code> ("janitor-governor"), <code>iat</code>.
-4. Implement <code>validate_jwt(token: &amp;str, verifying_key: &amp;VerifyingKey)</code> in the
-   <code>report_handler</code> — replace the <code>extract_role_from_token</code> string parse.
-5. Add token expiry enforcement: reject tokens where <code>exp &lt; now</code>.
-6. Add deterministic tests for issue + validate + expired + tampered token paths.</p>
-<p><strong>FIPS note</strong>: Ed25519 is NIST-approved (FIPS 186-5). Use it. Do NOT use HS256
-(HMAC-SHA256) for inter-service JWTs — symmetric keys cannot be rotated
-without coordination.</p>
+<h3 id="p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6-resolved-v1010-alpha22">P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6) — RESOLVED v10.1.0-alpha.22</h3>
+<p><code>analysis_token_handler</code> now issues EdDSA JWTs (FIPS 186-5). <code>report_handler</code> validates
+signature, issuer (<code>janitor-governor</code>), and expiry (HTTP 401 on failure).
+<code>PKCS#8</code> PEM constructed inline from Governor Ed25519 seed; no new key material required.
+2 new tests: <code>expired_jwt_in_report_returns_401</code>, <code>valid_jwt_with_auditor_role_cannot_post_report_returns_403</code>.</p>
 <hr />
 <h3 id="p2-2-mtls-mutual-authentication-for-governor-api-ia-3-sc-8">P2-2: mTLS Mutual Authentication for Governor API (IA-3, SC-8)</h3>
 <p><strong>Status</strong>: OPEN — Required for DoD IL5+</p>

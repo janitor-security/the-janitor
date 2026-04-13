@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-automated-live-fire-proving-fips-140-3-scrub-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Automated Live-Fire Proving &amp; FIPS 140-3 Scrub (v10.1.0-alpha.20)
@@ -1510,6 +1519,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-automated-live-fire-proving-fips-140-3-scrub-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Automated Live-Fire Proving &amp; FIPS 140-3 Scrub (v10.1.0-alpha.20)
@@ -2373,6 +2391,28 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<h2 id="2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving">2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving</h2>
+<p><strong>Directive:</strong> Zero Trust Identity &amp; Ledger Proving — Phase 1: live-fire HMAC-SHA-384 audit ledger verification; Phase 2: replace Governor stub tokens with real EdDSA JWTs; Phase 3: audit + release.</p>
+<p><strong>Phase 1 — Ledger Proving:</strong>
+- Created <code>tools/test_ledger.sh</code> (temporary); constructed a 2-line NDJSON ledger with HMAC-SHA-384 records computed via Python <code>hmac.new(key, payload, sha384)</code>.
+- <code>cargo run -p cli -- verify-audit-log</code> accepted the valid ledger (exit 0) and rejected a byte-mutated tampered copy (exit 1, line 1 identified).
+- Script and temp files deleted post-proof. Implementation confirmed correct.</p>
+<p><strong>Phase 2 — Real JWT Token Issuance (P2-1):</strong>
+- <code>crates/gov/Cargo.toml</code> <em>(modified)</em> — added <code>jsonwebtoken = "9"</code> and <code>base64.workspace = true</code>.
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em>:
+  - <code>JwtClaims</code> struct: <code>sub</code>, <code>role</code>, <code>iss</code>, <code>iat</code>, <code>exp</code>.
+  - <code>ed25519_seed_to_pkcs8_pem()</code> — constructs RFC 8410 PKCS#8 DER (48 bytes) and base64-encodes to PEM; no <code>pkcs8</code> crate feature required.
+  - <code>ed25519_pub_to_spki_pem()</code> — constructs SPKI DER (44 bytes) for the verifying key.
+  - <code>jwt_encoding_key()</code> / <code>jwt_decoding_key()</code> — OnceLock-cached <code>EncodingKey</code>/<code>DecodingKey</code> derived from <code>governor_signing_key()</code>.
+  - <code>issue_jwt(sub, role)</code> — EdDSA JWT with 300 s TTL, <code>iss = "janitor-governor"</code>.
+  - <code>validate_jwt(token)</code> — verifies signature, issuer, expiry; returns <code>role</code> claim.
+  - <code>is_jwt(token)</code> — <code>token.starts_with("eyJ")</code> predicate.
+  - <code>analysis_token_handler</code> — issues real JWT instead of <code>stub-token:role=...</code> format string; <code>mode</code> changed from <code>"stub"</code> to <code>"jwt"</code>.
+  - <code>report_handler</code> — JWT-bearing entries now validated via <code>validate_jwt</code>; expired/tampered tokens return HTTP 401; legacy stub tokens continue to work via <code>extract_role_from_token</code> fallback path.
+  - 3 token-issuance tests updated to decode JWT and inspect claims.
+  - 2 new tests: <code>expired_jwt_in_report_returns_401</code>, <code>valid_jwt_with_auditor_role_cannot_post_report_returns_403</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P2-1 marked RESOLVED.</p>
+<p><strong>Verification</strong>: <code>cargo test -p janitor-gov -- --test-threads=1</code> → 17/17 ✓ | <code>just audit</code> → ✅ System Clean.</p>
 <hr />
 <h2 id="2026-04-13-automated-live-fire-proving-fips-140-3-scrub-v1010-alpha20">2026-04-13 — Automated Live-Fire Proving &amp; FIPS 140-3 Scrub (v10.1.0-alpha.20)</h2>
 <p><strong>Directive:</strong> Live-fire Jira ASPM dedup test + FIPS 140-3 cryptographic boundary remediation (P0-2 + P0-3).</p>
