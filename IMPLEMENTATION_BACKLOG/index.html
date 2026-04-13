@@ -634,6 +634,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-siem-telemetry-immutable-audit-ledger-v1010-alpha21" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — SIEM Telemetry &amp; Immutable Audit Ledger (v10.1.0-alpha.21)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)
@@ -1510,6 +1519,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-siem-telemetry-immutable-audit-ledger-v1010-alpha21" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — SIEM Telemetry &amp; Immutable Audit Ledger (v10.1.0-alpha.21)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)
@@ -2372,6 +2390,20 @@ implemented as a result. Maintained by the Evolution Tracker skill.</p>
 <p><strong>Changes:</strong> <code>crates/gov/src/main.rs</code>, <code>crates/gov/Cargo.toml</code>, <code>crates/common/src/policy.rs</code>, <code>docs/INNOVATION_LOG.md</code>, <code>Cargo.toml</code>, <code>README.md</code>, <code>docs/index.md</code>.</p>
 <p><strong>Verification:</strong> <code>cargo test --workspace -- --test-threads=1</code> → all pass. <code>just audit</code> → ✅ System Clean.</p>
 <p><strong>Operator note:</strong> Existing <code>JANITOR_GOV_EXPECTED_POLICY</code> values contain BLAKE3 digests and must be refreshed with new SHA-256 hashes after upgrading.</p>
+<hr />
+<h2 id="2026-04-13-siem-telemetry-immutable-audit-ledger-v1010-alpha21">2026-04-13 — SIEM Telemetry &amp; Immutable Audit Ledger (v10.1.0-alpha.21)</h2>
+<p><strong>Directive:</strong> Execute P1-1 and P1-2 for the Sovereign Governor: SIEM-native CEF/Syslog emission, append-only HMAC-sealed audit ledger, offline verification, and release prep.</p>
+<p><strong>Files modified:</strong>
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em> — added <code>AuditFormat</code> (<code>Ndjson</code>, <code>Cef</code>, <code>Syslog</code>) via <code>JANITOR_GOV_AUDIT_FORMAT</code>; added source-IP extraction from <code>X-Forwarded-For</code> / <code>X-Real-IP</code>; implemented deterministic CEF and RFC 5424 syslog renderers; added append-only <code>JANITOR_GOV_AUDIT_LOG</code> sink with HMAC-SHA-384 sealing keyed by <code>JANITOR_GOV_AUDIT_HMAC_KEY</code>; startup now validates audit sink configuration.
+- <code>crates/cli/src/main.rs</code> <em>(modified)</em> — added <code>verify-audit-log</code> subcommand; implemented line-by-line HMAC-SHA-384 verification with constant-time <code>verify_slice</code>; failure path aborts with the exact tampered line number.
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version <code>10.1.0-alpha.20</code> → <code>10.1.0-alpha.21</code>.
+- <code>README.md</code>, <code>docs/index.md</code> <em>(modified)</em> — version parity synced to <code>v10.1.0-alpha.21</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — purged the now-landed P1-1 / P1-2 immutable-audit backlog items.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> — pending execution below.
+- <code>just audit</code> — pending execution below.
+- <code>just fast-release 10.1.0-alpha.21</code> — pending execution below.</p>
 <hr />
 <h2 id="2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19">2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)</h2>
 <p><strong>Directive:</strong> Fix Jira API contract failures and CISA KEV workflow broken binary verification.</p>

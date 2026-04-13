@@ -648,39 +648,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-immutable-audit-logging-fedramp-au-controls" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — Immutable Audit Logging (FedRAMP AU Controls)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — Immutable Audit Logging (FedRAMP AU Controls)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-cefsyslog-structured-audit-emission-au-2-au-3-au-9-au-12" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1: CEF/Syslog Structured Audit Emission (AU-2, AU-3, AU-9, AU-12)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-write-once-audit-log-au-9-protection-of-audit-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: Write-Once Audit Log (AU-9 — Protection of Audit Information)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p2-identity-access-management-fedramp-ia-ac-controls" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Identity &amp; Access Management (FedRAMP IA / AC Controls)
@@ -876,39 +843,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#p1-immutable-audit-logging-fedramp-au-controls" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1 — Immutable Audit Logging (FedRAMP AU Controls)
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="P1 — Immutable Audit Logging (FedRAMP AU Controls)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p1-1-cefsyslog-structured-audit-emission-au-2-au-3-au-9-au-12" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-1: CEF/Syslog Structured Audit Emission (AU-2, AU-3, AU-9, AU-12)
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#p1-2-write-once-audit-log-au-9-protection-of-audit-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      P1-2: Write-Once Audit Log (AU-9 — Protection of Audit Information)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#p2-identity-access-management-fedramp-ia-ac-controls" class="md-nav__link">
     <span class="md-ellipsis">
       P2 — Identity &amp; Access Management (FedRAMP IA / AC Controls)
@@ -1061,45 +995,6 @@ civilian agency contracts valued at $2M–$50M/yr per deployment.</p>
 64-char lowercase hex string (FIPS 180-4); <code>policy_hash</code> in <code>AnalysisTokenRequest</code>
 doc comment updated to SHA-256. Existing policy drift tokens are invalidated —
 operators must refresh <code>JANITOR_GOV_EXPECTED_POLICY</code> after upgrading.</p>
-<hr />
-<h2 id="p1-immutable-audit-logging-fedramp-au-controls">P1 — Immutable Audit Logging (FedRAMP AU Controls)</h2>
-<h3 id="p1-1-cefsyslog-structured-audit-emission-au-2-au-3-au-9-au-12">P1-1: CEF/Syslog Structured Audit Emission (AU-2, AU-3, AU-9, AU-12)</h3>
-<p><strong>Status</strong>: OPEN — Required for FedRAMP Moderate and above</p>
-<p><strong>Finding</strong>: The Governor currently emits audit events as unstructured NDJSON to
-stdout. FedRAMP AU controls require audit records in a SIEM-ingestible format
-(CEF, syslog RFC 5424, or OCSF) with tamper-evident transport.</p>
-<p><strong>Required fields per NIST SP 800-53 AU-3</strong>:
-- Date/time (UTC ISO-8601 with microsecond precision)
-- Event type
-- Subject identity (installation_id, repo_slug, commit_sha)
-- Outcome (accepted/rejected + slop_score)
-- Source IP / request ID</p>
-<p><strong>Implementation plan</strong>:
-1. Add <code>audit_format: AuditFormat</code> enum (<code>Ndjson</code> | <code>Cef</code> | <code>Syslog</code>) to
-   <code>crates/gov/src/main.rs</code>.
-2. Implement <code>emit_cef_event(event: &amp;GovLogEvent)</code> using the ArcSight CEF 0.1
-   format: <code>CEF:0|JanitorSecurity|Governor|{ver}|{event_id}|{name}|{sev}|{ext}</code>.
-3. Implement <code>emit_syslog_event</code> using RFC 5424 structured data elements.
-4. Wire <code>JANITOR_GOV_AUDIT_FORMAT</code> env var to select format at startup.
-5. Add deterministic unit tests for CEF/Syslog field ordering.</p>
-<p><strong>Commercial justification</strong>: Every FedRAMP-authorized SIEM (Splunk SIEM,
-Microsoft Sentinel, Chronicle) ingests CEF natively. Without this, customer
-security teams must build custom parsers — a deal-stopper for IL4+ contracts.</p>
-<hr />
-<h3 id="p1-2-write-once-audit-log-au-9-protection-of-audit-information">P1-2: Write-Once Audit Log (AU-9 — Protection of Audit Information)</h3>
-<p><strong>Status</strong>: OPEN — Required for DoD IL4+</p>
-<p><strong>Finding</strong>: The Governor's <code>emit_event</code> writes to stdout. There is no
-append-only audit store with integrity verification. A compromised Governor
-process can silently truncate or alter the audit stream.</p>
-<p><strong>Implementation plan</strong>:
-1. Add an optional <code>JANITOR_GOV_AUDIT_LOG</code> env var pointing to a local path.
-2. On startup, open the file in append-only mode (<code>O_APPEND | O_CREAT</code>).
-3. Write a SHA-384 HMAC (keyed by <code>JANITOR_GOV_AUDIT_HMAC_KEY</code>) over each
-   serialized line before writing — enables offline integrity verification.
-4. Provide <code>janitor verify-audit-log &lt;path&gt;</code> subcommand that replays the
-   HMAC chain and reports any tampered entries.</p>
-<p><strong>FIPS note</strong>: HMAC key must be derived from a FIPS-approved KDF (HKDF-SHA-384)
-when operating in a FIPS module. Do NOT use BLAKE3-based key derivation.</p>
 <hr />
 <h2 id="p2-identity-access-management-fedramp-ia-ac-controls">P2 — Identity &amp; Access Management (FedRAMP IA / AC Controls)</h2>
 <h3 id="p2-1-real-jwt-token-issuance-ia-2-ac-3-ac-6">P2-1: Real JWT Token Issuance (IA-2, AC-3, AC-6)</h3>
