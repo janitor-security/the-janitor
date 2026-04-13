@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)
@@ -1483,6 +1492,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)
@@ -2319,6 +2337,15 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<hr />
+<h2 id="2026-04-13-atlassian-api-contract-workflow-synchronization-v1010-alpha19">2026-04-13 — Atlassian API Contract &amp; Workflow Synchronization (v10.1.0-alpha.19)</h2>
+<p><strong>Directive:</strong> Fix Jira API contract failures and CISA KEV workflow broken binary verification.</p>
+<p><strong>Changes:</strong>
+- <code>crates/cli/src/jira.rs</code>: Search migrated from <code>GET /rest/api/2/search?jql=…</code> to <code>POST /rest/api/2/search</code> with JSON body — eliminates URL-encoding fragmentation rejected by Atlassian schema validator. Project key now double-quoted in JQL (<code>project="KAN"</code>). Description migrated from ADF (REST v3) to plain string (REST v2). Issue type changed from <code>"Bug"</code> to <code>"Task"</code>. New test <code>build_jql_search_payload_uses_post_body_with_quoted_project</code> validates the POST body contract.
+- <code>.github/workflows/cisa-kev-sync.yml</code>: Download step upgraded from unverified <code>gh release download</code> to full SHA-384 + ML-DSA-65 two-layer trust chain mirroring <code>action.yml</code>. Downloads <code>janitor</code>, <code>janitor.sha384</code>, <code>janitor.sig</code> (optional). Bootstrap binary from <code>v10.0.0-rc.9</code> performs Layer 2 PQC verification.
+- <code>Cargo.toml</code>: Version bumped <code>10.1.0-alpha.18</code> → <code>10.1.0-alpha.19</code>.
+- <code>README.md</code>, <code>docs/index.md</code>: Version strings synced via <code>just sync-versions</code>.</p>
+<p><strong>Verification:</strong> <code>cargo test --workspace -- --test-threads=1</code> → all pass. <code>just audit</code> → ✅ System Clean.</p>
 <hr />
 <h2 id="2026-04-12-fedramp-3pao-teardown-slop-eradication-v1010-alpha17">2026-04-12 — FedRAMP 3PAO Teardown &amp; Slop Eradication (v10.1.0-alpha.17)</h2>
 <p><strong>Directive:</strong> Hostile DoD IL6 / FedRAMP audit. Identify cryptographic boundary violations,
