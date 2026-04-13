@@ -12,9 +12,12 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384};
 use std::collections::HashSet;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::sync::{Arc, Mutex, OnceLock};
 
 type HmacSha256 = Hmac<Sha256>;
+type HmacSha384 = Hmac<Sha384>;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Provenance {
@@ -160,14 +163,96 @@ enum GovLogEvent {
     Report {
         entry: Box<BounceLogEntry>,
         inclusion_proof: InclusionProof,
+        source_ip: String,
     },
     AnalysisToken {
         request: AnalysisTokenRequest,
+        source_ip: String,
     },
     GithubInstallation {
         action: String,
         installation_id: u64,
+        source_ip: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuditFormat {
+    Ndjson,
+    Cef,
+    Syslog,
+}
+
+impl AuditFormat {
+    fn from_env() -> anyhow::Result<Self> {
+        match std::env::var("JANITOR_GOV_AUDIT_FORMAT")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            None => Ok(Self::Ndjson),
+            Some("ndjson") | Some("NDJSON") | Some("Ndjson") => Ok(Self::Ndjson),
+            Some("cef") | Some("CEF") | Some("Cef") => Ok(Self::Cef),
+            Some("syslog") | Some("SYSLOG") | Some("Syslog") => Ok(Self::Syslog),
+            Some(other) => anyhow::bail!(
+                "JANITOR_GOV_AUDIT_FORMAT must be one of ndjson, cef, or syslog; got {other}"
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SealedAuditRecord {
+    hmac: String,
+    payload: String,
+}
+
+#[derive(Debug)]
+struct AuditSink {
+    format: AuditFormat,
+    hostname: String,
+    file: Option<Mutex<File>>,
+    hmac_key: Option<Vec<u8>>,
+}
+
+impl AuditSink {
+    fn from_env() -> anyhow::Result<Self> {
+        let format = AuditFormat::from_env()?;
+        let hostname = resolve_hostname();
+        let file_path = std::env::var("JANITOR_GOV_AUDIT_LOG")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let hmac_key = std::env::var("JANITOR_GOV_AUDIT_HMAC_KEY")
+            .ok()
+            .map(|value| parse_hmac_hex_key("JANITOR_GOV_AUDIT_HMAC_KEY", &value))
+            .transpose()?;
+
+        let file = if let Some(path) = file_path {
+            if hmac_key.is_none() {
+                anyhow::bail!(
+                    "JANITOR_GOV_AUDIT_HMAC_KEY must be set when JANITOR_GOV_AUDIT_LOG is configured"
+                );
+            }
+            Some(Mutex::new(
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)
+                    .with_context(|| format!("opening JANITOR_GOV_AUDIT_LOG at {path}"))?,
+            ))
+        } else {
+            None
+        };
+
+        Ok(Self {
+            format,
+            hostname,
+            file,
+            hmac_key,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -278,6 +363,13 @@ fn transparency_log() -> &'static Mutex<Sha384HashChain> {
     LOG.get_or_init(|| Mutex::new(Sha384HashChain::default()))
 }
 
+fn audit_sink() -> anyhow::Result<&'static AuditSink> {
+    static SINK: OnceLock<anyhow::Result<AuditSink>> = OnceLock::new();
+    SINK.get_or_init(AuditSink::from_env)
+        .as_ref()
+        .map_err(|err| anyhow::anyhow!("{err}"))
+}
+
 fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
     static SIGNING_KEY: OnceLock<anyhow::Result<SigningKey>> = OnceLock::new();
     SIGNING_KEY
@@ -308,6 +400,7 @@ fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _ = audit_sink()?;
     let bind_addr = resolve_bind_addr();
     let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
@@ -355,6 +448,7 @@ fn build_router(state: AppState) -> Router {
 }
 
 async fn report_handler(
+    headers: HeaderMap,
     Json(entry): Json<BounceLogEntry>,
 ) -> Result<Json<ReportResponse>, AppError> {
     if let Some(token) = &entry.analysis_token {
@@ -380,6 +474,7 @@ async fn report_handler(
     emit_event(&GovLogEvent::Report {
         entry: Box::new(entry),
         inclusion_proof: proof.clone(),
+        source_ip: extract_source_ip(&headers),
     });
 
     Ok(Json(ReportResponse {
@@ -392,6 +487,7 @@ async fn report_handler(
 
 async fn analysis_token_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<AnalysisTokenRequest>,
 ) -> Result<Json<AnalysisTokenResponse>, AppError> {
     if let Ok(expected) = std::env::var("JANITOR_GOV_EXPECTED_POLICY") {
@@ -420,7 +516,10 @@ async fn analysis_token_handler(
         req.installation_id
     );
 
-    emit_event(&GovLogEvent::AnalysisToken { request: req });
+    emit_event(&GovLogEvent::AnalysisToken {
+        request: req,
+        source_ip: extract_source_ip(&headers),
+    });
 
     Ok(Json(AnalysisTokenResponse {
         token,
@@ -464,6 +563,7 @@ async fn github_webhook_handler(
     emit_event(&GovLogEvent::GithubInstallation {
         action: payload.action.clone(),
         installation_id,
+        source_ip: extract_source_ip(&headers),
     });
 
     Ok(Json(GithubWebhookResponse {
@@ -549,9 +649,291 @@ fn build_signed_receipt(
 }
 
 fn emit_event(event: &GovLogEvent) {
-    match serde_json::to_string(event) {
-        Ok(line) => println!("{line}"),
-        Err(err) => eprintln!("janitor-gov serialization failed: {err}"),
+    let sink = match audit_sink() {
+        Ok(sink) => sink,
+        Err(err) => {
+            eprintln!("janitor-gov audit sink initialization failed: {err}");
+            return;
+        }
+    };
+
+    let payload = render_audit_event(event, sink.format, &sink.hostname, &utc_now_iso8601());
+    println!("{payload}");
+
+    if let (Some(file), Some(key)) = (&sink.file, sink.hmac_key.as_deref()) {
+        match seal_audit_payload(payload.as_str(), key).and_then(|record| {
+            serde_json::to_string(&record).context("serializing sealed audit record")
+        }) {
+            Ok(line) => {
+                if let Ok(mut guard) = file.lock() {
+                    if writeln!(guard, "{line}").is_err() {
+                        eprintln!("janitor-gov audit log append failed");
+                    }
+                } else {
+                    eprintln!("janitor-gov audit log mutex poisoned");
+                }
+            }
+            Err(err) => eprintln!("janitor-gov audit record sealing failed: {err}"),
+        }
+    }
+}
+
+fn render_audit_event(
+    event: &GovLogEvent,
+    format: AuditFormat,
+    hostname: &str,
+    default_timestamp: &str,
+) -> String {
+    match format {
+        AuditFormat::Ndjson => serde_json::to_string(event).unwrap_or_else(|err| {
+            format!("{{\"event\":\"serialization_failed\",\"error\":\"{err}\"}}")
+        }),
+        AuditFormat::Cef => render_cef_event(event),
+        AuditFormat::Syslog => render_syslog_event(event, hostname, default_timestamp),
+    }
+}
+
+fn render_cef_event(event: &GovLogEvent) -> String {
+    let header = format!(
+        "CEF:0|JanitorSecurity|Governor|1.0|{}|{}|{}",
+        event.cef_event_id(),
+        escape_cef_value(event.cef_name()),
+        event.cef_severity()
+    );
+    let extension = match event {
+        GovLogEvent::Report {
+            entry,
+            inclusion_proof,
+            source_ip,
+        } => format!(
+            "src={} cs1Label=repo cs1={} cs2Label=commit cs2={} cs3Label=sequence_index cs3={} cs4Label=policy_hash cs4={} cn1Label=slop_score cn1={} suser={} outcome=accepted",
+            escape_cef_value(source_ip),
+            escape_cef_value(&entry.repo_slug),
+            escape_cef_value(&entry.commit_sha),
+            inclusion_proof.sequence_index,
+            escape_cef_value(&entry.policy_hash),
+            entry.slop_score,
+            escape_cef_value(entry.author.as_deref().unwrap_or("unknown")),
+        ),
+        GovLogEvent::AnalysisToken { request, source_ip } => format!(
+            "src={} cs1Label=repo cs1={} cs2Label=head_sha cs2={} cs3Label=installation_id cs3={} cs4Label=role cs4={} cn1Label=pr cn1={} outcome=issued",
+            escape_cef_value(source_ip),
+            escape_cef_value(&request.repo),
+            escape_cef_value(&request.head_sha),
+            request.installation_id,
+            escape_cef_value(&request.role),
+            request.pr,
+        ),
+        GovLogEvent::GithubInstallation {
+            action,
+            installation_id,
+            source_ip,
+        } => format!(
+            "src={} cs1Label=action cs1={} cs2Label=installation_id cs2={} outcome=accepted",
+            escape_cef_value(source_ip),
+            escape_cef_value(action),
+            installation_id,
+        ),
+    };
+    format!("{header}|{extension}")
+}
+
+fn render_syslog_event(event: &GovLogEvent, hostname: &str, default_timestamp: &str) -> String {
+    let pri = 16 * 8 + event.syslog_severity_code();
+    let timestamp = event.event_timestamp().unwrap_or(default_timestamp);
+    let structured_data = match event {
+        GovLogEvent::Report {
+            entry,
+            inclusion_proof,
+            source_ip,
+        } => format!(
+            "[janitorGov src=\"{}\" repo=\"{}\" commit=\"{}\" seq=\"{}\" policy_hash=\"{}\" slop_score=\"{}\"]",
+            escape_syslog_value(source_ip),
+            escape_syslog_value(&entry.repo_slug),
+            escape_syslog_value(&entry.commit_sha),
+            inclusion_proof.sequence_index,
+            escape_syslog_value(&entry.policy_hash),
+            entry.slop_score,
+        ),
+        GovLogEvent::AnalysisToken { request, source_ip } => format!(
+            "[janitorGov src=\"{}\" repo=\"{}\" head_sha=\"{}\" installation_id=\"{}\" role=\"{}\" pr=\"{}\"]",
+            escape_syslog_value(source_ip),
+            escape_syslog_value(&request.repo),
+            escape_syslog_value(&request.head_sha),
+            request.installation_id,
+            escape_syslog_value(&request.role),
+            request.pr,
+        ),
+        GovLogEvent::GithubInstallation {
+            action,
+            installation_id,
+            source_ip,
+        } => format!(
+            "[janitorGov src=\"{}\" action=\"{}\" installation_id=\"{}\"]",
+            escape_syslog_value(source_ip),
+            escape_syslog_value(action),
+            installation_id,
+        ),
+    };
+    format!(
+        "<{pri}>1 {timestamp} {hostname} janitor-gov - {} - {structured_data} {}",
+        event.cef_event_id(),
+        event.syslog_message()
+    )
+}
+
+fn seal_audit_payload(payload: &str, key: &[u8]) -> anyhow::Result<SealedAuditRecord> {
+    let mut mac = HmacSha384::new_from_slice(key)
+        .map_err(|err| anyhow::anyhow!("initializing audit HMAC failed: {err}"))?;
+    mac.update(payload.as_bytes());
+    Ok(SealedAuditRecord {
+        hmac: hex::encode(mac.finalize().into_bytes()),
+        payload: payload.to_string(),
+    })
+}
+
+fn parse_hmac_hex_key(var_name: &str, value: &str) -> anyhow::Result<Vec<u8>> {
+    let trimmed = value.trim();
+    let key = hex::decode(trimmed)
+        .with_context(|| format!("{var_name} must be valid lowercase or uppercase hex"))?;
+    if key.is_empty() {
+        anyhow::bail!("{var_name} must not be empty");
+    }
+    Ok(key)
+}
+
+fn resolve_hostname() -> String {
+    for key in ["HOSTNAME", "COMPUTERNAME"] {
+        if let Ok(value) = std::env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    "localhost".to_string()
+}
+
+fn extract_source_ip(headers: &HeaderMap) -> String {
+    for header_name in ["x-forwarded-for", "x-real-ip"] {
+        if let Some(value) = headers
+            .get(header_name)
+            .and_then(|value| value.to_str().ok())
+        {
+            if let Some(ip) = value
+                .split(',')
+                .next()
+                .map(str::trim)
+                .filter(|ip| !ip.is_empty())
+            {
+                return ip.to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
+fn utc_now_iso8601() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    let days = (secs / 86400) as i64;
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mo <= 2 { y + 1 } else { y };
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
+fn escape_cef_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('|', "\\|")
+        .replace('=', "\\=")
+        .replace('\n', "\\n")
+}
+
+fn escape_syslog_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace(']', "\\]")
+}
+
+impl GovLogEvent {
+    fn cef_event_id(&self) -> &'static str {
+        match self {
+            Self::Report { .. } => "gov.report",
+            Self::AnalysisToken { .. } => "gov.analysis_token",
+            Self::GithubInstallation { .. } => "gov.github_installation",
+        }
+    }
+
+    fn cef_name(&self) -> &'static str {
+        match self {
+            Self::Report { .. } => "bounce_report",
+            Self::AnalysisToken { .. } => "analysis_token_issued",
+            Self::GithubInstallation { .. } => "github_installation_webhook",
+        }
+    }
+
+    fn cef_severity(&self) -> u8 {
+        match self {
+            Self::Report { entry, .. } if entry.slop_score >= 100 => 10,
+            Self::Report { entry, .. } if entry.slop_score > 0 => 7,
+            Self::Report { .. } => 4,
+            Self::AnalysisToken { .. } => 5,
+            Self::GithubInstallation { .. } => 4,
+        }
+    }
+
+    fn syslog_severity_code(&self) -> u8 {
+        match self.cef_severity() {
+            9 | 10 => 2,
+            7 | 8 => 3,
+            5 | 6 => 4,
+            _ => 6,
+        }
+    }
+
+    fn event_timestamp(&self) -> Option<&str> {
+        match self {
+            Self::Report { entry, .. } => Some(entry.timestamp.as_str()),
+            Self::AnalysisToken { .. } | Self::GithubInstallation { .. } => None,
+        }
+    }
+
+    fn syslog_message(&self) -> String {
+        match self {
+            Self::Report { entry, .. } => format!(
+                "report accepted repo={} commit={} slop_score={}",
+                entry.repo_slug, entry.commit_sha, entry.slop_score
+            ),
+            Self::AnalysisToken { request, .. } => format!(
+                "analysis token issued repo={} installation_id={} role={}",
+                request.repo, request.installation_id, request.role
+            ),
+            Self::GithubInstallation {
+                action,
+                installation_id,
+                ..
+            } => format!(
+                "github installation webhook action={} installation_id={installation_id}",
+                action
+            ),
+        }
     }
 }
 
@@ -636,6 +1018,17 @@ mod tests {
             decision_receipt: None,
             cognition_surrender_index: 0.0,
             analysis_token: None,
+        }
+    }
+
+    fn sample_report_event(source_ip: &str) -> GovLogEvent {
+        GovLogEvent::Report {
+            entry: Box::new(sample_entry()),
+            inclusion_proof: InclusionProof {
+                sequence_index: 42,
+                chained_hash: "abcd".repeat(24),
+            },
+            source_ip: source_ip.to_string(),
         }
     }
 
@@ -728,6 +1121,28 @@ mod tests {
         // SHA-384 produces a 48-byte digest = 96 hex chars.
         assert_eq!(first.chained_hash.len(), 96);
         assert_eq!(second.chained_hash.len(), 96);
+    }
+
+    #[test]
+    fn cef_formatter_renders_exact_string() {
+        let rendered = render_cef_event(&sample_report_event("198.51.100.7"));
+        assert_eq!(
+            rendered,
+            "CEF:0|JanitorSecurity|Governor|1.0|gov.report|bounce_report|10|src=198.51.100.7 cs1Label=repo cs1=owner/repo cs2Label=commit cs2=deadbeef cs3Label=sequence_index cs3=42 cs4Label=policy_hash cs4=policy cn1Label=slop_score cn1=150 suser=agent outcome=accepted"
+        );
+    }
+
+    #[test]
+    fn syslog_formatter_renders_exact_string() {
+        let rendered = render_syslog_event(
+            &sample_report_event("198.51.100.7"),
+            "janitor-host",
+            "2026-04-13T00:00:00Z",
+        );
+        assert_eq!(
+            rendered,
+            "<130>1 2026-04-06T00:00:00Z janitor-host janitor-gov - gov.report - [janitorGov src=\"198.51.100.7\" repo=\"owner/repo\" commit=\"deadbeef\" seq=\"42\" policy_hash=\"policy\" slop_score=\"150\"] report accepted repo=owner/repo commit=deadbeef slop_score=150"
+        );
     }
 
     #[tokio::test]

@@ -1,8 +1,11 @@
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use hmac::KeyInit as _;
+use hmac::Mac as _;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 mod cbom;
@@ -744,6 +747,17 @@ enum Commands {
         /// Path to a bounce log NDJSON file (e.g. `.janitor/bounce_log.ndjson`).
         path: PathBuf,
     },
+    /// Verify the integrity of an HMAC-sealed Governor audit ledger.
+    ///
+    /// Reads the file line by line, recomputes the HMAC-SHA-384 for each payload,
+    /// and fails on the exact tampered line number.
+    VerifyAuditLog {
+        /// Path to the append-only Governor audit ledger.
+        path: PathBuf,
+        /// Hex-encoded HMAC-SHA-384 key used to seal the ledger.
+        #[arg(long)]
+        key: String,
+    },
     /// Replay a sealed decision capsule offline.
     ReplayReceipt {
         /// Path to a persisted `.capsule` envelope.
@@ -1343,6 +1357,9 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::VerifyCbom { key, slh_key, path } => {
             cmd_verify_cbom(key.as_deref(), slh_key.as_deref(), path)?;
+        }
+        Commands::VerifyAuditLog { path, key } => {
+            cmd_verify_audit_log(path, key)?;
         }
         Commands::ReplayReceipt { path } => {
             cmd_replay_receipt(path)?;
@@ -3994,6 +4011,54 @@ fn cmd_replay_receipt(capsule_path: &Path) -> anyhow::Result<()> {
         sealed.capsule.wasm_policy_receipts.len(),
         sealed.receipt.receipt.transparency_anchor
     );
+    Ok(())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SealedAuditRecord {
+    hmac: String,
+    payload: String,
+}
+
+fn parse_hmac_hex_key(var_name: &str, value: &str) -> anyhow::Result<Vec<u8>> {
+    let trimmed = value.trim();
+    let key = hex::decode(trimmed)
+        .with_context(|| format!("{var_name} must be valid lowercase or uppercase hex"))?;
+    if key.is_empty() {
+        anyhow::bail!("{var_name} must not be empty");
+    }
+    Ok(key)
+}
+
+fn cmd_verify_audit_log(path: &Path, key: &str) -> anyhow::Result<()> {
+    type HmacSha384 = hmac::Hmac<sha2::Sha384>;
+
+    let key_bytes = parse_hmac_hex_key("--key", key)?;
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("opening audit log: {}", path.display()))?;
+    let reader = BufReader::new(file);
+
+    for (idx, line) in reader.lines().enumerate() {
+        let line_no = idx + 1;
+        let line = line
+            .with_context(|| format!("reading audit log line {line_no} from {}", path.display()))?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let record: SealedAuditRecord = serde_json::from_str(trimmed)
+            .with_context(|| format!("line {line_no}: invalid sealed audit record"))?;
+        let expected = hex::decode(record.hmac.trim())
+            .with_context(|| format!("line {line_no}: HMAC is not valid hex"))?;
+        let mut mac = HmacSha384::new_from_slice(&key_bytes)
+            .map_err(|err| anyhow::anyhow!("initializing HMAC-SHA-384 failed: {err}"))?;
+        mac.update(record.payload.as_bytes());
+        if mac.verify_slice(&expected).is_err() {
+            anyhow::bail!("line {line_no}: audit ledger HMAC verification failed");
+        }
+    }
+
+    println!("audit ledger verified: {}", path.display());
     Ok(())
 }
 
@@ -7015,6 +7080,74 @@ mod sign_asset_tests {
             sha384_contents.trim(),
             expected,
             "SHA-384 hash file must match Sha384::digest output"
+        );
+    }
+}
+
+#[cfg(test)]
+mod verify_audit_log_tests {
+    use super::*;
+    use hmac::{Hmac, KeyInit, Mac};
+    use sha2::Sha384;
+
+    type HmacSha384 = Hmac<Sha384>;
+
+    fn sealed_line(payload: &str, key_hex: &str) -> String {
+        let key = hex::decode(key_hex).expect("test key must be valid hex");
+        let mut mac = HmacSha384::new_from_slice(&key).expect("test HMAC init must succeed");
+        mac.update(payload.as_bytes());
+        serde_json::json!({
+            "hmac": hex::encode(mac.finalize().into_bytes()),
+            "payload": payload,
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn verify_audit_log_accepts_valid_ledger() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let path = dir.path().join("audit.ndjson");
+        let key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        let body = [
+            sealed_line(
+                "CEF:0|JanitorSecurity|Governor|1.0|gov.report|bounce_report|10|src=198.51.100.7 cs1Label=repo cs1=owner/repo",
+                key,
+            ),
+            sealed_line(
+                "<130>1 2026-04-06T00:00:00Z janitor-host janitor-gov - gov.report - [janitorGov src=\"198.51.100.7\"] report accepted",
+                key,
+            ),
+        ]
+        .join("\n")
+            + "\n";
+        std::fs::write(&path, body).expect("audit ledger must be written");
+
+        cmd_verify_audit_log(&path, key).expect("valid ledger must verify");
+    }
+
+    #[test]
+    fn verify_audit_log_reports_exact_tampered_line() {
+        let dir = tempfile::tempdir().expect("tempdir must exist");
+        let path = dir.path().join("audit.ndjson");
+        let key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        let valid = sealed_line(
+            "CEF:0|JanitorSecurity|Governor|1.0|gov.report|bounce_report|10|src=198.51.100.7",
+            key,
+        );
+        let tampered = serde_json::json!({
+            "hmac": serde_json::from_str::<serde_json::Value>(&valid)
+                .expect("sealed JSON must parse")["hmac"],
+            "payload": "tampered payload",
+        })
+        .to_string();
+        std::fs::write(&path, format!("{valid}\n{tampered}\n"))
+            .expect("audit ledger must be written");
+
+        let err = cmd_verify_audit_log(&path, key).expect_err("tampered ledger must fail");
+        assert!(
+            err.to_string()
+                .contains("line 2: audit ledger HMAC verification failed"),
+            "verification error must identify the exact tampered line"
         );
     }
 }

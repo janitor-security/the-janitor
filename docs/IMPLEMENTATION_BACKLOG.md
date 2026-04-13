@@ -31,6 +31,25 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-13 — SIEM Telemetry & Immutable Audit Ledger (v10.1.0-alpha.21)
+
+**Directive:** Execute P1-1 and P1-2 for the Sovereign Governor: SIEM-native CEF/Syslog emission, append-only HMAC-sealed audit ledger, offline verification, and release prep.
+
+**Files modified:**
+- `crates/gov/src/main.rs` *(modified)* — added `AuditFormat` (`Ndjson`, `Cef`, `Syslog`) via `JANITOR_GOV_AUDIT_FORMAT`; added source-IP extraction from `X-Forwarded-For` / `X-Real-IP`; implemented deterministic CEF and RFC 5424 syslog renderers; added append-only `JANITOR_GOV_AUDIT_LOG` sink with HMAC-SHA-384 sealing keyed by `JANITOR_GOV_AUDIT_HMAC_KEY`; startup now validates audit sink configuration.
+- `crates/cli/src/main.rs` *(modified)* — added `verify-audit-log` subcommand; implemented line-by-line HMAC-SHA-384 verification with constant-time `verify_slice`; failure path aborts with the exact tampered line number.
+- `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.20` → `10.1.0-alpha.21`.
+- `README.md`, `docs/index.md` *(modified)* — version parity synced to `v10.1.0-alpha.21`.
+- `docs/INNOVATION_LOG.md` *(modified)* — purged the now-landed P1-1 / P1-2 immutable-audit backlog items.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` — pending execution below.
+- `just audit` — pending execution below.
+- `just fast-release 10.1.0-alpha.21` — pending execution below.
+
+---
+
 ## 2026-04-13 — Atlassian API Contract & Workflow Synchronization (v10.1.0-alpha.19)
 
 **Directive:** Fix Jira API contract failures and CISA KEV workflow broken binary verification.
