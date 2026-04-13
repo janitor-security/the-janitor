@@ -3,6 +3,39 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.
 
+## 2026-04-13 — Federal Network Encryption & Self-Attestation (v10.1.0-alpha.23)
+
+**Directive:** Close the DoD IL5 Governor transport gap with optional mTLS, generate and sign a first-party Janitor SBOM during release, verify under single-threaded tests, bump to `10.1.0-alpha.23`, and execute the fast-release path.
+
+**Phase 1 — P2-2 mTLS Governor Transport:**
+- `crates/gov/Cargo.toml` *(modified)* — added `axum-server` with `tls-rustls`, plus direct `rustls`, `rustls-pemfile`, `tokio-rustls`, and `tower` dependencies required for native TLS termination and certificate-aware request extensions.
+- `crates/gov/src/main.rs` *(modified)*:
+  - Governor startup now detects `JANITOR_GOV_TLS_CERT` and `JANITOR_GOV_TLS_KEY`; when present it boots over Rustls, otherwise it preserves the plain `axum::serve` path for local development and routing tests.
+  - `JANITOR_GOV_CLIENT_CA` now enables strict client-certificate verification through `WebPkiClientVerifier`; absence of the CA bundle keeps server-side TLS enabled without mutual auth.
+  - Added a custom `GovernorTlsAcceptor` that reads the peer certificate from the Rustls session and injects a typed `ClientIdentity` extension into Axum request handling.
+  - Added CN extraction from the presented client certificate and on-prem fallback in `analysis_token_handler`: when `GITHUB_WEBHOOK_SECRET` is absent and `installation_id == 0`, the Governor derives the installation binding from the client certificate Common Name.
+  - Added deterministic DER parsing helpers for subject/CN extraction without introducing a heavyweight X.509 parser dependency.
+  - Added two regression tests: subject CN extraction from a deterministic DER fixture and analysis-token issuance using mTLS CN fallback in on-prem mode.
+
+**Phase 2 — P3-1 NTIA-Minimum-Elements SBOM:**
+- `justfile` *(modified)* — `fast-release` now:
+  - runs `cargo cyclonedx --manifest-path Cargo.toml --all --format json --spec-version 1.5 --override-filename janitor`,
+  - copies the generated `janitor.cdx.json` into `target/release/janitor.cdx.json`,
+  - signs the SBOM with the same internal `janitor sign-asset` path used for the binary, and
+  - attaches the SBOM plus optional `.sig` to `gh release create`.
+
+**Phase 3 — Versioning / records:**
+- `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.22` to `10.1.0-alpha.23`.
+- `README.md`, `docs/index.md` *(modified via `just sync-versions`)* — version parity updated to `v10.1.0-alpha.23`.
+- `docs/INNOVATION_LOG.md` *(modified)* — open P2-2 / P3-1 backlog sections purged; both items moved into completed status.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this session ledger.
+
+**Verification:**
+- `cargo test -p janitor-gov -- --test-threads=1` ✅ — 19/19 Governor tests pass, including the new CN extraction and on-prem installation binding checks.
+- `cargo test --workspace -- --test-threads=1` ✅ — full workspace green.
+- `just audit` ✅ — fmt, clippy, check, workspace tests, release parity, and doc parity all pass after `just sync-versions`.
+- `just fast-release 10.1.0-alpha.23` — execution attempted below; outcome recorded in session summary.
+
 ## 2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity & Ledger Proving
 
 **Directive:** Zero Trust Identity & Ledger Proving — Phase 1: live-fire HMAC-SHA-384 audit ledger verification; Phase 2: replace Governor stub tokens with real EdDSA JWTs; Phase 3: audit + release.

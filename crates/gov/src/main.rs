@@ -1,22 +1,35 @@
 use anyhow::Context as _;
 use axum::body::Bytes;
+use axum::extract::FromRequestParts;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::AddExtension;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
+use axum_server::accept::Accept;
+use axum_server::tls_rustls::{RustlsAcceptor, RustlsConfig};
 use base64::Engine as _;
 use common::receipt::{DecisionReceipt, SignedDecisionReceipt};
 use dashmap::DashMap;
 use ed25519_dalek::SigningKey;
 use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::server::WebPkiClientVerifier;
+use rustls::RootCertStore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384};
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
+use std::future::{ready, Future};
 use std::io::Write;
+use std::pin::Pin;
+use std::str;
 use std::sync::{Arc, Mutex, OnceLock};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio_rustls::server::TlsStream;
+use tower::Layer;
 
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha384 = Hmac<Sha384>;
@@ -139,6 +152,12 @@ impl AnalysisTokenRequest {
     fn default_role() -> String {
         "ci-writer".to_string()
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ClientIdentity {
+    #[serde(default)]
+    common_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -317,6 +336,30 @@ struct AppState {
     github_webhook_secret: Option<Arc<Vec<u8>>>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct MutualTlsIdentity(Option<ClientIdentity>);
+
+impl<S> FromRequestParts<S> for MutualTlsIdentity
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        ready(Ok(parts
+            .extensions
+            .get::<ClientIdentity>()
+            .cloned()
+            .or_else(|| extract_client_identity_from_headers(&parts.headers))
+            .map(Some)
+            .map(Self)
+            .unwrap_or_default()))
+    }
+}
+
 #[derive(Debug)]
 struct AppError {
     status: StatusCode,
@@ -404,17 +447,26 @@ fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
 async fn main() -> anyhow::Result<()> {
     let _ = audit_sink()?;
     let bind_addr = resolve_bind_addr();
-    let listener = tokio::net::TcpListener::bind(&bind_addr)
-        .await
-        .with_context(|| format!("binding janitor-gov to {bind_addr}"))?;
     let app = build_router(AppState {
         active_installations: Arc::new(DashMap::new()),
         github_webhook_secret: resolve_github_webhook_secret().map(Arc::new),
     });
-    eprintln!("janitor-gov listening on http://{bind_addr}");
-    axum::serve(listener, app)
-        .await
-        .context("serving janitor-gov")?;
+    if let Some(tls) = resolve_rustls_config().await? {
+        eprintln!("janitor-gov listening on https://{bind_addr}");
+        axum_server::bind(bind_addr.parse()?)
+            .acceptor(GovernorTlsAcceptor::new(tls))
+            .serve(app.into_make_service())
+            .await
+            .context("serving janitor-gov over rustls")?;
+    } else {
+        let listener = tokio::net::TcpListener::bind(&bind_addr)
+            .await
+            .with_context(|| format!("binding janitor-gov to {bind_addr}"))?;
+        eprintln!("janitor-gov listening on http://{bind_addr}");
+        axum::serve(listener, app)
+            .await
+            .context("serving janitor-gov")?;
+    }
     Ok(())
 }
 
@@ -438,6 +490,111 @@ fn resolve_github_webhook_secret() -> Option<Vec<u8>> {
         .ok()
         .map(|value| value.trim().as_bytes().to_vec())
         .filter(|value| !value.is_empty())
+}
+
+async fn resolve_rustls_config() -> anyhow::Result<Option<RustlsConfig>> {
+    let cert_path = std::env::var("JANITOR_GOV_TLS_CERT")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let key_path = std::env::var("JANITOR_GOV_TLS_KEY")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let Some(cert_path) = cert_path else {
+        if key_path.is_some() {
+            anyhow::bail!("JANITOR_GOV_TLS_KEY provided without JANITOR_GOV_TLS_CERT");
+        }
+        return Ok(None);
+    };
+    let Some(key_path) = key_path else {
+        anyhow::bail!("JANITOR_GOV_TLS_CERT provided without JANITOR_GOV_TLS_KEY");
+    };
+
+    let server_config = build_server_tls_config(&cert_path, &key_path)
+        .await
+        .with_context(|| format!("building rustls config from {cert_path} and {key_path}"))?;
+    Ok(Some(RustlsConfig::from_config(Arc::new(server_config))))
+}
+
+async fn build_server_tls_config(
+    cert_path: &str,
+    key_path: &str,
+) -> anyhow::Result<rustls::ServerConfig> {
+    let cert_pem = tokio::fs::read(cert_path)
+        .await
+        .with_context(|| format!("reading JANITOR_GOV_TLS_CERT from {cert_path}"))?;
+    let key_pem = tokio::fs::read(key_path)
+        .await
+        .with_context(|| format!("reading JANITOR_GOV_TLS_KEY from {key_path}"))?;
+
+    let cert_chain = load_certificate_chain(&cert_pem)?;
+    let private_key = load_private_key(&key_pem)?;
+
+    let builder = rustls::ServerConfig::builder();
+    let client_ca = std::env::var("JANITOR_GOV_CLIENT_CA")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let mut server_config = if let Some(client_ca_path) = client_ca {
+        let verifier = build_client_verifier(&client_ca_path)
+            .await
+            .with_context(|| format!("loading JANITOR_GOV_CLIENT_CA from {client_ca_path}"))?;
+        builder
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(cert_chain, private_key)
+            .context("building rustls server config with client auth")?
+    } else {
+        builder
+            .with_no_client_auth()
+            .with_single_cert(cert_chain, private_key)
+            .context("building rustls server config")?
+    };
+    server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    Ok(server_config)
+}
+
+fn load_certificate_chain(cert_pem: &[u8]) -> anyhow::Result<Vec<CertificateDer<'static>>> {
+    let mut reader = std::io::BufReader::new(cert_pem);
+    let certs = rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to parse certificate PEM")?;
+    if certs.is_empty() {
+        anyhow::bail!("certificate PEM contained no certificates");
+    }
+    Ok(certs)
+}
+
+fn load_private_key(key_pem: &[u8]) -> anyhow::Result<PrivateKeyDer<'static>> {
+    let mut reader = std::io::BufReader::new(key_pem);
+    rustls_pemfile::private_key(&mut reader)
+        .context("failed to parse private key PEM")?
+        .ok_or_else(|| anyhow::anyhow!("private key PEM contained no private key"))
+}
+
+async fn build_client_verifier(
+    client_ca_path: &str,
+) -> anyhow::Result<Arc<dyn rustls::server::danger::ClientCertVerifier>> {
+    let ca_pem = tokio::fs::read(client_ca_path)
+        .await
+        .with_context(|| format!("reading CA bundle from {client_ca_path}"))?;
+    let mut reader = std::io::BufReader::new(ca_pem.as_slice());
+    let certs = rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to parse client CA PEM")?;
+    if certs.is_empty() {
+        anyhow::bail!("client CA PEM contained no certificates");
+    }
+    let mut roots = RootCertStore::empty();
+    let (_added, rejected) = roots.add_parsable_certificates(certs);
+    if rejected != 0 {
+        anyhow::bail!("client CA PEM contained unparsable certificates");
+    }
+    WebPkiClientVerifier::builder(Arc::new(roots))
+        .build()
+        .map_err(|err| anyhow::anyhow!("building client cert verifier: {err}"))
 }
 
 fn build_router(state: AppState) -> Router {
@@ -497,9 +654,19 @@ async fn report_handler(
 
 async fn analysis_token_handler(
     State(state): State<AppState>,
+    mtls_identity: MutualTlsIdentity,
     headers: HeaderMap,
-    Json(req): Json<AnalysisTokenRequest>,
+    Json(mut req): Json<AnalysisTokenRequest>,
 ) -> Result<Json<AnalysisTokenResponse>, AppError> {
+    if req.installation_id == 0 && state.github_webhook_secret.is_none() {
+        req.installation_id = installation_id_from_mtls_identity(&mtls_identity.0)
+            .ok_or_else(|| {
+                AppError::forbidden(
+                    "installation_id missing: provide installation_id or present an mTLS client certificate with a Common Name",
+                )
+            })?;
+    }
+
     if let Ok(expected) = std::env::var("JANITOR_GOV_EXPECTED_POLICY") {
         let expected = expected.trim();
         if !expected.is_empty() && req.policy_hash != expected {
@@ -509,7 +676,8 @@ async fn analysis_token_handler(
         }
     }
 
-    if req.installation_id != 0
+    if state.github_webhook_secret.is_some()
+        && req.installation_id != 0
         && !state
             .active_installations
             .contains_key(&req.installation_id)
@@ -534,6 +702,187 @@ async fn analysis_token_handler(
         mode: "jwt".to_string(),
         expires_in_secs: 300,
     }))
+}
+
+fn installation_id_from_mtls_identity(identity: &Option<ClientIdentity>) -> Option<u64> {
+    identity
+        .as_ref()
+        .and_then(|identity| identity.common_name.as_deref())
+        .and_then(|cn| cn.parse::<u64>().ok())
+}
+
+#[derive(Clone)]
+struct GovernorTlsAcceptor {
+    inner: RustlsAcceptor,
+}
+
+impl GovernorTlsAcceptor {
+    fn new(config: RustlsConfig) -> Self {
+        Self {
+            inner: RustlsAcceptor::new(config),
+        }
+    }
+}
+
+impl<I, S> Accept<I, S> for GovernorTlsAcceptor
+where
+    I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    S: Send + 'static,
+{
+    type Stream = TlsStream<I>;
+    type Service = AddExtension<S, ClientIdentity>;
+    type Future =
+        Pin<Box<dyn Future<Output = std::io::Result<(Self::Stream, Self::Service)>> + Send>>;
+
+    fn accept(&self, stream: I, service: S) -> Self::Future {
+        let acceptor = self.inner.clone();
+        Box::pin(async move {
+            let (stream, service) = acceptor.accept(stream, service).await?;
+            let client_identity = stream
+                .get_ref()
+                .1
+                .peer_certificates()
+                .and_then(|certs| certs.first())
+                .and_then(|cert| extract_client_identity_from_der(cert.as_ref()))
+                .unwrap_or_default();
+            Ok((stream, axum::Extension(client_identity).layer(service)))
+        })
+    }
+}
+
+fn extract_client_identity_from_headers(headers: &HeaderMap) -> Option<ClientIdentity> {
+    headers
+        .get("x-janitor-client-cert")
+        .and_then(|value| value.to_str().ok())
+        .and_then(decode_client_cert_header)
+        .and_then(|der| extract_client_identity_from_der(&der))
+}
+
+fn decode_client_cert_header(value: &str) -> Option<Vec<u8>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    base64::engine::general_purpose::STANDARD
+        .decode(trimmed)
+        .ok()
+}
+
+fn extract_client_identity_from_der(der: &[u8]) -> Option<ClientIdentity> {
+    extract_common_name_from_certificate(der).map(|common_name| ClientIdentity {
+        common_name: Some(common_name),
+    })
+}
+
+fn extract_common_name_from_certificate(der: &[u8]) -> Option<String> {
+    let (certificate, _) = parse_der_tlv(der)?;
+    if certificate.tag != 0x30 {
+        return None;
+    }
+    let mut cert_children = parse_der_children(certificate.value)?;
+    let tbs = cert_children.next()?;
+    if tbs.tag != 0x30 {
+        return None;
+    }
+    let mut tbs_children = parse_der_children(tbs.value)?;
+    let first = tbs_children.next()?;
+    let serial = if first.tag == 0xa0 {
+        tbs_children.next()?
+    } else {
+        first
+    };
+    if serial.tag != 0x02 {
+        return None;
+    }
+    let _signature = tbs_children.next()?;
+    let _issuer = tbs_children.next()?;
+    let _validity = tbs_children.next()?;
+    let subject = tbs_children.next()?;
+    if subject.tag != 0x30 {
+        return None;
+    }
+    extract_common_name_from_subject(subject.value)
+}
+
+fn extract_common_name_from_subject(subject_der: &[u8]) -> Option<String> {
+    let rdns = parse_der_children(subject_der)?;
+    for rdn in rdns {
+        if rdn.tag != 0x31 {
+            continue;
+        }
+        for attr in parse_der_children(rdn.value)? {
+            if attr.tag != 0x30 {
+                continue;
+            }
+            let mut pair = parse_der_children(attr.value)?;
+            let oid = pair.next()?;
+            let value = pair.next()?;
+            if oid.value == [0x55, 0x04, 0x03] {
+                return parse_directory_string(value);
+            }
+        }
+    }
+    None
+}
+
+fn parse_directory_string(value: DerTlv<'_>) -> Option<String> {
+    match value.tag {
+        0x0c | 0x13 | 0x16 => str::from_utf8(value.value).ok().map(ToOwned::to_owned),
+        0x1e => {
+            if !value.value.len().is_multiple_of(2) {
+                return None;
+            }
+            let utf16 = value
+                .value
+                .chunks_exact(2)
+                .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+                .collect::<Vec<_>>();
+            String::from_utf16(&utf16).ok()
+        }
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DerTlv<'a> {
+    tag: u8,
+    value: &'a [u8],
+}
+
+fn parse_der_children(mut input: &[u8]) -> Option<impl Iterator<Item = DerTlv<'_>> + '_> {
+    let mut items = Vec::new();
+    while !input.is_empty() {
+        let (item, rest) = parse_der_tlv(input)?;
+        items.push(item);
+        input = rest;
+    }
+    Some(items.into_iter())
+}
+
+fn parse_der_tlv(input: &[u8]) -> Option<(DerTlv<'_>, &[u8])> {
+    let (&tag, rest) = input.split_first()?;
+    let (len, rest) = parse_der_length(rest)?;
+    if rest.len() < len {
+        return None;
+    }
+    let (value, rest) = rest.split_at(len);
+    Some((DerTlv { tag, value }, rest))
+}
+
+fn parse_der_length(input: &[u8]) -> Option<(usize, &[u8])> {
+    let (&first, rest) = input.split_first()?;
+    if first & 0x80 == 0 {
+        return Some((usize::from(first), rest));
+    }
+    let octets = usize::from(first & 0x7f);
+    if octets == 0 || octets > std::mem::size_of::<usize>() || rest.len() < octets {
+        return None;
+    }
+    let mut len = 0usize;
+    for &byte in &rest[..octets] {
+        len = (len << 8) | usize::from(byte);
+    }
+    Some((len, &rest[octets..]))
 }
 
 async fn verify_suppressions_handler(
@@ -1163,6 +1512,54 @@ mod tests {
         }
     }
 
+    fn sample_client_cert_der(common_name: &str) -> Vec<u8> {
+        fn tlv(tag: u8, value: &[u8]) -> Vec<u8> {
+            let mut out = Vec::with_capacity(value.len() + 4);
+            out.push(tag);
+            if value.len() < 128 {
+                out.push(value.len() as u8);
+            } else {
+                let len_bytes = (value.len() as u16).to_be_bytes();
+                out.push(0x82);
+                out.extend_from_slice(&len_bytes);
+            }
+            out.extend_from_slice(value);
+            out
+        }
+
+        let version = tlv(0xa0, &[0x02, 0x01, 0x02]);
+        let serial = tlv(0x02, &[0x01]);
+        let algorithm = tlv(0x30, &[0x06, 0x03, 0x2a, 0x03, 0x04]);
+        let issuer = tlv(0x30, &[]);
+        let validity = tlv(0x30, &[]);
+        let cn_attr = {
+            let mut attr = Vec::new();
+            attr.extend_from_slice(&tlv(0x06, &[0x55, 0x04, 0x03]));
+            attr.extend_from_slice(&tlv(0x0c, common_name.as_bytes()));
+            tlv(0x31, &tlv(0x30, &attr))
+        };
+        let subject = tlv(0x30, &cn_attr);
+        let spki = tlv(0x30, &[]);
+
+        let mut tbs = Vec::new();
+        tbs.extend_from_slice(&version);
+        tbs.extend_from_slice(&serial);
+        tbs.extend_from_slice(&algorithm);
+        tbs.extend_from_slice(&issuer);
+        tbs.extend_from_slice(&validity);
+        tbs.extend_from_slice(&subject);
+        tbs.extend_from_slice(&spki);
+
+        let signature_algorithm = algorithm.clone();
+        let signature_value = tlv(0x03, &[0x00]);
+
+        let mut cert = Vec::new();
+        cert.extend_from_slice(&tlv(0x30, &tbs));
+        cert.extend_from_slice(&signature_algorithm);
+        cert.extend_from_slice(&signature_value);
+        tlv(0x30, &cert)
+    }
+
     fn test_app() -> Router {
         build_router(AppState {
             active_installations: Arc::new(DashMap::new()),
@@ -1589,5 +1986,44 @@ mod tests {
 
         let response = test_app().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn extract_common_name_from_certificate_reads_subject_cn() {
+        let cert = sample_client_cert_der("4242");
+        assert_eq!(
+            extract_common_name_from_certificate(&cert).as_deref(),
+            Some("4242")
+        );
+    }
+
+    #[tokio::test]
+    async fn analysis_token_uses_mtls_common_name_for_on_prem_installation_id() {
+        set_test_signing_key();
+        let app = build_router(AppState {
+            active_installations: Arc::new(DashMap::new()),
+            github_webhook_secret: None,
+        });
+        let cert = sample_client_cert_der("4242");
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/analysis-token")
+            .header("content-type", "application/json")
+            .header(
+                "x-janitor-client-cert",
+                base64::engine::general_purpose::STANDARD.encode(cert),
+            )
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "repo": "owner/repo",
+                    "pr": 6,
+                    "head_sha": "abc123",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

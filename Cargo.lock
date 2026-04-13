@@ -19,7 +19,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "advanced_threats"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -59,7 +59,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -292,8 +292,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-server"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1ab4a3ec9ea8a657c72d99a03a824af695bd0fb5ec639ccbd9cd3543b41a5f9"
+dependencies = [
+ "arc-swap",
+ "bytes",
+ "fs-err",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-util",
+ "pin-project-lite",
+ "rustls",
+ "rustls-pemfile",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tower-service",
+]
+
+[[package]]
 name = "backlog_pruner"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "blake3",
@@ -564,7 +586,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "advanced_threats",
  "anatomist",
@@ -640,7 +662,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "common"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "base64",
@@ -1012,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "crucible"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "common",
  "forge",
@@ -1142,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "common",
  "crossterm",
@@ -1518,7 +1540,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "advanced_threats",
  "aho-corasick",
@@ -1570,6 +1592,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs-err"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73fde052dbfc920003cfd2c8e2c6e6d4cc7c1091538c3a24226cec0665ab08c0"
+dependencies = [
+ "autocfg",
+ "tokio",
 ]
 
 [[package]]
@@ -1673,7 +1705,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "common",
@@ -1757,6 +1789,25 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "h2"
+version = "0.4.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f44da3a8150a6703ed5d34e164b875fd14c2cdab9af1252a9a1020bde2bdc54"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "http",
+ "indexmap",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1887,6 +1938,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -2043,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "include_deflator"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "blake3",
@@ -2175,7 +2227,7 @@ dependencies = [
 
 [[package]]
 name = "janitor-fuzz"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "libfuzzer-sys",
  "polyglot",
@@ -2187,10 +2239,11 @@ dependencies = [
 
 [[package]]
 name = "janitor-gov"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-server",
  "base64",
  "common",
  "dashmap",
@@ -2198,10 +2251,13 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "jsonwebtoken",
+ "rustls",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "sha2 0.11.0",
  "tokio",
+ "tokio-rustls",
  "tower",
 ]
 
@@ -2481,7 +2537,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -2558,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "base64",
@@ -2795,7 +2851,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "rayon",
@@ -2997,7 +3053,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "polyglot"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -3311,7 +3367,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -3701,7 +3757,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "junction",
@@ -4154,6 +4210,29 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
+dependencies = [
+ "rustls",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.7.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -4652,7 +4731,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -5570,7 +5649,7 @@ checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
 
 [[package]]
 name = "wisdom-bake"
-version = "10.1.0-alpha.22"
+version = "10.1.0-alpha.23"
 dependencies = [
  "anyhow",
  "common",

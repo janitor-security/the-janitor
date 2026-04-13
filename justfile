@@ -115,6 +115,10 @@ fast-release version:
 	just sync-versions
 	just audit
 	cargo build --release --workspace
+	cargo cyclonedx --manifest-path crates/cli/Cargo.toml --all --format json --spec-version 1.5 --override-filename janitor.cdx
+	SBOM_SOURCE="crates/cli/janitor.cdx.json"
+	SBOM_PATH="target/release/janitor.cdx.json"
+	cp "${SBOM_SOURCE}" "${SBOM_PATH}"
 	strip target/release/janitor
 	# SLSA Level 4: compute SHA-384 digest (and optional ML-DSA-65 sig) for binary provenance.
 	# Produces target/release/janitor.sha384 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.
@@ -123,6 +127,11 @@ fast-release version:
 	    SIGN_ARGS+=(--pqc-key "${JANITOR_PQC_KEY}")
 	fi
 	./target/release/janitor sign-asset "${SIGN_ARGS[@]}"
+	SBOM_SIGN_ARGS=("${SBOM_PATH}")
+	if [[ -n "${JANITOR_PQC_KEY:-}" ]]; then
+	    SBOM_SIGN_ARGS+=(--pqc-key "${JANITOR_PQC_KEY}")
+	fi
+	./target/release/janitor sign-asset "${SBOM_SIGN_ARGS[@]}"
 	# Idempotency guard — check local and remote before any mutation (Law: idempotency.md).
 	if git rev-parse "v{{version}}" >/dev/null 2>&1 \
 	   || git ls-remote --tags origin "refs/tags/v{{version}}" | grep -q .; then
@@ -138,8 +147,9 @@ fast-release version:
 	if gh release view "v{{version}}" >/dev/null 2>&1; then
 	    echo "Idempotency guard: GitHub Release v{{version}} already exists. Skipping gh release create."
 	else
-	    RELEASE_ASSETS=(target/release/janitor target/release/janitor.sha384)
+	    RELEASE_ASSETS=(target/release/janitor target/release/janitor.sha384 "${SBOM_PATH}")
 	    [ -f target/release/janitor.sig ] && RELEASE_ASSETS+=(target/release/janitor.sig)
+	    [ -f "${SBOM_PATH}.sig" ] && RELEASE_ASSETS+=("${SBOM_PATH}.sig")
 	    gh release create v{{version}} \
 	        --generate-notes \
 	        --title "The Janitor v{{version}}" \

@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 axum = { version = "0.8.6", features = ["json"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 base64.workspace = true
 common = { path = "../common" }
 dashmap = "6.1"
@@ -20,10 +21,14 @@ ed25519-dalek.workspace = true
 hex.workspace = true
 hmac.workspace = true
 jsonwebtoken = "9"
+rustls.workspace = true
+rustls-pemfile.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+tokio-rustls = "0.26"
+tower = "0.5.2"
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
