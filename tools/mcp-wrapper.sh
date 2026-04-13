@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # MCP stdio bridge with automatic UDS daemon resurrection.
 #
 # On each invocation (Claude Code relaunches this on every session):

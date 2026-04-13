@@ -4685,9 +4685,17 @@ fn cmd_update_wisdom_with_urls(
             }
         };
 
-        let kev_bytes = kev_resp.body_mut().read_to_vec().map_err(|e| {
-            anyhow::anyhow!("update-wisdom --ci-mode: reading KEV response failed: {e}")
-        })?;
+        // Circuit breaker: cap CISA KEV JSON at 32 MiB. Current feed is ~2 MiB;
+        // 32 MiB provides a 16× safety margin against unbounded heap growth.
+        const MAX_KEV_BYTES: u64 = 32 * 1024 * 1024;
+        let kev_bytes = kev_resp
+            .body_mut()
+            .with_config()
+            .limit(MAX_KEV_BYTES)
+            .read_to_vec()
+            .map_err(|_e| {
+                anyhow::anyhow!("update-wisdom --ci-mode: reading KEV response failed")
+            })?;
 
         let kev_json: serde_json::Value = serde_json::from_slice(&kev_bytes).map_err(|e| {
             anyhow::anyhow!("update-wisdom --ci-mode: parsing KEV JSON failed: {e}")
@@ -4904,9 +4912,19 @@ fn fetch_osv_slopsquat_corpus_from(
             .get(&zip_url)
             .call()
             .map_err(|_e| anyhow::anyhow!("update-slopsquat: OSV bulk ZIP fetch failed"))?;
-        let zip_bytes = response.body_mut().read_to_vec().map_err(|_e| {
-            anyhow::anyhow!("update-slopsquat: reading OSV bulk ZIP response failed")
-        })?;
+        // Circuit breaker: cap bulk OSV ZIP downloads at 256 MiB per ecosystem.
+        // OSV's all.zip files are typically 50–150 MiB; 256 MiB gives a 2×
+        // safety margin while preventing unbounded heap growth from a malformed
+        // or adversarially-redirected oversized payload.
+        const MAX_ZIP_BYTES: u64 = 256 * 1024 * 1024;
+        let zip_bytes = response
+            .body_mut()
+            .with_config()
+            .limit(MAX_ZIP_BYTES)
+            .read_to_vec()
+            .map_err(|_e| {
+                anyhow::anyhow!("update-slopsquat: reading OSV bulk ZIP response failed")
+            })?;
 
         let found = extract_mal_packages_from_zip(&zip_bytes, ecosystem)
             .map_err(|_e| anyhow::anyhow!("update-slopsquat: extracting OSV bulk ZIP failed"))?;
@@ -5219,8 +5237,13 @@ fn fetch_verified_wisdom_payload(
         .call()
         // CodeQL: URL and error details redacted — mirror URL may contain credentials.
         .map_err(|_e| anyhow::anyhow!("{mode_label}: wisdom archive fetch failed"))?;
+    // Circuit breaker: wisdom archives are typically a few hundred KiB.
+    // 64 MiB provides a generous safety margin against unbounded heap growth.
+    const MAX_WISDOM_BYTES: u64 = 64 * 1024 * 1024;
     let bytes = response
         .body_mut()
+        .with_config()
+        .limit(MAX_WISDOM_BYTES)
         .read_to_vec()
         // CodeQL: error details redacted.
         .map_err(|_e| anyhow::anyhow!("update-wisdom: reading wisdom response body failed"))?;
@@ -5229,8 +5252,12 @@ fn fetch_verified_wisdom_payload(
         .call()
         // CodeQL: URL and error details redacted — mirror URL may contain credentials.
         .map_err(|_e| anyhow::anyhow!("{mode_label}: wisdom signature fetch failed"))?;
+    // Circuit breaker: Ed25519 signatures are exactly 64 bytes; 4 KiB is generous.
+    const MAX_SIG_BYTES: u64 = 4 * 1024;
     let sig_bytes = sig_response
         .body_mut()
+        .with_config()
+        .limit(MAX_SIG_BYTES)
         .read_to_vec()
         // CodeQL: error details redacted.
         .map_err(|_e| {
