@@ -13,7 +13,6 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 axum = { version = "0.8.6", features = ["json"] }
-blake3.workspace = true
 common = { path = "../common" }
 dashmap = "6.1"
 ed25519-dalek.workspace = true

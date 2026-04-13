@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use ed25519_dalek::SigningKey;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
+use sha2::{Digest, Sha256, Sha384};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -115,7 +115,7 @@ struct AnalysisTokenRequest {
     head_sha: String,
     #[serde(default)]
     installation_id: u64,
-    /// BLAKE3 hash of the canonical policy fields (from `JanitorPolicy::content_hash`).
+    /// SHA-256 hash of the canonical policy fields (from `JanitorPolicy::content_hash`).
     ///
     /// When `JANITOR_GOV_EXPECTED_POLICY` is set in the Governor environment, the
     /// hash MUST match or the token request is rejected with HTTP 403
@@ -187,22 +187,37 @@ struct GithubWebhookResponse {
     installation_id: u64,
 }
 
-#[derive(Debug, Default)]
-struct Blake3HashChain {
-    last_hash: [u8; 32],
+/// FIPS 140-3 compliant transparency log hash chain.
+///
+/// Replaces the prior BLAKE3 implementation.  NIST SP 800-92 requires
+/// audit log integrity mechanisms to use NIST-approved algorithms;
+/// SHA-384 (FIPS 180-4) satisfies this requirement.  Each `append`
+/// produces a 96-character hex string (`chained_hash` in `InclusionProof`).
+#[derive(Debug)]
+struct Sha384HashChain {
+    last_hash: [u8; 48],
     next_index: u64,
 }
 
-impl Blake3HashChain {
+impl Default for Sha384HashChain {
+    fn default() -> Self {
+        Self {
+            last_hash: [0u8; 48],
+            next_index: 0,
+        }
+    }
+}
+
+impl Sha384HashChain {
     fn append(&mut self, new_cbom_signature: &str) -> InclusionProof {
         let mut payload = Vec::with_capacity(self.last_hash.len() + new_cbom_signature.len());
         payload.extend_from_slice(&self.last_hash);
         payload.extend_from_slice(new_cbom_signature.as_bytes());
-        let digest = blake3::hash(&payload);
-        self.last_hash = *digest.as_bytes();
+        let digest = Sha384::digest(&payload);
+        self.last_hash.copy_from_slice(&digest);
         let proof = InclusionProof {
             sequence_index: self.next_index,
-            chained_hash: digest.to_hex().to_string(),
+            chained_hash: hex::encode(self.last_hash),
         };
         self.next_index = self.next_index.saturating_add(1);
         proof
@@ -258,9 +273,9 @@ impl IntoResponse for AppError {
     }
 }
 
-fn transparency_log() -> &'static Mutex<Blake3HashChain> {
-    static LOG: OnceLock<Mutex<Blake3HashChain>> = OnceLock::new();
-    LOG.get_or_init(|| Mutex::new(Blake3HashChain::default()))
+fn transparency_log() -> &'static Mutex<Sha384HashChain> {
+    static LOG: OnceLock<Mutex<Sha384HashChain>> = OnceLock::new();
+    LOG.get_or_init(|| Mutex::new(Sha384HashChain::default()))
 }
 
 fn governor_signing_key() -> anyhow::Result<&'static SigningKey> {
@@ -704,12 +719,15 @@ mod tests {
 
     #[test]
     fn hash_chain_appends_deterministically() {
-        let mut chain = Blake3HashChain::default();
+        let mut chain = Sha384HashChain::default();
         let first = chain.append("sig-a");
         let second = chain.append("sig-b");
         assert_eq!(first.sequence_index, 0);
         assert_eq!(second.sequence_index, 1);
         assert_ne!(first.chained_hash, second.chained_hash);
+        // SHA-384 produces a 48-byte digest = 96 hex chars.
+        assert_eq!(first.chained_hash.len(), 96);
+        assert_eq!(second.chained_hash.len(), 96);
     }
 
     #[tokio::test]

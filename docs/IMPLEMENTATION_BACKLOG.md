@@ -5,6 +5,32 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-13 — Automated Live-Fire Proving & FIPS 140-3 Scrub (v10.1.0-alpha.20)
+
+**Directive:** Live-fire Jira ASPM dedup test + FIPS 140-3 cryptographic boundary remediation (P0-2 + P0-3).
+
+**Phase 1 — Live-Fire ASPM Dedup:**
+- `live_fire_test.patch`: HCL Terraform `aws_iam_role` with wildcard `Action="*"` — triggers `security:iac_agentic_recon_target` at `KevCritical` (150 pts).
+- Run 1: `slop_score=150`, no diag error → Jira ticket created (HTTP 200, silent success).
+- Run 2: Dedup search runs; fail-open contract observed (no diag error); idempotent.
+- Test artifacts deleted; `janitor.toml` restored.
+
+**Phase 2 — P0-2 (Governor Transparency Log: BLAKE3 → SHA-384):**
+- `crates/gov/src/main.rs`: `Blake3HashChain` → `Sha384HashChain`; `last_hash: [u8; 32]` → `[u8; 48]`; `blake3::hash` replaced with `sha2::Sha384::digest`; `chained_hash` is now 96-char hex; manual `Default` impl added; test extended to assert `chained_hash.len() == 96`.
+- `crates/gov/Cargo.toml`: `blake3` dependency removed.
+
+**Phase 3 — P0-3 (Policy Content Hash: BLAKE3 → SHA-256):**
+- `crates/common/src/policy.rs`: `content_hash()` now uses `sha2::Sha256::digest`; output is 64-char hex (FIPS 180-4); `use sha2::Digest as _` added; test comment updated; doc comment updated.
+- `docs/INNOVATION_LOG.md`: P0-2 and P0-3 marked RESOLVED.
+
+**Changes:** `crates/gov/src/main.rs`, `crates/gov/Cargo.toml`, `crates/common/src/policy.rs`, `docs/INNOVATION_LOG.md`, `Cargo.toml`, `README.md`, `docs/index.md`.
+
+**Verification:** `cargo test --workspace -- --test-threads=1` → all pass. `just audit` → ✅ System Clean.
+
+**Operator note:** Existing `JANITOR_GOV_EXPECTED_POLICY` values contain BLAKE3 digests and must be refreshed with new SHA-256 hashes after upgrading.
+
+---
+
 ## 2026-04-13 — Atlassian API Contract & Workflow Synchronization (v10.1.0-alpha.19)
 
 **Directive:** Fix Jira API contract failures and CISA KEV workflow broken binary verification.

@@ -33,6 +33,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use sha2::Digest as _;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -936,13 +937,14 @@ impl JanitorPolicy {
         score < self.effective_gate(pr_body)
     }
 
-    /// Computes a stable BLAKE3 hash over the security-relevant canonical fields.
+    /// Computes a stable SHA-256 hash over the security-relevant canonical fields.
     ///
     /// Only fields that affect enforcement semantics are included — ephemeral
     /// settings such as `soft_fail` or `forge.governor_url` are excluded so
     /// that infrastructure-only changes do not trigger policy-drift alerts.
     ///
     /// The hash is deterministic: maps are sorted before serialization.
+    /// Output is a 64-character lowercase hex string (SHA-256, FIPS 180-4).
     pub fn content_hash(&self) -> String {
         // Sort wasm_pins HashMap keys for deterministic ordering.
         let mut pins_sorted: Vec<(&String, &String)> = self.wasm_pins.iter().collect();
@@ -965,9 +967,10 @@ impl JanitorPolicy {
             "wasm_pqc_pub_key": self.wasm_pqc_pub_key,
             "suppressions": self.suppressions,
         });
-        blake3::hash(canonical.to_string().as_bytes())
-            .to_hex()
-            .to_string()
+        sha2::Sha256::digest(canonical.to_string().as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 }
 
@@ -1419,7 +1422,7 @@ mod tests {
         let h1 = p.content_hash();
         let h2 = p.content_hash();
         assert_eq!(h1, h2, "content_hash must be stable across calls");
-        assert_eq!(h1.len(), 64, "BLAKE3 hex output is 64 characters");
+        assert_eq!(h1.len(), 64, "SHA-256 hex output is 64 characters");
     }
 
     #[test]
