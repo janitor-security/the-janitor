@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:9a3284db-e457-4ff9-84f5-b335f8f1c0d7",
+  "serialNumber": "urn:uuid:56b22647-a995-4903-ab2f-2a84dee128cd",
   "metadata": {
-    "timestamp": "2026-04-13T18:39:25.764390275Z",
+    "timestamp": "2026-04-13T21:15:58.728679271Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "name": "common",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.0-alpha.23?download_url=file://.",
+      "purl": "pkg:cargo/common@10.1.0-alpha.24?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24 bin-target-0",
           "name": "common",
-          "version": "10.1.0-alpha.23",
-          "purl": "pkg:cargo/common@10.1.0-alpha.23?download_url=file://.#src/lib.rs"
+          "version": "10.1.0-alpha.24",
+          "purl": "pkg:cargo/common@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -5089,7 +5089,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

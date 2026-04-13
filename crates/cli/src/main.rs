@@ -947,6 +947,26 @@ enum Commands {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+
+    /// Generate a fresh Dual-PQC (ML-DSA-65 + SLH-DSA-SHAKE-192s) private key bundle.
+    ///
+    /// Writes the raw binary key material to `out_path`.  The bundle layout is
+    /// ML-DSA-65 private key (4032 bytes) followed immediately by
+    /// SLH-DSA-SHAKE-192s private key bytes.
+    ///
+    /// Pass the output path as `--pqc-key` in `janitor bounce` to enable local
+    /// Dual-PQC (FIPS 204 + FIPS 205) attestation signing without the Governor.
+    ///
+    /// ## Usage
+    /// ```sh
+    /// janitor generate-keys .janitor_release.key
+    /// janitor bounce --pqc-key .janitor_release.key ...
+    /// ```
+    #[command(hide = true)]
+    GenerateKeys {
+        /// Output path for the dual-PQC private key bundle.
+        out_path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1390,6 +1410,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::WatchSbom { path } => {
             cmd_watch_sbom(path)?;
+        }
+        Commands::GenerateKeys { out_path } => {
+            cmd_generate_keys(out_path)?;
         }
     }
 
@@ -3104,6 +3127,26 @@ fn cmd_bounce(
 
     // Load governance manifest — absent = defaults OK; malformed = hard fail.
     let mut policy = JanitorPolicy::load(project_root)?;
+
+    // ASPM Preflight — verify Jira credentials before analysis begins so the
+    // operator sees a clear error at startup rather than a buried fail-open
+    // warning buried in findings output.
+    let jira_sync_disabled = if policy.jira.is_configured() {
+        let user_ok = std::env::var("JANITOR_JIRA_USER").is_ok();
+        let token_ok = std::env::var("JANITOR_JIRA_TOKEN").is_ok();
+        if !user_ok || !token_ok {
+            eprintln!(
+                "[ASPM PREFLIGHT] Jira integration configured but credentials missing. \
+                 Sync disabled."
+            );
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     let scm_context = common::scm::ScmContext::from_env();
     let resolved_pr_number = pr_number.or(scm_context.pr_number);
     let resolved_repo_slug = repo_slug
@@ -3849,13 +3892,15 @@ probable AI context-collapse (hallucinated function reference)"
         effective_gate,
         &policy,
     );
-    if let Err(_e) =
-        jira::sync_findings_to_jira(&policy.jira, &score.structured_findings, &janitor_dir)
-    {
-        report::append_diag_log(
-            &janitor_dir,
-            "WARN jira sync pipeline failed — error details redacted",
-        );
+    if !jira_sync_disabled {
+        if let Err(_e) =
+            jira::sync_findings_to_jira(&policy.jira, &score.structured_findings, &janitor_dir)
+        {
+            report::append_diag_log(
+                &janitor_dir,
+                "WARN jira sync pipeline failed — error details redacted",
+            );
+        }
     }
     report::append_bounce_log(&janitor_dir, &log_entry);
     let verdict = common::scm::StatusVerdict::bounce(
@@ -6532,6 +6577,44 @@ fn cmd_sign_asset(file: &Path, pqc_key: Option<&str>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// generate-keys
+// ---------------------------------------------------------------------------
+
+/// Generate a fresh Dual-PQC private key bundle and write it to `out_path`.
+///
+/// Wraps [`common::pqc::generate_dual_pqc_key_bundle`].  The bundle is ready
+/// for use with `janitor bounce --pqc-key <out_path>`.
+fn cmd_generate_keys(out_path: &Path) -> anyhow::Result<()> {
+    let bundle =
+        common::pqc::generate_dual_pqc_key_bundle().context("dual-PQC key generation failed")?;
+    std::fs::write(out_path, bundle.as_slice())
+        .with_context(|| format!("failed to write PQC key bundle to {}", out_path.display()))?;
+    eprintln!(
+        "PQC key bundle written: {} ({} bytes, ML-DSA-65 || SLH-DSA-SHAKE-192s)",
+        out_path.display(),
+        bundle.len()
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod generate_keys_tests {
+    use super::cmd_generate_keys;
+    use common::pqc::{ML_DSA_PRIVATE_KEY_LEN, SLH_DSA_PRIVATE_KEY_LEN};
+
+    #[test]
+    fn cmd_generate_keys_writes_correct_bundle_size() {
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile");
+        cmd_generate_keys(tmp.path()).expect("generate-keys must succeed");
+        let written = std::fs::read(tmp.path()).expect("read key bundle");
+        assert_eq!(
+            written.len(),
+            ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

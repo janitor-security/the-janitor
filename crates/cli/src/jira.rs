@@ -434,4 +434,48 @@ mod tests {
             "send must not be called when dedup fires"
         );
     }
+
+    #[test]
+    fn dedup_second_call_with_same_fingerprint_skips_creation() {
+        let _guard_user = std::env::set_var("JANITOR_JIRA_USER", "operator@example.com");
+        let _guard_token = std::env::set_var("JANITOR_JIRA_TOKEN", "token");
+
+        let config = JiraConfig {
+            url: "https://corp.atlassian.net".to_string(),
+            project_key: "SEC".to_string(),
+            dedup: true,
+        };
+        let finding = StructuredFinding {
+            id: "security:credential_leak".to_string(),
+            file: Some("src/main.rs".to_string()),
+            line: Some(42),
+            fingerprint: "stable-fingerprint-abc123".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some("Rotate the leaked credential immediately.".to_string()),
+            docs_url: None,
+        };
+        let janitor_tmp = tempdir().expect("tempdir");
+        let janitor_dir = janitor_tmp.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).expect("create .janitor");
+
+        // First call: search returns 0 open tickets → send is invoked.
+        let first_sender = MockJiraSender::new_with_search_total(vec![Ok(())], 0);
+        let result = spawn_jira_ticket_with_sender(&config, &finding, &first_sender);
+        assert!(result.is_ok(), "first call must succeed");
+        let remaining_after_first = first_sender.outcomes.lock().expect("mutex").len();
+        assert_eq!(
+            remaining_after_first, 0,
+            "send must be called on the first ticket creation"
+        );
+
+        // Second call: search returns 1 open ticket (just created above) → send is skipped.
+        let second_sender = MockJiraSender::new_with_search_total(vec![Ok(())], 1);
+        let result = spawn_jira_ticket_with_sender(&config, &finding, &second_sender);
+        assert!(result.is_ok(), "second call must succeed");
+        let remaining_after_second = second_sender.outcomes.lock().expect("mutex").len();
+        assert_eq!(
+            remaining_after_second, 1,
+            "send must NOT be called when dedup detects an existing open ticket"
+        );
+    }
 }

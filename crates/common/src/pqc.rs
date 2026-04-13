@@ -292,6 +292,34 @@ pub fn sign_asset_hash_from_file(
     })
 }
 
+/// Generate a fresh Dual-PQC private key bundle (ML-DSA-65 + SLH-DSA-SHAKE-192s).
+///
+/// Returns the raw dual-bundle bytes ready for atomic write to a key file.
+/// Layout: ML-DSA-65 private key (`ML_DSA_PRIVATE_KEY_LEN` bytes) immediately
+/// followed by SLH-DSA-SHAKE-192s private key (`SLH_DSA_PRIVATE_KEY_LEN` bytes).
+///
+/// Pass the output path as `--pqc-key` in `janitor bounce` to enable Dual-PQC
+/// (FIPS 204 + FIPS 205) attestation signing.
+pub fn generate_dual_pqc_key_bundle() -> anyhow::Result<Zeroizing<Vec<u8>>> {
+    use fips204::traits::KeyGen as _;
+    use fips205::traits::KeyGen as _;
+
+    let (_ml_pk, ml_sk) = ml_dsa_65::KG::try_keygen()
+        .map_err(|e| anyhow::anyhow!("ML-DSA-65 key generation failed: {e}"))?;
+    let (_slh_pk, slh_sk) = slh_dsa_shake_192s::KG::try_keygen()
+        .map_err(|e| anyhow::anyhow!("{SLH_DSA_VARIANT} key generation failed: {e}"))?;
+
+    let ml_bytes: [u8; ML_DSA_PRIVATE_KEY_LEN] = ml_sk.into_bytes();
+    let slh_bytes: [u8; SLH_DSA_PRIVATE_KEY_LEN] = slh_sk.into_bytes();
+
+    let mut bundle = Zeroizing::new(Vec::with_capacity(
+        ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN,
+    ));
+    bundle.extend_from_slice(&ml_bytes);
+    bundle.extend_from_slice(&slh_bytes);
+    Ok(bundle)
+}
+
 /// Parse a PQC private key bundle from raw bytes.
 ///
 /// Strictly requires the full dual-bundle format: ML-DSA-65 private key bytes
@@ -504,6 +532,34 @@ mod tests {
         assert!(
             bundle.slh_dsa.is_none(),
             "slh_dsa must be None after zeroize (inner bytes wiped then discriminant cleared)"
+        );
+    }
+
+    #[test]
+    fn generate_dual_pqc_key_bundle_produces_correct_length() {
+        let bundle = super::generate_dual_pqc_key_bundle().expect("key generation must succeed");
+        assert_eq!(
+            bundle.len(),
+            super::ML_DSA_PRIVATE_KEY_LEN + super::SLH_DSA_PRIVATE_KEY_LEN
+        );
+    }
+
+    #[test]
+    fn generate_dual_pqc_key_bundle_round_trips_through_sign_cbom() {
+        use std::io::Write as _;
+        let bundle = super::generate_dual_pqc_key_bundle().expect("key generation must succeed");
+        let mut tmpfile = tempfile::NamedTempFile::new().expect("tempfile");
+        tmpfile.write_all(&bundle).expect("write key bundle");
+        let cbom = br#"{"bomFormat":"CycloneDX","specVersion":"1.6"}"#;
+        let sig = super::sign_cbom_dual_from_file(cbom, tmpfile.path())
+            .expect("generated key bundle must sign without error");
+        assert!(
+            sig.ml_dsa_sig.is_some(),
+            "ML-DSA-65 signature must be present"
+        );
+        assert!(
+            sig.slh_dsa_sig.is_some(),
+            "SLH-DSA signature must be present"
         );
     }
 }

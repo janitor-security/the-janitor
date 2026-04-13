@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:c59322e6-242a-41a4-9db4-24170e4136cf",
+  "serialNumber": "urn:uuid:6a6117c1-8742-46c3-babd-6502c03996a8",
   "metadata": {
-    "timestamp": "2026-04-13T18:39:25.799460155Z",
+    "timestamp": "2026-04-13T21:15:58.753151681Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.24",
       "name": "backlog_pruner",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.1.0-alpha.23?download_url=file://.",
+      "purl": "pkg:cargo/backlog_pruner@10.1.0-alpha.24?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.23 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.24 bin-target-0",
           "name": "backlog_pruner",
-          "version": "10.1.0-alpha.23",
-          "purl": "pkg:cargo/backlog_pruner@10.1.0-alpha.23?download_url=file://.#src/lib.rs"
+          "version": "10.1.0-alpha.24",
+          "purl": "pkg:cargo/backlog_pruner@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1591,7 +1591,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",

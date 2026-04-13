@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:eef8fc8f-02bb-4c93-a395-98a3fd78ae82",
+  "serialNumber": "urn:uuid:dbf5b04d-a5bb-40e9-b26f-8410178866d5",
   "metadata": {
-    "timestamp": "2026-04-13T18:39:25.937996074Z",
+    "timestamp": "2026-04-13T21:15:58.884045893Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.24",
       "name": "wisdom-bake",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/wisdom-bake@10.1.0-alpha.23?download_url=file://.",
+      "purl": "pkg:cargo/wisdom-bake@10.1.0-alpha.24?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.23 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.24 bin-target-0",
           "name": "wisdom-bake",
-          "version": "10.1.0-alpha.23",
-          "purl": "pkg:cargo/wisdom-bake@10.1.0-alpha.23?download_url=file://.#src/main.rs"
+          "version": "10.1.0-alpha.24",
+          "purl": "pkg:cargo/wisdom-bake@10.1.0-alpha.24?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "name": "common",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.0-alpha.23?download_url=file://../../crates/common",
+      "purl": "pkg:cargo/common@10.1.0-alpha.24?download_url=file://../../crates/common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -5178,7 +5178,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -5205,10 +5205,10 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/wisdom-bake#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",

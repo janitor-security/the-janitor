@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:d229eb58-f5e1-4457-8af9-080c86b8a385",
+  "serialNumber": "urn:uuid:9edadead-f20d-481e-9e13-1ba8bc080392",
   "metadata": {
-    "timestamp": "2026-04-13T18:39:25.965920386Z",
+    "timestamp": "2026-04-13T21:15:58.906432864Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.24",
       "name": "gauntlet-runner",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/gauntlet-runner@10.1.0-alpha.23?download_url=file://.",
+      "purl": "pkg:cargo/gauntlet-runner@10.1.0-alpha.24?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.23 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.24 bin-target-0",
           "name": "gauntlet-runner",
-          "version": "10.1.0-alpha.23",
-          "purl": "pkg:cargo/gauntlet-runner@10.1.0-alpha.23?download_url=file://.#src/main.rs"
+          "version": "10.1.0-alpha.24",
+          "purl": "pkg:cargo/gauntlet-runner@10.1.0-alpha.24?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "name": "common",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.0-alpha.23?download_url=file://../../crates/common",
+      "purl": "pkg:cargo/common@10.1.0-alpha.24?download_url=file://../../crates/common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -5293,7 +5293,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -5320,10 +5320,10 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/gauntlet-runner#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.23",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0-alpha.24",
         "registry+https://github.com/rust-lang/crates.io-index#rayon@1.11.0",
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149"

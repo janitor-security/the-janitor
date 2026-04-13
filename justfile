@@ -61,6 +61,43 @@ clean:
 	find . -name "*.rkyv" -not -path "./.git/*" -delete
 	@echo "💥 Target directory and rkyv artefacts vaporized."
 
+# Verify bit-for-bit binary reproducibility (SLSA Level 4).
+#
+# Builds the release binary twice inside isolated Docker containers using an
+# identical rust:1.91.0-alpine image with lld and compares the SHA-384 digests.
+# Both digests must match for the build to be considered reproducible.
+#
+# Requirements: Docker must be running and rust:1.91.0-alpine must be pullable.
+verify-reproducible:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	REPRO_DIR="$(mktemp -d)"
+	mkdir -p "${REPRO_DIR}/build1" "${REPRO_DIR}/build2"
+	echo "→ Reproducible build pass 1..."
+	docker run --rm \
+	    -v "$(pwd):/src:ro" \
+	    -v "${REPRO_DIR}/build1:/out" \
+	    -w /src \
+	    rust:1.91.0-alpine \
+	    sh -c "apk add --no-cache lld musl-dev >/dev/null 2>&1 && CARGO_TARGET_DIR=/out cargo build --release -p janitor-cli 2>/dev/null"
+	echo "→ Reproducible build pass 2..."
+	docker run --rm \
+	    -v "$(pwd):/src:ro" \
+	    -v "${REPRO_DIR}/build2:/out" \
+	    -w /src \
+	    rust:1.91.0-alpine \
+	    sh -c "apk add --no-cache lld musl-dev >/dev/null 2>&1 && CARGO_TARGET_DIR=/out cargo build --release -p janitor-cli 2>/dev/null"
+	echo "→ Comparing binaries..."
+	sha384sum "${REPRO_DIR}/build1/release/janitor" "${REPRO_DIR}/build2/release/janitor"
+	if cmp -s "${REPRO_DIR}/build1/release/janitor" "${REPRO_DIR}/build2/release/janitor"; then
+	    echo "✅ Reproducible build VERIFIED — binaries are bit-for-bit identical."
+	else
+	    echo "✗ REPRODUCIBILITY FAILURE — binaries differ."
+	    rm -rf "${REPRO_DIR}"
+	    exit 1
+	fi
+	rm -rf "${REPRO_DIR}"
+
 # 3. AUTHENTICATION
 auth-refresh:
 	@echo "Auth is stateless — token injected at runtime via --token flag."

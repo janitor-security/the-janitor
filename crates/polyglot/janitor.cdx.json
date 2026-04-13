@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:7c98284d-7ecb-4494-91a1-a57300dd4c0f",
+  "serialNumber": "urn:uuid:14f50cb1-9e27-4839-bbb3-d1160f4d09e3",
   "metadata": {
-    "timestamp": "2026-04-13T18:39:25.867959973Z",
+    "timestamp": "2026-04-13T21:15:58.823249680Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.23",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24",
       "name": "polyglot",
-      "version": "10.1.0-alpha.23",
+      "version": "10.1.0-alpha.24",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.0-alpha.23?download_url=file://.",
+      "purl": "pkg:cargo/polyglot@10.1.0-alpha.24?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.23 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24 bin-target-0",
           "name": "polyglot",
-          "version": "10.1.0-alpha.23",
-          "purl": "pkg:cargo/polyglot@10.1.0-alpha.23?download_url=file://.#src/lib.rs"
+          "version": "10.1.0-alpha.24",
+          "purl": "pkg:cargo/polyglot@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1310,7 +1310,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.23",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",

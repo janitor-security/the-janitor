@@ -1983,3 +1983,25 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - Second identical run produced the same `HTTP 410` search failure and `HTTP 400` create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.
 
 **Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
+
+## 2026-04-13 — v10.1.0-alpha.24: Reproducible Builds & Preflight Hardening
+
+**Directive:** Reproducible Builds & Preflight Hardening — SLSA Level 4 bit-for-bit reproducibility, native PQC key generation subcommand, and ASPM Jira credential preflight contract.
+
+### Phase 1: Native PQC Key Generation
+- `crates/common/src/pqc.rs` *(modified)* — `generate_dual_pqc_key_bundle()` added; generates ML-DSA-65 || SLH-DSA-SHAKE-192s dual key bundle via `KG::try_keygen()` for both algorithms; returns `Zeroizing<Vec<u8>>` to wipe key material on drop; 2 new tests: `generate_dual_pqc_key_bundle_produces_correct_length`, `generate_dual_pqc_key_bundle_round_trips_through_sign_cbom`.
+- `crates/cli/src/main.rs` *(modified)* — `GenerateKeys { out_path: PathBuf }` hidden subcommand added; `cmd_generate_keys` writes dual key bundle to `out_path`; `cmd_generate_keys_writes_correct_bundle_size` test verifies file output size = 4032 + SLH-DSA SK len.
+
+### Phase 2: ASPM Dedup Preflight Contract
+- `crates/cli/src/main.rs` *(modified)* — `jira_sync_disabled` preflight flag added immediately after `JanitorPolicy::load`; when `policy.jira.is_configured()` is true but `JANITOR_JIRA_USER` or `JANITOR_JIRA_TOKEN` are absent, emits `[ASPM PREFLIGHT] Jira integration configured but credentials missing. Sync disabled.` to stderr and gates the `jira::sync_findings_to_jira` call.
+- `crates/cli/src/jira.rs` *(modified)* — `dedup_second_call_with_same_fingerprint_skips_creation` test added; proves first call with `search_total=0` invokes send (outcome consumed), second call with `search_total=1` returns early without invoking send (outcome unconsumed).
+
+### Phase 3: SLSA Level 4 Reproducible Builds
+- `.cargo/config.toml` *(created)* — forces `lld` linker with `--build-id=none` to eliminate linker-generated unique identifiers that break reproducibility between independent compilation runs.
+- `justfile` *(modified)* — `verify-reproducible` recipe added; builds the binary twice in isolated `rust:1.91.0-alpine` Docker containers with separate output volumes, then uses `cmp` and `sha384sum` to mathematically prove bit-for-bit identity.
+
+### Version & Docs
+- `Cargo.toml` *(modified)* — workspace version bumped `10.1.0-alpha.23` → `10.1.0-alpha.24`.
+- `docs/INNOVATION_LOG.md` *(modified)* — P3-2 and Live ASPM Dedup purged from open queue; both marked RESOLVED with version reference in Completed Items.
+
+**Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
