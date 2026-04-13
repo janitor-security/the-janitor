@@ -9,11 +9,12 @@ use std::path::Path;
 
 trait JiraIssueSender {
     fn send(&self, url: &str, auth: &str, payload: &str) -> anyhow::Result<()>;
-    /// Return the total number of Jira issues matching the given search URL.
+    /// POST to the Jira REST v2 search endpoint and return the total number of
+    /// matching issues.
     ///
     /// Used for deduplication: if > 0, a ticket with the same fingerprint is
     /// already open and creation can be skipped.
-    fn search_total(&self, url: &str, auth: &str) -> anyhow::Result<u32>;
+    fn search_total(&self, url: &str, auth: &str, payload: &str) -> anyhow::Result<u32>;
 }
 
 struct UreqJiraSender;
@@ -35,8 +36,12 @@ impl JiraIssueSender for UreqJiraSender {
         }
     }
 
-    fn search_total(&self, url: &str, auth: &str) -> anyhow::Result<u32> {
-        match ureq::get(url).header("Authorization", auth).call() {
+    fn search_total(&self, url: &str, auth: &str, payload: &str) -> anyhow::Result<u32> {
+        match ureq::post(url)
+            .header("Authorization", auth)
+            .header("Content-Type", "application/json")
+            .send(payload.to_owned())
+        {
             Ok(response) => {
                 let body: serde_json::Value = response
                     .into_body()
@@ -76,70 +81,38 @@ fn build_issue_payload(config: &JiraConfig, finding: &StructuredFinding) -> serd
         .as_deref()
         .unwrap_or("No structured remediation provided.");
 
+    let description = format!(
+        "Finding: {}\nSeverity: {severity}\nLocation: {file}:{line}\nFingerprint: {}\nRemediation: {remediation}",
+        finding.id,
+        finding.fingerprint
+    );
+
     json!({
         "fields": {
             "project": { "key": config.project_key },
-            "issuetype": { "name": "Bug" },
             "summary": format!("Janitor finding: {}", finding.id),
-            "description": {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            { "type": "text", "text": format!("Finding: {}", finding.id) }
-                        ]
-                    },
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            { "type": "text", "text": format!("Severity: {severity}") }
-                        ]
-                    },
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            { "type": "text", "text": format!("Location: {file}:{line}") }
-                        ]
-                    },
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            { "type": "text", "text": format!("Fingerprint: {}", finding.fingerprint) }
-                        ]
-                    },
-                    {
-                        "type": "paragraph",
-                        "content": [
-                            { "type": "text", "text": format!("Remediation: {remediation}") }
-                        ]
-                    }
-                ]
-            }
+            "description": description,
+            "issuetype": { "name": "Task" }
         }
     })
 }
 
-/// Build the Jira REST search URL for deduplication.
+/// Build the JSON body for `POST /rest/api/2/search`.
 ///
-/// The JQL query looks for the finding's BLAKE3 fingerprint in the description
-/// of open (not Done) tickets within the configured project.
-fn build_jql_search_url(config: &JiraConfig, fingerprint: &str) -> String {
+/// Avoids URL-encoding fragmentation that causes Atlassian's strict schema
+/// validator to reject GET-based JQL queries containing special characters.
+/// The project key is double-quoted in JQL so that keys containing hyphens or
+/// digits are matched exactly.
+fn build_jql_search_payload(config: &JiraConfig, fingerprint: &str) -> String {
     let jql = format!(
-        "project={} AND description~\"{}\" AND statusCategory != Done",
+        "project=\"{}\" AND description~\"{}\" AND statusCategory != Done",
         config.project_key, fingerprint
     );
-    let jql_encoded = jql
-        .replace(' ', "%20")
-        .replace('"', "%22")
-        .replace('!', "%21")
-        .replace('=', "%3D");
-    format!(
-        "{}/rest/api/2/search?jql={}&maxResults=1",
-        config.url.trim_end_matches('/'),
-        jql_encoded
-    )
+    serde_json::to_string(&json!({
+        "jql": jql,
+        "maxResults": 1
+    }))
+    .expect("jira search payload serialization")
 }
 
 pub fn spawn_jira_ticket(config: &JiraConfig, finding: &StructuredFinding) -> anyhow::Result<()> {
@@ -159,8 +132,9 @@ fn spawn_jira_ticket_with_sender(
 
     // Dedup: skip creation if an open ticket with this fingerprint already exists.
     if config.dedup {
-        let search_url = build_jql_search_url(config, &finding.fingerprint);
-        match sender.search_total(&search_url, &auth) {
+        let search_url = format!("{}/rest/api/2/search", config.url.trim_end_matches('/'));
+        let search_payload = build_jql_search_payload(config, &finding.fingerprint);
+        match sender.search_total(&search_url, &auth, &search_payload) {
             Ok(total) if total > 0 => {
                 eprintln!("jira dedup: open ticket found for fingerprint, skipping creation");
                 return Ok(());
@@ -274,7 +248,7 @@ mod tests {
                 .unwrap_or_else(|| Ok(()))
         }
 
-        fn search_total(&self, _url: &str, _auth: &str) -> anyhow::Result<u32> {
+        fn search_total(&self, _url: &str, _auth: &str, _payload: &str) -> anyhow::Result<u32> {
             Ok(self.search_total_value)
         }
     }
@@ -302,10 +276,33 @@ mod tests {
             payload["fields"]["summary"],
             "Janitor finding: security:ai_prompt_injection"
         );
+        assert_eq!(payload["fields"]["issuetype"]["name"], "Task");
         let description = payload["fields"]["description"].to_string();
         assert!(description.contains("abc123fingerprint"));
         assert!(description.contains("Remove the hidden reviewer-invisible payload."));
         assert!(description.contains("KevCritical"));
+    }
+
+    #[test]
+    fn build_jql_search_payload_uses_post_body_with_quoted_project() {
+        let config = JiraConfig {
+            url: "https://corp.atlassian.net".to_string(),
+            project_key: "KAN".to_string(),
+            dedup: true,
+        };
+        let payload = build_jql_search_payload(&config, "deadbeef");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&payload).expect("payload must be valid JSON");
+        let jql = parsed["jql"].as_str().expect("jql must be a string");
+        assert!(
+            jql.contains("project=\"KAN\""),
+            "project key must be quoted"
+        );
+        assert!(
+            jql.contains("description~\"deadbeef\""),
+            "fingerprint must be quoted"
+        );
+        assert_eq!(parsed["maxResults"], 1);
     }
 
     #[test]

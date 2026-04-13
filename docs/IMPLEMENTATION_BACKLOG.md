@@ -5,6 +5,20 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-13 — Atlassian API Contract & Workflow Synchronization (v10.1.0-alpha.19)
+
+**Directive:** Fix Jira API contract failures and CISA KEV workflow broken binary verification.
+
+**Changes:**
+- `crates/cli/src/jira.rs`: Search migrated from `GET /rest/api/2/search?jql=…` to `POST /rest/api/2/search` with JSON body — eliminates URL-encoding fragmentation rejected by Atlassian schema validator. Project key now double-quoted in JQL (`project="KAN"`). Description migrated from ADF (REST v3) to plain string (REST v2). Issue type changed from `"Bug"` to `"Task"`. New test `build_jql_search_payload_uses_post_body_with_quoted_project` validates the POST body contract.
+- `.github/workflows/cisa-kev-sync.yml`: Download step upgraded from unverified `gh release download` to full SHA-384 + ML-DSA-65 two-layer trust chain mirroring `action.yml`. Downloads `janitor`, `janitor.sha384`, `janitor.sig` (optional). Bootstrap binary from `v10.0.0-rc.9` performs Layer 2 PQC verification.
+- `Cargo.toml`: Version bumped `10.1.0-alpha.18` → `10.1.0-alpha.19`.
+- `README.md`, `docs/index.md`: Version strings synced via `just sync-versions`.
+
+**Verification:** `cargo test --workspace -- --test-threads=1` → all pass. `just audit` → ✅ System Clean.
+
+---
+
 ## 2026-04-12 — FedRAMP 3PAO Teardown & Slop Eradication (v10.1.0-alpha.17)
 
 **Directive:** Hostile DoD IL6 / FedRAMP audit. Identify cryptographic boundary violations,
