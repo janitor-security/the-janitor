@@ -625,18 +625,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384" class="md-nav__link">
+  <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384-resolved-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384
+      ~~P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384~~ [RESOLVED v10.1.0-alpha.20]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-3-policy-content-hash-blake3-sha-256" class="md-nav__link">
+  <a href="#p0-3-policy-content-hash-blake3-sha-256-resolved-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-3: Policy Content Hash — BLAKE3 → SHA-256
+      ~~P0-3: Policy Content Hash — BLAKE3 → SHA-256~~ [RESOLVED v10.1.0-alpha.20]
     </span>
   </a>
   
@@ -853,18 +853,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384" class="md-nav__link">
+  <a href="#p0-2-governor-transparency-log-chain-blake3-sha-384-resolved-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384
+      ~~P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384~~ [RESOLVED v10.1.0-alpha.20]
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#p0-3-policy-content-hash-blake3-sha-256" class="md-nav__link">
+  <a href="#p0-3-policy-content-hash-blake3-sha-256-resolved-v1010-alpha20" class="md-nav__link">
     <span class="md-ellipsis">
-      P0-3: Policy Content Hash — BLAKE3 → SHA-256
+      ~~P0-3: Policy Content Hash — BLAKE3 → SHA-256~~ [RESOLVED v10.1.0-alpha.20]
     </span>
   </a>
   
@@ -1051,33 +1051,16 @@ civilian agency contracts valued at $2M–$50M/yr per deployment.</p>
 </table>
 <hr />
 <h2 id="p0-fips-140-3-cryptographic-boundary-remediation">P0 — FIPS 140-3 Cryptographic Boundary Remediation</h2>
-<h3 id="p0-2-governor-transparency-log-chain-blake3-sha-384">P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384</h3>
-<p><strong>Status</strong>: OPEN — FedRAMP HARD BLOCK</p>
-<p><strong>Finding</strong>: <code>crates/gov/src/main.rs::Blake3HashChain::append</code> uses BLAKE3 to
-chain the audit log. For FedRAMP, audit log integrity mechanisms must use
-NIST-approved algorithms (NIST SP 800-92).</p>
-<p><strong>Migration plan</strong>:
-1. Rename <code>Blake3HashChain</code> → <code>Sha384HashChain</code> in <code>crates/gov/src/main.rs</code>.
-2. Replace <code>blake3::hash(&amp;payload)</code> with <code>sha2::Sha384::digest(&amp;payload)</code>.
-3. Update <code>InclusionProof::chained_hash</code> to hold a 96-hex-char SHA-384 string
-   (vs. current 64-char BLAKE3 hex).
-4. Update all <code>chained_hash</code> comparisons in test fixtures.
-5. Document the change in the Governor API changelog — <code>InclusionProof</code> is a
-   public contract field; downstream consumers must be notified.</p>
-<p><strong>Estimated scope</strong>: <code>crates/gov/src/main.rs</code> (~15 lines), tests (~10 lines).</p>
+<h3 id="p0-2-governor-transparency-log-chain-blake3-sha-384-resolved-v1010-alpha20">~~P0-2: Governor Transparency Log Chain — BLAKE3 → SHA-384~~ [RESOLVED v10.1.0-alpha.20]</h3>
+<p><code>Blake3HashChain</code> renamed to <code>Sha384HashChain</code>; <code>blake3::hash</code> replaced with
+<code>sha2::Sha384::digest</code>; <code>chained_hash</code> is now a 96-char hex string;
+<code>blake3</code> dependency removed from <code>crates/gov/Cargo.toml</code>.</p>
 <hr />
-<h3 id="p0-3-policy-content-hash-blake3-sha-256">P0-3: Policy Content Hash — BLAKE3 → SHA-256</h3>
-<p><strong>Status</strong>: OPEN — FedRAMP COMPLIANCE GAP</p>
-<p><strong>Finding</strong>: <code>crates/common/src/policy.rs::JanitorPolicy::content_hash()</code> uses
-BLAKE3. The <code>policy_hash</code> is transmitted in the <code>AnalysisTokenRequest</code> and
-compared against <code>JANITOR_GOV_EXPECTED_POLICY</code> in the Governor — a security
-decision. This places it within the FIPS boundary.</p>
-<p><strong>Migration plan</strong>:
-1. Replace <code>blake3::hash</code> in <code>content_hash()</code> with <code>sha2::Sha256::digest</code>.
-2. Update all test literals that embed <code>content_hash()</code> outputs.
-3. Bump workspace version — any change to <code>content_hash()</code> invalidates existing
-   policy drift tokens.</p>
-<p><strong>Estimated scope</strong>: <code>crates/common/src/policy.rs</code> (~5 lines + test fixtures).</p>
+<h3 id="p0-3-policy-content-hash-blake3-sha-256-resolved-v1010-alpha20">~~P0-3: Policy Content Hash — BLAKE3 → SHA-256~~ [RESOLVED v10.1.0-alpha.20]</h3>
+<p><code>JanitorPolicy::content_hash()</code> now uses <code>sha2::Sha256::digest</code>; output is a
+64-char lowercase hex string (FIPS 180-4); <code>policy_hash</code> in <code>AnalysisTokenRequest</code>
+doc comment updated to SHA-256. Existing policy drift tokens are invalidated —
+operators must refresh <code>JANITOR_GOV_EXPECTED_POLICY</code> after upgrading.</p>
 <hr />
 <h2 id="p1-immutable-audit-logging-fedramp-au-controls">P1 — Immutable Audit Logging (FedRAMP AU Controls)</h2>
 <h3 id="p1-1-cefsyslog-structured-audit-emission-au-2-au-3-au-9-au-12">P1-1: CEF/Syslog Structured Audit Emission (AU-2, AU-3, AU-9, AU-12)</h3>
