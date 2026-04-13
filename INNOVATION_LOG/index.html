@@ -678,21 +678,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P3 — Supply Chain & SBOM Compliance (FedRAMP SA / SR Controls)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p3-2-reproducible-build-attestation-slsa-level-3-level-4" class="md-nav__link">
-    <span class="md-ellipsis">
-      P3-2: Reproducible Build Attestation (SLSA Level 3 → Level 4)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -855,21 +840,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="P3 — Supply Chain & SBOM Compliance (FedRAMP SA / SR Controls)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p3-2-reproducible-build-attestation-slsa-level-3-level-4" class="md-nav__link">
-    <span class="md-ellipsis">
-      P3-2: Reproducible Build Attestation (SLSA Level 3 → Level 4)
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -969,19 +939,6 @@ signature, issuer (<code>janitor-governor</code>), and expiry (HTTP 401 on failu
 <hr />
 <h2 id="p3-supply-chain-sbom-compliance-fedramp-sa-sr-controls">P3 — Supply Chain &amp; SBOM Compliance (FedRAMP SA / SR Controls)</h2>
 <hr />
-<h3 id="p3-2-reproducible-build-attestation-slsa-level-3-level-4">P3-2: Reproducible Build Attestation (SLSA Level 3 → Level 4)</h3>
-<p><strong>Status</strong>: OPEN — Upgrade from current SLSA Level 4 (binary provenance)</p>
-<p><strong>Finding</strong>: Current SLSA provenance covers binary hash + PQC signature.
-FedRAMP High requires full build reproducibility: two independent builds from
-identical source must produce bit-identical binaries. Rust's <code>opt-level = "z"</code>
-with <code>lto = true</code> is currently NOT reproducible across different linker versions.</p>
-<p><strong>Implementation plan</strong>:
-1. Pin <code>lld</code> linker version in <code>rust-toolchain.toml</code>.
-2. Set <code>RUSTFLAGS="-C link-arg=-fuse-ld=lld -C link-arg=--build-id=none"</code> in
-   <code>justfile::fast-release</code> to strip build IDs from the output.
-3. Add a <code>just verify-reproducible</code> recipe that builds the binary twice in
-   isolated Docker containers and compares BLAKE3 hashes.
-4. Emit <code>in-toto</code> provenance attestation using <code>slsa-verifier</code> format.</p>
 <hr />
 <h2 id="completed-items">Completed Items</h2>
 <ul>
@@ -991,17 +948,13 @@ with <code>lto = true</code> is currently NOT reproducible across different link
 <li>P2-2 (mTLS): Governor mutual TLS + client-CN installation binding — [COMPLETED 2026-04-13 v10.1.0-alpha.23]</li>
 <li>P2-6 (PQC CT): Wasm Rule Publisher Signing — [COMPLETED 2026-04-12 v10.1.0-alpha.15]</li>
 <li>P3-1 (SBOM): Signed Janitor CycloneDX release SBOM — [COMPLETED 2026-04-13 v10.1.0-alpha.23]</li>
+<li>P3-2 (Reproducible Builds): SLSA Level 4 bit-for-bit reproducibility — [COMPLETED 2026-04-13 v10.1.0-alpha.24]</li>
+<li>ASPM Dedup Preflight: Jira credential preflight banner + sequential dedup proof — [COMPLETED 2026-04-13 v10.1.0-alpha.24]</li>
 <li>Governor Marketplace: GitHub App webhook + installation gating — [COMPLETED 2026-04-12 v10.1.0-alpha.16]</li>
 </ul>
 <hr />
 <h3 id="2026-04-12-live-aspm-dedup-preflight-contract">2026-04-12 — Live ASPM Dedup Preflight Contract</h3>
-<p><strong>Status</strong>: OPEN</p>
-<p><strong>Finding</strong>: The Jira deduplication proof path is not self-validating. <code>bounce</code> reaches <code>KevCritical</code> detection, but the live ASPM workflow aborts before dedup search/create when <code>JANITOR_JIRA_USER</code> or <code>JANITOR_JIRA_TOKEN</code> are absent from the execution environment. This leaves the operator with detector proof but no production deduplication proof.</p>
-<p><strong>Implementation plan</strong>:
-1. Add an explicit preflight to <code>crates/cli/src/jira.rs</code> or <code>crates/cli/src/main.rs</code> that reports the exact missing Jira auth variables before scan execution when <code>[jira]</code> is configured.
-2. Add an integration harness that injects a deterministic mock Jira sender and asserts first-run create / second-run dedup skip semantics for a stable fingerprint.
-3. Emit a dedicated terminal line for dedup preflight state so operators can distinguish detector success from ASPM transport readiness without inspecting warning text.
-4. Add a Crucible or CLI regression covering the missing-auth fail-open path plus the successful dedup path.</p>
+<p><strong>Status</strong>: RESOLVED v10.1.0-alpha.24 — preflight stderr banner on missing credentials; <code>dedup_second_call_with_same_fingerprint_skips_creation</code> test proves first-run create / second-run skip semantics.</p>
 
 
 

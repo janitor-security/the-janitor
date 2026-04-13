@@ -1485,6 +1485,57 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-04-13-v1010-alpha24-reproducible-builds-preflight-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — v10.1.0-alpha.24: Reproducible Builds &amp; Preflight Hardening
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2026-04-13 — v10.1.0-alpha.24: Reproducible Builds & Preflight Hardening">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-native-pqc-key-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 1: Native PQC Key Generation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-aspm-dedup-preflight-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 2: ASPM Dedup Preflight Contract
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-slsa-level-4-reproducible-builds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 3: SLSA Level 4 Reproducible Builds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version &amp; Docs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2385,6 +2436,57 @@
       2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary &amp; Jira Re-Engagement
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-13-v1010-alpha24-reproducible-builds-preflight-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — v10.1.0-alpha.24: Reproducible Builds &amp; Preflight Hardening
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2026-04-13 — v10.1.0-alpha.24: Reproducible Builds & Preflight Hardening">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-native-pqc-key-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 1: Native PQC Key Generation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-aspm-dedup-preflight-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 2: ASPM Dedup Preflight Contract
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-slsa-level-4-reproducible-builds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 3: SLSA Level 4 Reproducible Builds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version &amp; Docs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4012,6 +4114,29 @@ provider-neutral SCM context extraction, and roll the portability work into the
 <p><strong>Live-fire Jira re-engagement</strong>:
 - First inline-credential bounce run reached Jira transport, but dedup search failed with <code>HTTP 410</code> and issue creation failed with <code>HTTP 400</code>; the <code>KevCritical</code> finding still fired and blocked the patch at <code>slop score 150</code>.
 - Second identical run produced the same <code>HTTP 410</code> search failure and <code>HTTP 400</code> create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.</p>
+<p><strong>Verification</strong>: <code>cargo test --workspace -- --test-threads=1</code> ✓ | <code>just audit</code> ✓</p>
+<h2 id="2026-04-13-v1010-alpha24-reproducible-builds-preflight-hardening">2026-04-13 — v10.1.0-alpha.24: Reproducible Builds &amp; Preflight Hardening</h2>
+<p><strong>Directive:</strong> Reproducible Builds &amp; Preflight Hardening — SLSA Level 4 bit-for-bit reproducibility, native PQC key generation subcommand, and ASPM Jira credential preflight contract.</p>
+<h3 id="phase-1-native-pqc-key-generation">Phase 1: Native PQC Key Generation</h3>
+<ul>
+<li><code>crates/common/src/pqc.rs</code> <em>(modified)</em> — <code>generate_dual_pqc_key_bundle()</code> added; generates ML-DSA-65 || SLH-DSA-SHAKE-192s dual key bundle via <code>KG::try_keygen()</code> for both algorithms; returns <code>Zeroizing&lt;Vec&lt;u8&gt;&gt;</code> to wipe key material on drop; 2 new tests: <code>generate_dual_pqc_key_bundle_produces_correct_length</code>, <code>generate_dual_pqc_key_bundle_round_trips_through_sign_cbom</code>.</li>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>GenerateKeys { out_path: PathBuf }</code> hidden subcommand added; <code>cmd_generate_keys</code> writes dual key bundle to <code>out_path</code>; <code>cmd_generate_keys_writes_correct_bundle_size</code> test verifies file output size = 4032 + SLH-DSA SK len.</li>
+</ul>
+<h3 id="phase-2-aspm-dedup-preflight-contract">Phase 2: ASPM Dedup Preflight Contract</h3>
+<ul>
+<li><code>crates/cli/src/main.rs</code> <em>(modified)</em> — <code>jira_sync_disabled</code> preflight flag added immediately after <code>JanitorPolicy::load</code>; when <code>policy.jira.is_configured()</code> is true but <code>JANITOR_JIRA_USER</code> or <code>JANITOR_JIRA_TOKEN</code> are absent, emits <code>[ASPM PREFLIGHT] Jira integration configured but credentials missing. Sync disabled.</code> to stderr and gates the <code>jira::sync_findings_to_jira</code> call.</li>
+<li><code>crates/cli/src/jira.rs</code> <em>(modified)</em> — <code>dedup_second_call_with_same_fingerprint_skips_creation</code> test added; proves first call with <code>search_total=0</code> invokes send (outcome consumed), second call with <code>search_total=1</code> returns early without invoking send (outcome unconsumed).</li>
+</ul>
+<h3 id="phase-3-slsa-level-4-reproducible-builds">Phase 3: SLSA Level 4 Reproducible Builds</h3>
+<ul>
+<li><code>.cargo/config.toml</code> <em>(created)</em> — forces <code>lld</code> linker with <code>--build-id=none</code> to eliminate linker-generated unique identifiers that break reproducibility between independent compilation runs.</li>
+<li><code>justfile</code> <em>(modified)</em> — <code>verify-reproducible</code> recipe added; builds the binary twice in isolated <code>rust:1.91.0-alpine</code> Docker containers with separate output volumes, then uses <code>cmp</code> and <code>sha384sum</code> to mathematically prove bit-for-bit identity.</li>
+</ul>
+<h3 id="version-docs">Version &amp; Docs</h3>
+<ul>
+<li><code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped <code>10.1.0-alpha.23</code> → <code>10.1.0-alpha.24</code>.</li>
+<li><code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — P3-2 and Live ASPM Dedup purged from open queue; both marked RESOLVED with version reference in Completed Items.</li>
+</ul>
 <p><strong>Verification</strong>: <code>cargo test --workspace -- --test-threads=1</code> ✓ | <code>just audit</code> ✓</p>
 
 
