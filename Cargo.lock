@@ -19,7 +19,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "advanced_threats"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -59,7 +59,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "anatomist"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "backlog_pruner"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "blake3",
@@ -564,7 +564,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "advanced_threats",
  "anatomist",
@@ -582,6 +582,7 @@ dependencies = [
  "fips205",
  "forge",
  "git2",
+ "hex",
  "hmac 0.13.0",
  "include_deflator",
  "indicatif",
@@ -639,7 +640,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "common"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "base64",
@@ -657,6 +658,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.18",
@@ -1010,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "crucible"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "common",
  "forge",
@@ -1140,7 +1142,7 @@ dependencies = [
 
 [[package]]
 name = "dashboard"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "common",
  "crossterm",
@@ -1516,7 +1518,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forge"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "advanced_threats",
  "aho-corasick",
@@ -1671,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "gauntlet-runner"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "common",
@@ -2039,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "include_deflator"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "blake3",
@@ -2171,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "janitor-fuzz"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "libfuzzer-sys",
  "polyglot",
@@ -2183,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "janitor-gov"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "axum",
@@ -2461,7 +2463,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mcp"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anatomist",
  "anyhow",
@@ -2538,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "mint-token"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "base64",
@@ -2756,7 +2758,7 @@ dependencies = [
 
 [[package]]
 name = "parallel-bounce"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "rayon",
@@ -2948,7 +2950,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "polyglot"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
@@ -3262,7 +3264,7 @@ dependencies = [
 
 [[package]]
 name = "reaper"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -3652,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "shadow"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "junction",
@@ -4591,7 +4593,7 @@ dependencies = [
 
 [[package]]
 name = "vault"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -5509,7 +5511,7 @@ checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
 
 [[package]]
 name = "wisdom-bake"
-version = "10.1.0-alpha.17"
+version = "10.1.0-alpha.18"
 dependencies = [
  "anyhow",
  "common",

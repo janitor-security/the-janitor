@@ -2,21 +2,22 @@
 //!
 //! `janitor verify-asset` performs two sequential checks:
 //!
-//! 1. **BLAKE3 hash integrity** — recomputes the BLAKE3 digest of `--file`
-//!    and compares it to the hex stored in `--hash` (.b3 file).  Catches
+//! 1. **SHA-384 hash integrity** — recomputes the SHA-384 digest of `--file`
+//!    and compares it to the hex stored in `--hash` (.sha384 file).  Catches
 //!    CDN bit-rot, partial downloads, and transparent-proxy tampering.
 //!
 //! 2. **ML-DSA-65 signature** (when `--sig` is supplied) — verifies the
-//!    detached PQC signature in `--sig` against the BLAKE3 hash using the
+//!    detached PQC signature in `--sig` against the SHA-384 digest using the
 //!    immutable release verifying key hardcoded below.  Catches a compromised
 //!    CDN that can serve a re-hashed replacement binary.
 //!
 //! The two checks compose into a SLSA Level 4 trust anchor: a CDN that can
-//! replace both the binary *and* the co-hosted `.b3` file cannot forge a
+//! replace both the binary *and* the co-hosted `.sha384` file cannot forge a
 //! valid ML-DSA-65 signature without the private key.
 
 use anyhow::Context as _;
 use common::pqc::ML_DSA_PUBLIC_KEY_LEN;
+use sha2::{Digest as _, Sha384};
 use std::path::Path;
 
 /// The Janitor's release ML-DSA-65 verifying key (FIPS 204).
@@ -156,44 +157,44 @@ const JANITOR_RELEASE_ML_DSA_PUB_KEY: [u8; ML_DSA_PUBLIC_KEY_LEN] = [
 ///
 /// # Arguments
 /// * `file`      — path to the release binary to verify
-/// * `hash_path` — path to the `.b3` file (64 lowercase hex chars + optional newline)
+/// * `hash_path` — path to the `.sha384` file (96 lowercase hex chars + optional newline)
 /// * `sig_path`  — optional path to the `.sig` JSON file produced by `janitor sign-asset`
 pub fn cmd_verify_asset(
     file: &Path,
     hash_path: &Path,
     sig_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    // ── Step 1: recompute BLAKE3 and compare to .b3 file ────────────────────
+    // ── Step 1: recompute SHA-384 and compare to .sha384 file ───────────────
     let data = std::fs::read(file).with_context(|| format!("reading binary {}", file.display()))?;
-    let actual_hash = blake3::hash(&data).to_hex().to_string();
+    let actual_hash = hex::encode(Sha384::digest(&data));
 
     let raw_expected = std::fs::read_to_string(hash_path)
         .with_context(|| format!("reading hash file {}", hash_path.display()))?;
     let expected_hash = raw_expected.trim();
 
-    // Strict format gate — 64 lowercase hex chars only.
+    // Strict format gate — 96 lowercase hex chars only.
     anyhow::ensure!(
-        expected_hash.len() == 64
+        expected_hash.len() == 96
             && expected_hash
                 .chars()
                 .all(|c| matches!(c, '0'..='9' | 'a'..='f')),
-        "hash file {} contains invalid format (expected 64 lowercase hex chars, got {} chars)",
+        "hash file {} contains invalid format (expected 96 lowercase hex chars, got {} chars)",
         hash_path.display(),
         expected_hash.len()
     );
 
     anyhow::ensure!(
         actual_hash == expected_hash,
-        "BLAKE3 integrity check FAILED\n  file:     {}\n  expected: {}\n  actual:   {}",
+        "SHA-384 integrity check FAILED\n  file:     {}\n  expected: {}\n  actual:   {}",
         file.display(),
         expected_hash,
         actual_hash
     );
-    println!("BLAKE3 verified: {actual_hash}");
+    println!("SHA-384 verified: {actual_hash}");
 
     // ── Step 2: ML-DSA-65 signature (optional — fires only when --sig given) ─
     let Some(sig_path) = sig_path else {
-        // No signature file supplied — BLAKE3-only verification complete.
+        // No signature file supplied — SHA-384-only verification complete.
         println!("ML-DSA-65: skipped (--sig not provided)");
         return Ok(());
     };
@@ -215,8 +216,8 @@ pub fn cmd_verify_asset(
         .as_str()
         .context("signature file missing ml_dsa_sig field")?;
 
-    // Verify against the raw 32-byte BLAKE3 hash (same preimage as sign-asset).
-    let hash_bytes: [u8; 32] = blake3::hash(&data).into();
+    // Verify against the raw 48-byte SHA-384 digest (same preimage as sign-asset).
+    let hash_bytes: [u8; 48] = Sha384::digest(&data).into();
     let valid = common::pqc::verify_asset_ml_dsa_signature(
         &hash_bytes,
         &JANITOR_RELEASE_ML_DSA_PUB_KEY,
@@ -246,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn blake3_mismatch_is_rejected() {
+    fn sha384_mismatch_is_rejected() {
         let dir =
             std::env::temp_dir().join(format!("janitor_verify_asset_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -255,14 +256,14 @@ mod tests {
         // Deliberately wrong hash.
         let hash_file = write_tmp(
             &dir,
-            "binary.b3",
-            b"0000000000000000000000000000000000000000000000000000000000000000",
+            "binary.sha384",
+            b"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
         );
 
         let err = cmd_verify_asset(&file, &hash_file, None).unwrap_err();
         assert!(
-            err.to_string().contains("BLAKE3 integrity check FAILED"),
-            "wrong hash must fail BLAKE3 gate"
+            err.to_string().contains("SHA-384 integrity check FAILED"),
+            "wrong hash must fail SHA-384 gate"
         );
     }
 
@@ -273,7 +274,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let file = write_tmp(&dir, "binary", b"data");
-        let hash_file = write_tmp(&dir, "binary.b3", b"not-hex-garbage");
+        let hash_file = write_tmp(&dir, "binary.sha384", b"not-hex-garbage");
 
         let err = cmd_verify_asset(&file, &hash_file, None).unwrap_err();
         assert!(
@@ -283,17 +284,17 @@ mod tests {
     }
 
     #[test]
-    fn blake3_only_verification_succeeds() {
+    fn sha384_only_verification_succeeds() {
         let dir =
             std::env::temp_dir().join(format!("janitor_verify_asset_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
 
         let payload = b"release binary contents";
         let file = write_tmp(&dir, "binary", payload);
-        let hex = blake3::hash(payload).to_hex().to_string();
-        let hash_file = write_tmp(&dir, "binary.b3", hex.as_bytes());
+        let hex = hex::encode(Sha384::digest(payload));
+        let hash_file = write_tmp(&dir, "binary.sha384", hex.as_bytes());
 
-        cmd_verify_asset(&file, &hash_file, None).expect("blake3-only verify must succeed");
+        cmd_verify_asset(&file, &hash_file, None).expect("sha384-only verify must succeed");
     }
 
     /// Round-trip: sign-asset hash with a fresh ML-DSA-65 key, then verify with
@@ -309,7 +310,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let payload = b"test release payload";
-        let hash_bytes: [u8; 32] = blake3::hash(payload).into();
+        let hash_bytes: [u8; 48] = Sha384::digest(payload).into();
 
         // Generate a fresh keypair for this test.
         let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("ML-DSA keygen");
@@ -329,7 +330,7 @@ mod tests {
         use base64::Engine as _;
         use common::pqc::JANITOR_ASSET_CONTEXT;
 
-        let hash_bytes: [u8; 32] = blake3::hash(b"original").into();
+        let hash_bytes: [u8; 48] = Sha384::digest(b"original").into();
         let (pk, sk) = ml_dsa_65::KG::try_keygen().expect("ML-DSA keygen");
         let sig = sk
             .try_sign(&hash_bytes, JANITOR_ASSET_CONTEXT)
@@ -337,7 +338,7 @@ mod tests {
         let sig_b64 = base64::engine::general_purpose::STANDARD.encode(sig.as_ref());
 
         // Verify against a DIFFERENT payload hash — simulates tampered binary.
-        let tampered_hash: [u8; 32] = blake3::hash(b"tampered").into();
+        let tampered_hash: [u8; 48] = Sha384::digest(b"tampered").into();
         let valid =
             common::pqc::verify_asset_ml_dsa_signature(&tampered_hash, &pk.into_bytes(), &sig_b64)
                 .expect("verify must not error");

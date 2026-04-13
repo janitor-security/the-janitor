@@ -34,6 +34,7 @@ base64.workspace = true
 ed25519-dalek.workspace = true
 fips204.workspace = true
 fips205.workspace = true
+sha2.workspace = true
 
 # Secure key material zeroization (PQC private key bundles)
 zeroize.workspace = true

@@ -179,15 +179,15 @@ pub fn verify_slh_dsa_signature(
     Ok(pk.verify(cbom_bytes, &sig_array, JANITOR_CBOM_CONTEXT))
 }
 
-/// Verify an ML-DSA-65 signature over a release-asset BLAKE3 hash.
+/// Verify an ML-DSA-65 signature over a release-asset SHA-384 digest.
 ///
 /// Uses [`JANITOR_ASSET_CONTEXT`] — distinct from the CBOM context — so that a
 /// CBOM signature cannot be replayed as a release-asset signature and vice versa.
 ///
-/// `hash_bytes` is the raw 32-byte BLAKE3 digest.  `sig_b64` is the base64-encoded
+/// `hash_bytes` is the raw 48-byte SHA-384 digest.  `sig_b64` is the base64-encoded
 /// ML-DSA-65 signature as written to the `.sig` file by `janitor sign-asset`.
 pub fn verify_asset_ml_dsa_signature(
-    hash_bytes: &[u8; 32],
+    hash_bytes: &[u8; 48],
     public_key_bytes: &[u8],
     sig_b64: &str,
 ) -> anyhow::Result<bool> {
@@ -241,16 +241,16 @@ pub fn verify_wasm_rule_ml_dsa_signature(
     Ok(pk.verify(hash_bytes, &sig_array, JANITOR_WASM_RULE_CONTEXT))
 }
 
-/// Sign a release-asset BLAKE3 hash using the PQC private key bundle at `path`.
+/// Sign a release-asset SHA-384 digest using the PQC private key bundle at `path`.
 ///
-/// `hash_bytes` is the 32-byte raw BLAKE3 digest of the release asset.
+/// `hash_bytes` is the 48-byte raw SHA-384 digest of the release asset.
 /// Signing the hash rather than the raw binary keeps the operation fast
 /// regardless of asset size.
 ///
 /// Writes no files; the caller is responsible for serialising the returned
 /// [`PqcSignatureBundle`] to disk as a `.sig` file.
 pub fn sign_asset_hash_from_file(
-    hash_bytes: &[u8; 32],
+    hash_bytes: &[u8; 48],
     path: &Path,
 ) -> anyhow::Result<PqcSignatureBundle> {
     // Zeroizing<Vec<u8>>: key material is wiped from RAM when this binding is dropped.

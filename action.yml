@@ -39,19 +39,20 @@ runs:
     # SLSA Level 4 provenance: the binary in CI is the exact artifact emitted by
     # the signed release pipeline.
     #
-    # CIRCULAR TRUST FIX: the previous approach used the NEW binary's co-hosted .b3
+    # CIRCULAR TRUST FIX: the previous approach used the NEW binary's co-hosted .sha384
     # file and Python to verify itself — circular because a tampered CDN could supply
-    # a matching (tampered binary, matching .b3) pair.  The corrected approach
+    # a matching (tampered binary, matching .sha384) pair.  The corrected approach
     # bootstraps a PREVIOUSLY RELEASED, ALREADY TRUSTED version of the Janitor CLI
     # and uses ITS embedded ML-DSA-65 release verifying key to validate the new binary.
     #
     # Verification sequence:
-    #   1. Download the new binary (.b3 and .sig) from the GitHub Release CDN.
+    #   1. Download the new binary (.sha384 and .sig) from the GitHub Release CDN.
     #   2. Download a HARDCODED bootstrap binary from the prior known-good release.
     #      (This binary is trusted because it was verified by a previous release cycle.)
-    #   3. Run `bootstrap verify-asset --file NEW --hash NEW.b3 [--sig NEW.sig]`.
+    #   3. Verify the downloaded SHA-384 sidecar with `sha384sum -c`.
+    #   4. Run `bootstrap verify-asset --file NEW --hash NEW.sha384 [--sig NEW.sig]`.
     #      The bootstrap binary carries the release verifying key for the NEW release.
-    #   4. `verify-asset` exits 1 on any hash/signature mismatch → Action fails hard.
+    #   5. `verify-asset` exits 1 on any hash/signature mismatch → Action fails hard.
     #
     # IMPORTANT: update BOOTSTRAP_TAG each time a new release ships.
     - name: Download and Verify Janitor Binary
@@ -67,7 +68,7 @@ runs:
 
         # ── Download new release artifacts.
         curl -fsSL "${BASE_URL}/janitor"     -o "${INSTALL_DIR}/janitor"
-        curl -fsSL "${BASE_URL}/janitor.b3"  -o "${INSTALL_DIR}/janitor.b3"
+        curl -fsSL "${BASE_URL}/janitor.sha384"  -o "${INSTALL_DIR}/janitor.sha384"
         curl -fsSL "${BASE_URL}/janitor.sig" -o "${INSTALL_DIR}/janitor.sig" || true
 
         # ── Bootstrap: fetch the previous known-good Janitor binary as the verifier.
@@ -83,22 +84,23 @@ runs:
         curl -fsSL "${BOOTSTRAP_URL}" -o "${BOOTSTRAP_BIN}"
         chmod +x "${BOOTSTRAP_BIN}"
 
-        # ── Layer 1 + 2: BLAKE3 + ML-DSA-65 via bootstrap verifier.
-        # verify-asset checks the BLAKE3 hash first (exits 1 on mismatch), then
-        # verifies the ML-DSA-65 detached signature if a .sig file is present.
-        # Both checks are performed by the bootstrap binary — no Python dependency.
+        # ── Layer 1: SHA-384 via coreutils.
+        printf '%s  %s\n' "$(tr -d '\n' < "${INSTALL_DIR}/janitor.sha384")" "${INSTALL_DIR}/janitor" | sha384sum -c -
+        # ── Layer 2: ML-DSA-65 via bootstrap verifier.
+        # verify-asset recomputes SHA-384 internally and verifies the detached
+        # ML-DSA-65 signature if a .sig file is present.
         if [ -f "${INSTALL_DIR}/janitor.sig" ]; then
             "${BOOTSTRAP_BIN}" verify-asset \
                 --file "${INSTALL_DIR}/janitor" \
-                --hash "${INSTALL_DIR}/janitor.b3" \
+                --hash "${INSTALL_DIR}/janitor.sha384" \
                 --sig  "${INSTALL_DIR}/janitor.sig"
-            echo "Trust chain verified: BLAKE3 + ML-DSA-65 via bootstrap ${BOOTSTRAP_TAG}"
+            echo "Trust chain verified: SHA-384 + ML-DSA-65 via bootstrap ${BOOTSTRAP_TAG}"
         else
-            # .sig absent (pre-PQC or unsigned release) — BLAKE3-only via bootstrap.
+            # .sig absent (pre-PQC or unsigned release) — SHA-384-only via bootstrap.
             "${BOOTSTRAP_BIN}" verify-asset \
                 --file "${INSTALL_DIR}/janitor" \
-                --hash "${INSTALL_DIR}/janitor.b3"
-            echo "Trust chain verified: BLAKE3-only via bootstrap ${BOOTSTRAP_TAG} (no .sig)"
+                --hash "${INSTALL_DIR}/janitor.sha384"
+            echo "Trust chain verified: SHA-384-only via bootstrap ${BOOTSTRAP_TAG} (no .sig)"
         fi
 
         chmod +x "${INSTALL_DIR}/janitor"

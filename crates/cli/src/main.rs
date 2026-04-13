@@ -789,9 +789,9 @@ enum Commands {
         repo: PathBuf,
     },
 
-    /// Compute the BLAKE3 hash of a release binary and optionally sign it with PQC keys.
+    /// Compute the SHA-384 digest of a release binary and optionally sign it with PQC keys.
     ///
-    /// Writes `<file>.b3` — the hex-encoded BLAKE3 digest — always.
+    /// Writes `<file>.sha384` — the hex-encoded SHA-384 digest — always.
     /// If `--pqc-key` is supplied, also writes `<file>.sig` — a JSON bundle
     /// containing ML-DSA-65 and/or SLH-DSA-SHAKE-192s signatures over the hash.
     ///
@@ -803,14 +803,14 @@ enum Commands {
         file: PathBuf,
         /// PQC private key bundle path (ML-DSA-65 or dual ML+SLH, FIPS 204/205).
         ///
-        /// When omitted, only the BLAKE3 `.b3` hash file is written — no signature.
+        /// When omitted, only the SHA-384 `.sha384` hash file is written — no signature.
         #[arg(long)]
         pqc_key: Option<String>,
     },
 
     /// Verify the integrity of a Janitor release binary.
     ///
-    /// Performs BLAKE3 hash verification against `--hash` (.b3 file) and,
+    /// Performs SHA-384 hash verification against `--hash` (.sha384 file) and,
     /// when `--sig` is supplied, verifies the ML-DSA-65 detached signature
     /// against the hardcoded release verifying key.  Implements the SLSA Level 4
     /// trust anchor: a tampered CDN binary cannot forge the PQC signature.
@@ -822,12 +822,12 @@ enum Commands {
         /// Path to the release binary to verify.
         #[arg(long)]
         file: PathBuf,
-        /// Path to the `.b3` BLAKE3 hash file (64 lowercase hex chars).
+        /// Path to the `.sha384` SHA-384 hash file (96 lowercase hex chars).
         #[arg(long)]
         hash: PathBuf,
         /// Optional path to the `.sig` JSON signature file produced by `sign-asset`.
         ///
-        /// When omitted, only the BLAKE3 hash is checked.  Providing `--sig`
+        /// When omitted, only the SHA-384 hash is checked.  Providing `--sig`
         /// additionally verifies the ML-DSA-65 signature against the hardcoded
         /// release public key.
         #[arg(long)]
@@ -6415,12 +6415,13 @@ fn verify_wisdom_signature(wisdom_bytes: &[u8], sig_bytes: &[u8]) -> anyhow::Res
 // sign-asset
 // ---------------------------------------------------------------------------
 
-/// Compute a BLAKE3 hash for a release binary and optionally sign it with PQC keys.
+/// Compute a SHA-384 digest for a release binary and optionally sign it with PQC keys.
 ///
-/// Always writes `<file>.b3` (hex BLAKE3 digest, newline-terminated).
+/// Always writes `<file>.sha384` (hex SHA-384 digest, newline-terminated).
 /// Writes `<file>.sig` (JSON PQC signature bundle) only when `pqc_key` is supplied.
 fn cmd_sign_asset(file: &Path, pqc_key: Option<&str>) -> anyhow::Result<()> {
     use memmap2::Mmap;
+    use sha2::{Digest as _, Sha384};
     use std::fs::File;
 
     let f = File::open(file).with_context(|| format!("opening asset: {}", file.display()))?;
@@ -6428,29 +6429,26 @@ fn cmd_sign_asset(file: &Path, pqc_key: Option<&str>) -> anyhow::Result<()> {
     let mmap = unsafe { Mmap::map(&f) }
         .with_context(|| format!("mmap failed for asset: {}", file.display()))?;
 
-    let hash = blake3::hash(&mmap);
-    let hex = hash.to_hex().to_string();
+    let hash: [u8; 48] = Sha384::digest(&mmap).into();
+    let hex = hex::encode(hash);
 
-    // Append ".b3" to the full filename (including any existing extension).
-    let b3_path = {
+    // Append ".sha384" to the full filename (including any existing extension).
+    let sha384_path = {
         let mut p = file.to_path_buf();
         let mut name = p.file_name().unwrap_or_default().to_os_string();
-        name.push(".b3");
+        name.push(".sha384");
         p.set_file_name(name);
         p
     };
-    std::fs::write(&b3_path, format!("{hex}\n"))
-        .with_context(|| format!("writing {}", b3_path.display()))?;
-    println!("BLAKE3: {hex}");
-    println!("Written: {}", b3_path.display());
+    std::fs::write(&sha384_path, format!("{hex}\n"))
+        .with_context(|| format!("writing {}", sha384_path.display()))?;
+    println!("SHA-384: {hex}");
+    println!("Written: {}", sha384_path.display());
 
     if let Some(key_path) = pqc_key {
-        let bundle = common::pqc::sign_asset_hash_from_file(
-            hash.as_bytes(),
-            std::path::Path::new(key_path),
-        )?;
+        let bundle = common::pqc::sign_asset_hash_from_file(&hash, std::path::Path::new(key_path))?;
         let sig_json = serde_json::json!({
-            "hash_algorithm": "BLAKE3",
+            "hash_algorithm": "SHA-384",
             "context": "janitor-release-asset",
             "asset": file.file_name().unwrap_or_default().to_string_lossy(),
             "ml_dsa_sig": bundle.ml_dsa_sig,
@@ -6998,9 +6996,10 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 #[cfg(test)]
 mod sign_asset_tests {
     use super::*;
+    use sha2::Digest as _;
 
     #[test]
-    fn sign_asset_produces_correct_blake3_hash() {
+    fn sign_asset_produces_correct_sha384_hash() {
         let dir = std::env::temp_dir().join("janitor_sign_asset_test");
         std::fs::create_dir_all(&dir).unwrap();
         let asset = dir.join("dummy_asset");
@@ -7008,14 +7007,14 @@ mod sign_asset_tests {
 
         cmd_sign_asset(&asset, None).expect("sign_asset must succeed without pqc_key");
 
-        let b3_path = dir.join("dummy_asset.b3");
-        let b3_contents =
-            std::fs::read_to_string(&b3_path).expect("b3 file must exist after sign_asset");
-        let expected = blake3::hash(b"hello janitor release").to_hex().to_string();
+        let sha384_path = dir.join("dummy_asset.sha384");
+        let sha384_contents =
+            std::fs::read_to_string(&sha384_path).expect("sha384 file must exist after sign_asset");
+        let expected = hex::encode(sha2::Sha384::digest(b"hello janitor release"));
         assert_eq!(
-            b3_contents.trim(),
+            sha384_contents.trim(),
             expected,
-            "BLAKE3 hash file must match blake3::hash output"
+            "SHA-384 hash file must match Sha384::digest output"
         );
     }
 }

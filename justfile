@@ -116,8 +116,8 @@ fast-release version:
 	just audit
 	cargo build --release --workspace
 	strip target/release/janitor
-	# SLSA Level 4: compute BLAKE3 hash (and optional ML-DSA-65 sig) for binary provenance.
-	# Produces target/release/janitor.b3 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.
+	# SLSA Level 4: compute SHA-384 digest (and optional ML-DSA-65 sig) for binary provenance.
+	# Produces target/release/janitor.sha384 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.
 	SIGN_ARGS=(target/release/janitor)
 	if [[ -n "${JANITOR_PQC_KEY:-}" ]]; then
 	    SIGN_ARGS+=(--pqc-key "${JANITOR_PQC_KEY}")
@@ -138,7 +138,7 @@ fast-release version:
 	if gh release view "v{{version}}" >/dev/null 2>&1; then
 	    echo "Idempotency guard: GitHub Release v{{version}} already exists. Skipping gh release create."
 	else
-	    RELEASE_ASSETS=(target/release/janitor target/release/janitor.b3)
+	    RELEASE_ASSETS=(target/release/janitor target/release/janitor.sha384)
 	    [ -f target/release/janitor.sig ] && RELEASE_ASSETS+=(target/release/janitor.sig)
 	    gh release create v{{version}} \
 	        --generate-notes \

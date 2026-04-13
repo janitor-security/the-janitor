@@ -5,6 +5,42 @@ implemented as a result. Maintained by the Evolution Tracker skill.
 
 ---
 
+## 2026-04-12 — FedRAMP 3PAO Teardown & Slop Eradication (v10.1.0-alpha.17)
+
+**Directive:** Hostile DoD IL6 / FedRAMP audit. Identify cryptographic boundary violations,
+OOM vectors, shell discipline gaps. Eradicate slop. Rewrite INNOVATION_LOG as a
+strict FedRAMP High accreditation roadmap.
+
+**Audit findings:**
+- BLAKE3 used as pre-hash digest in `sign_asset_hash_from_file` / `verify_asset_ml_dsa_signature`
+  — non-NIST at FIPS 140-3 boundary. Documented as P0-1 in INNOVATION_LOG (roadmap item).
+- `Blake3HashChain` in Governor uses BLAKE3 for audit log integrity — non-NIST.
+  Documented as P0-2 in INNOVATION_LOG.
+- `JanitorPolicy::content_hash()` uses BLAKE3 for security-decision hash — documented P0-3.
+- CBOM signing (`sign_cbom_dual_from_keys`) signs raw bytes via ML-DSA-65 (SHAKE-256 internal) — **FIPS-compliant, no action needed**.
+- Three unbounded `read_to_vec()` HTTP body reads: OSV bulk ZIP, CISA KEV, wisdom archive — OOM vectors.
+- `tools/mcp-wrapper.sh` missing `set -euo pipefail` — shell discipline violation.
+
+**Files modified:**
+- `crates/cli/src/main.rs` — Added `with_config().limit(N).read_to_vec()` circuit breakers on
+  three HTTP response body reads: OSV bulk ZIP (256 MiB), CISA KEV (32 MiB), wisdom archive
+  (64 MiB), wisdom signature (4 KiB).
+- `tools/mcp-wrapper.sh` — Added `set -euo pipefail` on line 2.
+- `docs/INNOVATION_LOG.md` — Fully rewritten as FedRAMP High / DoD IL6 accreditation roadmap:
+  P0 (FIPS cryptographic migrations), P1 (CEF/Syslog audit emission, write-once audit log),
+  P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
+- `Cargo.toml` — workspace version `10.1.0-alpha.16` → `10.1.0-alpha.17`.
+- `README.md`, `docs/index.md` — version parity sync.
+- `docs/IMPLEMENTATION_BACKLOG.md` — this entry.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=1` ✅ — all tests pass
+- `just audit` ✅ — fmt + clippy + check + test + doc parity pass
+- `just fast-release 10.1.0-alpha.17` ✅ — tagged, GH Release published, docs deployed
+- BLAKE3: `016e9acd418f8f1e27846f47ecf140feb657e2eec6a0aa8b62e7b9836e24634a`
+
+---
+
 ## 2026-04-12 — Marketplace Integration & Governor Provisioning (v10.1.0-alpha.16)
 
 **Directive:** Wire the Sovereign Governor as a GitHub App backend with authenticated installation webhooks, tenant-bound analysis token issuance, single-threaded verification, and release preparation.
@@ -1804,3 +1840,27 @@ provider-neutral SCM context extraction, and roll the portability work into the
 - Extended the Sha1-Hulud interceptor to catch obfuscated JavaScript / TypeScript `child_process` execution chains where folded string fragments resolve to `exec`, `spawn`, `execSync`, or `child_process` within a suspicious execution context.
 - Centralized Jira fail-open synchronization in `crates/cli/src/jira.rs`, added deterministic warning emission plus diagnostic logging, and proved `HTTP 500`, `HTTP 401`, and timeout failures do not abort bounce execution.
 - Added Crucible coverage for obfuscated `child_process` payload execution and promoted the deferred GitHub App OAuth Marketplace Integration work item to top-priority `P1` in the innovation log.
+
+## 2026-04-12 — Live-Fire ASPM Deduplication Proving Attempt
+
+- Created a transient root `janitor.toml` pointing Jira sync at `https://ghrammr.atlassian.net` with project key `KAN` and `dedup = true`, then removed it after execution to avoid polluting the tree.
+- Proved the live `bounce` gate rejects the repository’s canonical obfuscated JavaScript `child_process.exec` payload at `slop score 150` as `security:obfuscated_payload_execution` (`KevCritical` path).
+- Live Jira deduplication did not execute because both bounce runs failed before search/create with `JANITOR_JIRA_USER is required for Jira sync`; second execution therefore repeated the same fail-open auth path instead of logging `jira dedup: open ticket found for fingerprint, skipping creation`.
+- Build latency on first live-fire execution was dominated by fresh dependency acquisition and compilation; second execution reused the built artifact and returned immediately.
+
+## 2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary & Jira Re-Engagement
+
+**Directive:** FIPS 140-3 Cryptographic Boundary & Live-Fire Re-Engagement. Replace the release-asset BLAKE3 pre-hash with SHA-384, re-run the live Jira deduplication proof with inline credentials, verify the workspace under single-threaded test execution, and cut `10.1.0-alpha.18`.
+
+- `crates/cli/src/main.rs` *(modified)* — `cmd_sign_asset` now computes `Sha384::digest`, writes `<asset>.sha384`, emits `hash_algorithm = "SHA-384"`, and the hidden CLI help text now documents SHA-384 instead of BLAKE3 for the release-asset lane.
+- `crates/cli/src/verify_asset.rs` *(modified)* — release verification now enforces 96-char lowercase `.sha384` sidecars, recomputes SHA-384 for integrity, and verifies ML-DSA-65 against a 48-byte pre-hash; tests migrated from `.b3`/BLAKE3 expectations to `.sha384`/SHA-384 expectations.
+- `crates/common/src/pqc.rs` *(modified)* — `sign_asset_hash_from_file` and `verify_asset_ml_dsa_signature` now operate on `&[u8; 48]`, moving the release-signature boundary onto a NIST-approved pre-hash without touching the performance BLAKE3 paths used elsewhere.
+- `crates/cli/Cargo.toml` *(modified)* — added `hex.workspace = true` for SHA-384 hex sidecar encoding; `crates/common/Cargo.toml` *(modified)* — added `sha2.workspace = true` to make the boundary dependency explicit.
+- `action.yml` *(modified)* — release downloads now fetch `janitor.sha384`, verify the sidecar with `sha384sum -c`, and then invoke the bootstrap verifier for ML-DSA-65 signature validation. `justfile` *(modified)* — `fast-release` now ships `target/release/janitor.sha384` instead of `janitor.b3`.
+- `Cargo.toml` *(modified)* — workspace version bumped to `10.1.0-alpha.18`. `docs/INNOVATION_LOG.md` *(modified)* — removed implemented `P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384` from the active FedRAMP queue. `docs/IMPLEMENTATION_BACKLOG.md` *(modified)* — this ledger entry.
+
+**Live-fire Jira re-engagement**:
+- First inline-credential bounce run reached Jira transport, but dedup search failed with `HTTP 410` and issue creation failed with `HTTP 400`; the `KevCritical` finding still fired and blocked the patch at `slop score 150`.
+- Second identical run produced the same `HTTP 410` search failure and `HTTP 400` create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.
+
+**Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
