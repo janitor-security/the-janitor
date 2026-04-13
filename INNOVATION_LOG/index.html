@@ -666,15 +666,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p2-2-mtls-mutual-authentication-for-governor-api-ia-3-sc-8" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: mTLS Mutual Authentication for Governor API (IA-3, SC-8)
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -689,15 +680,6 @@
   
     <nav class="md-nav" aria-label="P3 — Supply Chain & SBOM Compliance (FedRAMP SA / SR Controls)">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p3-1-ntia-minimum-elements-sbom-for-governor-binary-sa-12-sr-3" class="md-nav__link">
-    <span class="md-ellipsis">
-      P3-1: NTIA-Minimum-Elements SBOM for Governor Binary (SA-12, SR-3)
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p3-2-reproducible-build-attestation-slsa-level-3-level-4" class="md-nav__link">
@@ -861,15 +843,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#p2-2-mtls-mutual-authentication-for-governor-api-ia-3-sc-8" class="md-nav__link">
-    <span class="md-ellipsis">
-      P2-2: mTLS Mutual Authentication for Governor API (IA-3, SC-8)
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -884,15 +857,6 @@
   
     <nav class="md-nav" aria-label="P3 — Supply Chain & SBOM Compliance (FedRAMP SA / SR Controls)">
       <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#p3-1-ntia-minimum-elements-sbom-for-governor-binary-sa-12-sr-3" class="md-nav__link">
-    <span class="md-ellipsis">
-      P3-1: NTIA-Minimum-Elements SBOM for Governor Binary (SA-12, SR-3)
-    </span>
-  </a>
-  
-</li>
         
           <li class="md-nav__item">
   <a href="#p3-2-reproducible-build-attestation-slsa-level-3-level-4" class="md-nav__link">
@@ -1003,33 +967,7 @@ signature, issuer (<code>janitor-governor</code>), and expiry (HTTP 401 on failu
 <code>PKCS#8</code> PEM constructed inline from Governor Ed25519 seed; no new key material required.
 2 new tests: <code>expired_jwt_in_report_returns_401</code>, <code>valid_jwt_with_auditor_role_cannot_post_report_returns_403</code>.</p>
 <hr />
-<h3 id="p2-2-mtls-mutual-authentication-for-governor-api-ia-3-sc-8">P2-2: mTLS Mutual Authentication for Governor API (IA-3, SC-8)</h3>
-<p><strong>Status</strong>: OPEN — Required for DoD IL5+</p>
-<p><strong>Finding</strong>: The Governor listens on plain TCP. DoD IL5 mandates mutual TLS
-for all service-to-service communication within the enclave boundary.</p>
-<p><strong>Implementation plan</strong>:
-1. Add <code>axum-server</code> + <code>rustls</code> to <code>crates/gov/Cargo.toml</code>.
-2. Load <code>JANITOR_GOV_TLS_CERT</code> + <code>JANITOR_GOV_TLS_KEY</code> at startup.
-3. Load optional <code>JANITOR_GOV_CLIENT_CA</code> for client certificate validation.
-4. Bind <code>axum::serve</code> with <code>axum_server::tls_rustls::RustlsConfig</code>.
-5. Extract client certificate CN as the <code>installation_id</code> alternative when
-   <code>GITHUB_WEBHOOK_SECRET</code> is absent (enterprise on-prem deployment).</p>
-<hr />
 <h2 id="p3-supply-chain-sbom-compliance-fedramp-sa-sr-controls">P3 — Supply Chain &amp; SBOM Compliance (FedRAMP SA / SR Controls)</h2>
-<h3 id="p3-1-ntia-minimum-elements-sbom-for-governor-binary-sa-12-sr-3">P3-1: NTIA-Minimum-Elements SBOM for Governor Binary (SA-12, SR-3)</h3>
-<p><strong>Status</strong>: OPEN — Mandated by EO 14028 (Cyber EO) for federal software supply chain</p>
-<p><strong>Finding</strong>: The Janitor generates CycloneDX SBOMs for audited repositories but
-does NOT generate one for its own release binary. EO 14028 and NIST SSDF
-require all software sold to federal agencies to include an NTIA-minimum-element
-SBOM.</p>
-<p><strong>Implementation plan</strong>:
-1. Add <code>cargo cyclonedx</code> or <code>syft</code> invocation to <code>justfile::fast-release</code>.
-2. Generate <code>janitor-{version}.cdx.json</code> (CycloneDX 1.6) for the release binary.
-3. Attach the SBOM to the GitHub Release alongside the binary and <code>.b3</code> hash.
-4. Sign the SBOM with the existing Dual-PQC pipeline (<code>sign_cbom_dual_from_keys</code>).
-5. Add SBOM hash to the release attestation capsule.</p>
-<p><strong>Commercial justification</strong>: EO 14028 compliance is a pass/fail gate for all
-federal software procurement. SBOM absence disqualifies bids automatically.</p>
 <hr />
 <h3 id="p3-2-reproducible-build-attestation-slsa-level-3-level-4">P3-2: Reproducible Build Attestation (SLSA Level 3 → Level 4)</h3>
 <p><strong>Status</strong>: OPEN — Upgrade from current SLSA Level 4 (binary provenance)</p>
@@ -1050,7 +988,9 @@ with <code>lto = true</code> is currently NOT reproducible across different link
 <li>P0-1 (RBAC): Role-Based Access Control — [COMPLETED 2026-04-11 v10.1.0-alpha.11]</li>
 <li>P1-1 (ASPM): Jira Sync — [COMPLETED 2026-04-12 v10.1.0-alpha.12]</li>
 <li>P1-2 (Air-Gap): OSV Bulk Corpus Resilience — [COMPLETED 2026-04-12 v10.1.0-alpha.14]</li>
+<li>P2-2 (mTLS): Governor mutual TLS + client-CN installation binding — [COMPLETED 2026-04-13 v10.1.0-alpha.23]</li>
 <li>P2-6 (PQC CT): Wasm Rule Publisher Signing — [COMPLETED 2026-04-12 v10.1.0-alpha.15]</li>
+<li>P3-1 (SBOM): Signed Janitor CycloneDX release SBOM — [COMPLETED 2026-04-13 v10.1.0-alpha.23]</li>
 <li>Governor Marketplace: GitHub App webhook + installation gating — [COMPLETED 2026-04-12 v10.1.0-alpha.16]</li>
 </ul>
 <hr />

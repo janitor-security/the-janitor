@@ -625,6 +625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Federal Network Encryption &amp; Self-Attestation (v10.1.0-alpha.23)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving
@@ -1519,6 +1528,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Federal Network Encryption &amp; Self-Attestation (v10.1.0-alpha.23)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving
@@ -2391,6 +2409,33 @@
 <h1 id="implementation-backlog">Implementation Backlog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result. Maintained by the Evolution Tracker skill.</p>
+<h2 id="2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23">2026-04-13 — Federal Network Encryption &amp; Self-Attestation (v10.1.0-alpha.23)</h2>
+<p><strong>Directive:</strong> Close the DoD IL5 Governor transport gap with optional mTLS, generate and sign a first-party Janitor SBOM during release, verify under single-threaded tests, bump to <code>10.1.0-alpha.23</code>, and execute the fast-release path.</p>
+<p><strong>Phase 1 — P2-2 mTLS Governor Transport:</strong>
+- <code>crates/gov/Cargo.toml</code> <em>(modified)</em> — added <code>axum-server</code> with <code>tls-rustls</code>, plus direct <code>rustls</code>, <code>rustls-pemfile</code>, <code>tokio-rustls</code>, and <code>tower</code> dependencies required for native TLS termination and certificate-aware request extensions.
+- <code>crates/gov/src/main.rs</code> <em>(modified)</em>:
+  - Governor startup now detects <code>JANITOR_GOV_TLS_CERT</code> and <code>JANITOR_GOV_TLS_KEY</code>; when present it boots over Rustls, otherwise it preserves the plain <code>axum::serve</code> path for local development and routing tests.
+  - <code>JANITOR_GOV_CLIENT_CA</code> now enables strict client-certificate verification through <code>WebPkiClientVerifier</code>; absence of the CA bundle keeps server-side TLS enabled without mutual auth.
+  - Added a custom <code>GovernorTlsAcceptor</code> that reads the peer certificate from the Rustls session and injects a typed <code>ClientIdentity</code> extension into Axum request handling.
+  - Added CN extraction from the presented client certificate and on-prem fallback in <code>analysis_token_handler</code>: when <code>GITHUB_WEBHOOK_SECRET</code> is absent and <code>installation_id == 0</code>, the Governor derives the installation binding from the client certificate Common Name.
+  - Added deterministic DER parsing helpers for subject/CN extraction without introducing a heavyweight X.509 parser dependency.
+  - Added two regression tests: subject CN extraction from a deterministic DER fixture and analysis-token issuance using mTLS CN fallback in on-prem mode.</p>
+<p><strong>Phase 2 — P3-1 NTIA-Minimum-Elements SBOM:</strong>
+- <code>justfile</code> <em>(modified)</em> — <code>fast-release</code> now:
+  - runs <code>cargo cyclonedx --manifest-path Cargo.toml --all --format json --spec-version 1.5 --override-filename janitor</code>,
+  - copies the generated <code>janitor.cdx.json</code> into <code>target/release/janitor.cdx.json</code>,
+  - signs the SBOM with the same internal <code>janitor sign-asset</code> path used for the binary, and
+  - attaches the SBOM plus optional <code>.sig</code> to <code>gh release create</code>.</p>
+<p><strong>Phase 3 — Versioning / records:</strong>
+- <code>Cargo.toml</code> <em>(modified)</em> — workspace version bumped from <code>10.1.0-alpha.22</code> to <code>10.1.0-alpha.23</code>.
+- <code>README.md</code>, <code>docs/index.md</code> <em>(modified via <code>just sync-versions</code>)</em> — version parity updated to <code>v10.1.0-alpha.23</code>.
+- <code>docs/INNOVATION_LOG.md</code> <em>(modified)</em> — open P2-2 / P3-1 backlog sections purged; both items moved into completed status.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> <em>(modified)</em> — this session ledger.</p>
+<p><strong>Verification:</strong>
+- <code>cargo test -p janitor-gov -- --test-threads=1</code> ✅ — 19/19 Governor tests pass, including the new CN extraction and on-prem installation binding checks.
+- <code>cargo test --workspace -- --test-threads=1</code> ✅ — full workspace green.
+- <code>just audit</code> ✅ — fmt, clippy, check, workspace tests, release parity, and doc parity all pass after <code>just sync-versions</code>.
+- <code>just fast-release 10.1.0-alpha.23</code> — execution attempted below; outcome recorded in session summary.</p>
 <h2 id="2026-04-13-v1010-alpha22-zero-trust-identity-ledger-proving">2026-04-13 — v10.1.0-alpha.22: Zero Trust Identity &amp; Ledger Proving</h2>
 <p><strong>Directive:</strong> Zero Trust Identity &amp; Ledger Proving — Phase 1: live-fire HMAC-SHA-384 audit ledger verification; Phase 2: replace Governor stub tokens with real EdDSA JWTs; Phase 3: audit + release.</p>
 <p><strong>Phase 1 — Ledger Proving:</strong>
