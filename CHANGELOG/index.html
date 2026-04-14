@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-release-rescue-cloud-infra-taint-strike-v1017" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-dynamic-esg-fintech-taint-strike-v1016" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)
@@ -1571,6 +1580,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-release-rescue-cloud-infra-taint-strike-v1017" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-dynamic-esg-fintech-taint-strike-v1016" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)
@@ -2566,6 +2584,19 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-release-rescue-cloud-infra-taint-strike-v1017">2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)</h2>
+<p><strong>Directive:</strong> Rescue uncommitted v10.1.6 code (Codex token-exhaustion recovery), then expand the taint producer spine into Cloud Infrastructure grammars (Bash, Nix, HCL/Terraform), reorganize the remaining-language roadmap into Group 2 (Systems &amp; Gaming) and Group 3 (Apple &amp; Graphics), and release.</p>
+<p><strong>Phase 1 — v10.1.6 Rescue:</strong>
+- Committed and released all v10.1.6 code previously written by Codex but not committed (Dynamic ESG, Swift/Scala taint, SARIF/CEF outputs, GitHub Actions SHA pin updates, <code>.gitignore</code> OpSec hardening). GH Release v10.1.6 published.</p>
+<p><strong>Phase 2 — Cloud Infra Taint Producers (Group 1):</strong>
+- <code>crates/forge/src/taint_propagate.rs</code>:
+  - <code>collect_bash_params</code> / <code>find_bash_dangerous_flows</code> / <code>track_taint_bash</code> — detects <code>eval "$1"</code>, <code>eval "$@"</code>, and named-local aliases in bash <code>function_definition</code> nodes; <code>collect_bash_exports</code> wired into <code>export_cross_file_records</code> for <code>sh|bash|cmd|zsh</code>.
+  - <code>collect_nix_params</code> / <code>find_nix_exec_flows</code> / <code>track_taint_nix</code> — detects <code>builtins.exec</code> with set-pattern formals <code>{ cmd }:</code> and simple bindings; <code>collect_nix_exports</code> wired for <code>nix</code> (grammar node kind <code>function_expression</code>).
+  - <code>find_hcl_dangerous_flows</code> / <code>extract_hcl_var_flows</code> / <code>track_taint_hcl</code> — detects <code>provisioner "local-exec"</code> and <code>data "external"</code> blocks with <code>${var.X}</code> / <code>${local.X}</code> template interpolations; <code>collect_hcl_exports</code> wired for <code>tf|hcl</code>.
+  - <code>export_cross_file_records</code> dispatch extended: <code>sh|bash|cmd|zsh</code>, <code>nix</code>, <code>tf|hcl</code>.
+  - 9 new deterministic tests: 3 true-positive / true-negative / export-record per language.</p>
+<p><strong>Phase 3 — Innovation Log:</strong>
+- <code>.INNOVATION_LOG.md</code>: P1-1 updated — Bash/Nix/HCL/Terraform promoted to COMPLETED for v10.1.7; remaining lanes reorganized into Group 2 (Lua, GDScript, Zig) and Group 3 (Objective-C, GLSL).</p>
 <h2 id="2026-04-14-dynamic-esg-fintech-taint-strike-v1016">2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)</h2>
 <p><strong>Directive:</strong> Replace static ESG energy math with measured telemetry, extend the taint producer spine into Swift and Scala, add SARIF/CEF strike artefacts for enterprise ingestion, reprioritize the remaining-language roadmap toward Bash/Terraform/Nix, verify under single-threaded tests, and execute the governed release path.</p>
 <p><strong>Phase 1 — Dynamic ESG Telemetry:</strong>
