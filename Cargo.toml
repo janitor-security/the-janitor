@@ -123,7 +123,7 @@ git2 = "0.20"
 rayon = "1.10"
 
 # ZIP archive extraction — OSV bulk corpus download (in-memory, no temp files)
-zip = "2"
+zip = "8"
 
 # File-system watch — SBOM drift daemon (inotify/kqueue via OS-native backend)
 notify = "6.1"
