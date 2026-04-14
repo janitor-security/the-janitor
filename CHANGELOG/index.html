@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-forensic-benchmark-true-taint-activation-v1012" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Forensic Benchmark &amp; True Taint Activation (v10.1.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-dual-model-consensus-deep-eradication-strike-v1011" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)
@@ -1526,6 +1535,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-forensic-benchmark-true-taint-activation-v1012" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Forensic Benchmark &amp; True Taint Activation (v10.1.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-dual-model-consensus-deep-eradication-strike-v1011" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)
@@ -2476,6 +2494,53 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-13-forensic-benchmark-true-taint-activation-v1012">2026-04-13 — Forensic Benchmark &amp; True Taint Activation (v10.1.2)</h2>
+<p><strong>Directive:</strong> Clean repository state, finalize SIEM exports, activate the producer side of the cross-file taint spine, benchmark the engine against three large OSS repos, verify under single-threaded tests, bump to <code>10.1.2</code>, and execute the governed fast-release path.</p>
+<p><strong>Phase 1 — State eradication:</strong>
+- Removed the obsolete tracked backlog file: <code>docs/IMPLEMENTATION_BACKLOG.md</code>.
+- Removed the lingering tracked stale patch: <code>gauntlet/godot/slop_pr.patch</code>.
+- Verified <code>mkdocs.yml</code> does not reference the deleted backlog surface; nav remains pinned to <code>CHANGELOG.md</code> only.</p>
+<p><strong>Phase 2 — CEF / OCSF export surface:</strong>
+- <code>crates/cli/src/report.rs</code>:
+  - added <code>BounceLogEntry::to_cef_string()</code> with the required <code>CEF:0|JanitorSecurity|Governor|1.0|...</code> envelope.
+  - added <code>BounceLogEntry::to_ocsf_json()</code> with OCSF v1.1-style Security Finding output.
+- <code>crates/cli/src/export.rs</code>:
+  - added non-CSV export writers for <code>cef</code> and <code>ocsf</code>.
+  - preserved CSV as the default export lane.
+- <code>crates/cli/src/main.rs</code>:
+  - extended <code>janitor export</code> with <code>--format csv|cef|ocsf</code>.</p>
+<p><strong>Phase 3 — True taint spine activation:</strong>
+- <code>crates/forge/src/taint_propagate.rs</code>:
+  - added producer-side export builders for <code>py</code>, <code>js/jsx</code>, <code>ts/tsx</code>, <code>java</code>, <code>go</code>, and <code>cs</code>.
+  - added deterministic regression tests covering public/exported boundary emission for Python, TypeScript, Java, Go, and C#.
+- <code>crates/forge/src/taint_catalog.rs</code>:
+  - added <code>upsert_records()</code> so repeated bounces replace boundary summaries instead of inflating the catalog with duplicate entries.
+- <code>crates/forge/src/slop_filter.rs</code>:
+  - wired producer emission into the live patch-bounce path before cross-file sink consumption, activating the previously missing producer leg in production.</p>
+<p><strong>Phase 4 — Live-fire benchmarks:</strong>
+- <code>just strike godotengine/godot 25</code>
+- <code>just strike bevyengine/bevy 25</code>
+- <code>just strike neovim/neovim 25</code></p>
+<p><strong>Telemetry:</strong>
+- <code>godotengine/godot</code>:
+  - full <code>just strike</code> wall-clock: <code>1144.91s</code>
+  - internal hyper-drive wall-clock: <code>163.56s</code>
+  - PRs harvested / bounced: <code>24</code>
+- <code>bevyengine/bevy</code>:
+  - full <code>just strike</code> wall-clock: <code>63.06s</code>
+  - internal hyper-drive wall-clock: <code>7.03s</code>
+  - PRs harvested / bounced: <code>22</code>
+- <code>neovim/neovim</code>:
+  - full <code>just strike</code> wall-clock: <code>156.62s</code>
+  - internal hyper-drive wall-clock: <code>16.76s</code>
+  - PRs harvested / bounced: <code>24</code></p>
+<p><strong>Verification:</strong>
+- <code>cargo test -p forge -p cli -- --test-threads=1</code> ✅
+- <code>cargo test --workspace -- --test-threads=1</code> ✅
+- <code>just audit</code> ✅</p>
+<p><strong>Versioning / release prep:</strong>
+- <code>Cargo.toml</code> — workspace version <code>10.1.1</code> → <code>10.1.2</code>
+- <code>.INNOVATION_LOG.md</code> — purged completed <code>P0-1</code> (CEF/OCSF export) and <code>P1-3</code> (true taint spine completion) from the active roadmap; completion recorded in the ledger.</p>
 <h2 id="2026-04-13-dual-model-consensus-deep-eradication-strike-v1011">2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)</h2>
 <p><strong>Directive:</strong> Audit workspace dependency bloat, delete RC/stale residue, map the true 23-grammar semantic-depth surface, synthesize Claude's FedRAMP findings with a hostile AST audit, verify under single-threaded tests, bump to <code>10.1.1</code>, and execute the governed fast-release path.</p>
 <p><strong>Phase 1 — Dependency &amp; workspace bloat audit:</strong>
