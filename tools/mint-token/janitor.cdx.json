@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:f2743aa9-1126-4147-b300-d62d077e7641",
+  "serialNumber": "urn:uuid:daa0d181-59b4-4437-b657-639b1c7045ae",
   "metadata": {
-    "timestamp": "2026-04-14T00:09:45.188825231Z",
+    "timestamp": "2026-04-14T02:02:25.520824220Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.0",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.1",
       "name": "mint-token",
-      "version": "10.1.0",
+      "version": "10.1.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.1.0?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.1.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.0 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.1 bin-target-0",
           "name": "mint-token",
-          "version": "10.1.0",
-          "purl": "pkg:cargo/mint-token@10.1.0?download_url=file://.#src/main.rs"
+          "version": "10.1.1",
+          "purl": "pkg:cargo/mint-token@10.1.1?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -1684,7 +1684,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.0",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

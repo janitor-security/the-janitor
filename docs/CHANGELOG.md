@@ -3,6 +3,43 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-13 — Dual-Model Consensus & Deep Eradication Strike (v10.1.1)
+
+**Directive:** Audit workspace dependency bloat, delete RC/stale residue, map the true 23-grammar semantic-depth surface, synthesize Claude's FedRAMP findings with a hostile AST audit, verify under single-threaded tests, bump to `10.1.1`, and execute the governed fast-release path.
+
+**Phase 1 — Dependency & workspace bloat audit:**
+- Removed three verified-dead direct dependencies:
+  - `crates/common/Cargo.toml` — dropped unused `bitflags` and `dunce`
+  - `crates/anatomist/Cargo.toml` — dropped unused `semver`
+  - `crates/cli/Cargo.toml` — dropped unused direct `rustls`
+- Kept the remaining heavy crates because they are still exercised in the production path:
+  - `tokio` powers CLI async orchestration, daemon, MCP, and Governor runtime
+  - `ureq` + `rustls` + `rustls-pemfile` remain required for TLS/mTLS outbound lanes
+  - `notify`, `zip`, `indicatif`, `uuid`, `git2`, `rayon`, `wasmtime` all have live call sites
+
+**Phase 2 — Stale artifact eradication:**
+- Deleted confirmed orphan / stale residue:
+  - `gauntlet/godot/slop_pr.patch`
+  - `janitor-test-gauntlet/main.c.patch`
+  - `tools/omni_coverage_mapper.sh`
+  - `tools/setup_remote_access.sh`
+  - `SOVEREIGN_BRIEFING.md`
+- `RUNBOOK.md` updated to remove the deleted Tailscale bootstrap script and the stale remote-gauntlet setup language.
+
+**Phase 3 — Grammar truth & roadmap synthesis:**
+- `.INNOVATION_LOG.md` appended with the brutal semantic-depth truth table:
+  - no end-to-end production cross-file taint spine proven in the audited runtime files
+  - intra-file taint only for `go`, `rb`, `php`
+  - catalog-backed cross-file sink matching without demonstrated production export for a broader subset
+  - the remainder still sit at AST / byte-pattern detection depth
+- Added two roadmap items Claude missed:
+  - `P1-3` Semantic Depth Disclosure & True Taint Spine Completion
+  - `P1-4` Wasm Capability Receipts & SCM Review-Parity Spine
+
+**Phase 4 — Versioning & release prep:**
+- `Cargo.toml` — workspace version `10.1.0` → `10.1.1`
+- Release verification and release execution results recorded after command execution below.
+
 ## 2026-04-13 — General Availability Genesis & Omni-Audit (v10.1.0)
 
 **Directive:** Drop Release Candidate tags. Transition to General Availability. Massive documentation rewrite, OpSec leak eradication, dependency CVE resolution, and enterprise readiness audit.

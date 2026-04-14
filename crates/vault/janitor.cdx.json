@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:86e8b45e-2a65-4261-92a1-822c9f45ed33",
+  "serialNumber": "urn:uuid:0c112e45-90a9-45d2-aa68-0ecb8e8d9749",
   "metadata": {
-    "timestamp": "2026-04-14T00:09:45.132363152Z",
+    "timestamp": "2026-04-14T02:02:25.450179670Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.1",
       "name": "vault",
-      "version": "10.1.0",
+      "version": "10.1.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.1.0?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.1.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.1 bin-target-0",
           "name": "vault",
-          "version": "10.1.0",
-          "purl": "pkg:cargo/vault@10.1.0?download_url=file://.#src/lib.rs"
+          "version": "10.1.1",
+          "purl": "pkg:cargo/vault@10.1.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1204,7 +1204,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:73ef3f09-494f-4491-9b06-d0b060e8521d",
+  "serialNumber": "urn:uuid:d2e4acaf-ed5e-4b3b-91f2-68848b3de6d0",
   "metadata": {
-    "timestamp": "2026-04-14T00:09:45.173073969Z",
+    "timestamp": "2026-04-14T02:02:25.500269122Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.0",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.1",
       "name": "janitor-gov",
-      "version": "10.1.0",
+      "version": "10.1.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/janitor-gov@10.1.0?download_url=file://.",
+      "purl": "pkg:cargo/janitor-gov@10.1.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.0 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.1 bin-target-0",
           "name": "janitor-gov",
-          "version": "10.1.0",
-          "purl": "pkg:cargo/janitor-gov@10.1.0?download_url=file://.#src/main.rs"
+          "version": "10.1.1",
+          "purl": "pkg:cargo/janitor-gov@10.1.1?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1",
       "name": "common",
-      "version": "10.1.0",
+      "version": "10.1.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.0?download_url=file://../common",
+      "purl": "pkg:cargo/common@10.1.1?download_url=file://../common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -601,41 +601,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/contain-rs/bit-vec"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
-      "author": "The Rust Project Developers",
-      "name": "bitflags",
-      "version": "2.11.0",
-      "description": "A macro to generate structures which behave like bitflags. ",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/bitflags@2.11.0",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/bitflags"
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/bitflags/bitflags"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/bitflags/bitflags"
         }
       ]
     },
@@ -1705,7 +1670,7 @@
       "name": "dunce",
       "version": "1.0.5",
       "description": "Normalize Windows paths to the most compatible format, avoiding UNC where possible",
-      "scope": "required",
+      "scope": "excluded",
       "hashes": [
         {
           "alg": "SHA-256",
@@ -6875,16 +6840,14 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
-        "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
         "registry+https://github.com/rust-lang/crates.io-index#bitvec@1.0.1",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#bloom@0.3.2",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "registry+https://github.com/rust-lang/crates.io-index#dunce@1.0.5",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
         "registry+https://github.com/rust-lang/crates.io-index#fips204@0.4.6",
         "registry+https://github.com/rust-lang/crates.io-index#fips205@0.4.1",
@@ -6902,13 +6865,13 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.0",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/gov#janitor-gov@10.1.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#axum@0.8.8",
         "registry+https://github.com/rust-lang/crates.io-index#axum-server@0.7.3",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.0",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1",
         "registry+https://github.com/rust-lang/crates.io-index#dashmap@6.1.0",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
         "registry+https://github.com/rust-lang/crates.io-index#hex@0.4.3",
@@ -7046,9 +7009,6 @@
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#bit-vec@0.4.4"
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#bitvec@1.0.1",
