@@ -126,7 +126,7 @@ rayon = "1.10"
 zip = "2"
 
 # File-system watch — SBOM drift daemon (inotify/kqueue via OS-native backend)
-notify = "6.1"
+notify = "8.2"
 
 # Progress reporting
 indicatif = "0.18"
