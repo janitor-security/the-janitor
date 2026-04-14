@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-dual-model-consensus-deep-eradication-strike-v1011" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-general-availability-genesis-omni-audit-v1010" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)
@@ -1517,6 +1526,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-13-dual-model-consensus-deep-eradication-strike-v1011" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-general-availability-genesis-omni-audit-v1010" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)
@@ -2458,6 +2476,37 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-13-dual-model-consensus-deep-eradication-strike-v1011">2026-04-13 — Dual-Model Consensus &amp; Deep Eradication Strike (v10.1.1)</h2>
+<p><strong>Directive:</strong> Audit workspace dependency bloat, delete RC/stale residue, map the true 23-grammar semantic-depth surface, synthesize Claude's FedRAMP findings with a hostile AST audit, verify under single-threaded tests, bump to <code>10.1.1</code>, and execute the governed fast-release path.</p>
+<p><strong>Phase 1 — Dependency &amp; workspace bloat audit:</strong>
+- Removed three verified-dead direct dependencies:
+  - <code>crates/common/Cargo.toml</code> — dropped unused <code>bitflags</code> and <code>dunce</code>
+  - <code>crates/anatomist/Cargo.toml</code> — dropped unused <code>semver</code>
+  - <code>crates/cli/Cargo.toml</code> — dropped unused direct <code>rustls</code>
+- Kept the remaining heavy crates because they are still exercised in the production path:
+  - <code>tokio</code> powers CLI async orchestration, daemon, MCP, and Governor runtime
+  - <code>ureq</code> + <code>rustls</code> + <code>rustls-pemfile</code> remain required for TLS/mTLS outbound lanes
+  - <code>notify</code>, <code>zip</code>, <code>indicatif</code>, <code>uuid</code>, <code>git2</code>, <code>rayon</code>, <code>wasmtime</code> all have live call sites</p>
+<p><strong>Phase 2 — Stale artifact eradication:</strong>
+- Deleted confirmed orphan / stale residue:
+  - <code>gauntlet/godot/slop_pr.patch</code>
+  - <code>janitor-test-gauntlet/main.c.patch</code>
+  - <code>tools/omni_coverage_mapper.sh</code>
+  - <code>tools/setup_remote_access.sh</code>
+  - <code>SOVEREIGN_BRIEFING.md</code>
+- <code>RUNBOOK.md</code> updated to remove the deleted Tailscale bootstrap script and the stale remote-gauntlet setup language.</p>
+<p><strong>Phase 3 — Grammar truth &amp; roadmap synthesis:</strong>
+- <code>.INNOVATION_LOG.md</code> appended with the brutal semantic-depth truth table:
+  - no end-to-end production cross-file taint spine proven in the audited runtime files
+  - intra-file taint only for <code>go</code>, <code>rb</code>, <code>php</code>
+  - catalog-backed cross-file sink matching without demonstrated production export for a broader subset
+  - the remainder still sit at AST / byte-pattern detection depth
+- Added two roadmap items Claude missed:
+  - <code>P1-3</code> Semantic Depth Disclosure &amp; True Taint Spine Completion
+  - <code>P1-4</code> Wasm Capability Receipts &amp; SCM Review-Parity Spine</p>
+<p><strong>Phase 4 — Versioning &amp; release prep:</strong>
+- <code>Cargo.toml</code> — workspace version <code>10.1.0</code> → <code>10.1.1</code>
+- Release verification and release execution results recorded after command execution below.</p>
 <h2 id="2026-04-13-general-availability-genesis-omni-audit-v1010">2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)</h2>
 <p><strong>Directive:</strong> Drop Release Candidate tags. Transition to General Availability. Massive documentation rewrite, OpSec leak eradication, dependency CVE resolution, and enterprise readiness audit.</p>
 <p><strong>Phase 1 — OpSec &amp; Navigation Overhaul:</strong>
