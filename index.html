@@ -1193,7 +1193,8 @@
 
 <p><img alt="Janitor Terminal Demo" src="assets/janitor_demo.webp" /></p>
 <h1 id="the-janitor">The Janitor</h1>
-<p><strong>v10.1.2 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.</strong></p>
+<p><strong>v10.1.3
+ — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.</strong></p>
 <hr />
 <blockquote>
 <p><strong>Sonar finds style violations.</strong>
@@ -1207,7 +1208,7 @@
 <p><strong>CodeQL</strong> is a graph-query engine optimised for known CVE patterns. It does not detect AI-generated structural anomalies, Swarm clone behaviour, or zombie dependency hallucinations — patterns that have no prior CVE record. It also adds 10–45 minutes to CI runtime on large repositories.</p>
 <p><strong>Snyk</strong> excels at known vulnerability databases. It generates false positives at scale on AI-assisted code because it is trained on pre-AI codebases. Teams that have deployed Copilot broadly report Snyk alert fatigue as the primary reason policies get disabled.</p>
 <p><strong>SonarQube</strong> flags style and complexity. It has no structural clone detection, no actuarial ledger, and no mechanism to distinguish an AI-generated PR from a human one. It does not know what an Agentic Swarm is.</p>
-<p>The Janitor detects what the others cannot: structural patterns that have no CVE record, coordinated multi-author clone injection, and the entropy signatures of AI-generated boilerplate — deterministically, on your hardware, in under 33 seconds.</p>
+<p>The Janitor detects what the others cannot: structural patterns that have no CVE record, coordinated multi-author clone injection, and the entropy signatures of AI-generated boilerplate — deterministically, on your hardware, in sustained 6.7 seconds per Pull Request.</p>
 <p>Three capabilities your current toolchain cannot replicate:</p>
 <h3 id="zero-copy-execution">Zero-Copy Execution</h3>
 <ul>
@@ -1237,7 +1238,7 @@
 </tbody>
 </table>
 <p>The Janitor engine runs entirely inside your own runner in both modes. The Governor (Sentinel's backend) receives a signed analysis result — not your source code. There is no server-side clone, no cloud SAST upload, no exfiltration vector.</p>
-<p><strong>Benchmark:</strong> Scanned the Godot Engine — <strong>3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python</strong> — in <strong>33 seconds</strong>, consuming <strong>58 MB of peak RAM</strong>. On a standard CI runner. With zero OOM events and zero panics.</p>
+<p><strong>Benchmark:</strong> Sustained <strong>6.7 seconds per Pull Request</strong> on the Godot Engine — <strong>3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python</strong> — featuring full Cross-File Taint Analysis and Wasm Governance, consuming <strong>58 MB of peak RAM</strong>. On a standard CI runner. With zero OOM events and zero panics.</p>
 <p>Sonar's cloud pipeline cannot run in your air-gap. The Janitor runs everywhere.</p>
 <h3 id="zombie-dependency-detection">Zombie Dependency Detection</h3>
 <p>AI code generators hallucinate package imports. A Copilot-generated function adds <code>import requests</code> at the module level and uses it exactly once — inside a conditional branch that never executes in production. Standard linters do not detect this. Import graphs do not resolve it. Dependency reviewers do not see it.</p>
@@ -1299,7 +1300,7 @@
 <h2 id="the-competitive-moat">THE COMPETITIVE MOAT</h2>
 <h3 id="on-device-vs-cloud-fabric">On-Device vs. Cloud Fabric</h3>
 <p>The market is filling with "AI Security Fabrics" — cloud-hosted LLM pipelines that ingest your source code, run probabilistic analysis, and return a verdict four minutes later. They are slow. They exfiltrate your code to a third-party inference cluster. And their probabilistic outputs produce alert fatigue at scale.</p>
-<p>The Janitor is the opposite architecture. It is an <strong>on-device structural firewall</strong> — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. No cloud ingestion. No LLM. Proven at <strong>3.5 million lines in 33 seconds on an 8 GB laptop</strong>. Your code never leaves your runner.</p>
+<p>The Janitor is the opposite architecture. It is an <strong>on-device structural firewall</strong> — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. No cloud ingestion. No LLM. Proven at <strong>6.7 seconds per Pull Request on a 3.5M-line C++ codebase, on an 8 GB laptop</strong>. Your code never leaves your runner.</p>
 <p>Cloud fabrics are an exfiltration vector wearing a security badge. The Janitor eliminates the attack surface instead of adding to it.</p>
 <h3 id="deterministic-vs-heuristic">Deterministic vs. Heuristic</h3>
 <p>LLM-based code review tools cannot <em>prove</em> anything. They pattern-match against training distributions and emit confidence scores. A sufficiently novel adversarial input — a well-structured but semantically dangerous diff — is invisible to a heuristic system trained on pre-AI codebases.</p>
@@ -1427,7 +1428,7 @@
 <tr>
 <td style="text-align: left;">Speed</td>
 <td style="text-align: center;">2–8 minutes per PR</td>
-<td style="text-align: center;">Under 33 seconds for 3.5M-line repos</td>
+<td style="text-align: center;"><strong>6.7 seconds per PR</strong> on 3.5M-line repos (Cross-File Taint + Wasm)</td>
 </tr>
 </tbody>
 </table>
