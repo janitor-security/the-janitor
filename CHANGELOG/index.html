@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-operational-silence-semantic-depth-v1015" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)
@@ -1553,6 +1562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-operational-silence-semantic-depth-v1015" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)
@@ -2530,6 +2548,26 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-operational-silence-semantic-depth-v1015">2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)</h2>
+<p><strong>Directive:</strong> Git hygiene / OpSec silence (remove <code>.agent_governance</code> from public index); Dependabot annihilation (notify 6→8, zip 2→8, jsonwebtoken 9→10, axum 0.8.8→0.8.9, GitHub Actions: harden-runner 2.16.1→2.17.0, actions/cache 5.0.4→5.0.5, actions/upload-artifact 7.0.0→7.0.1); taint producer expansion (C/C++, Rust, Kotlin); P1-1 filed for remaining 11 languages.</p>
+<p><strong>Phase 1 — Git Hygiene &amp; OpSec Silence:</strong>
+- <code>git rm -r --cached .agent_governance</code> — 37 governance files removed from public index; remain on local disk.
+- <code>.gitignore</code> updated: <code>.agent_governance/</code>, <code>.codex</code> (bare), <code>.cursorrules</code> added to Section 4 (AI Assistant Instructions).</p>
+<p><strong>Phase 2 — Dependabot Annihilation:</strong>
+- <code>notify = "6.1"</code> → <code>"8"</code> (workspace <code>Cargo.toml</code>) — notify 8.2.0 resolves with zero API breakage.
+- <code>zip = "2"</code> → <code>"8"</code> (workspace <code>Cargo.toml</code>) — zip 8.5.1 resolves with zero API breakage.
+- <code>jsonwebtoken = "9"</code> → <code>"10"</code> (<code>crates/gov/Cargo.toml</code>) — JWT 10.3.0 resolves with zero API breakage.
+- <code>cargo update</code> — axum 0.8.8 → 0.8.9, inotify 0.9.6 → 0.11.1, windows-sys family updated.
+- <code>.github/workflows/*.yml</code> (8 files) — <code>step-security/harden-runner</code> <code>fe10465</code> (v2.16.1) → <code>f808768</code> (v2.17.0); <code>actions/cache</code> <code>668228</code> (v5.0.4) → <code>27d5ce7</code> (v5.0.5); <code>actions/upload-artifact</code> <code>bbbca2d</code> (v7.0.0) → <code>043fb46</code> (v7.0.1).</p>
+<p><strong>Phase 3 — Taint Producers (C/C++, Rust, Kotlin):</strong>
+- <code>crates/forge/src/taint_propagate.rs</code>:
+  - <code>collect_cpp_params</code> / <code>find_tainted_cpp_sinks</code> — C/C++ <code>system()</code>, <code>popen()</code>, <code>execv*()</code>; <code>find_cpp_os_sinks</code>; <code>CPP_DANGEROUS_CALLS</code> constant (12 sinks).
+  - <code>collect_rust_params</code> / <code>find_tainted_rust_sinks</code> — Rust <code>Command::new(param)</code>, <code>libc::system(param)</code>, <code>::exec(param)</code>; <code>RUST_DANGEROUS_CALLS</code>.
+  - <code>collect_kotlin_params</code> / <code>find_tainted_kotlin_sinks</code> — Kotlin <code>Runtime.exec(param)</code>, <code>ProcessBuilder(param)</code>, raw JDBC exec sinks; <code>KOTLIN_DANGEROUS_CALLS</code> (8 patterns).
+  - <code>export_cross_file_records</code> extended: <code>"cpp"|"cxx"|"cc"|"c"|"h"|"hpp"</code> → <code>collect_cpp_exports</code>; <code>"rs"</code> → <code>collect_rust_exports</code>; <code>"kt"|"kts"</code> → <code>collect_kotlin_exports</code>.
+  - 8 new deterministic tests: true-positive + true-negative + export-record for each of C++, Rust, Kotlin.</p>
+<p><strong>Phase 4 — Innovation Log:</strong>
+- <code>.INNOVATION_LOG.md</code> P1-1 created: "Full Taint Producers for Remaining Languages" — lists Swift, Scala, Lua, Bash, Nix, GDScript, Objective-C, HCL, Terraform, GLSL, Zig with sink classes and commercial priority.</p>
 <h2 id="2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014">2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)</h2>
 <p><strong>Directive:</strong> Close the final two P0 federal compliance blockers: automated PQC key rotation (IA-5) and formal FIPS 140-3 cryptographic boundary documentation (SC-13); verify under single-threaded tests; execute the governed release path.</p>
 <p><strong>Phase 1 — P0-2 Automated PQC Key Rotation:</strong>
