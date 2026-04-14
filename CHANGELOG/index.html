@@ -6,14 +6,14 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot.">
+        <meta name="description" content="Structural Firewall for AI-Generated Code. Dual-PQC Attestation. SLSA Level 4. Zero-Upload. On-Device.">
       
       
       
-        <link rel="canonical" href="https://thejanitor.app/IMPLEMENTATION_BACKLOG/">
+        <link rel="canonical" href="https://thejanitor.app/CHANGELOG/">
       
       
-        <link rel="prev" href="../INNOVATION_LOG/">
+        <link rel="prev" href="../privacy/">
       
       
       
@@ -22,7 +22,7 @@
     
     
       
-        <title>Implementation Backlog - The Janitor</title>
+        <title>Release Changelog - The Janitor</title>
       
     
     
@@ -105,7 +105,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#implementation-backlog" class="md-skip">
+        <a href="#release-changelog" class="md-skip">
           Skip to content
         </a>
       
@@ -140,7 +140,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Implementation Backlog
+              Release Changelog
             
           </span>
         </div>
@@ -517,69 +517,6 @@
   
   
   
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
-            
-  
-  <span class="md-ellipsis">
-    R&D and Telemetry
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_11">
-            <span class="md-nav__icon md-icon"></span>
-            R&D and Telemetry
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../INNOVATION_LOG/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Innovation Log
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
     <li class="md-nav__item md-nav__item--active">
       
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
@@ -592,7 +529,7 @@
           
   
   <span class="md-ellipsis">
-    Implementation Backlog
+    Release Changelog
   </span>
   
 
@@ -603,7 +540,7 @@
         
   
   <span class="md-ellipsis">
-    Implementation Backlog
+    Release Changelog
   </span>
   
 
@@ -623,6 +560,15 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-13-general-availability-genesis-omni-audit-v1010" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23" class="md-nav__link">
@@ -1543,14 +1489,6 @@
     </li>
   
 
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
     
   </ul>
 </nav>
@@ -1577,6 +1515,15 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-13-general-availability-genesis-omni-audit-v1010" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23" class="md-nav__link">
@@ -2508,9 +2455,39 @@
   
 
 
-<h1 id="implementation-backlog">Implementation Backlog</h1>
+<h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
-implemented as a result. Maintained by the Evolution Tracker skill.</p>
+implemented as a result.</p>
+<h2 id="2026-04-13-general-availability-genesis-omni-audit-v1010">2026-04-13 — General Availability Genesis &amp; Omni-Audit (v10.1.0)</h2>
+<p><strong>Directive:</strong> Drop Release Candidate tags. Transition to General Availability. Massive documentation rewrite, OpSec leak eradication, dependency CVE resolution, and enterprise readiness audit.</p>
+<p><strong>Phase 1 — OpSec &amp; Navigation Overhaul:</strong>
+- Removed <code>INNOVATION_LOG.md</code> from mkdocs.yml navigation entirely.
+- Renamed <code>docs/IMPLEMENTATION_BACKLOG.md</code> to <code>docs/CHANGELOG.md</code>; updated mkdocs.yml nav entry to "Release Changelog".
+- Moved <code>docs/INNOVATION_LOG.md</code> to hidden <code>.INNOVATION_LOG.md</code> at repo root; added to <code>.gitignore</code>.</p>
+<p><strong>Phase 2 — Dependabot Annihilation:</strong>
+- <code>cargo update</code> pulled 13 patch-level dependency updates: rustls 0.23.37→0.23.38, cc 1.2.59→1.2.60, libc 0.2.184→0.2.185, openssl-sys 0.9.112→0.9.113, rustls-webpki 0.103.10→0.103.11, lru 0.16.3→0.16.4, pkg-config 0.3.32→0.3.33, wasm-bindgen family 0.2.117→0.2.118, js-sys 0.3.94→0.3.95.
+- <code>cargo check --workspace</code> clean.</p>
+<p><strong>Phase 3 — Enterprise Documentation Rewrite:</strong>
+- Full rewrite of <code>README.md</code> and <code>docs/index.md</code> for v10.0.0 GA: Dual-PQC (ML-DSA-65 + SLH-DSA), SLSA Level 4, Air-Gap Intel Capsules, Wasm BYOR with BLAKE3 Pinning, Jira ASPM Deduplication, Native SCM (GitLab, AzDO).
+- <code>docs/architecture.md</code>: CycloneDX v1.5→v1.6, Dual-PQC description updated.
+- <code>docs/manifesto.md</code>: Dual-PQC + FIPS 205 references updated.
+- <code>docs/pricing_faq.md</code>: Added SLSA L4, Jira ASPM, native SCM to Sovereign tier.
+- <code>mkdocs.yml</code>: Site description updated for GA positioning.</p>
+<p><strong>Phase 4 — Brutal Readiness Audit:</strong>
+- JAB Assessor + Fortune 500 CISO dual-lens assessment conducted.
+- Top 3 gaps filed as P0-1 (CEF/OCSF audit export), P0-2 (automated PQC key rotation), P0-3 (FIPS 140-3 boundary documentation) in <code>.INNOVATION_LOG.md</code>.</p>
+<p><strong>Changes:</strong>
+- <code>mkdocs.yml</code> <em>(modified)</em> — nav restructured, site description updated
+- <code>.gitignore</code> <em>(modified)</em> — <code>.INNOVATION_LOG.md</code> added
+- <code>docs/CHANGELOG.md</code> <em>(renamed from IMPLEMENTATION_BACKLOG.md)</em> — header updated, session ledger
+- <code>README.md</code> <em>(rewritten)</em> — v10.0.0 GA enterprise documentation
+- <code>docs/index.md</code> <em>(rewritten)</em> — v10.0.0 GA landing page
+- <code>docs/architecture.md</code> <em>(modified)</em> — CycloneDX v1.6, Dual-PQC
+- <code>docs/manifesto.md</code> <em>(modified)</em> — Dual-PQC + FIPS 205
+- <code>docs/pricing_faq.md</code> <em>(modified)</em> — Sovereign tier expanded
+- <code>Cargo.toml</code> <em>(modified)</em> — version <code>10.1.0-alpha.24</code> → <code>10.1.0</code>
+- <code>Cargo.lock</code> <em>(modified)</em> — 13 dependency patches
+- <code>.INNOVATION_LOG.md</code> <em>(rewritten, gitignored)</em> — GA readiness audit, top 3 gaps</p>
 <h2 id="2026-04-13-federal-network-encryption-self-attestation-v1010-alpha23">2026-04-13 — Federal Network Encryption &amp; Self-Attestation (v10.1.0-alpha.23)</h2>
 <p><strong>Directive:</strong> Close the DoD IL5 Governor transport gap with optional mTLS, generate and sign a first-party Janitor SBOM during release, verify under single-threaded tests, bump to <code>10.1.0-alpha.23</code>, and execute the fast-release path.</p>
 <p><strong>Phase 1 — P2-2 mTLS Governor Transport:</strong>

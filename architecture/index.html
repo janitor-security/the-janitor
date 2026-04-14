@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot.">
+        <meta name="description" content="Structural Firewall for AI-Generated Code. Dual-PQC Attestation. SLSA Level 4. Zero-Upload. On-Device.">
       
       
       
@@ -1193,85 +1193,16 @@
   
   
   
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
-        
-          
-          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
-            
-  
-  <span class="md-ellipsis">
-    R&D and Telemetry
-  </span>
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_11">
-            <span class="md-nav__icon md-icon"></span>
-            R&D and Telemetry
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
-      <a href="../INNOVATION_LOG/" class="md-nav__link">
+      <a href="../CHANGELOG/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Innovation Log
+    Release Changelog
   </span>
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../IMPLEMENTATION_BACKLOG/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Implementation Backlog
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2163,9 +2094,9 @@ AST walk), and TSX/JSX (dangerouslySetInnerHTML attribute walk).</p>
 <td>Zombie/clone identity</td>
 </tr>
 <tr>
-<td>Security — PQC</td>
-<td>ML-DSA-65 (FIPS 204) — PRODUCTION. the-governor/src/compliance/pqc.rs implements keygen/sign/verify via the fips204 crate. The Governor generates a persistent governor.key on first run and signs every CycloneDX CBOM bond with it. pqc_enforced: true in janitor.toml blocks the PR merge if bond issuance fails.</td>
-<td>Post-quantum attestation for CycloneDX v1.5 CBOM bonds</td>
+<td>Security — Dual-PQC</td>
+<td>ML-DSA-65 (FIPS 204) + SLH-DSA-SHAKE-192s (FIPS 205) — PRODUCTION. Dual-PQC key bundles (4128 bytes) generated via <code>janitor generate-keys</code>. The Governor signs every CycloneDX v1.6 CBOM bond with both algorithms. <code>pqc_enforced: true</code> in <code>janitor.toml</code> blocks PR merge if bond issuance fails.</td>
+<td>Post-quantum attestation for CycloneDX v1.6 CBOM bonds</td>
 </tr>
 <tr>
 <td>Security — Ed25519</td>
@@ -3557,7 +3488,7 @@ The engine's CI runs <code>janitor scan</code> against its own source tree on ev
 <a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>    D --&gt; E
 <a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>    E --&gt;|silos ≥ 5| F[Hard block\nmerge prevented]
 <a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>    E --&gt; G{Score ≤ gate?}
-<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>    G --&gt;|Yes — SANCTUARY INTACT| H[PQC Bond Issuance\nML-DSA-65 · CycloneDX v1.5\nCBOM written to .janitor/]
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>    G --&gt;|Yes — SANCTUARY INTACT| H[PQC Bond Issuance\nML-DSA-65 · CycloneDX v1.6\nCBOM written to .janitor/]
 <a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>    G --&gt;|No — BREACH DETECTED| I[Check Run FAIL\nSARIF annotations uploaded\nwebhook fired]
 </code></pre></div>
 <p>The diagram above is the canonical execution sequence. Every PR traverses all
