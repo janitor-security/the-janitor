@@ -65,6 +65,9 @@ struct LoadedModule {
     abi_version: String,
     module_digest: String,
     module: Module,
+    /// Every `module::field` import declared in the Wasm binary's import section.
+    /// Collected once at load time; proves the capability surface to auditors.
+    imported_capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -136,6 +139,13 @@ impl WasmHost {
             }
             let module = Module::new(engine.as_ref(), &bytes)
                 .map_err(|e| anyhow::anyhow!("compiling Wasm rule module: {path}: {e:#}"))?;
+            // Enumerate every import declared in the module's import section.
+            // Format: "module_name::field_name" (e.g., "wasi_snapshot_preview1::fd_write").
+            // An empty vec mathematically proves zero host-capability access.
+            let imported_capabilities: Vec<String> = module
+                .imports()
+                .map(|imp| format!("{}::{}", imp.module(), imp.name()))
+                .collect();
             let rule_id = Path::new(path)
                 .file_stem()
                 .and_then(|stem| stem.to_str())
@@ -148,9 +158,23 @@ impl WasmHost {
                 abi_version: WASM_POLICY_ABI_VERSION.to_string(),
                 module_digest,
                 module,
+                imported_capabilities,
             });
         }
         Ok(Self { engine, modules })
+    }
+
+    /// Returns the declared import capabilities for every loaded module, in
+    /// load order.
+    ///
+    /// Each inner `Vec<String>` is the `module::field` import list for one
+    /// rule.  An empty inner vec means the corresponding rule imported nothing —
+    /// provably zero host-capability access.  Used by auditors and tests.
+    pub fn capabilities_snapshot(&self) -> Vec<Vec<String>> {
+        self.modules
+            .iter()
+            .map(|m| m.imported_capabilities.clone())
+            .collect()
     }
 
     /// Execute all loaded rule modules against `src` bytes.
@@ -179,6 +203,8 @@ impl WasmHost {
                         rule_id: loaded.rule_id.clone(),
                         abi_version: loaded.abi_version.clone(),
                         result_digest,
+                        host_abi_version: WASM_POLICY_ABI_VERSION.to_string(),
+                        imported_capabilities: loaded.imported_capabilities.clone(),
                     });
                 }
                 Err(e) => {
@@ -464,6 +490,62 @@ mod tests {
             err.to_string()
                 .contains("Wasm rule signature file not found"),
             "missing sig file must report signature file not found"
+        );
+    }
+
+    /// A module with no imports must produce an empty `imported_capabilities`
+    /// vec — proving zero host-capability access to an auditor.
+    #[test]
+    fn test_no_import_module_has_empty_capabilities() {
+        let (_tmp, path) = wat_to_tempfile(MOCK_WAT);
+        let host = WasmHost::new(&[&path], &HashMap::new(), None).unwrap();
+        let result = host.run(b"fn foo() {}");
+        assert_eq!(result.receipts.len(), 1, "expected one receipt");
+        let receipt = &result.receipts[0];
+        assert!(
+            receipt.imported_capabilities.is_empty(),
+            "module with no imports must report zero capabilities"
+        );
+        assert_eq!(
+            receipt.host_abi_version, WASM_POLICY_ABI_VERSION,
+            "host_abi_version must match the constant"
+        );
+    }
+
+    /// A module that imports a single host function must record that import
+    /// in `capabilities_snapshot()` at load time — before any instantiation
+    /// attempt.  The sandbox rejects WASI-importing modules at run time (no
+    /// host linker is wired), but the capability surface is still captured
+    /// statically from the module's import section, which is the evidentiary
+    /// artifact the auditor needs.
+    #[test]
+    fn test_wasi_import_module_capabilities_captured() {
+        // WAT module declaring one WASI import — used for capability auditing.
+        // `WasmHost::run` will reject this at instantiation (no linker), but
+        // the declared imports are captured at load time by `capabilities_snapshot`.
+        let wat_with_import = r#"(module
+  (import "wasi_snapshot_preview1" "proc_exit" (func (param i32)))
+  (memory (export "memory") 2)
+  (func (export "output_ptr") (result i32) i32.const 0)
+  (func (export "analyze") (param i32 i32) (result i32) i32.const 0)
+)"#;
+        let (_tmp, path) = wat_to_tempfile(wat_with_import);
+        let host = WasmHost::new(&[&path], &HashMap::new(), None).unwrap();
+        let snapshot = host.capabilities_snapshot();
+        assert_eq!(
+            snapshot.len(),
+            1,
+            "one module must produce one capability list"
+        );
+        let caps = &snapshot[0];
+        assert_eq!(
+            caps.len(),
+            1,
+            "one import must produce one capability entry"
+        );
+        assert_eq!(
+            caps[0], "wasi_snapshot_preview1::proc_exit",
+            "capability entry must be formatted as module::field"
         );
     }
 

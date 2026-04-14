@@ -1,9 +1,9 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v10.1.2 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
+**v10.1.3 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.1.2: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
+*Attested by The Janitor v10.1.3: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
 
 ---
 
@@ -70,7 +70,7 @@ Every analysis executes via **memory-mapped file access**. No network call is ma
 
 The Janitor engine runs entirely inside your own runner in both modes. The Governor (Sentinel's backend) receives a signed analysis result — not your source code. No server-side clone. No SAST upload.
 
-**Benchmark:** 3.5 million lines of Godot Engine — **33 seconds, 58 MB peak RAM.** On a standard CI runner. Zero panics.
+**Benchmark:** Sustained **6.7 seconds per Pull Request** on the 3.5M-line Godot Engine codebase (C++, C#, GDScript, Python) — featuring full Cross-File Taint Analysis and Wasm Governance. 58 MB peak RAM. On a standard CI runner. Zero panics.
 
 ### Zombie Dependency Detection
 
@@ -100,7 +100,7 @@ Commit-status publishing works out of the box for **GitHub**, **GitLab**, and **
 
 The market is filling with "AI Security Fabrics" — cloud-hosted LLM pipelines that ingest your source code, run probabilistic analysis, and return a verdict four minutes later. They are slow. They exfiltrate your code to a third-party inference cluster. Your diffs become training data.
 
-The Janitor is the opposite architecture: an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. Proven at **3.5 million lines in 33 seconds on an 8 GB laptop**. Code never leaves your runner in either deployment model.
+The Janitor is the opposite architecture: an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. Proven at **6.7 seconds per Pull Request on a 3.5M-line C++ codebase, on an 8 GB laptop**. Code never leaves your runner in either deployment model.
 
 ### Deterministic vs. Heuristic
 
@@ -314,7 +314,7 @@ chmod +x janitor && sudo mv janitor /usr/local/bin/
 
 ## The Proof
 
-> **3.5 million lines. 33 seconds. 58 megabytes. Zero panics.**
+> **3.5 million lines. 6.7 seconds per PR. 58 megabytes. Zero panics.**
 >
 > [Read the Godot Engine Autopsy →](https://thejanitor.app/case-studies/godot/)
 

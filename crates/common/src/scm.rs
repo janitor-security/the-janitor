@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::io::Write as _;
 use ureq;
 
+use crate::slop::StructuredFinding;
+
 /// Supported SCM / CI providers with normalized environment extraction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScmProvider {
@@ -114,6 +116,33 @@ pub trait StatusPublisher {
         std::io::stderr().write_all(b"\n")?;
         Ok(())
     }
+
+    /// Post structured findings as inline review comments on a PR diff.
+    ///
+    /// Findings with `file` and `line` populated are mapped to diff-line
+    /// comments.  Findings without location data are aggregated into the
+    /// review-level body.
+    ///
+    /// Providers without a native implementation fall through to a stderr
+    /// annotation listing the finding count.  This default is intentionally
+    /// non-fatal — callers must not gate pipeline pass/fail on comment
+    /// delivery.
+    fn publish_inline_comments(
+        &self,
+        _ctx: &ScmContext,
+        findings: &[StructuredFinding],
+    ) -> Result<()> {
+        // Default implementation: announce count to stderr; no HTTP call.
+        if findings.is_empty() {
+            return Ok(());
+        }
+        eprintln!(
+            "janitor: {} finding(s) — inline comment publishing not implemented for {:?}",
+            findings.len(),
+            self.provider()
+        );
+        Ok(())
+    }
 }
 
 pub fn status_publisher_for(ctx: &ScmContext) -> Box<dyn StatusPublisher + Send + Sync> {
@@ -156,8 +185,8 @@ impl ScmContext {
                     .or_else(|| parse_github_pr_number(&map)),
                 base_ref: get(&map, "GITHUB_BASE_REF"),
                 head_ref: get(&map, "GITHUB_HEAD_REF"),
-                api_base_url: None,
-                api_token: None,
+                api_base_url: Some("https://api.github.com".to_string()),
+                api_token: get(&map, "GITHUB_TOKEN"),
                 project_id: None,
                 repo_id: None,
             };
@@ -281,11 +310,127 @@ impl StatusPublisher for GitHubStatusPublisher {
         let summary = github_escape(&format!("{scope} {}", verdict.summary));
         format!("::{level} title={title}::{summary}")
     }
+
+    /// Post findings as a GitHub PR review with inline comments.
+    ///
+    /// Uses `POST /repos/{owner}/{repo}/pulls/{pr_number}/reviews`.
+    /// Findings with `file` + `line` become per-line diff comments; the rest
+    /// aggregate into the review body text.
+    ///
+    /// Requires `GITHUB_TOKEN` in `ctx.api_token` and a valid `ctx.pr_number`.
+    /// Falls back to the default stderr annotation on missing credentials or
+    /// context — network failure never blocks the analysis gate.
+    fn publish_inline_comments(
+        &self,
+        ctx: &ScmContext,
+        findings: &[StructuredFinding],
+    ) -> Result<()> {
+        if findings.is_empty() {
+            return Ok(());
+        }
+        let (Some(api_base), Some(repo_slug), Some(pr_number), Some(token)) = (
+            ctx.api_base_url.as_deref(),
+            ctx.repo_slug.as_deref(),
+            ctx.pr_number,
+            ctx.api_token.as_deref(),
+        ) else {
+            // Missing context — fall back to default stderr annotation.
+            eprintln!(
+                "janitor: {} finding(s) — GitHub inline comments skipped (missing GITHUB_TOKEN, repo slug, or PR number)",
+                findings.len()
+            );
+            return Ok(());
+        };
+
+        // Partition into line-addressable (inline) and body-level findings.
+        let mut inline_comments: Vec<serde_json::Value> = Vec::new();
+        let mut body_lines: Vec<String> = Vec::new();
+
+        for f in findings {
+            let severity_tag = f.severity.as_deref().unwrap_or("Info");
+            let remediation = f
+                .remediation
+                .as_deref()
+                .map(|r| format!("\n\n> **Remediation**: {r}"))
+                .unwrap_or_default();
+            let docs = f
+                .docs_url
+                .as_deref()
+                .map(|u| format!("\n\n[Documentation]({u})"))
+                .unwrap_or_default();
+
+            match (&f.file, f.line) {
+                (Some(file), Some(line)) => {
+                    let body = format!("**[{severity_tag}] `{}`**{remediation}{docs}", f.id);
+                    inline_comments.push(serde_json::json!({
+                        "path": file,
+                        "line": line,
+                        "side": "RIGHT",
+                        "body": body
+                    }));
+                }
+                _ => {
+                    body_lines.push(format!(
+                        "- **[{severity_tag}] `{}`**{}{}",
+                        f.id, remediation, docs
+                    ));
+                }
+            }
+        }
+
+        let event = if inline_comments.is_empty() && body_lines.is_empty() {
+            "COMMENT"
+        } else {
+            "REQUEST_CHANGES"
+        };
+
+        let body_header = format!("## The Janitor — {} finding(s)\n\n", findings.len());
+        let body_text = if body_lines.is_empty() {
+            format!("{body_header}All findings are annotated inline on the diff.")
+        } else {
+            format!("{body_header}{}", body_lines.join("\n"))
+        };
+
+        let url = format!("{api_base}/repos/{repo_slug}/pulls/{pr_number}/reviews");
+        let payload = serde_json::json!({
+            "body": body_text,
+            "event": event,
+            "comments": inline_comments
+        });
+
+        // Best-effort — network failure is non-fatal.
+        let _ = ureq::post(&url)
+            .header("Authorization", &format!("Bearer {token}"))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Content-Type", "application/json")
+            .send(payload.to_string().as_str());
+
+        Ok(())
+    }
 }
 
 impl StatusPublisher for GitLabStatusPublisher {
     fn provider(&self) -> ScmProvider {
         ScmProvider::GitLab
+    }
+
+    /// GitLab inline comment stub — expand to POST
+    /// `{CI_API_V4_URL}/projects/{CI_PROJECT_ID}/merge_requests/{iid}/notes`
+    /// for each finding with `file` + `line` populated.
+    fn publish_inline_comments(
+        &self,
+        _ctx: &ScmContext,
+        findings: &[StructuredFinding],
+    ) -> Result<()> {
+        if findings.is_empty() {
+            return Ok(());
+        }
+        eprintln!(
+            "janitor: {} finding(s) — GitLab inline comment publishing stub (not yet implemented)",
+            findings.len()
+        );
+        Ok(())
     }
 
     fn render_verdict(&self, ctx: &ScmContext, verdict: &StatusVerdict) -> String {
@@ -388,6 +533,24 @@ impl StatusPublisher for AzureDevOpsStatusPublisher {
         ScmProvider::AzureDevOps
     }
 
+    /// Azure DevOps inline comment stub — expand to POST
+    /// `{collection_uri}/{project}/_apis/git/repositories/{repoId}/pullRequests/{prId}/threads`
+    /// (api-version 7.1-preview.1) with a `CommentThread` payload per finding.
+    fn publish_inline_comments(
+        &self,
+        _ctx: &ScmContext,
+        findings: &[StructuredFinding],
+    ) -> Result<()> {
+        if findings.is_empty() {
+            return Ok(());
+        }
+        eprintln!(
+            "janitor: {} finding(s) — AzDO inline comment publishing stub (not yet implemented)",
+            findings.len()
+        );
+        Ok(())
+    }
+
     fn render_verdict(&self, ctx: &ScmContext, verdict: &StatusVerdict) -> String {
         let issue_type = match verdict.level {
             VerdictLevel::Success | VerdictLevel::Warning => "warning",
@@ -487,6 +650,88 @@ fn github_escape(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{status_publisher_for, ScmContext, ScmProvider, StatusVerdict, VerdictLevel};
+    use crate::slop::StructuredFinding;
+
+    // ── inline comment tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn github_context_captures_github_token() {
+        let ctx = ScmContext::from_pairs([
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_SHA", "abc123"),
+            ("GITHUB_REPOSITORY", "acme/api"),
+            ("GITHUB_REF", "refs/pull/7/merge"),
+            ("GITHUB_TOKEN", "ghs-test-token"),
+        ]);
+        assert_eq!(ctx.provider, ScmProvider::GitHub);
+        assert_eq!(ctx.api_token.as_deref(), Some("ghs-test-token"));
+        assert_eq!(ctx.api_base_url.as_deref(), Some("https://api.github.com"));
+    }
+
+    /// publish_inline_comments with no token must not panic and must return Ok.
+    #[test]
+    fn github_inline_comments_without_token_is_nonfatal() {
+        let ctx = ScmContext {
+            provider: ScmProvider::GitHub,
+            repo_slug: Some("acme/api".to_string()),
+            pr_number: Some(42),
+            api_base_url: Some("https://api.github.com".to_string()),
+            api_token: None, // absent — must fall back gracefully
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        let findings = vec![StructuredFinding {
+            id: "security:command_injection".to_string(),
+            file: Some("src/main.rs".to_string()),
+            line: Some(10),
+            ..StructuredFinding::default()
+        }];
+        // Must return Ok — inline comment delivery is non-fatal.
+        assert!(publisher.publish_inline_comments(&ctx, &findings).is_ok());
+    }
+
+    /// publish_inline_comments with empty findings must return Ok immediately.
+    #[test]
+    fn inline_comments_empty_findings_is_noop() {
+        let ctx = ScmContext {
+            provider: ScmProvider::GitHub,
+            repo_slug: Some("acme/api".to_string()),
+            pr_number: Some(1),
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        assert!(publisher.publish_inline_comments(&ctx, &[]).is_ok());
+    }
+
+    /// GitLab stub must return Ok without panicking.
+    #[test]
+    fn gitlab_inline_comments_stub_returns_ok() {
+        let ctx = ScmContext {
+            provider: ScmProvider::GitLab,
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        let findings = vec![StructuredFinding {
+            id: "security:test".to_string(),
+            ..StructuredFinding::default()
+        }];
+        assert!(publisher.publish_inline_comments(&ctx, &findings).is_ok());
+    }
+
+    /// AzDO stub must return Ok without panicking.
+    #[test]
+    fn azdo_inline_comments_stub_returns_ok() {
+        let ctx = ScmContext {
+            provider: ScmProvider::AzureDevOps,
+            ..ScmContext::default()
+        };
+        let publisher = status_publisher_for(&ctx);
+        let findings = vec![StructuredFinding {
+            id: "security:test".to_string(),
+            ..StructuredFinding::default()
+        }];
+        assert!(publisher.publish_inline_comments(&ctx, &findings).is_ok());
+    }
 
     #[test]
     fn detects_github_actions_context() {

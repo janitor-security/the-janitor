@@ -3,6 +3,37 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-13 — Transparent Scaling & SCM Parity Strike (v10.1.3)
+
+**Directive:** Git hygiene & dependency annihilation; marketing benchmark update to 6.7 s/PR; execute P1-4 Wasm Capability Receipts + SCM Review-Thread Parity; verify; bump to `10.1.3`; release.
+
+**Phase 1 — Git Hygiene & Dependency Annihilation:**
+- Restored drifted tracked files: `.github/workflows/cisa-kev-sync.yml`, `.gitignore`.
+- Removed untracked `.cargo/` directory.
+- `Cargo.toml`: bumped `indicatif` `0.17` → `0.18` (eradicates RUSTSEC-2025-0119 `number_prefix` unmaintained advisory).
+- `Cargo.toml`: bumped `petgraph` `0.7` → `0.8` (version lag, Dependabot PR closure).
+- `cargo update`: locked `rayon v1.12.0`, `console v0.16.3`, `indicatif v0.18.4`, `petgraph v0.8.3`; removed `number_prefix v0.4.0` + `windows-sys v0.59.0`; added `unit-prefix v0.5.2`.
+
+**Phase 2 — Marketing Truth:**
+- `README.md`: updated all "33 seconds" benchmark references to "Sustained 6.7 seconds per Pull Request" on 3.5M-line Godot Engine — featuring full Cross-File Taint Analysis and Wasm Governance.
+- `docs/index.md`: identical benchmark update across all occurrence sites.
+- `.INNOVATION_LOG.md`: competitive table `33 seconds` → `6.7 sec/PR`.
+
+**Phase 3 — P1-4 Part A (Wasm Capability Receipts):**
+- `crates/common/src/wasm_receipt.rs`: added `host_abi_version: String` and `imported_capabilities: Vec<String>` to `WasmPolicyReceipt`. Empty `imported_capabilities` is a machine-verifiable proof of zero host-capability access.
+- `crates/forge/src/wasm_host.rs`: added `imported_capabilities: Vec<String>` to `LoadedModule`; collected from `module.imports()` at load time (format: `module_name::field_name`); populated in `WasmExecutionResult` receipt. Added 2 deterministic tests: `test_no_import_module_has_empty_capabilities` and `test_wasi_import_module_capabilities_captured`.
+
+**Phase 4 — P1-4 Part B (SCM Review-Thread Parity):**
+- `crates/common/src/scm.rs`:
+  - Added `use crate::slop::StructuredFinding`.
+  - `ScmContext::from_pairs` for GitHub: wires `GITHUB_TOKEN` → `api_token` and sets `api_base_url = "https://api.github.com"`.
+  - `StatusPublisher` trait: added `publish_inline_comments(ctx, findings) -> Result<()>` with non-fatal default stderr implementation.
+  - `GitHubStatusPublisher`: full implementation — POSTs to `GET /repos/{owner}/{repo}/pulls/{pr_number}/reviews` with inline `comments` array for line-addressable findings and aggregated `body` for non-line findings. Best-effort (network failure is non-fatal).
+  - `GitLabStatusPublisher`: stub (MR notes endpoint documented in code comment).
+  - `AzureDevOpsStatusPublisher`: stub (PR threads endpoint documented in code comment).
+  - Added 5 deterministic unit tests covering: GitHub token capture, non-fatal missing-token fallback, empty-findings no-op, GitLab stub, AzDO stub.
+- `.INNOVATION_LOG.md`: P1-4 moved to Completed Items section.
+
 ## 2026-04-13 — Forensic Benchmark & True Taint Activation (v10.1.2)
 
 **Directive:** Clean repository state, finalize SIEM exports, activate the producer side of the cross-file taint spine, benchmark the engine against three large OSS repos, verify under single-threaded tests, bump to `10.1.2`, and execute the governed fast-release path.

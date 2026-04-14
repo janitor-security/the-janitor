@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:68a986f7-83fb-461d-aba9-f149caac016a",
+  "serialNumber": "urn:uuid:dcfa48aa-9f85-4ecd-b156-a59e35de6fd9",
   "metadata": {
-    "timestamp": "2026-04-14T03:23:38.470739549Z",
+    "timestamp": "2026-04-14T07:02:22.559050281Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,23 +14,23 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.2",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.3",
       "name": "include_deflator",
-      "version": "10.1.2",
+      "version": "10.1.3",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/include_deflator@10.1.2?download_url=file://.",
+      "purl": "pkg:cargo/include_deflator@10.1.3?download_url=file://.",
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.2 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.3 bin-target-0",
           "name": "include_deflator",
-          "version": "10.1.2",
-          "purl": "pkg:cargo/include_deflator@10.1.2?download_url=file://.#src/lib.rs"
+          "version": "10.1.3",
+          "purl": "pkg:cargo/include_deflator@10.1.3?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -546,6 +546,33 @@
     },
     {
       "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.1.5",
+      "author": "Orson Peters <orsonpeters@gmail.com>",
+      "name": "foldhash",
+      "version": "0.1.5",
+      "description": "A fast, non-cryptographic, minimally DoS-resistant hashing algorithm.",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "purl": "pkg:cargo/foldhash@0.1.5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/orlp/foldhash"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#form_urlencoded@1.2.2",
       "author": "The rust-url developers",
       "name": "form_urlencoded",
@@ -599,6 +626,33 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-lang/git2-rs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+      "author": "Amanieu d'Antras <amanieu@gmail.com>",
+      "name": "hashbrown",
+      "version": "0.15.5",
+      "description": "A Rust port of Google's SwissTable hash map",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/hashbrown@0.15.5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/hashbrown"
         }
       ]
     },
@@ -1316,16 +1370,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.7.1",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
       "author": "bluss, mitchmindtree",
       "name": "petgraph",
-      "version": "0.7.1",
+      "version": "0.8.3",
       "description": "Graph data structure library. Provides graph types and graph algorithms.",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
+          "content": "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
         }
       ],
       "licenses": [
@@ -1333,7 +1387,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/petgraph@0.7.1",
+      "purl": "pkg:cargo/petgraph@0.8.3",
       "externalReferences": [
         {
           "type": "documentation",
@@ -2499,13 +2553,13 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.2",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.3",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#bumpalo@3.20.2",
         "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
-        "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.7.1",
+        "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c@0.24.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
@@ -2586,6 +2640,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#fixedbitset@0.5.7"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.1.5"
+    },
+    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#form_urlencoded@1.2.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#percent-encoding@2.3.2"
@@ -2601,6 +2658,12 @@
         "registry+https://github.com/rust-lang/crates.io-index#openssl-probe@0.1.6",
         "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.113",
         "registry+https://github.com/rust-lang/crates.io-index#url@2.5.8"
+      ]
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.1.5"
       ]
     },
     {
@@ -2757,10 +2820,12 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#percent-encoding@2.3.2"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.7.1",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#fixedbitset@0.5.7",
-        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0"
+        "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+        "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+        "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228"
       ]
     },
     {

@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v10.1.2 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
+**v10.1.3 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
 
 ---
 
@@ -34,7 +34,7 @@ The Janitor is not a linter. It is not a SAST scanner. It is a **structural enfo
 
 **SonarQube** flags style and complexity. It has no structural clone detection, no actuarial ledger, and no mechanism to distinguish an AI-generated PR from a human one. It does not know what an Agentic Swarm is.
 
-The Janitor detects what the others cannot: structural patterns that have no CVE record, coordinated multi-author clone injection, and the entropy signatures of AI-generated boilerplate — deterministically, on your hardware, in under 33 seconds.
+The Janitor detects what the others cannot: structural patterns that have no CVE record, coordinated multi-author clone injection, and the entropy signatures of AI-generated boilerplate — deterministically, on your hardware, in sustained 6.7 seconds per Pull Request.
 
 Three capabilities your current toolchain cannot replicate:
 
@@ -53,7 +53,7 @@ Every analysis — reference graph construction, dead symbol detection, structur
 
 The Janitor engine runs entirely inside your own runner in both modes. The Governor (Sentinel's backend) receives a signed analysis result — not your source code. There is no server-side clone, no cloud SAST upload, no exfiltration vector.
 
-**Benchmark:** Scanned the Godot Engine — **3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python** — in **33 seconds**, consuming **58 MB of peak RAM**. On a standard CI runner. With zero OOM events and zero panics.
+**Benchmark:** Sustained **6.7 seconds per Pull Request** on the Godot Engine — **3.5 million lines of polyglot C++, C#, Java, Objective-C++, and Python** — featuring full Cross-File Taint Analysis and Wasm Governance, consuming **58 MB of peak RAM**. On a standard CI runner. With zero OOM events and zero panics.
 
 Sonar's cloud pipeline cannot run in your air-gap. The Janitor runs everywhere.
 
@@ -122,7 +122,7 @@ The Janitor enforces your architectural rules at the one choke point that Shadow
 
 The market is filling with "AI Security Fabrics" — cloud-hosted LLM pipelines that ingest your source code, run probabilistic analysis, and return a verdict four minutes later. They are slow. They exfiltrate your code to a third-party inference cluster. And their probabilistic outputs produce alert fatigue at scale.
 
-The Janitor is the opposite architecture. It is an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. No cloud ingestion. No LLM. Proven at **3.5 million lines in 33 seconds on an 8 GB laptop**. Your code never leaves your runner.
+The Janitor is the opposite architecture. It is an **on-device structural firewall** — a Rust binary that memory-maps your diffs, applies deterministic analysis, and exits. No network call during the analysis path. No cloud ingestion. No LLM. Proven at **6.7 seconds per Pull Request on a 3.5M-line C++ codebase, on an 8 GB laptop**. Your code never leaves your runner.
 
 Cloud fabrics are an exfiltration vector wearing a security badge. The Janitor eliminates the attack surface instead of adding to it.
 
@@ -205,7 +205,7 @@ The market has a new category: **Vibe Radar**. These are tools that use LLMs to 
 | Detects Swarm coordination | No | Yes — MinHash LSH at Jaccard ≥ 0.85 across full PR history |
 | Source code egress | Yes — sent to inference cluster | No — memory-mapped on your runner |
 | Auditable | No | Yes — SHA-384 ledger, Dual-PQC signed CBOM, policy hash |
-| Speed | 2–8 minutes per PR | Under 33 seconds for 3.5M-line repos |
+| Speed | 2–8 minutes per PR | **6.7 seconds per PR** on 3.5M-line repos (Cross-File Taint + Wasm) |
 
 **The Vibe Radar tells you what it thinks. The Janitor tells you what it proved.**
 
