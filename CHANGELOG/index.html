@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-transparent-scaling-scm-parity-strike-v1013" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Transparent Scaling &amp; SCM Parity Strike (v10.1.3)
@@ -1544,6 +1553,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-transparent-scaling-scm-parity-strike-v1013" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — Transparent Scaling &amp; SCM Parity Strike (v10.1.3)
@@ -2512,6 +2530,29 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-fips-140-3-lifecycle-boundary-definition-v1014">2026-04-14 — FIPS 140-3 Lifecycle &amp; Boundary Definition (v10.1.4)</h2>
+<p><strong>Directive:</strong> Close the final two P0 federal compliance blockers: automated PQC key rotation (IA-5) and formal FIPS 140-3 cryptographic boundary documentation (SC-13); verify under single-threaded tests; execute the governed release path.</p>
+<p><strong>Phase 1 — P0-2 Automated PQC Key Rotation:</strong>
+- <code>crates/common/src/policy.rs</code>:
+  - added <code>[pqc]</code> policy section via <code>PqcConfig</code>.
+  - added <code>max_key_age_days: Option&lt;u32&gt;</code> with a default of <code>Some(90)</code>.
+  - extended <code>JanitorPolicy::content_hash()</code> so lifecycle policy drift changes the policy digest.
+- <code>crates/cli/src/main.rs</code>:
+  - added hidden <code>RotateKeys { key_path: PathBuf }</code> subcommand.
+  - implemented <code>cmd_rotate_keys()</code> to read the current bundle, archive it to <code>&lt;key_path&gt;.&lt;unix_timestamp&gt;.bak</code>, generate a fresh Dual-PQC bundle, write it in place, and append a rotation event to <code>.janitor/bounce_log.ndjson</code>.
+  - added <code>enforce_pqc_key_age()</code> and <code>pqc_key_age_exceeds_max()</code>; <code>cmd_bounce()</code> now hard-fails when <code>pqc_enforced = true</code> and the filesystem-backed <code>--pqc-key</code> exceeds <code>max_key_age_days</code>.
+  - updated <code>janitor init</code> scaffolds to emit a <code>[pqc]</code> section with <code>max_key_age_days = 90</code>.
+- <code>crates/cli/src/report.rs</code>:
+  - added <code>KeyRotationEvent</code> plus <code>append_key_rotation_log()</code> so rotation telemetry is ledgered without corrupting existing bounce-log readers.</p>
+<p><strong>Phase 2 — P0-3 FIPS 140-3 Boundary Documentation:</strong>
+- Created <code>docs/fips_boundary.md</code>.
+- Documented the formal cryptographic boundary aligned to NIST SP 800-140B Rev. 1.
+- Added the authoritative operation table for SHA-384, SHA-256, ML-DSA-65, and SLH-DSA-SHAKE-192s, each marked <code>Pending POA&amp;M</code>.
+- Recorded the explicit CMVP posture note: PQC standards were published by NIST on 2024-08-13, so CMVP validation lag for <code>fips204</code> and <code>fips205</code> is expected and tracked as a POA&amp;M item.</p>
+<p><strong>Phase 3 — Verification &amp; Release Prep:</strong>
+- <code>Cargo.toml</code> — workspace version <code>10.1.3</code> → <code>10.1.4</code>.
+- Added unit coverage for stale-key detection, fresh-key acceptance, and end-to-end key rotation archive/log behavior.
+- <code>.INNOVATION_LOG.md</code> — removed active P0-2 / P0-3 backlog items and marked both complete in the Completed Items ledger.</p>
 <h2 id="2026-04-13-transparent-scaling-scm-parity-strike-v1013">2026-04-13 — Transparent Scaling &amp; SCM Parity Strike (v10.1.3)</h2>
 <p><strong>Directive:</strong> Git hygiene &amp; dependency annihilation; marketing benchmark update to 6.7 s/PR; execute P1-4 Wasm Capability Receipts + SCM Review-Thread Parity; verify; bump to <code>10.1.3</code>; release.</p>
 <p><strong>Phase 1 — Git Hygiene &amp; Dependency Annihilation:</strong>
