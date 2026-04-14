@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-release-rescue-cloud-infra-taint-strike-v1017" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)
@@ -1580,6 +1589,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-release-rescue-cloud-infra-taint-strike-v1017" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)
@@ -2584,6 +2602,29 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018">2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)</h2>
+<p><strong>Directive:</strong> Complete P1-1 Group 2 (Lua, GDScript, Zig) taint producers; audit CLI for offensive black-box artifact ingestion; blueprint <code>janitor hunt</code> subcommand for bug bounty workflows; update Innovation Log with <code>P0-4 Offensive Ingestion Pipelines</code>; release v10.1.8.</p>
+<p><strong>Phase 1 — Group 2 Taint Producers:</strong></p>
+<ul>
+<li><code>crates/forge/src/taint_propagate.rs</code>:</li>
+<li><code>track_taint_lua</code> / <code>collect_lua_params</code> / <code>find_lua_dangerous_flows</code> / <code>collect_lua_exports</code> — Lua <code>os.execute(param)</code> and <code>io.popen(param)</code> sink detection; textual export with <code>extract_lua_function_name</code> for <code>function name(</code> / <code>local function name(</code> parsing.</li>
+<li><code>track_taint_gdscript</code> / <code>collect_gdscript_params</code> / <code>find_gdscript_dangerous_flows</code> / <code>collect_gdscript_exports</code> — GDScript <code>OS.execute(param)</code> and <code>OS.shell_open(param)</code> (Godot 4.x); AST <code>parameters</code> node traversal + textual fallback.</li>
+<li><code>track_taint_zig</code> / <code>collect_zig_params</code> / <code>find_zig_dangerous_flows</code> / <code>collect_zig_exports</code> — Zig <code>ChildProcess.exec</code>, <code>ChildProcess.run</code>, <code>std.process.exec</code>, <code>spawnAndWait</code>; textual export with <code>extract_zig_function_name</code> for <code>pub fn name(</code> / <code>fn name(</code> parsing.</li>
+<li><code>export_cross_file_records</code> extended: <code>"lua"</code>, <code>"gd"</code>, <code>"zig"</code> dispatch arms added.</li>
+<li>9 new deterministic unit tests (true-positive + true-negative + export-record per language).</li>
+<li><code>crates/forge/Cargo.toml</code>: <code>tree-sitter-zig.workspace = true</code> added.</li>
+</ul>
+<p><strong>Phase 2 — Offensive Ingestion Audit:</strong></p>
+<ul>
+<li>Audited CLI interface for black-box artifact ingestion gaps.</li>
+<li>Identified five ingestion target types: JS sourcemaps, npm tarballs, APK (via jadx), Electron <code>.asar</code>, Docker OCI layers.</li>
+<li>Designed <code>janitor hunt</code> subcommand blueprint (Phase A–D implementation plan).</li>
+</ul>
+<p><strong>Phase 3 — Innovation Log:</strong></p>
+<ul>
+<li><code>.INNOVATION_LOG.md</code>: P1-1 status updated (all Group 2 languages complete through v10.1.8); Group 2 table removed from Remaining section; Group 3 (Objective-C, GLSL) retained as next target.</li>
+<li><code>.INNOVATION_LOG.md</code>: New <code>P0-4 — Offensive Ingestion Pipelines</code> section added: full <code>janitor hunt</code> blueprint with TAM rationale (~$8M ARR), five ingestion target types, Phase A–D implementation plan.</li>
+</ul>
 <h2 id="2026-04-14-release-rescue-cloud-infra-taint-strike-v1017">2026-04-14 — Release Rescue &amp; Cloud Infra Taint Strike (v10.1.7)</h2>
 <p><strong>Directive:</strong> Rescue uncommitted v10.1.6 code (Codex token-exhaustion recovery), then expand the taint producer spine into Cloud Infrastructure grammars (Bash, Nix, HCL/Terraform), reorganize the remaining-language roadmap into Group 2 (Systems &amp; Gaming) and Group 3 (Apple &amp; Graphics), and release.</p>
 <p><strong>Phase 1 — v10.1.6 Rescue:</strong>
