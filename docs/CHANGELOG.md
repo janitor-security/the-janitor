@@ -1,7 +1,44 @@
-# Implementation Backlog
+# Release Changelog
 
 Append-only log of every major directive received and the specific changes
-implemented as a result. Maintained by the Evolution Tracker skill.
+implemented as a result.
+
+## 2026-04-13 — General Availability Genesis & Omni-Audit (v10.1.0)
+
+**Directive:** Drop Release Candidate tags. Transition to General Availability. Massive documentation rewrite, OpSec leak eradication, dependency CVE resolution, and enterprise readiness audit.
+
+**Phase 1 — OpSec & Navigation Overhaul:**
+- Removed `INNOVATION_LOG.md` from mkdocs.yml navigation entirely.
+- Renamed `docs/IMPLEMENTATION_BACKLOG.md` to `docs/CHANGELOG.md`; updated mkdocs.yml nav entry to "Release Changelog".
+- Moved `docs/INNOVATION_LOG.md` to hidden `.INNOVATION_LOG.md` at repo root; added to `.gitignore`.
+
+**Phase 2 — Dependabot Annihilation:**
+- `cargo update` pulled 13 patch-level dependency updates: rustls 0.23.37→0.23.38, cc 1.2.59→1.2.60, libc 0.2.184→0.2.185, openssl-sys 0.9.112→0.9.113, rustls-webpki 0.103.10→0.103.11, lru 0.16.3→0.16.4, pkg-config 0.3.32→0.3.33, wasm-bindgen family 0.2.117→0.2.118, js-sys 0.3.94→0.3.95.
+- `cargo check --workspace` clean.
+
+**Phase 3 — Enterprise Documentation Rewrite:**
+- Full rewrite of `README.md` and `docs/index.md` for v10.0.0 GA: Dual-PQC (ML-DSA-65 + SLH-DSA), SLSA Level 4, Air-Gap Intel Capsules, Wasm BYOR with BLAKE3 Pinning, Jira ASPM Deduplication, Native SCM (GitLab, AzDO).
+- `docs/architecture.md`: CycloneDX v1.5→v1.6, Dual-PQC description updated.
+- `docs/manifesto.md`: Dual-PQC + FIPS 205 references updated.
+- `docs/pricing_faq.md`: Added SLSA L4, Jira ASPM, native SCM to Sovereign tier.
+- `mkdocs.yml`: Site description updated for GA positioning.
+
+**Phase 4 — Brutal Readiness Audit:**
+- JAB Assessor + Fortune 500 CISO dual-lens assessment conducted.
+- Top 3 gaps filed as P0-1 (CEF/OCSF audit export), P0-2 (automated PQC key rotation), P0-3 (FIPS 140-3 boundary documentation) in `.INNOVATION_LOG.md`.
+
+**Changes:**
+- `mkdocs.yml` *(modified)* — nav restructured, site description updated
+- `.gitignore` *(modified)* — `.INNOVATION_LOG.md` added
+- `docs/CHANGELOG.md` *(renamed from IMPLEMENTATION_BACKLOG.md)* — header updated, session ledger
+- `README.md` *(rewritten)* — v10.0.0 GA enterprise documentation
+- `docs/index.md` *(rewritten)* — v10.0.0 GA landing page
+- `docs/architecture.md` *(modified)* — CycloneDX v1.6, Dual-PQC
+- `docs/manifesto.md` *(modified)* — Dual-PQC + FIPS 205
+- `docs/pricing_faq.md` *(modified)* — Sovereign tier expanded
+- `Cargo.toml` *(modified)* — version `10.1.0-alpha.24` → `10.1.0`
+- `Cargo.lock` *(modified)* — 13 dependency patches
+- `.INNOVATION_LOG.md` *(rewritten, gitignored)* — GA readiness audit, top 3 gaps
 
 ## 2026-04-13 — Federal Network Encryption & Self-Attestation (v10.1.0-alpha.23)
 

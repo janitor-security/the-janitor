@@ -1,5 +1,5 @@
 site_name: The Janitor
-site_description: "Automated Dead Symbol Detection & Code Cleanup. Rust-Native. Zero-Copy. Polyglot."
+site_description: "Structural Firewall for AI-Generated Code. Dual-PQC Attestation. SLSA Level 4. Zero-Upload. On-Device."
 site_url: https://thejanitor.app
 repo_url: https://github.com/janitor-security/the-janitor
 repo_name: janitor-security/the-janitor
@@ -33,9 +33,7 @@ nav:
   - Pricing FAQ: pricing_faq.md
   - Terms: terms.md
   - Privacy: privacy.md
-  - R&D and Telemetry:
-    - Innovation Log: INNOVATION_LOG.md
-    - Implementation Backlog: IMPLEMENTATION_BACKLOG.md
+  - Release Changelog: CHANGELOG.md
 
 markdown_extensions:
   - admonition

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:c7c236b1-d8f1-4637-9805-684a63a7b6f9",
+  "serialNumber": "urn:uuid:86e8b45e-2a65-4261-92a1-822c9f45ed33",
   "metadata": {
-    "timestamp": "2026-04-13T21:15:58.829716311Z",
+    "timestamp": "2026-04-14T00:09:45.132363152Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0-alpha.24",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0",
       "name": "vault",
-      "version": "10.1.0-alpha.24",
+      "version": "10.1.0",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.1.0-alpha.24?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.1.0?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0-alpha.24 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0 bin-target-0",
           "name": "vault",
-          "version": "10.1.0-alpha.24",
-          "purl": "pkg:cargo/vault@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
+          "version": "10.1.0",
+          "purl": "pkg:cargo/vault@10.1.0?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -522,16 +522,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
       "author": "The Rust Project Developers",
       "name": "libc",
-      "version": "0.2.184",
+      "version": "0.2.185",
       "description": "Raw FFI bindings to platform libraries like libc.",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
+          "content": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
         }
       ],
       "licenses": [
@@ -539,7 +539,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.184",
+      "purl": "pkg:cargo/libc@0.2.185",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1204,7 +1204,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0-alpha.24",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
@@ -1304,11 +1304,11 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184"
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#pkcs8@0.10.2",

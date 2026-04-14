@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:8efe4b61-6476-42b4-9b2d-5449ae2f49db",
+  "serialNumber": "urn:uuid:25bbf7fc-b72b-4048-8ce3-1d07c73c21b1",
   "metadata": {
-    "timestamp": "2026-04-13T21:15:58.845496253Z",
+    "timestamp": "2026-04-14T00:09:45.144904709Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0-alpha.24",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0",
       "name": "shadow",
-      "version": "10.1.0-alpha.24",
+      "version": "10.1.0",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/shadow@10.1.0-alpha.24?download_url=file://.",
+      "purl": "pkg:cargo/shadow@10.1.0?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0-alpha.24 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0 bin-target-0",
           "name": "shadow",
-          "version": "10.1.0-alpha.24",
-          "purl": "pkg:cargo/shadow@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
+          "version": "10.1.0",
+          "purl": "pkg:cargo/shadow@10.1.0?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -334,7 +334,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0-alpha.24",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.1.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",

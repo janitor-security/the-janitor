@@ -175,7 +175,7 @@ All operations run locally when using the CLI or GitHub Action. Your source code
 
 The Janitor runs in fully air-gapped environments — no cloud dependency, no inbound internet, zero data egress.
 
-The `janitor-gov` binary is a self-contained governance server deployable behind your firewall. It stores all state in a single SQLite file (`governor.db`), issues ML-DSA-65–signed CBOM bonds via a locally-held `governor.key`, and communicates with your CI runner over an internal HTTPS endpoint. No Janitor service call ever leaves your network boundary.
+The `janitor-gov` binary is a self-contained governance server deployable behind your firewall. It stores all state in a single SQLite file (`governor.db`), issues Dual-PQC–signed (ML-DSA-65 + SLH-DSA) CBOM bonds via a locally-held key bundle, and communicates with your CI runner over an internal HTTPS endpoint. No Janitor service call ever leaves your network boundary.
 
 ### FedRAMP / DISA STIG Boundary Requirements
 
@@ -183,7 +183,7 @@ The `janitor-gov` binary is a self-contained governance server deployable behind
 |-------------|----------------|
 | **AU-2 — Audit Events** | Immutable `bounce_log.ndjson` with `f.sync_all()` on every write |
 | **SC-28 — Data at Rest** | SQLite under operator-managed encryption; no cloud storage path |
-| **FIPS 204** | ML-DSA-65 attestation on every CycloneDX CBOM bond |
+| **FIPS 204 + FIPS 205** | Dual-PQC (ML-DSA-65 + SLH-DSA) attestation on every CycloneDX v1.6 CBOM bond |
 | **Zero Egress (IL5)** | Governor receives only the signed score report — never source code |
 
 The `pqc_enforced = true` flag in `janitor.toml` blocks any PR merge if the CBOM bond cannot be verified locally, ensuring cryptographic provenance even in disconnected CI environments.

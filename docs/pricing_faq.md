@@ -25,9 +25,15 @@ license server.
 
 **What it includes:**
 
-- **Dual-PQC CBOMs** — CycloneDX v1.6 Software Bills of Materials signed with
-  both ML-DSA-65 (FIPS 204) and SLH-DSA (FIPS 205) for long-horizon
+- **Dual-PQC CBOMs** — CycloneDX v1.6 Cryptography Bills of Materials signed with
+  both ML-DSA-65 (FIPS 204) and SLH-DSA-SHAKE-192s (FIPS 205) for long-horizon
   cryptographic assurance.
+- **SLSA Level 4 Reproducible Builds** — bit-for-bit deterministic release
+  binaries verified via Docker-based dual-build comparison.
+- **Jira ASPM Sync** — fingerprint-based deduplication with credential preflight;
+  graceful degradation to local-only mode when credentials are absent.
+- **Native SCM Publishing** — GitLab and Azure DevOps commit-status verdicts
+  auto-detected from CI environment variables.
 - **Wasm BYOR Rule Mounting** — bring your own private governance modules;
   pin them with BLAKE3 (`janitor wasm-pin`) and enforce integrity at load time.
 - **Offline Replayable Decision Capsules** — tamper-evident audit capsules

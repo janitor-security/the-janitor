@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:5c5017f5-0087-4d3a-8a40-74004fc9f4d3",
+  "serialNumber": "urn:uuid:29f899f3-c3a5-4065-8884-6f8dac30ce15",
   "metadata": {
-    "timestamp": "2026-04-13T21:15:58.866029767Z",
+    "timestamp": "2026-04-14T00:09:45.162483894Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0-alpha.24",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0",
       "name": "janitor-fuzz",
-      "version": "10.1.0-alpha.24",
+      "version": "10.1.0",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/janitor-fuzz@10.1.0-alpha.24?download_url=file://.",
+      "purl": "pkg:cargo/janitor-fuzz@10.1.0?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0-alpha.24 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0 bin-target-0",
           "name": "janitor_fuzz",
-          "version": "10.1.0-alpha.24",
-          "purl": "pkg:cargo/janitor-fuzz@10.1.0-alpha.24?download_url=file://.#src/lib.rs"
+          "version": "10.1.0",
+          "purl": "pkg:cargo/janitor-fuzz@10.1.0?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0",
       "name": "polyglot",
-      "version": "10.1.0-alpha.24",
+      "version": "10.1.0",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.0-alpha.24?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.1.0?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -131,16 +131,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
       "author": "Alex Crichton <alex@alexcrichton.com>",
       "name": "cc",
-      "version": "1.2.59",
+      "version": "1.2.60",
       "description": "A build-time dependency for Cargo build scripts to assist in invoking the native C compiler to compile native C code into a static archive to be linked into Rust code. ",
       "scope": "excluded",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b7a4d3ec6524d28a329fc53654bbadc9bdd7b0431f5d65f1a56ffb28a1ee5283"
+          "content": "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
         }
       ],
       "licenses": [
@@ -148,7 +148,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/cc@1.2.59",
+      "purl": "pkg:cargo/cc@1.2.60",
       "externalReferences": [
         {
           "type": "documentation",
@@ -376,16 +376,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
       "author": "The Rust Project Developers",
       "name": "libc",
-      "version": "0.2.184",
+      "version": "0.2.185",
       "description": "Raw FFI bindings to platform libraries like libc.",
       "scope": "excluded",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
+          "content": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
         }
       ],
       "licenses": [
@@ -393,7 +393,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.184",
+      "purl": "pkg:cargo/libc@0.2.185",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1542,10 +1542,10 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0-alpha.24",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#libfuzzer-sys@0.4.12",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-javascript@0.25.0",
@@ -1553,7 +1553,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0-alpha.24",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -1594,11 +1594,11 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#jobserver@0.1.34",
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184",
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
         "registry+https://github.com/rust-lang/crates.io-index#shlex@1.3.0"
       ]
     },
@@ -1633,17 +1633,17 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#jobserver@0.1.34",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184"
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.184"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#libfuzzer-sys@0.4.12",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.4.2",
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59"
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60"
       ]
     },
     {
@@ -1711,77 +1711,77 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.1",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c@0.24.1",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-gdscript@6.1.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-glsl@0.2.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-go@0.25.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-hcl@1.1.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-java@0.23.5",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-javascript@0.25.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-kotlin-ng@1.1.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
@@ -1791,91 +1791,91 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-lua@0.5.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-nix@0.3.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-objc@3.0.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-php@0.24.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-python@0.25.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-ruby@0.23.1",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-rust@0.24.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.0",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-swift@0.7.1",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-typescript@0.23.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-yaml@0.7.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-zig@1.1.2",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
         "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.10",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",

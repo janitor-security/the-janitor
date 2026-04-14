@@ -60,7 +60,7 @@ Grammar library: `tree-sitter 0.26` (workspace pinned).
 | Dependency graph | `petgraph 0.7` — transitive compile-time reach analysis | C++ silo detection in `Structural Topology` tab |
 | Pattern matching | `aho_corasick 1.1` — single automaton per pattern group (`OnceLock`) | Hot-path multi-pattern search without recompilation |
 | Hashing | `blake3 1.5` — exact structural hash per function body | Zombie/clone identity |
-| Security — PQC | ML-DSA-65 (FIPS 204) — PRODUCTION. the-governor/src/compliance/pqc.rs implements keygen/sign/verify via the fips204 crate. The Governor generates a persistent governor.key on first run and signs every CycloneDX CBOM bond with it. pqc_enforced: true in janitor.toml blocks the PR merge if bond issuance fails. | Post-quantum attestation for CycloneDX v1.5 CBOM bonds |
+| Security — Dual-PQC | ML-DSA-65 (FIPS 204) + SLH-DSA-SHAKE-192s (FIPS 205) — PRODUCTION. Dual-PQC key bundles (4128 bytes) generated via `janitor generate-keys`. The Governor signs every CycloneDX v1.6 CBOM bond with both algorithms. `pqc_enforced: true` in `janitor.toml` blocks PR merge if bond issuance fails. | Post-quantum attestation for CycloneDX v1.6 CBOM bonds |
 | Security — Ed25519 | `vault::SigningOracle::verify_token` — public-key-only; no private key in binary | API token gate for `janitor_clean` (MCP) and `/v1/attest` |
 
 ---
@@ -826,7 +826,7 @@ flowchart TD
     D --> E
     E -->|silos ≥ 5| F[Hard block\nmerge prevented]
     E --> G{Score ≤ gate?}
-    G -->|Yes — SANCTUARY INTACT| H[PQC Bond Issuance\nML-DSA-65 · CycloneDX v1.5\nCBOM written to .janitor/]
+    G -->|Yes — SANCTUARY INTACT| H[PQC Bond Issuance\nML-DSA-65 · CycloneDX v1.6\nCBOM written to .janitor/]
     G -->|No — BREACH DETECTED| I[Check Run FAIL\nSARIF annotations uploaded\nwebhook fired]
 ```
 
