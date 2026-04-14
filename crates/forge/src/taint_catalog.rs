@@ -189,6 +189,49 @@ pub fn append_record(catalog_path: &Path, record: TaintExportRecord) -> Result<(
     write_catalog(catalog_path, &records)
 }
 
+/// Upsert `new_records` into the persisted catalog, keyed by `(symbol_name, file_path)`.
+///
+/// Existing records for the same function boundary are replaced atomically so
+/// repeated bounces do not accumulate duplicate entries for the same symbol.
+pub fn upsert_records(catalog_path: &Path, new_records: &[TaintExportRecord]) -> Result<()> {
+    if new_records.is_empty() {
+        return Ok(());
+    }
+
+    let mut records: Vec<TaintExportRecord> = if catalog_path.exists() {
+        File::open(catalog_path)
+            .ok()
+            .and_then(|f| {
+                let mmap = unsafe { Mmap::map(&f).ok()? };
+                if mmap.is_empty() {
+                    return Some(vec![]);
+                }
+                rkyv::access::<ArchivedCatalog, rkyv::rancor::Error>(&mmap[..])
+                    .ok()
+                    .map(|archived| {
+                        rkyv::deserialize::<Vec<TaintExportRecord>, rkyv::rancor::Error>(archived)
+                            .unwrap_or_default()
+                    })
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    for new_record in new_records {
+        if let Some(existing) = records.iter_mut().find(|existing| {
+            existing.symbol_name == new_record.symbol_name
+                && existing.file_path == new_record.file_path
+        }) {
+            *existing = new_record.clone();
+        } else {
+            records.push(new_record.clone());
+        }
+    }
+
+    write_catalog(catalog_path, &records)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Cross-file sink finding
 // ─────────────────────────────────────────────────────────────────────────────

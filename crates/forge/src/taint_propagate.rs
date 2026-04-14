@@ -19,6 +19,8 @@
 
 use tree_sitter::Node;
 
+use common::taint::{TaintExportRecord, TaintKind, TaintedParam};
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -122,6 +124,28 @@ pub fn collect_cpp_params(_root: Node<'_>, _source: &[u8]) -> Vec<String> {
 /// Swift taint stub — reserved for a subsequent release.
 pub fn collect_swift_params(_root: Node<'_>, _source: &[u8]) -> Vec<String> {
     Vec::new()
+}
+
+/// Build cross-file taint export records for supported languages.
+///
+/// The producer side intentionally operates only on exported / public
+/// boundaries so the catalog remains narrow: module-level Python functions,
+/// exported JS/TS functions, public Java/C# methods, and exported Go symbols.
+pub fn export_cross_file_records(
+    lang: &str,
+    file_path: &str,
+    source: &[u8],
+    root: Node<'_>,
+) -> Vec<TaintExportRecord> {
+    match lang {
+        "py" => collect_python_exports(root, source, file_path),
+        "js" | "jsx" => collect_javascript_exports(root, source, file_path),
+        "ts" | "tsx" => collect_javascript_exports(root, source, file_path),
+        "java" => collect_java_exports(root, source, file_path),
+        "go" => collect_go_exports(root, source, file_path),
+        "cs" => collect_csharp_exports(root, source, file_path),
+        _ => Vec::new(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +453,556 @@ fn find_tainted_operand(
     None
 }
 
+fn collect_python_exports(
+    root: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+) -> Vec<TaintExportRecord> {
+    let mut records = Vec::new();
+    walk_python_exports(root, source, file_path, &mut records, 0);
+    records
+}
+
+fn walk_python_exports(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    records: &mut Vec<TaintExportRecord>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "function_definition" && is_python_export_boundary(node, source) {
+        if let Some(record) = build_record_from_function_like(
+            node,
+            source,
+            file_path,
+            "parameters",
+            "body",
+            "name",
+            collect_param_names_python,
+            find_tainted_call_params_python,
+        ) {
+            records.push(record);
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_python_exports(child, source, file_path, records, depth + 1);
+    }
+}
+
+fn is_python_export_boundary(node: Node<'_>, source: &[u8]) -> bool {
+    let name = node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source).ok())
+        .unwrap_or("");
+    if name.starts_with('_') {
+        return false;
+    }
+    match node.parent().map(|parent| parent.kind()) {
+        Some("module") => true,
+        Some("block") => node
+            .parent()
+            .and_then(|block| block.parent())
+            .map(|parent| parent.kind() == "class_definition")
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn collect_javascript_exports(
+    root: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+) -> Vec<TaintExportRecord> {
+    let mut records = Vec::new();
+    walk_javascript_exports(root, source, file_path, &mut records, 0);
+    records
+}
+
+fn walk_javascript_exports(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    records: &mut Vec<TaintExportRecord>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "function_declaration" && is_javascript_export_boundary(node) {
+        if let Some(record) = build_record_from_function_like(
+            node,
+            source,
+            file_path,
+            "parameters",
+            "body",
+            "name",
+            collect_param_names_generic_identifiers,
+            find_tainted_call_params_js,
+        ) {
+            records.push(record);
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_javascript_exports(child, source, file_path, records, depth + 1);
+    }
+}
+
+fn is_javascript_export_boundary(node: Node<'_>) -> bool {
+    matches!(
+        node.parent().map(|parent| parent.kind()),
+        Some("export_statement") | Some("export_declaration")
+    )
+}
+
+fn collect_java_exports(root: Node<'_>, source: &[u8], file_path: &str) -> Vec<TaintExportRecord> {
+    let mut records = Vec::new();
+    walk_java_exports(root, source, file_path, &mut records, 0);
+    records
+}
+
+fn walk_java_exports(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    records: &mut Vec<TaintExportRecord>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "method_declaration" && has_public_modifier(node, source) {
+        if let Some(record) = build_record_from_function_like(
+            node,
+            source,
+            file_path,
+            "parameters",
+            "body",
+            "name",
+            collect_param_names_java,
+            find_tainted_call_params_java,
+        ) {
+            records.push(record);
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_java_exports(child, source, file_path, records, depth + 1);
+    }
+}
+
+fn collect_go_exports(root: Node<'_>, source: &[u8], file_path: &str) -> Vec<TaintExportRecord> {
+    let mut records = Vec::new();
+    walk_go_exports(root, source, file_path, &mut records, 0);
+    records
+}
+
+fn walk_go_exports(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    records: &mut Vec<TaintExportRecord>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if matches!(node.kind(), "function_declaration" | "method_declaration")
+        && is_go_export_boundary(node, source)
+    {
+        if let Some(record) = build_record_from_function_like(
+            node,
+            source,
+            file_path,
+            "parameters",
+            "body",
+            "name",
+            collect_param_names_go,
+            find_tainted_call_params_go,
+        ) {
+            records.push(record);
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_go_exports(child, source, file_path, records, depth + 1);
+    }
+}
+
+fn is_go_export_boundary(node: Node<'_>, source: &[u8]) -> bool {
+    node.child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source).ok())
+        .and_then(|name| name.chars().next())
+        .map(|first| first.is_ascii_uppercase())
+        .unwrap_or(false)
+}
+
+fn collect_csharp_exports(
+    root: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+) -> Vec<TaintExportRecord> {
+    let mut records = Vec::new();
+    walk_csharp_exports(root, source, file_path, &mut records, 0);
+    records
+}
+
+fn walk_csharp_exports(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    records: &mut Vec<TaintExportRecord>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if node.kind() == "method_declaration" && has_public_modifier(node, source) {
+        if let Some(record) = build_record_from_function_like(
+            node,
+            source,
+            file_path,
+            "parameters",
+            "body",
+            "name",
+            collect_param_names_csharp,
+            find_tainted_call_params_csharp,
+        ) {
+            records.push(record);
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_csharp_exports(child, source, file_path, records, depth + 1);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_record_from_function_like(
+    node: Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    params_field: &str,
+    body_field: &str,
+    name_field: &str,
+    param_collector: fn(Node<'_>, &[u8]) -> Vec<String>,
+    taint_finder: fn(Node<'_>, &[u8], &[String]) -> Vec<String>,
+) -> Option<TaintExportRecord> {
+    let symbol_name = node
+        .child_by_field_name(name_field)
+        .and_then(|n| n.utf8_text(source).ok())
+        .unwrap_or("")
+        .to_string();
+    if symbol_name.is_empty() {
+        return None;
+    }
+
+    let params_node = node
+        .child_by_field_name(params_field)
+        .or_else(|| find_named_child_by_kind_fragment(node, "parameter"))?;
+    let body_node = node
+        .child_by_field_name(body_field)
+        .or_else(|| find_named_child_by_kind_fragment(node, "block"))
+        .or_else(|| find_named_child_by_kind_fragment(node, "body"))?;
+    let params = param_collector(params_node, source);
+    if params.is_empty() {
+        return None;
+    }
+    let tainted_params = taint_finder(body_node, source, &params);
+    if tainted_params.is_empty() {
+        return None;
+    }
+
+    let tainted_params = tainted_params
+        .into_iter()
+        .filter_map(|name| {
+            params
+                .iter()
+                .position(|param| param == &name)
+                .map(|index| TaintedParam {
+                    param_index: index as u32,
+                    param_name: name,
+                    kind: TaintKind::UserInput,
+                })
+        })
+        .collect::<Vec<_>>();
+
+    if tainted_params.is_empty() {
+        return None;
+    }
+
+    Some(TaintExportRecord {
+        symbol_name,
+        file_path: file_path.replace('\\', "/"),
+        tainted_params,
+        sink_kinds: vec![TaintKind::Unknown],
+        propagates_to_return: function_returns_tainted_param(body_node, source, &params),
+    })
+}
+
+fn has_public_modifier(node: Node<'_>, source: &[u8]) -> bool {
+    node.child_by_field_name("modifiers")
+        .and_then(|n| n.utf8_text(source).ok())
+        .or_else(|| {
+            let mut cur = node.walk();
+            let text = node
+                .named_children(&mut cur)
+                .find(|child| child.kind().contains("modifier"))
+                .and_then(|child| child.utf8_text(source).ok());
+            text
+        })
+        .map(|text| text.split_whitespace().any(|token| token == "public"))
+        .unwrap_or(false)
+}
+
+fn function_returns_tainted_param(node: Node<'_>, source: &[u8], params: &[String]) -> bool {
+    let mut found = false;
+    walk_return_nodes(node, source, params, &mut found, 0);
+    found
+}
+
+fn walk_return_nodes(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    found: &mut bool,
+    depth: u32,
+) {
+    if *found || depth > 100 {
+        return;
+    }
+    if node.kind().contains("return") && subtree_contains_any_identifier(node, source, params) {
+        *found = true;
+        return;
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        walk_return_nodes(child, source, params, found, depth + 1);
+    }
+}
+
+fn collect_param_names_python(params_node: Node<'_>, source: &[u8]) -> Vec<String> {
+    collect_param_names_by_kinds(params_node, source, &["identifier"], &["self", "cls"], 0)
+}
+
+fn collect_param_names_generic_identifiers(params_node: Node<'_>, source: &[u8]) -> Vec<String> {
+    collect_param_names_by_kinds(params_node, source, &["identifier"], &[], 0)
+}
+
+fn collect_param_names_java(params_node: Node<'_>, source: &[u8]) -> Vec<String> {
+    collect_param_names_by_kinds(params_node, source, &["identifier"], &[], 0)
+}
+
+fn collect_param_names_go(params_node: Node<'_>, source: &[u8]) -> Vec<String> {
+    let mut params = Vec::new();
+    collect_go_params(params_node, source, &mut params, 0);
+    params
+}
+
+fn collect_param_names_csharp(params_node: Node<'_>, source: &[u8]) -> Vec<String> {
+    collect_param_names_by_kinds(params_node, source, &["identifier"], &["this"], 0)
+}
+
+fn collect_param_names_by_kinds(
+    node: Node<'_>,
+    source: &[u8],
+    identifier_kinds: &[&str],
+    ignored_names: &[&str],
+    depth: u32,
+) -> Vec<String> {
+    let mut params = Vec::new();
+    collect_param_names_into(
+        node,
+        source,
+        identifier_kinds,
+        ignored_names,
+        &mut params,
+        depth,
+    );
+    params
+}
+
+fn collect_param_names_into(
+    node: Node<'_>,
+    source: &[u8],
+    identifier_kinds: &[&str],
+    ignored_names: &[&str],
+    params: &mut Vec<String>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if identifier_kinds.contains(&node.kind()) {
+        if let Ok(name) = node.utf8_text(source) {
+            if !name.is_empty() && !ignored_names.iter().any(|ignored| ignored == &name) {
+                params.push(name.to_string());
+            }
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        collect_param_names_into(
+            child,
+            source,
+            identifier_kinds,
+            ignored_names,
+            params,
+            depth + 1,
+        );
+    }
+}
+
+fn find_tainted_call_params_python(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+) -> Vec<String> {
+    find_tainted_call_params(node, source, params, &["call"], &["arguments"], 0)
+}
+
+fn find_tainted_call_params_js(node: Node<'_>, source: &[u8], params: &[String]) -> Vec<String> {
+    find_tainted_call_params(
+        node,
+        source,
+        params,
+        &["call_expression"],
+        &["arguments"],
+        0,
+    )
+}
+
+fn find_tainted_call_params_java(node: Node<'_>, source: &[u8], params: &[String]) -> Vec<String> {
+    find_tainted_call_params(
+        node,
+        source,
+        params,
+        &["method_invocation"],
+        &["arguments"],
+        0,
+    )
+}
+
+fn find_tainted_call_params_go(node: Node<'_>, source: &[u8], params: &[String]) -> Vec<String> {
+    find_tainted_call_params(
+        node,
+        source,
+        params,
+        &["call_expression"],
+        &["arguments"],
+        0,
+    )
+}
+
+fn find_tainted_call_params_csharp(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+) -> Vec<String> {
+    find_tainted_call_params(
+        node,
+        source,
+        params,
+        &["invocation_expression"],
+        &["argument_list", "arguments"],
+        0,
+    )
+}
+
+fn find_tainted_call_params(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    call_kinds: &[&str],
+    arg_fields: &[&str],
+    depth: u32,
+) -> Vec<String> {
+    let mut found = Vec::new();
+    collect_tainted_call_params(
+        node, source, params, call_kinds, arg_fields, &mut found, depth,
+    );
+    found.sort();
+    found.dedup();
+    found
+}
+
+fn collect_tainted_call_params(
+    node: Node<'_>,
+    source: &[u8],
+    params: &[String],
+    call_kinds: &[&str],
+    arg_fields: &[&str],
+    found: &mut Vec<String>,
+    depth: u32,
+) {
+    if depth > 100 {
+        return;
+    }
+    if call_kinds.contains(&node.kind()) {
+        let args_node = arg_fields
+            .iter()
+            .find_map(|field| node.child_by_field_name(field))
+            .or_else(|| {
+                let mut cur = node.walk();
+                let found = node
+                    .named_children(&mut cur)
+                    .find(|child| child.kind().contains("argument"));
+                found
+            });
+        if let Some(args_node) = args_node {
+            for param in params {
+                if subtree_contains_identifier(args_node, source, param) {
+                    found.push(param.clone());
+                }
+            }
+        }
+    }
+    let mut cur = node.walk();
+    for child in node.children(&mut cur) {
+        collect_tainted_call_params(
+            child,
+            source,
+            params,
+            call_kinds,
+            arg_fields,
+            found,
+            depth + 1,
+        );
+    }
+}
+
+fn subtree_contains_any_identifier(node: Node<'_>, source: &[u8], params: &[String]) -> bool {
+    params
+        .iter()
+        .any(|param| subtree_contains_identifier(node, source, param))
+}
+
+fn subtree_contains_identifier(node: Node<'_>, source: &[u8], target: &str) -> bool {
+    if node.kind() == "identifier" {
+        return node
+            .utf8_text(source)
+            .map(|text| text == target)
+            .unwrap_or(false);
+    }
+    let mut cur = node.walk();
+    let found = node
+        .children(&mut cur)
+        .any(|child| subtree_contains_identifier(child, source, target));
+    found
+}
+
+fn find_named_child_by_kind_fragment<'a>(node: Node<'a>, fragment: &str) -> Option<Node<'a>> {
+    let mut cur = node.walk();
+    let found = node
+        .named_children(&mut cur)
+        .find(|child| child.kind().contains(fragment));
+    found
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -465,6 +1039,46 @@ mod tests {
         parser
             .parse(source.as_bytes(), None)
             .expect("PHP source must parse")
+    }
+
+    fn parse_python(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .expect("Python grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("Python source must parse")
+    }
+
+    fn parse_typescript(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .expect("TypeScript grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("TypeScript source must parse")
+    }
+
+    fn parse_java(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_java::LANGUAGE.into())
+            .expect("Java grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("Java source must parse")
+    }
+
+    fn parse_csharp(source: &str) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_c_sharp::LANGUAGE.into())
+            .expect("C# grammar must load");
+        parser
+            .parse(source.as_bytes(), None)
+            .expect("C# source must parse")
     }
 
     /// True positive: named parameter directly concatenated into db.Query.
@@ -596,5 +1210,75 @@ function fetch_user($conn) {
         let params = collect_php_params(tree.root_node(), src.as_bytes());
         let flows = find_tainted_php_sql_sinks(tree.root_node(), src.as_bytes(), &params);
         assert!(flows.is_empty());
+    }
+
+    #[test]
+    fn python_export_record_emits_for_public_function_boundary() {
+        let src = r#"def build_query(user):
+    dangerous_sink(user)
+"#;
+        let tree = parse_python(src);
+        let records =
+            export_cross_file_records("py", "src/db.py", src.as_bytes(), tree.root_node());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].symbol_name, "build_query");
+        assert_eq!(records[0].tainted_params[0].param_name, "user");
+        assert!(!records[0].sink_kinds.is_empty());
+    }
+
+    #[test]
+    fn typescript_export_record_emits_for_exported_function() {
+        let src = r#"export function buildQuery(user: string) {
+  dangerousSink(user);
+}"#;
+        let tree = parse_typescript(src);
+        let records =
+            export_cross_file_records("ts", "src/db.ts", src.as_bytes(), tree.root_node());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].symbol_name, "buildQuery");
+        assert_eq!(records[0].tainted_params[0].param_name, "user");
+    }
+
+    #[test]
+    fn java_export_record_emits_for_public_method() {
+        let src = r#"class Queries {
+  public String buildQuery(String user) {
+    return dangerousSink(user);
+  }
+}"#;
+        let tree = parse_java(src);
+        let records =
+            export_cross_file_records("java", "src/Queries.java", src.as_bytes(), tree.root_node());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].symbol_name, "buildQuery");
+        assert!(records[0].propagates_to_return);
+    }
+
+    #[test]
+    fn go_export_record_emits_for_exported_function() {
+        let src = r#"package main
+func BuildQuery(user string) string {
+    return dangerousSink(user)
+}
+"#;
+        let tree = parse_go(src);
+        let records = export_cross_file_records("go", "db.go", src.as_bytes(), tree.root_node());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].symbol_name, "BuildQuery");
+    }
+
+    #[test]
+    fn csharp_export_record_emits_for_public_method() {
+        let src = r#"class Queries {
+    public string BuildQuery(string user) {
+        return DangerousSink(user);
+    }
+}"#;
+        let tree = parse_csharp(src);
+        let records =
+            export_cross_file_records("cs", "Queries.cs", src.as_bytes(), tree.root_node());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].symbol_name, "BuildQuery");
+        assert_eq!(records[0].tainted_params[0].param_name, "user");
     }
 }

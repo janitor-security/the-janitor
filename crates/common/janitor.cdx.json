@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:be07a6e6-c42d-47fa-a135-b80144f520c4",
+  "serialNumber": "urn:uuid:89cc54b2-9e52-49e3-bd95-3227a01f8605",
   "metadata": {
-    "timestamp": "2026-04-14T02:02:25.351967789Z",
+    "timestamp": "2026-04-14T03:23:38.400128437Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.2",
       "name": "common",
-      "version": "10.1.1",
+      "version": "10.1.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.1?download_url=file://.",
+      "purl": "pkg:cargo/common@10.1.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.2 bin-target-0",
           "name": "common",
-          "version": "10.1.1",
-          "purl": "pkg:cargo/common@10.1.1?download_url=file://.#src/lib.rs"
+          "version": "10.1.2",
+          "purl": "pkg:cargo/common@10.1.2?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -5054,7 +5054,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

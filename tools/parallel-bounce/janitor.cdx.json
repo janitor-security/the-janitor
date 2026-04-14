@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:d32056f5-6911-421d-ae55-41f6e02376a7",
+  "serialNumber": "urn:uuid:1bb43b1c-eae7-4566-ab26-95f44a62b052",
   "metadata": {
-    "timestamp": "2026-04-14T02:02:25.530704354Z",
+    "timestamp": "2026-04-14T03:23:38.578994706Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.2",
       "name": "parallel-bounce",
-      "version": "10.1.1",
+      "version": "10.1.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/parallel-bounce@10.1.1?download_url=file://.",
+      "purl": "pkg:cargo/parallel-bounce@10.1.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.2 bin-target-0",
           "name": "parallel-bounce",
-          "version": "10.1.1",
-          "purl": "pkg:cargo/parallel-bounce@10.1.1?download_url=file://.#src/main.rs"
+          "version": "10.1.2",
+          "purl": "pkg:cargo/parallel-bounce@10.1.2?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -707,7 +707,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.1.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#rayon@1.11.0",

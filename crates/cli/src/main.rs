@@ -603,6 +603,9 @@ enum Commands {
         /// Output CSV file path.
         #[arg(long, short = 'o', default_value = "bounce_export.csv")]
         out: PathBuf,
+        /// Output format: `csv` (default), `cef`, or `ocsf`.
+        #[arg(long, default_value = "csv")]
+        format: String,
         /// Aggregate bounce logs from ALL repos under a gauntlet directory.
         ///
         /// When set, `--repo` is ignored and every `<gauntlet-dir>/*/` sub-directory
@@ -1294,6 +1297,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Export {
             repo,
             out,
+            format,
             global,
             gauntlet_dir,
         } => {
@@ -1304,9 +1308,9 @@ async fn main() -> anyhow::Result<()> {
                     .join("dev")
                     .join("gauntlet");
                 let root = gauntlet_dir.as_deref().unwrap_or(&default_gauntlet);
-                export::cmd_export_global(root, out)?;
+                export::cmd_export_global_with_format(root, out, format)?;
             } else {
-                export::cmd_export(repo, out)?;
+                export::cmd_export_with_format(repo, out, format)?;
             }
         }
         Commands::Pardon { symbol, repo } => cmd_pardon(symbol, repo)?,

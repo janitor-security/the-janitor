@@ -29,6 +29,7 @@
 //! | 17 | `Agentic_Contribution_Pct` | `(agentic commits / total PR commits) × 100`; 100.0 when PR author is a detected agentic actor, 0.0 otherwise |
 
 use anyhow::Result;
+use serde_json::Value;
 use std::io::Write as _;
 use std::path::Path;
 
@@ -277,6 +278,63 @@ pub fn cmd_export_global(gauntlet_root: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
+fn write_cef_lines(entries: &[crate::report::BounceLogEntry], out: &Path) -> Result<()> {
+    let mut file = std::io::BufWriter::new(std::fs::File::create(out)?);
+    for entry in entries {
+        writeln!(file, "{}", entry.to_cef_string())?;
+    }
+    file.flush()?;
+    Ok(())
+}
+
+fn write_ocsf_json(entries: &[crate::report::BounceLogEntry], out: &Path) -> Result<()> {
+    let docs: Vec<Value> = entries.iter().map(|entry| entry.to_ocsf_json()).collect();
+    let file = std::fs::File::create(out)?;
+    let writer = std::io::BufWriter::new(file);
+    serde_json::to_writer_pretty(writer, &docs)?;
+    Ok(())
+}
+
+pub fn cmd_export_global_with_format(gauntlet_root: &Path, out: &Path, format: &str) -> Result<()> {
+    use crate::report::discover_bounce_logs;
+
+    let repo_logs = discover_bounce_logs(gauntlet_root);
+    if repo_logs.is_empty() {
+        anyhow::bail!(
+            "No bounce logs found under `{}`. \
+             Run `janitor bounce` in each repo to populate logs.",
+            gauntlet_root.display()
+        );
+    }
+
+    let entries: Vec<crate::report::BounceLogEntry> = repo_logs
+        .into_iter()
+        .flat_map(|(_, entries)| entries)
+        .collect();
+    match format {
+        "csv" => cmd_export_global(gauntlet_root, out),
+        "cef" => {
+            write_cef_lines(&entries, out)?;
+            println!(
+                "Exported {} entries (global) → {}",
+                entries.len(),
+                out.display()
+            );
+            Ok(())
+        }
+        "ocsf" => {
+            write_ocsf_json(&entries, out)?;
+            println!(
+                "Exported {} entries (global) → {}",
+                entries.len(),
+                out.display()
+            );
+            Ok(())
+        }
+        other => anyhow::bail!("unknown export format `{other}`; expected csv|cef|ocsf"),
+    }
+}
+
 /// Export the bounce log at `<repo>/.janitor/bounce_log.ndjson` to a CSV file.
 ///
 /// Creates or overwrites `out`.  When the bounce log is absent or empty, falls
@@ -300,6 +358,38 @@ pub fn cmd_export(repo: &Path, out: &Path) -> Result<()> {
     wtr.flush()?;
     println!("Exported {} entries → {}", entries.len(), out.display());
     Ok(())
+}
+
+pub fn cmd_export_with_format(repo: &Path, out: &Path, format: &str) -> Result<()> {
+    let janitor_dir = repo.join(".janitor");
+    let entries = crate::report::load_bounce_log(&janitor_dir);
+
+    match format {
+        "csv" => cmd_export(repo, out),
+        "cef" => {
+            if entries.is_empty() {
+                anyhow::bail!(
+                    "No bounce log found under {}.\nRun `janitor bounce` first to populate data.",
+                    janitor_dir.display()
+                );
+            }
+            write_cef_lines(&entries, out)?;
+            println!("Exported {} entries → {}", entries.len(), out.display());
+            Ok(())
+        }
+        "ocsf" => {
+            if entries.is_empty() {
+                anyhow::bail!(
+                    "No bounce log found under {}.\nRun `janitor bounce` first to populate data.",
+                    janitor_dir.display()
+                );
+            }
+            write_ocsf_json(&entries, out)?;
+            println!("Exported {} entries → {}", entries.len(), out.display());
+            Ok(())
+        }
+        other => anyhow::bail!("unknown export format `{other}`; expected csv|cef|ocsf"),
+    }
 }
 
 /// Static-scan fallback: load `.janitor/symbols.rkyv` and emit one CSV row per

@@ -1228,6 +1228,24 @@ impl PRBouncer for PatchBouncer {
             }
         }
 
+        // Producer side of the cross-file taint spine: persist summaries for
+        // exported / public boundaries so later files can resolve real callers
+        // against a live catalog instead of the Crucible-only fixture path.
+        if matches!(
+            ext,
+            "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go" | "cs"
+        ) {
+            if let Some(catalog_path) = self.catalog_path.as_deref() {
+                let export_records = crate::taint_propagate::export_cross_file_records(
+                    ext,
+                    &file_path,
+                    source,
+                    tree.root_node(),
+                );
+                let _ = crate::taint_catalog::upsert_records(catalog_path, &export_records);
+            }
+        }
+
         // Cross-file taint spine (P0-1 Phase 4–7): for Python, JS/JSX, TypeScript,
         // Java, and Go files, consult the taint catalog to confirm multi-file taint
         // flows.  Each confirmed call to a cataloged sink function with a non-literal

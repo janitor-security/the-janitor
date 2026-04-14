@@ -3,6 +3,62 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-13 — Forensic Benchmark & True Taint Activation (v10.1.2)
+
+**Directive:** Clean repository state, finalize SIEM exports, activate the producer side of the cross-file taint spine, benchmark the engine against three large OSS repos, verify under single-threaded tests, bump to `10.1.2`, and execute the governed fast-release path.
+
+**Phase 1 — State eradication:**
+- Removed the obsolete tracked backlog file: `docs/IMPLEMENTATION_BACKLOG.md`.
+- Removed the lingering tracked stale patch: `gauntlet/godot/slop_pr.patch`.
+- Verified `mkdocs.yml` does not reference the deleted backlog surface; nav remains pinned to `CHANGELOG.md` only.
+
+**Phase 2 — CEF / OCSF export surface:**
+- `crates/cli/src/report.rs`:
+  - added `BounceLogEntry::to_cef_string()` with the required `CEF:0|JanitorSecurity|Governor|1.0|...` envelope.
+  - added `BounceLogEntry::to_ocsf_json()` with OCSF v1.1-style Security Finding output.
+- `crates/cli/src/export.rs`:
+  - added non-CSV export writers for `cef` and `ocsf`.
+  - preserved CSV as the default export lane.
+- `crates/cli/src/main.rs`:
+  - extended `janitor export` with `--format csv|cef|ocsf`.
+
+**Phase 3 — True taint spine activation:**
+- `crates/forge/src/taint_propagate.rs`:
+  - added producer-side export builders for `py`, `js/jsx`, `ts/tsx`, `java`, `go`, and `cs`.
+  - added deterministic regression tests covering public/exported boundary emission for Python, TypeScript, Java, Go, and C#.
+- `crates/forge/src/taint_catalog.rs`:
+  - added `upsert_records()` so repeated bounces replace boundary summaries instead of inflating the catalog with duplicate entries.
+- `crates/forge/src/slop_filter.rs`:
+  - wired producer emission into the live patch-bounce path before cross-file sink consumption, activating the previously missing producer leg in production.
+
+**Phase 4 — Live-fire benchmarks:**
+- `just strike godotengine/godot 25`
+- `just strike bevyengine/bevy 25`
+- `just strike neovim/neovim 25`
+
+**Telemetry:**
+- `godotengine/godot`:
+  - full `just strike` wall-clock: `1144.91s`
+  - internal hyper-drive wall-clock: `163.56s`
+  - PRs harvested / bounced: `24`
+- `bevyengine/bevy`:
+  - full `just strike` wall-clock: `63.06s`
+  - internal hyper-drive wall-clock: `7.03s`
+  - PRs harvested / bounced: `22`
+- `neovim/neovim`:
+  - full `just strike` wall-clock: `156.62s`
+  - internal hyper-drive wall-clock: `16.76s`
+  - PRs harvested / bounced: `24`
+
+**Verification:**
+- `cargo test -p forge -p cli -- --test-threads=1` ✅
+- `cargo test --workspace -- --test-threads=1` ✅
+- `just audit` ✅
+
+**Versioning / release prep:**
+- `Cargo.toml` — workspace version `10.1.1` → `10.1.2`
+- `.INNOVATION_LOG.md` — purged completed `P0-1` (CEF/OCSF export) and `P1-3` (true taint spine completion) from the active roadmap; completion recorded in the ledger.
+
 ## 2026-04-13 — Dual-Model Consensus & Deep Eradication Strike (v10.1.1)
 
 **Directive:** Audit workspace dependency bloat, delete RC/stale residue, map the true 23-grammar semantic-depth surface, synthesize Claude's FedRAMP findings with a hostile AST audit, verify under single-threaded tests, bump to `10.1.1`, and execute the governed fast-release path.

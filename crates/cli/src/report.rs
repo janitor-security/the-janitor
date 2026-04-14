@@ -710,6 +710,123 @@ pub struct BounceLogEntry {
     pub cognition_surrender_index: f64,
 }
 
+impl BounceLogEntry {
+    fn export_threat_class(&self) -> &'static str {
+        if is_critical_threat(self) {
+            "Critical"
+        } else if self.necrotic_flag.is_some() || !self.zombie_deps.is_empty() {
+            "Necrotic"
+        } else if self.slop_score > 0 {
+            "StructuralSlop"
+        } else {
+            "Boilerplate"
+        }
+    }
+
+    fn export_cef_severity(&self) -> u8 {
+        match self.export_threat_class() {
+            "Critical" => 10,
+            "Necrotic" => 7,
+            "StructuralSlop" => 5,
+            _ => 1,
+        }
+    }
+
+    fn export_detail_message(&self) -> String {
+        let mut details = Vec::new();
+        details.extend(self.antipatterns.iter().cloned());
+        details.extend(self.comment_violations.iter().cloned());
+        if !self.zombie_deps.is_empty() {
+            details.push(format!("zombie_deps={}", self.zombie_deps.join("|")));
+        }
+        if !self.version_silos.is_empty() {
+            details.push(format!("version_silos={}", self.version_silos.join("|")));
+        }
+        if let Some(flag) = self.necrotic_flag.as_deref() {
+            details.push(format!("necrotic_flag={flag}"));
+        }
+        if details.is_empty() {
+            details.push("no_findings_recorded".to_string());
+        }
+        details.join(" ; ")
+    }
+
+    fn cef_escape(value: &str) -> String {
+        value
+            .replace('\\', "\\\\")
+            .replace('=', "\\=")
+            .replace(['\n', '\r'], " ")
+    }
+
+    pub fn to_cef_string(&self) -> String {
+        format!(
+            "CEF:0|JanitorSecurity|Governor|1.0|{}|{}|{}|cs1={} cs2={} msg={}",
+            Self::cef_escape(self.export_threat_class()),
+            self.slop_score,
+            self.export_cef_severity(),
+            Self::cef_escape(&self.repo_slug),
+            Self::cef_escape(&self.commit_sha),
+            Self::cef_escape(&self.export_detail_message()),
+        )
+    }
+
+    pub fn to_ocsf_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "metadata": {
+                "version": "1.1.0",
+                "product": {
+                    "name": "The Janitor",
+                    "vendor_name": "JanitorSecurity",
+                    "version": env!("CARGO_PKG_VERSION"),
+                }
+            },
+            "category_name": "Findings",
+            "category_uid": 2,
+            "class_name": "Security Finding",
+            "class_uid": 2001,
+            "activity_name": "Create",
+            "activity_id": 1,
+            "severity": self.export_threat_class(),
+            "severity_id": self.export_cef_severity(),
+            "status": if self.slop_score > 0 { "Open" } else { "Closed" },
+            "status_id": if self.slop_score > 0 { 1 } else { 2 },
+            "time": self.timestamp,
+            "message": self.export_detail_message(),
+            "finding_info": {
+                "title": format!("Janitor {}", self.export_threat_class()),
+                "desc": self.export_detail_message(),
+                "uid": format!(
+                    "{}:{}:{}",
+                    self.repo_slug,
+                    self.pr_number.unwrap_or_default(),
+                    self.commit_sha
+                ),
+                "types": self.antipatterns,
+            },
+            "resources": [{
+                "name": self.repo_slug,
+                "uid": self.commit_sha,
+                "type": "repository",
+            }],
+            "src_endpoint": {
+                "service_name": "Governor",
+            },
+            "unmapped": {
+                "pr_number": self.pr_number,
+                "author": self.author,
+                "logic_clones_found": self.logic_clones_found,
+                "dead_symbols_added": self.dead_symbols_added,
+                "zombie_symbols_added": self.zombie_symbols_added,
+                "comment_violations": self.comment_violations,
+                "zombie_deps": self.zombie_deps,
+                "version_silos": self.version_silos,
+                "policy_hash": self.policy_hash,
+                "agentic_pct": self.agentic_pct,
+            }
+        })
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ReportData
 // ---------------------------------------------------------------------------
@@ -3425,6 +3542,31 @@ mod tests {
             output.contains("more silo"),
             "overflow message must appear when >3"
         );
+    }
+
+    #[test]
+    fn test_bounce_log_entry_to_cef_string() {
+        let mut entry = make_clean_entry();
+        entry.slop_score = 150;
+        entry.antipatterns = vec!["security:compiled_payload_anomaly".to_string()];
+        let cef = entry.to_cef_string();
+        assert!(cef.starts_with("CEF:0|JanitorSecurity|Governor|1.0|Critical|150|10|"));
+        assert!(cef.contains("cs1=owner/repo"));
+        assert!(cef.contains("cs2=abc123"));
+        assert!(cef.contains("msg=security:compiled_payload_anomaly"));
+    }
+
+    #[test]
+    fn test_bounce_log_entry_to_ocsf_json() {
+        let mut entry = make_clean_entry();
+        entry.pr_number = Some(99);
+        entry.slop_score = 75;
+        entry.antipatterns = vec!["antipattern:ncd_anomaly".to_string()];
+        let ocsf = entry.to_ocsf_json();
+        assert_eq!(ocsf["class_name"], "Security Finding");
+        assert_eq!(ocsf["resources"][0]["name"], "owner/repo");
+        assert_eq!(ocsf["resources"][0]["uid"], "abc123");
+        assert_eq!(ocsf["finding_info"]["uid"], "owner/repo:99:abc123");
     }
 }
 
