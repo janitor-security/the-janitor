@@ -3,6 +3,34 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-14 — FIPS 140-3 Lifecycle & Boundary Definition (v10.1.4)
+
+**Directive:** Close the final two P0 federal compliance blockers: automated PQC key rotation (IA-5) and formal FIPS 140-3 cryptographic boundary documentation (SC-13); verify under single-threaded tests; execute the governed release path.
+
+**Phase 1 — P0-2 Automated PQC Key Rotation:**
+- `crates/common/src/policy.rs`:
+  - added `[pqc]` policy section via `PqcConfig`.
+  - added `max_key_age_days: Option<u32>` with a default of `Some(90)`.
+  - extended `JanitorPolicy::content_hash()` so lifecycle policy drift changes the policy digest.
+- `crates/cli/src/main.rs`:
+  - added hidden `RotateKeys { key_path: PathBuf }` subcommand.
+  - implemented `cmd_rotate_keys()` to read the current bundle, archive it to `<key_path>.<unix_timestamp>.bak`, generate a fresh Dual-PQC bundle, write it in place, and append a rotation event to `.janitor/bounce_log.ndjson`.
+  - added `enforce_pqc_key_age()` and `pqc_key_age_exceeds_max()`; `cmd_bounce()` now hard-fails when `pqc_enforced = true` and the filesystem-backed `--pqc-key` exceeds `max_key_age_days`.
+  - updated `janitor init` scaffolds to emit a `[pqc]` section with `max_key_age_days = 90`.
+- `crates/cli/src/report.rs`:
+  - added `KeyRotationEvent` plus `append_key_rotation_log()` so rotation telemetry is ledgered without corrupting existing bounce-log readers.
+
+**Phase 2 — P0-3 FIPS 140-3 Boundary Documentation:**
+- Created `docs/fips_boundary.md`.
+- Documented the formal cryptographic boundary aligned to NIST SP 800-140B Rev. 1.
+- Added the authoritative operation table for SHA-384, SHA-256, ML-DSA-65, and SLH-DSA-SHAKE-192s, each marked `Pending POA&M`.
+- Recorded the explicit CMVP posture note: PQC standards were published by NIST on 2024-08-13, so CMVP validation lag for `fips204` and `fips205` is expected and tracked as a POA&M item.
+
+**Phase 3 — Verification & Release Prep:**
+- `Cargo.toml` — workspace version `10.1.3` → `10.1.4`.
+- Added unit coverage for stale-key detection, fresh-key acceptance, and end-to-end key rotation archive/log behavior.
+- `.INNOVATION_LOG.md` — removed active P0-2 / P0-3 backlog items and marked both complete in the Completed Items ledger.
+
 ## 2026-04-13 — Transparent Scaling & SCM Parity Strike (v10.1.3)
 
 **Directive:** Git hygiene & dependency annihilation; marketing benchmark update to 6.7 s/PR; execute P1-4 Wasm Capability Receipts + SCM Review-Thread Parity; verify; bump to `10.1.3`; release.

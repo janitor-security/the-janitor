@@ -310,6 +310,35 @@ impl ForgeConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// PqcConfig — [pqc] sub-table
+// ---------------------------------------------------------------------------
+
+/// Post-quantum key lifecycle controls nested under `[pqc]` in `janitor.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PqcConfig {
+    /// Maximum permitted age for the active filesystem-backed PQC key bundle.
+    ///
+    /// Default: `Some(90)` days.
+    #[serde(default = "PqcConfig::default_max_key_age_days")]
+    pub max_key_age_days: Option<u32>,
+}
+
+impl Default for PqcConfig {
+    fn default() -> Self {
+        Self {
+            max_key_age_days: Self::default_max_key_age_days(),
+        }
+    }
+}
+
+impl PqcConfig {
+    fn default_max_key_age_days() -> Option<u32> {
+        Some(90)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct WisdomQuorumConfig {
@@ -467,6 +496,10 @@ pub struct JanitorPolicy {
     /// forward-compatibility placeholder for the PQC enforcement module.
     pub pqc_enforced: bool,
 
+    /// Post-quantum key lifecycle settings nested under `[pqc]`.
+    #[serde(default)]
+    pub pqc: PqcConfig,
+
     /// Paths to custom `.scm` tree-sitter query files that define
     /// project-specific antipatterns.
     ///
@@ -619,6 +652,7 @@ impl Default for JanitorPolicy {
             require_issue_link: false,
             allowed_zombies: false,
             pqc_enforced: false,
+            pqc: PqcConfig::default(),
             custom_antipatterns: Vec::new(),
             refactor_bonus: 0,
             trusted_bot_authors: Vec::new(),
@@ -959,6 +993,7 @@ impl JanitorPolicy {
             "require_issue_link": self.require_issue_link,
             "allowed_zombies": self.allowed_zombies,
             "pqc_enforced": self.pqc_enforced,
+            "pqc.max_key_age_days": self.pqc.max_key_age_days,
             "custom_antipatterns": self.custom_antipatterns,
             "refactor_bonus": self.refactor_bonus,
             "trusted_bot_authors": trusted_sorted,
@@ -1029,6 +1064,7 @@ mod tests {
             require_issue_link: true,
             allowed_zombies: false,
             pqc_enforced: false,
+            pqc: PqcConfig::default(),
             custom_antipatterns: vec!["tools/queries/no_global.scm".to_owned()],
             refactor_bonus: 25,
             trusted_bot_authors: vec!["release-bot".to_owned()],

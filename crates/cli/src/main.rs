@@ -970,6 +970,12 @@ enum Commands {
         /// Output path for the dual-PQC private key bundle.
         out_path: PathBuf,
     },
+    /// Rotate an existing Dual-PQC private key bundle and append a ledger event.
+    #[command(hide = true)]
+    RotateKeys {
+        /// Filesystem path to the active Dual-PQC private key bundle.
+        key_path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1417,6 +1423,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::GenerateKeys { out_path } => {
             cmd_generate_keys(out_path)?;
+        }
+        Commands::RotateKeys { key_path } => {
+            cmd_rotate_keys(key_path)?;
         }
     }
 
@@ -3096,6 +3105,52 @@ fn fetch_base_lockfile_from_odb(repo_path: &Path, base_sha: &str) -> Option<Vec<
     Some(blob.content().to_vec())
 }
 
+fn pqc_key_age_exceeds_max(
+    modified: std::time::SystemTime,
+    now: std::time::SystemTime,
+    max_key_age_days: u32,
+) -> anyhow::Result<bool> {
+    let age = now.duration_since(modified).map_err(|_| {
+        anyhow::anyhow!("PQC key modification time is in the future; refusing lifecycle check")
+    })?;
+    Ok(age.as_secs() > u64::from(max_key_age_days) * 86_400)
+}
+
+fn enforce_pqc_key_age(
+    pqc_key: &str,
+    max_key_age_days: u32,
+    now: std::time::SystemTime,
+) -> anyhow::Result<()> {
+    use common::pqc::PqcKeySource;
+
+    let key_source = PqcKeySource::parse(pqc_key);
+    let PqcKeySource::File(key_path) = key_source else {
+        anyhow::bail!(
+            "pqc_enforced = true requires a filesystem-backed --pqc-key so the key age can be verified"
+        );
+    };
+
+    let metadata = std::fs::metadata(&key_path)
+        .with_context(|| format!("failed to stat PQC key bundle {}", key_path.display()))?;
+    let modified = metadata.modified().with_context(|| {
+        format!(
+            "failed to read mtime for PQC key bundle {}",
+            key_path.display()
+        )
+    })?;
+    if pqc_key_age_exceeds_max(modified, now, max_key_age_days)? {
+        let age_days = now.duration_since(modified).unwrap_or_default().as_secs() / 86_400;
+        anyhow::bail!(
+            "PQC key bundle {} is {} days old; maximum allowed age is {} days. Run `janitor rotate-keys {}` before CI can proceed.",
+            key_path.display(),
+            age_days,
+            max_key_age_days,
+            key_path.display()
+        );
+    }
+    Ok(())
+}
+
 /// **Git-native mode** (`--repo --base --head`): Loads changed blobs directly
 /// from the git pack index via `shadow_git::simulate_merge`, no diff file needed.
 ///
@@ -3181,6 +3236,14 @@ fn cmd_bounce(
              Provide a PQC private key bundle via --pqc-key <path> to comply with \
              the post-quantum attestation mandate."
         );
+    }
+    if policy.pqc_enforced {
+        let max_key_age_days = policy.pqc.max_key_age_days.unwrap_or(90);
+        enforce_pqc_key_age(
+            pqc_key.expect("checked above"),
+            max_key_age_days,
+            std::time::SystemTime::now(),
+        )?;
     }
 
     // Load symbol registry — empty registry is safe (bounce degrades to clone-only analysis).
@@ -6604,9 +6667,78 @@ fn cmd_generate_keys(out_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Rotate an existing Dual-PQC private key bundle in place and append a ledger event.
+fn cmd_rotate_keys(key_path: &Path) -> anyhow::Result<()> {
+    let existing_bytes = std::fs::read(key_path).with_context(|| {
+        format!(
+            "failed to read existing PQC key bundle {}",
+            key_path.display()
+        )
+    })?;
+    let expected_len = common::pqc::ML_DSA_PRIVATE_KEY_LEN + common::pqc::SLH_DSA_PRIVATE_KEY_LEN;
+    if existing_bytes.len() != expected_len {
+        anyhow::bail!(
+            "existing PQC key bundle {} has invalid length {}; expected exactly {} bytes",
+            key_path.display(),
+            existing_bytes.len(),
+            expected_len
+        );
+    }
+
+    let timestamp_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("system clock is before UNIX_EPOCH; refusing key rotation")?
+        .as_secs();
+    let backup_path = {
+        let mut path = key_path.to_path_buf();
+        let file_name = key_path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("key path {} has no file name", key_path.display()))?;
+        let backup_name = format!("{}.{}.bak", file_name.to_string_lossy(), timestamp_secs);
+        path.set_file_name(backup_name);
+        path
+    };
+
+    std::fs::rename(key_path, &backup_path).with_context(|| {
+        format!(
+            "failed to archive PQC key bundle {} to {}",
+            key_path.display(),
+            backup_path.display()
+        )
+    })?;
+
+    let bundle = common::pqc::generate_dual_pqc_key_bundle()
+        .context("dual-PQC key generation failed during rotation")?;
+    std::fs::write(key_path, bundle.as_slice()).with_context(|| {
+        format!(
+            "failed to write rotated PQC key bundle {}",
+            key_path.display()
+        )
+    })?;
+
+    let janitor_dir = std::env::current_dir()
+        .context("failed to resolve current working directory for bounce log append")?
+        .join(".janitor");
+    let rotation_event = report::KeyRotationEvent {
+        event_type: "pqc_key_rotation".to_string(),
+        timestamp: utc_now_iso8601(),
+        key_path: key_path.display().to_string(),
+        backup_path: backup_path.display().to_string(),
+        bundle_bytes: expected_len,
+    };
+    report::append_key_rotation_log(&janitor_dir, &rotation_event);
+
+    println!(
+        "Rotated PQC key bundle: {} -> {}",
+        key_path.display(),
+        backup_path.display()
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod generate_keys_tests {
-    use super::cmd_generate_keys;
+    use super::{cmd_generate_keys, cmd_rotate_keys, enforce_pqc_key_age, pqc_key_age_exceeds_max};
     use common::pqc::{ML_DSA_PRIVATE_KEY_LEN, SLH_DSA_PRIVATE_KEY_LEN};
 
     #[test]
@@ -6617,6 +6749,63 @@ mod generate_keys_tests {
         assert_eq!(
             written.len(),
             ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN
+        );
+    }
+
+    #[test]
+    fn pqc_key_age_gate_flags_stale_material() {
+        let modified = std::time::UNIX_EPOCH;
+        let now = modified + std::time::Duration::from_secs(91 * 86_400);
+        assert!(
+            pqc_key_age_exceeds_max(modified, now, 90).expect("age check must succeed"),
+            "91-day-old key must exceed 90-day policy"
+        );
+    }
+
+    #[test]
+    fn enforce_pqc_key_age_allows_fresh_filesystem_key() {
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile");
+        cmd_generate_keys(tmp.path()).expect("generate-keys must succeed");
+        enforce_pqc_key_age(
+            &tmp.path().display().to_string(),
+            90,
+            std::time::SystemTime::now(),
+        )
+        .expect("fresh key must satisfy max-age gate");
+    }
+
+    #[test]
+    fn cmd_rotate_keys_archives_old_bundle_and_writes_new_one() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key_path = dir.path().join("janitor_release.key");
+        cmd_generate_keys(&key_path).expect("seed key generation must succeed");
+        let original = std::fs::read(&key_path).expect("read original key");
+
+        let cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(dir.path()).expect("chdir tempdir");
+        let rotate_result = cmd_rotate_keys(&key_path);
+        let _ = std::env::set_current_dir(cwd);
+        rotate_result.expect("rotate-keys must succeed");
+
+        let rotated = std::fs::read(&key_path).expect("read rotated key");
+        assert_eq!(
+            rotated.len(),
+            ML_DSA_PRIVATE_KEY_LEN + SLH_DSA_PRIVATE_KEY_LEN
+        );
+        assert_ne!(rotated, original, "rotation must replace the active bundle");
+
+        let backup_count = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".bak"))
+            .count();
+        assert_eq!(backup_count, 1, "rotation must create exactly one backup");
+
+        let log_path = dir.path().join(".janitor").join("bounce_log.ndjson");
+        let log = std::fs::read_to_string(log_path).expect("rotation log must exist");
+        assert!(
+            log.contains("\"event_type\":\"pqc_key_rotation\""),
+            "rotation must append a dedicated key-rotation event"
         );
     }
 }
@@ -6705,6 +6894,10 @@ require_issue_link = false
 # for typical OSS projects.
 pqc_enforced = false
 
+[pqc]
+# Maximum allowed age for a filesystem-backed Dual-PQC key bundle.
+max_key_age_days = 90
+
 # [forge] — engine-level settings
 [forge]
 # Governor URL for Architecture Inversion attestation.
@@ -6732,6 +6925,10 @@ require_issue_link = true
 # Post-quantum cryptography enforcement.
 # Rejects patches that introduce RSA/ECDSA/AES-128/SHA-1 primitives.
 pqc_enforced = true
+
+[pqc]
+# Hard-fail CI once the on-disk Dual-PQC key bundle exceeds this age.
+max_key_age_days = 90
 
 [billing]
 # Financial valuation per critical threat intercept (USD).
@@ -6776,6 +6973,10 @@ require_issue_link = false
 # When true, patches introducing RSA/ECDSA/AES-128/SHA-1 fail the gate.
 # Default: false.
 pqc_enforced = false
+
+[pqc]
+# Maximum allowed age for a filesystem-backed Dual-PQC key bundle.
+max_key_age_days = 90
 
 # [forge] — engine-level settings
 [forge]

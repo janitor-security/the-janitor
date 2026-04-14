@@ -710,6 +710,16 @@ pub struct BounceLogEntry {
     pub cognition_surrender_index: f64,
 }
 
+/// Dedicated audit-ledger event for filesystem PQC key rotation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KeyRotationEvent {
+    pub event_type: String,
+    pub timestamp: String,
+    pub key_path: String,
+    pub backup_path: String,
+    pub bundle_bytes: usize,
+}
+
 impl BounceLogEntry {
     fn export_threat_class(&self) -> &'static str {
         if is_critical_threat(self) {
@@ -913,7 +923,16 @@ pub fn load_bounce_log(janitor_dir: &Path) -> Vec<BounceLogEntry> {
 /// shell script between iterations.
 /// Emits a diagnostic to stderr on any I/O failure so silent log loss is detectable.
 pub fn append_bounce_log(janitor_dir: &Path, entry: &BounceLogEntry) {
-    let line = match serde_json::to_string(entry) {
+    append_log_line(janitor_dir, entry);
+}
+
+/// Appends one PQC key-rotation event as a JSON line to `.janitor/bounce_log.ndjson`.
+pub fn append_key_rotation_log(janitor_dir: &Path, event: &KeyRotationEvent) {
+    append_log_line(janitor_dir, event);
+}
+
+fn append_log_line<T: Serialize>(janitor_dir: &Path, event: &T) {
+    let line = match serde_json::to_string(event) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("janitor: bounce_log serialization failed: {e}");
