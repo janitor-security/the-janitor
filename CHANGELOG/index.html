@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-dynamic-esg-fintech-taint-strike-v1016" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-operational-silence-semantic-depth-v1015" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)
@@ -1562,6 +1571,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-dynamic-esg-fintech-taint-strike-v1016" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-operational-silence-semantic-depth-v1015" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)
@@ -2548,6 +2566,33 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-dynamic-esg-fintech-taint-strike-v1016">2026-04-14 — Dynamic ESG &amp; Fintech Taint Strike (v10.1.6)</h2>
+<p><strong>Directive:</strong> Replace static ESG energy math with measured telemetry, extend the taint producer spine into Swift and Scala, add SARIF/CEF strike artefacts for enterprise ingestion, reprioritize the remaining-language roadmap toward Bash/Terraform/Nix, verify under single-threaded tests, and execute the governed release path.</p>
+<p><strong>Phase 1 — Dynamic ESG Telemetry:</strong>
+- <code>crates/cli/src/report.rs</code>:
+  - added authoritative telemetry helpers: <code>compute_ci_energy_saved_kwh_from_metrics()</code> and <code>compute_ci_energy_saved_kwh()</code>.
+  - energy now derives from measured bounce duration: <code>(duration_seconds / 3600) * 0.150</code>.
+  - critical threats multiply that base telemetry by 5 estimated averted CI reruns.
+  - synthetic webhook payload now uses the same helper instead of a static <code>0.1</code>.
+- <code>crates/cli/src/main.rs</code>, <code>crates/cli/src/git_drive.rs</code>, <code>crates/cli/src/daemon.rs</code>, <code>crates/cli/src/cbom.rs</code>:
+  - removed the <code>0.1 kWh</code> fiction from live emitters and test fixtures.
+  - bounce, hyper-drive, daemon, and CBOM surfaces now route through the shared telemetry helper.</p>
+<p><strong>Phase 2 — Swift &amp; Scala Taint Producers:</strong>
+- <code>crates/forge/src/taint_propagate.rs</code>:
+  - added <code>collect_swift_params</code>, <code>track_taint_swift</code>, <code>collect_swift_exports</code>.
+  - targeted Swift sinks: <code>NSTask</code>, <code>Process</code>, <code>Foundation.Process</code>, and <code>launch()</code> chains.
+  - added <code>collect_scala_params</code>, <code>track_taint_scala</code>, <code>collect_scala_exports</code>.
+  - targeted Scala sinks: <code>Runtime.getRuntime().exec()</code> and <code>sys.process.Process()</code>.
+  - <code>export_cross_file_records</code> now dispatches <code>"swift"</code> and <code>"scala"</code>.
+  - added deterministic Swift/Scala producer tests (positive, negative, export-record coverage).</p>
+<p><strong>Phase 3 — Strike Artifact Expansion:</strong>
+- <code>tools/generate_client_package.sh</code>:
+  - strike packages now emit <code>gauntlet_report.sarif</code> and <code>gauntlet_export.cef</code> into <code>strikes/&lt;repo_name&gt;/</code>.
+  - package manifest/case-study inventory updated so enterprise evaluators see native GitHub Advanced Security and SIEM-ready artefacts.</p>
+<p><strong>Phase 4 — Innovation Ledger Rewrite:</strong>
+- <code>.INNOVATION_LOG.md</code>:
+  - purged Swift and Scala from the remaining-language table.
+  - rewrote P1-1 to prioritize Bash, Terraform/HCL, and Nix as the next critical infrastructure tier.</p>
 <h2 id="2026-04-14-operational-silence-semantic-depth-v1015">2026-04-14 — Operational Silence &amp; Semantic Depth (v10.1.5)</h2>
 <p><strong>Directive:</strong> Git hygiene / OpSec silence (remove <code>.agent_governance</code> from public index); Dependabot annihilation (notify 6→8, zip 2→8, jsonwebtoken 9→10, axum 0.8.8→0.8.9, GitHub Actions: harden-runner 2.16.1→2.17.0, actions/cache 5.0.4→5.0.5, actions/upload-artifact 7.0.0→7.0.1); taint producer expansion (C/C++, Rust, Kotlin); P1-1 filed for remaining 11 languages.</p>
 <p><strong>Phase 1 — Git Hygiene &amp; OpSec Silence:</strong>
