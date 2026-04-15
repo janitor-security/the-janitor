@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-15-mobiledesktop-recon-native-query-engine-v10111" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)
@@ -1607,6 +1616,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-15-mobiledesktop-recon-native-query-engine-v10111" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)
@@ -2638,6 +2656,17 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-15-mobiledesktop-recon-native-query-engine-v10111">2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)</h2>
+<p><strong>Directive:</strong> Complete P0-4 Phases C (APK) and D (ASAR); implement P2-7 native jaq-style filtering; eliminate runtime <code>jq</code> dependency; release v10.1.11.</p>
+<p><strong>Phase C — APK Ingestion via jadx:</strong>
+- <code>crates/cli/src/hunt.rs</code>: <code>ingest_apk(path)</code> — preflight <code>jadx --version</code> (bail if not in PATH); <code>tempfile::TempDir</code> RAII decompilation target; <code>jadx -d &lt;tmpdir&gt; &lt;apk&gt;</code> spawned and awaited; <code>scan_directory(tmpdir.path())</code> on decompiled source; tmpdir drops on return. No test (requires jadx binary).</p>
+<p><strong>Phase D — Electron ASAR Ingestion (pure Rust):</strong>
+- <code>crates/cli/src/hunt.rs</code>: <code>ingest_asar(path)</code> — parses Chromium Pickle header (<code>magic=4</code>, <code>header_buf_size</code>, <code>json_len</code>, JSON at byte 16, file data at <code>8 + header_buf_size</code>); <code>extract_asar_dir(node, file_data, dest_dir)</code> — recursive JSON traversal; path traversal guard (rejects names containing <code>..</code>, <code>/</code>, <code>\</code>); ASAR <code>offset</code> field parsed as decimal string (not JSON number); <code>tempfile::TempDir</code> RAII cleanup. Tests: <code>asar_extraction_scans_embedded_credential</code> (synthetic ASAR with AWS key pattern), <code>asar_rejects_bad_magic</code>.</p>
+<p><strong>Phase 3 — P2-7 Native jq-style Filter:</strong>
+- <code>crates/cli/Cargo.toml</code>: <code>jaq-core = "1"</code>, <code>jaq-parse = "1"</code>, <code>jaq-std = "1"</code> added.
+- <code>crates/cli/src/hunt.rs</code>: <code>apply_jaq_filter(filter_str, findings_json)</code> — <code>jaq_core::load::{Arena, File, Loader}</code> + <code>jaq_std::defs()</code> for standard library; <code>Compiler::&lt;_, Native&lt;_&gt;&gt;::default().with_funs().compile()</code>; <code>Val::from(serde_json::Value)</code> input; results collected to <code>Value::Array</code>. Tests: <code>jaq_filter_selects_by_severity</code>, <code>jaq_filter_iterates_all_elements</code>, <code>jaq_filter_invalid_syntax_returns_error</code>.
+- <code>cmd_hunt</code> extended: <code>apk_path: Option&lt;&amp;Path&gt;</code>, <code>asar_path: Option&lt;&amp;Path&gt;</code>, <code>filter_expr: Option&lt;&amp;str&gt;</code> parameters; <code>--filter</code> applied after collection (post-scan JSON transform).
+- <code>crates/cli/src/main.rs</code>: <code>Hunt</code> variant gains <code>--apk</code>, <code>--asar</code>, <code>--filter</code> fields; handler passes all new params to <code>cmd_hunt</code>.</p>
 <h2 id="2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110">2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)</h2>
 <p><strong>Directive:</strong> Purge AI scaffolding from the public git index; fix all governance file references from <code>docs/IMPLEMENTATION_BACKLOG.md</code> → <code>docs/CHANGELOG.md</code> and <code>docs/INNOVATION_LOG.md</code> → <code>.INNOVATION_LOG.md</code>; add npm tarball ingestion to <code>janitor hunt</code>; release v10.1.10.</p>
 <p><strong>Phase 1 — Agent Brain Surgery:</strong>
