@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-offensive-hunt-engine-final-taint-spine-v1019" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)
@@ -1598,6 +1607,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-offensive-hunt-engine-final-taint-spine-v1019" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)
@@ -2620,6 +2638,31 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-15-agent-brain-surgery-offensive-ingestion-pipeline-v10110">2026-04-15 — Agent Brain Surgery &amp; Offensive Ingestion Pipeline (v10.1.10)</h2>
+<p><strong>Directive:</strong> Purge AI scaffolding from the public git index; fix all governance file references from <code>docs/IMPLEMENTATION_BACKLOG.md</code> → <code>docs/CHANGELOG.md</code> and <code>docs/INNOVATION_LOG.md</code> → <code>.INNOVATION_LOG.md</code>; add npm tarball ingestion to <code>janitor hunt</code>; release v10.1.10.</p>
+<p><strong>Phase 1 — Agent Brain Surgery:</strong>
+- <code>.agent_governance/skills/evolution-tracker/SKILL.md</code>: all <code>docs/IMPLEMENTATION_BACKLOG.md</code> refs → <code>docs/CHANGELOG.md</code>; all <code>docs/INNOVATION_LOG.md</code> refs → <code>.INNOVATION_LOG.md</code>.
+- <code>.agent_governance/commands/release.md</code>: same replacements.
+- <code>.agent_governance/commands/ciso-pulse.md</code>: <code>docs/INNOVATION_LOG.md</code> → <code>.INNOVATION_LOG.md</code>.
+- <code>.agent_governance/README.md</code>: both replacements.
+- <code>docs/INNOVATION_LOG.md</code> migrated to <code>.INNOVATION_LOG.md</code> (project root, gitignored).
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> deleted (redundant with <code>docs/CHANGELOG.md</code>).
+- <code>.gitignore</code>: added <code>.INNOVATION_LOG.md</code> and <code>docs/IMPLEMENTATION_BACKLOG.md</code> guards.</p>
+<p><strong>Phase 2 — Git Index Purge:</strong>
+- <code>git rm --cached .agents .claude .codex .cursorrules</code> — removed all tracked AI scaffolding symlinks and files.
+- <code>.agent_governance/</code> (37 files, pre-staged) deleted from index.
+- Dedicated commit <code>c6e98fc</code>: <code>chore: eradicate AI scaffolding from public index</code>.</p>
+<p><strong>Phase 3 — P0-4 Phase B (npm Tarball Ingestion):</strong>
+- <code>crates/cli/Cargo.toml</code>: added <code>tempfile = "3"</code>, <code>flate2 = "1"</code>, <code>tar = "0.4"</code> to <code>[dependencies]</code>; <code>tempfile</code> moved from dev-only to production (enables RAII tmpdir in hunt command).
+- <code>crates/cli/src/hunt.rs</code> <em>(rewritten)</em>:
+  - <code>ingest_sourcemap(url)</code> — <code>ureq</code> GET with 16 MiB limit; <code>with_config().limit().read_json()</code>; <code>tempfile::TempDir</code> RAII reconstruction; path traversal guard.
+  - <code>ingest_npm(pkg)</code> — parse <code>"name@version"</code> spec; resolve latest via <code>registry.npmjs.org/&lt;name&gt;/latest</code> if no version; fetch <code>&lt;name&gt;/-/&lt;name&gt;-&lt;ver&gt;.tgz</code>; stream <code>with_config().limit().reader()</code> → <code>flate2::read::GzDecoder</code> → <code>tar::Archive::new().unpack(tmpdir.path())</code>; <code>TempDir</code> RAII cleanup.
+  - <code>parse_npm_spec(pkg)</code> — handles scoped packages (<code>@scope/name@ver</code>).
+  - <code>resolve_npm_latest(name)</code> — JSON metadata endpoint.
+  - <code>cmd_hunt</code> signature extended: <code>npm: Option&lt;&amp;str&gt;</code> added.
+  - 4 new npm tests: <code>parse_npm_spec_versioned</code>, <code>parse_npm_spec_unversioned</code>, <code>parse_npm_spec_scoped_versioned</code>, <code>parse_npm_spec_scoped_unversioned</code>, <code>npm_tarball_extraction_scans_extracted_files</code> (in-memory tarball round-trip).
+  - <code>sourcemap_reconstruction_scans_inline_content</code> test added.
+- <code>crates/cli/src/main.rs</code>: <code>Commands::Hunt</code> extended with <code>--npm &lt;pkg&gt;</code> flag; handler passes <code>npm.as_deref()</code> to <code>cmd_hunt</code>.</p>
 <h2 id="2026-04-14-offensive-hunt-engine-final-taint-spine-v1019">2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)</h2>
 <p><strong>Directive:</strong> Complete P1-1 Group 3 (Objective-C, GLSL) taint producers; forge native <code>janitor hunt</code> command for bug-bounty offensive scanning; add P2-7 native filtering proposal; release v10.1.9.</p>
 <p><strong>Phase 1 — Group 3 Taint Producers (23-grammar taint spine COMPLETE):</strong></p>
