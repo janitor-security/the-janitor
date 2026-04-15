@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://thejanitor.app/IMPLEMENTATION_BACKLOG/">
+        <link rel="canonical" href="https://thejanitor.app/INNOVATION_LOG/">
       
       
       
@@ -20,7 +20,7 @@
     
     
       
-        <title>Implementation Backlog - The Janitor</title>
+        <title>Innovation Log - The Janitor</title>
       
     
     
@@ -103,7 +103,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#implementation-backlog" class="md-skip">
+        <a href="#innovation-log" class="md-skip">
           Skip to content
         </a>
       
@@ -138,7 +138,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Implementation Backlog
+              Innovation Log
             
           </span>
         </div>
@@ -554,9 +554,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#2026-04-14" class="md-nav__link">
+  <a href="#p0-4-offensive-ingestion-pipelines-janitor-hunt-phase-a-complete" class="md-nav__link">
     <span class="md-ellipsis">
-      2026-04-14
+      P0-4 — Offensive Ingestion Pipelines (janitor hunt) [PHASE A COMPLETE]
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-1-taint-spine-23-grammar-producer-coverage-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-1 — Taint Spine: 23-Grammar Producer Coverage [COMPLETE]
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-7-native-jq-style-filtering-for-janitor-hunt-proposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-7 — Native jq-style Filtering for janitor hunt [PROPOSED]
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-3-fips-boundary-documentation-complete-as-of-v1014" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-3 — FIPS Boundary Documentation [COMPLETE as of v10.1.4]
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-2-pqc-key-rotation-complete-as-of-v1014" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-2 — PQC Key Rotation [COMPLETE as of v10.1.4]
     </span>
   </a>
   
@@ -580,13 +616,84 @@
   
 
 
-<h1 id="implementation-backlog">Implementation Backlog</h1>
-<p>Append-only dated ledger for local directive execution.</p>
-<h2 id="2026-04-14">2026-04-14</h2>
-<ul>
-<li>v10.1.9 directive executed: P1-1 Group 3 (ObjC + GLSL) taint producers landed; 23-grammar taint spine complete; native <code>janitor hunt</code> command forged (sourcemap ingestion, walkdir recursive scan, <code>Vec&lt;StructuredFinding&gt;</code> JSON output, 1 MiB circuit breaker, path traversal guard); 15 new tests; P2-7 jq-filter proposal logged.</li>
-<li>v10.1.6 directive executed: replaced static ESG energy constants with duration-based telemetry, extended taint producers into Swift/Scala, added SARIF/CEF strike artefacts, and rewrote the remaining-language priority stack toward Bash/Terraform/Nix.</li>
-</ul>
+<h1 id="innovation-log">Innovation Log</h1>
+<p>OpSec blackout — gitignored. Local only.</p>
+<hr />
+<h2 id="p0-4-offensive-ingestion-pipelines-janitor-hunt-phase-a-complete">P0-4 — Offensive Ingestion Pipelines (<code>janitor hunt</code>) [PHASE A COMPLETE]</h2>
+<p><strong>TAM:</strong> ~$8M ARR — every bug-bounty hunter and red-team operator who needs a
+local-first, offline-capable, structured-output scanner rather than a SaaS
+upload gate.</p>
+<p><strong>Phase A (v10.1.9 — COMPLETE):</strong> Native <code>janitor hunt</code> command:
+- Sourcemap ingestion: <code>ureq</code> GET → parse <code>sources[]</code> + <code>sourcesContent[]</code> → tmpdir reconstruction.
+- Recursive walkdir scan: <code>find_slop</code> + <code>find_credential_slop</code> + <code>find_supply_chain_slop</code> on every file.
+- Output: <code>Vec&lt;StructuredFinding&gt;</code> as a single JSON array to stdout. Pipe-friendly.
+- Path traversal guard: <code>sanitize_sourcemap_path</code> strips <code>webpack:///</code>, <code>file://</code>, <code>../</code>, caps depth at 3.</p>
+<p><strong>Phase B (next):</strong> npm tarball ingestion — <code>tar</code> extract to tmpdir, scan, clean up.</p>
+<p><strong>Phase C:</strong> APK via jadx — spawn <code>jadx</code> subprocess, scan the decompiled tree.</p>
+<p><strong>Phase D:</strong> Electron <code>.asar</code> — parse asar format, reconstruct, scan.</p>
+<hr />
+<h2 id="p1-1-taint-spine-23-grammar-producer-coverage-complete">P1-1 — Taint Spine: 23-Grammar Producer Coverage [COMPLETE]</h2>
+<p>All 23 grammars in the polyglot registry now have producer-side <code>TaintExportRecord</code>
+emission wired into <code>export_cross_file_records</code>. Taint spine is closed.</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Languages</th>
+<th>Version</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 — Foundational</td>
+<td>Python, JS, TS, Go, Rust, Java, C, C++</td>
+<td>v10.1.5</td>
+<td>✓ DONE</td>
+</tr>
+<tr>
+<td>1 — Cloud Infra</td>
+<td>Bash/sh, Nix, HCL/Terraform</td>
+<td>v10.1.7</td>
+<td>✓ DONE</td>
+</tr>
+<tr>
+<td>2 — Systems &amp; Gaming</td>
+<td>Lua, GDScript, Zig</td>
+<td>v10.1.8</td>
+<td>✓ DONE</td>
+</tr>
+<tr>
+<td>3 — Apple &amp; Graphics</td>
+<td>Objective-C (.m/.mm), GLSL (.glsl/.vert/.frag)</td>
+<td>v10.1.9</td>
+<td>✓ DONE</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="p2-7-native-jq-style-filtering-for-janitor-hunt-proposed">P2-7 — Native <code>jq</code>-style Filtering for <code>janitor hunt</code> [PROPOSED]</h2>
+<p><strong>Problem:</strong> Users currently must pipe <code>janitor hunt</code> output through <code>jq</code> to filter
+findings by severity, rule ID, or file pattern. This adds a runtime dependency and
+breaks on Windows where <code>jq</code> is not available.</p>
+<p><strong>Proposal:</strong> Embed a minimal query engine and add a <code>--filter</code> flag:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>janitor<span class="w"> </span>hunt<span class="w"> </span>./target<span class="w"> </span>--filter<span class="w"> </span><span class="s1">&#39;.[] | select(.id == &quot;security:sqli&quot;)&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>janitor<span class="w"> </span>hunt<span class="w"> </span>./target<span class="w"> </span>--filter<span class="w"> </span><span class="s1">&#39;.[] | select(.severity == &quot;KevCritical&quot;)&#39;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>janitor<span class="w"> </span>hunt<span class="w"> </span>./target<span class="w"> </span>--filter<span class="w"> </span><span class="s1">&#39;.[] | select(.file | startswith(&quot;src/api/&quot;))&#39;</span>
+</code></pre></div>
+<p><strong>Implementation options:</strong>
+1. <code>jaq</code> crate (jq-compatible, pure Rust, no C deps) — preferred.
+2. Custom mini-DSL: <code>--filter-id security:sqli --filter-severity KevCritical</code> flags — simpler, less expressive.</p>
+<p><strong>TAM expansion:</strong> Removes <code>jq</code> as a runtime dependency, enabling native Windows
+support and integration into CI pipelines that don't have <code>jq</code> installed (~30% of
+enterprise Windows runners).</p>
+<hr />
+<h2 id="p0-3-fips-boundary-documentation-complete-as-of-v1014">P0-3 — FIPS Boundary Documentation [COMPLETE as of v10.1.4]</h2>
+<p>Documented in FIPS_BOUNDARY.md and CHANGELOG for v10.1.4.</p>
+<hr />
+<h2 id="p0-2-pqc-key-rotation-complete-as-of-v1014">P0-2 — PQC Key Rotation [COMPLETE as of v10.1.4]</h2>
+<p>Dual-PQC key rotation pipeline live. <code>janitor rotate-keys</code> + <code>janitor generate-keys</code>
+wired. Documented in v10.1.4 changelog.</p>
 
 
 

@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-offensive-hunt-engine-final-taint-spine-v1019" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)
@@ -1589,6 +1598,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-14-offensive-hunt-engine-final-taint-spine-v1019" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)
@@ -2602,6 +2620,34 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-14-offensive-hunt-engine-final-taint-spine-v1019">2026-04-14 — Offensive Hunt Engine &amp; Final Taint Spine (v10.1.9)</h2>
+<p><strong>Directive:</strong> Complete P1-1 Group 3 (Objective-C, GLSL) taint producers; forge native <code>janitor hunt</code> command for bug-bounty offensive scanning; add P2-7 native filtering proposal; release v10.1.9.</p>
+<p><strong>Phase 1 — Group 3 Taint Producers (23-grammar taint spine COMPLETE):</strong></p>
+<ul>
+<li><code>crates/forge/src/taint_propagate.rs</code>:</li>
+<li><code>track_taint_objc</code> / <code>collect_objc_params</code> / <code>collect_objc_params_textual</code> / <code>find_objc_dangerous_flows</code> / <code>collect_objc_exports</code> / <code>extract_objc_method_name</code> — Objective-C method signature parsing (<code>- (RetType)selector:(Type *)paramName</code>); sinks: <code>NSTask</code>, <code>system(</code>, <code>popen(</code>, <code>performSelector:</code>, <code>LaunchPath</code>, <code>launch</code>; textual producer (AST node-kind variance in ObjC tree-sitter grammar). Excludes <code>@"literal"</code> and <code>"literal"</code> string occurrences.</li>
+<li><code>track_taint_glsl</code> / <code>collect_glsl_inputs</code> / <code>collect_glsl_inputs_textual</code> / <code>find_glsl_dangerous_flows</code> / <code>collect_glsl_exports</code> — GLSL external input declaration parsing (<code>uniform</code>, <code>varying</code>, <code>in</code>); sinks: <code>discard</code>, <code>gl_FragDepth</code>, <code>gl_FragColor</code>, <code>gl_Position</code>, <code>texelFetch(</code>, <code>texture2D(</code>, <code>texture(</code>; textual producer; file stem used as symbol name.</li>
+<li><code>export_cross_file_records</code> extended: <code>"m" | "mm"</code> and <code>"glsl" | "vert" | "frag"</code> dispatch arms added.</li>
+<li><code>OBJC_DANGEROUS_CALLS</code> constant; <code>GLSL_DANGEROUS_SINKS</code> constant.</li>
+<li>6 new deterministic unit tests: <code>objc_nstask_with_param_confirms_taint</code>, <code>objc_nstask_with_literal_is_safe</code>, <code>objc_export_record_emits_for_nstask_boundary</code>, <code>glsl_varying_in_texture2d_confirms_taint</code>, <code>glsl_no_external_inputs_is_safe</code>, <code>glsl_export_record_emits_for_shader_boundary</code>.</li>
+</ul>
+<p><strong>Phase 2 — Native <code>janitor hunt</code> Command:</strong></p>
+<ul>
+<li><code>crates/cli/src/hunt.rs</code> <em>(created)</em>:</li>
+<li><code>cmd_hunt(scan_root, sourcemap_url, corpus_path)</code> — entry point; sourcemap ingestion or local scan.</li>
+<li><code>scan_directory(dir)</code> — walkdir recursive scan; <code>find_slop</code> (language-specific) + <code>find_credential_slop</code> + <code>find_supply_chain_slop</code> on every file; 1 MiB circuit breaker; emits <code>Vec&lt;StructuredFinding&gt;</code> as JSON array to stdout. No SlopScore. No summary table.</li>
+<li><code>reconstruct_sourcemap(url)</code> — <code>ureq</code> GET, parse <code>sources[]</code> + <code>sourcesContent[]</code>, write to <code>/tmp/janitor-hunt-&lt;uuid&gt;/</code>; path traversal prevention via <code>sanitize_sourcemap_path</code>.</li>
+<li><code>sanitize_sourcemap_path(raw, index)</code> — strips <code>webpack:///</code>, <code>file://</code>, <code>//</code> prefixes; removes <code>../</code> traversal; caps depth at 3 components.</li>
+<li><code>extract_rule_id(description)</code> — splits on EM DASH (U+2014) separator.</li>
+<li><code>fingerprint_finding(source, start, end)</code> — 8-byte BLAKE3 hex fingerprint.</li>
+<li>9 deterministic unit tests covering sourcemap sanitisation, rule ID extraction, line counting, credential detection, and oversized-file skip.</li>
+<li><code>crates/cli/src/main.rs</code>: <code>mod hunt</code> added; <code>Hunt { path, --sourcemap, --corpus-path }</code> subcommand added to <code>Commands</code> enum; handler wired.</li>
+</ul>
+<p><strong>Phase 3 — Innovation Log:</strong></p>
+<ul>
+<li><code>docs/INNOVATION_LOG.md</code>: P1-1 Group 3 marked COMPLETED; 23-grammar taint spine officially finished.</li>
+<li><code>docs/INNOVATION_LOG.md</code>: P2-7 <code>janitor hunt --filter</code> native jq-style filtering proposed.</li>
+</ul>
 <h2 id="2026-04-14-systems-taint-strike-bounty-hunter-pivot-v1018">2026-04-14 — Systems Taint Strike &amp; Bounty Hunter Pivot (v10.1.8)</h2>
 <p><strong>Directive:</strong> Complete P1-1 Group 2 (Lua, GDScript, Zig) taint producers; audit CLI for offensive black-box artifact ingestion; blueprint <code>janitor hunt</code> subcommand for bug bounty workflows; update Innovation Log with <code>P0-4 Offensive Ingestion Pipelines</code>; release v10.1.8.</p>
 <p><strong>Phase 1 — Group 2 Taint Producers:</strong></p>
