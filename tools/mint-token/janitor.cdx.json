@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:80e65681-fbde-440d-bf8f-6394c071f8d6",
+  "serialNumber": "urn:uuid:d7668236-2eb4-4302-b8f8-4b8f6bd72c42",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.149287089Z",
+    "timestamp": "2026-04-15T07:19:06.715139019Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.9",
       "name": "mint-token",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.9 bin-target-0",
           "name": "mint-token",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/mint-token@10.1.4?download_url=file://.#src/main.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/mint-token@10.1.9?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -897,6 +897,33 @@
     },
     {
       "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "author": "RustCrypto Developers",
+      "name": "pem-rfc7468",
+      "version": "0.7.0",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/pem-rfc7468@0.7.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#pkcs8@0.10.2",
       "author": "RustCrypto Developers",
       "name": "pkcs8",
@@ -1684,7 +1711,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -1803,6 +1830,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#der@0.7.10",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
+        "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
@@ -1810,6 +1838,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
+        "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
         "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
         "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1"
       ]
@@ -1837,7 +1866,8 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
-        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
+        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
+        "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
     {
@@ -1858,6 +1888,12 @@
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#base64ct@1.8.3"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#pkcs8@0.10.2",
@@ -1946,6 +1982,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#signature@2.2.0",
       "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
         "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4"
       ]
     },

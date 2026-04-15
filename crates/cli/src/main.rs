@@ -12,6 +12,7 @@ mod cbom;
 mod daemon;
 mod export;
 mod git_drive;
+mod hunt;
 mod jira;
 mod report;
 mod verify_asset;
@@ -976,6 +977,37 @@ enum Commands {
         /// Filesystem path to the active Dual-PQC private key bundle.
         key_path: PathBuf,
     },
+    /// Offensive security scanner for bug-bounty and penetration-testing engagements.
+    ///
+    /// Recursively walks `path`, runs the full Janitor detector suite (credential
+    /// scanning, supply-chain analysis, injection pattern detection, and taint
+    /// propagation) on every file, and emits a single JSON array of findings to
+    /// stdout.  No SlopScore is computed and no summary table is printed —
+    /// the output is raw structured signal suitable for `jq` filtering and SIEM
+    /// ingestion.
+    ///
+    /// ## Examples
+    ///
+    /// ```sh
+    /// # Scan a local checkout
+    /// janitor hunt ./target-repo | jq '.[] | select(.id == "security:credential_leak")'
+    ///
+    /// # Reconstruct and scan a bundled JS app from its sourcemap
+    /// janitor hunt . --sourcemap https://example.com/static/app.js.map
+    /// ```
+    Hunt {
+        /// Directory to scan.  Use `.` to scan the current working directory.
+        path: PathBuf,
+        /// Optional JavaScript sourcemap URL.  When provided, the source tree
+        /// is reconstructed from the sourcemap before scanning; `path` is
+        /// ignored (the reconstructed tmpdir is scanned instead).
+        #[arg(long)]
+        sourcemap: Option<String>,
+        /// Path to an alternative slopsquat corpus file (`.rkyv` format).
+        /// When omitted the compiled-in corpus is used.
+        #[arg(long)]
+        corpus_path: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1426,6 +1458,13 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::RotateKeys { key_path } => {
             cmd_rotate_keys(key_path)?;
+        }
+        Commands::Hunt {
+            path,
+            sourcemap,
+            corpus_path,
+        } => {
+            hunt::cmd_hunt(path, sourcemap.as_deref(), corpus_path.as_deref())?;
         }
     }
 
@@ -3764,6 +3803,14 @@ probable AI context-collapse (hallucinated function reference)"
     let wisdom_receipt = loaded_wisdom
         .as_ref()
         .and_then(|loaded| loaded.receipt.clone());
+    let analysis_duration_ms = bounce_start.elapsed().as_millis() as u64;
+    let ci_energy_saved_kwh = report::compute_ci_energy_saved_kwh(
+        analysis_duration_ms,
+        slop_score_val,
+        score.necrotic_flag.as_deref(),
+        &score.antipattern_details,
+        &score.collided_pr_numbers,
+    );
     let mut log_entry = report::BounceLogEntry {
         pr_number: resolved_pr_number,
         author: author.map(|s| s.to_owned()),
@@ -3801,13 +3848,9 @@ probable AI context-collapse (hallucinated function reference)"
         } else {
             0.0
         },
-        ci_energy_saved_kwh: if slop_score_val > 0 {
-            policy.billing.ci_kwh_per_run
-        } else {
-            0.0
-        },
+        ci_energy_saved_kwh,
         provenance: report::Provenance {
-            analysis_duration_ms: bounce_start.elapsed().as_millis() as u64,
+            analysis_duration_ms,
             source_bytes_processed: source_bytes,
             // egress_bytes_sent computed below — depends on whether we POST.
             egress_bytes_sent: 0,
@@ -5850,13 +5893,18 @@ fn run_pytest(dir: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod pqc_signing_tests {
     use super::cbom;
-    use crate::report::{BounceLogEntry, PrState, Provenance};
+    use crate::report::{self, BounceLogEntry, PrState, Provenance};
     use common::pqc::PqcKeySource;
     use fips204::ml_dsa_65;
     use fips204::traits::{KeyGen, SerDes, Signer, Verifier};
 
     /// Construct a minimal BounceLogEntry for signing fixture use.
     fn make_pqc_entry(score: u32) -> BounceLogEntry {
+        let antipatterns = if score > 0 {
+            vec!["security:unsafe_gets".to_string()]
+        } else {
+            vec![]
+        };
         BounceLogEntry {
             pr_number: Some(42),
             author: Some("security-team".to_string()),
@@ -5866,11 +5914,7 @@ mod pqc_signing_tests {
             logic_clones_found: 0,
             zombie_symbols_added: 0,
             unlinked_pr: 0,
-            antipatterns: if score > 0 {
-                vec!["security:unsafe_gets".to_string()]
-            } else {
-                vec![]
-            },
+            antipatterns: antipatterns.clone(),
             comment_violations: vec![],
             min_hashes: vec![],
             zombie_deps: vec![],
@@ -5884,7 +5928,13 @@ mod pqc_signing_tests {
             policy_hash: String::new(),
             version_silos: vec![],
             agentic_pct: 0.0,
-            ci_energy_saved_kwh: if score > 0 { 0.1 } else { 0.0 },
+            ci_energy_saved_kwh: report::compute_ci_energy_saved_kwh(
+                0,
+                score,
+                None,
+                &antipatterns,
+                &[],
+            ),
             provenance: Provenance::default(),
             governor_status: None,
             pqc_sig: None,

@@ -20,7 +20,7 @@ dashmap = "6.1"
 ed25519-dalek.workspace = true
 hex.workspace = true
 hmac.workspace = true
-jsonwebtoken = "9"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 rustls.workspace = true
 rustls-pemfile.workspace = true
 serde.workspace = true

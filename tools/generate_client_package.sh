@@ -2,15 +2,17 @@
 # generate_client_package.sh — single-repo audit + marketing asset generator.
 #
 # Runs a hyper-drive bounce audit against one GitHub repository and produces a
-# self-contained client package directory with seven artefacts:
+# self-contained client package directory with nine artefacts:
 #
 #   1. gauntlet_intelligence_report.pdf  — PDF intelligence report
 #   2. gauntlet_export.csv               — 16-column CSV audit trail
 #   3. gauntlet_report.json              — machine-readable aggregate JSON
-#   4. <repo>_cbom.json                  — CycloneDX v1.5 Cryptography SBOM
-#   5. <repo>_intel.json                 — per-repo JSON (clone pairs + top-50)
-#   6. <repo>_vex.json                   — CycloneDX v1.5 VEX (exploitability)
-#   7. case-study.md                     — auto-populated case study (Markdown)
+#   4. gauntlet_report.sarif             — SARIF 2.1.0 findings feed
+#   5. gauntlet_export.cef               — ArcSight CEF event stream
+#   6. <repo>_cbom.json                  — CycloneDX v1.5 Cryptography SBOM
+#   7. <repo>_intel.json                 — per-repo JSON (clone pairs + top-50)
+#   8. <repo>_vex.json                   — CycloneDX v1.5 VEX (exploitability)
+#   9. case-study.md                     — auto-populated case study (Markdown)
 #
 # Usage:
 #   ./tools/generate_client_package.sh <owner/repo> [out_dir]
@@ -169,6 +171,8 @@ See <https://thejanitor.app/architecture> for the full technical specification.
 | \`gauntlet_intelligence_report.pdf\` | Full PDF intelligence report with ranked PR table |
 | \`gauntlet_export.csv\` | 16-column CSV audit trail (Excel/pandas compatible, UTF-8 BOM) |
 | \`gauntlet_report.json\` | Machine-readable aggregate statistics |
+| \`gauntlet_report.sarif\` | SARIF 2.1.0 findings feed for GitHub Advanced Security ingestion |
+| \`gauntlet_export.cef\` | ArcSight CEF event stream for Splunk / SIEM forwarding |
 | \`${repo_name}_cbom.json\` | CycloneDX v1.5 Cryptography Bill of Materials |
 | \`${repo_name}_intel.json\` | Per-repo JSON with clone pairs and top-50 PR detail |
 | \`${repo_name}_vex.json\` | CycloneDX v1.5 VEX — exploitability status for all scanned threat classes |
@@ -334,6 +338,8 @@ JANITOR_VERSION="$("${JANITOR}" --version 2>/dev/null | awk '{print $2}' || echo
 #   gauntlet_intelligence_report.pdf
 #   gauntlet_export.csv
 #   gauntlet_report.json
+#   gauntlet_report.sarif
+#   gauntlet_export.cef
 
 echo "[2/6] Running hyper-drive audit for ${SLUG} (limit=${PR_LIMIT})..."
 
@@ -362,6 +368,19 @@ for f in gauntlet_intelligence_report.pdf gauntlet_export.csv gauntlet_report.js
         exit 1
     fi
 done
+
+echo "[2b/6] Generating enterprise ingestion artefacts..."
+SARIF_OUT="${OUT_DIR}/gauntlet_report.sarif"
+"${JANITOR}" report \
+    --repo   "${REPO_DIR}" \
+    --format sarif \
+    --out    "${SARIF_OUT}"
+
+CEF_OUT="${OUT_DIR}/gauntlet_export.cef"
+"${JANITOR}" export \
+    --repo   "${REPO_DIR}" \
+    --format cef \
+    --out    "${CEF_OUT}"
 
 # ── Step 3: CBOM Bond ─────────────────────────────────────────────────────────
 #

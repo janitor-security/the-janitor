@@ -84,7 +84,10 @@ CLAUDE.md
 RUNBOOK.md
 .agent/
 .agents/
+.agent_governance/
+.codex
 .codex/
+.cursorrules
 AGENTS.md
 SOVEREIGN_BRIEFING.md
 .cursor/
@@ -96,6 +99,8 @@ SOVEREIGN_BRIEFING.md
 # Internal R&D intelligence — never push to public repo.
 docs/INNOVATION_LOG.md
 docs/ENTERPRISE_GAPS.md
+.INNOVATION_LOG.md
+docs/IMPLEMENTATION_BACKLOG.md
 
 
 # ------------------------------------------------------------------------------

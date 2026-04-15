@@ -3,6 +3,138 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-14 — Offensive Hunt Engine & Final Taint Spine (v10.1.9)
+
+**Directive:** Complete P1-1 Group 3 (Objective-C, GLSL) taint producers; forge native `janitor hunt` command for bug-bounty offensive scanning; add P2-7 native filtering proposal; release v10.1.9.
+
+**Phase 1 — Group 3 Taint Producers (23-grammar taint spine COMPLETE):**
+
+- `crates/forge/src/taint_propagate.rs`:
+  - `track_taint_objc` / `collect_objc_params` / `collect_objc_params_textual` / `find_objc_dangerous_flows` / `collect_objc_exports` / `extract_objc_method_name` — Objective-C method signature parsing (`- (RetType)selector:(Type *)paramName`); sinks: `NSTask`, `system(`, `popen(`, `performSelector:`, `LaunchPath`, `launch`; textual producer (AST node-kind variance in ObjC tree-sitter grammar). Excludes `@"literal"` and `"literal"` string occurrences.
+  - `track_taint_glsl` / `collect_glsl_inputs` / `collect_glsl_inputs_textual` / `find_glsl_dangerous_flows` / `collect_glsl_exports` — GLSL external input declaration parsing (`uniform`, `varying`, `in`); sinks: `discard`, `gl_FragDepth`, `gl_FragColor`, `gl_Position`, `texelFetch(`, `texture2D(`, `texture(`; textual producer; file stem used as symbol name.
+  - `export_cross_file_records` extended: `"m" | "mm"` and `"glsl" | "vert" | "frag"` dispatch arms added.
+  - `OBJC_DANGEROUS_CALLS` constant; `GLSL_DANGEROUS_SINKS` constant.
+  - 6 new deterministic unit tests: `objc_nstask_with_param_confirms_taint`, `objc_nstask_with_literal_is_safe`, `objc_export_record_emits_for_nstask_boundary`, `glsl_varying_in_texture2d_confirms_taint`, `glsl_no_external_inputs_is_safe`, `glsl_export_record_emits_for_shader_boundary`.
+
+**Phase 2 — Native `janitor hunt` Command:**
+
+- `crates/cli/src/hunt.rs` *(created)*:
+  - `cmd_hunt(scan_root, sourcemap_url, corpus_path)` — entry point; sourcemap ingestion or local scan.
+  - `scan_directory(dir)` — walkdir recursive scan; `find_slop` (language-specific) + `find_credential_slop` + `find_supply_chain_slop` on every file; 1 MiB circuit breaker; emits `Vec<StructuredFinding>` as JSON array to stdout. No SlopScore. No summary table.
+  - `reconstruct_sourcemap(url)` — `ureq` GET, parse `sources[]` + `sourcesContent[]`, write to `/tmp/janitor-hunt-<uuid>/`; path traversal prevention via `sanitize_sourcemap_path`.
+  - `sanitize_sourcemap_path(raw, index)` — strips `webpack:///`, `file://`, `//` prefixes; removes `../` traversal; caps depth at 3 components.
+  - `extract_rule_id(description)` — splits on EM DASH (U+2014) separator.
+  - `fingerprint_finding(source, start, end)` — 8-byte BLAKE3 hex fingerprint.
+  - 9 deterministic unit tests covering sourcemap sanitisation, rule ID extraction, line counting, credential detection, and oversized-file skip.
+- `crates/cli/src/main.rs`: `mod hunt` added; `Hunt { path, --sourcemap, --corpus-path }` subcommand added to `Commands` enum; handler wired.
+
+**Phase 3 — Innovation Log:**
+
+- `docs/INNOVATION_LOG.md`: P1-1 Group 3 marked COMPLETED; 23-grammar taint spine officially finished.
+- `docs/INNOVATION_LOG.md`: P2-7 `janitor hunt --filter` native jq-style filtering proposed.
+
+## 2026-04-14 — Systems Taint Strike & Bounty Hunter Pivot (v10.1.8)
+
+**Directive:** Complete P1-1 Group 2 (Lua, GDScript, Zig) taint producers; audit CLI for offensive black-box artifact ingestion; blueprint `janitor hunt` subcommand for bug bounty workflows; update Innovation Log with `P0-4 Offensive Ingestion Pipelines`; release v10.1.8.
+
+**Phase 1 — Group 2 Taint Producers:**
+
+- `crates/forge/src/taint_propagate.rs`:
+  - `track_taint_lua` / `collect_lua_params` / `find_lua_dangerous_flows` / `collect_lua_exports` — Lua `os.execute(param)` and `io.popen(param)` sink detection; textual export with `extract_lua_function_name` for `function name(` / `local function name(` parsing.
+  - `track_taint_gdscript` / `collect_gdscript_params` / `find_gdscript_dangerous_flows` / `collect_gdscript_exports` — GDScript `OS.execute(param)` and `OS.shell_open(param)` (Godot 4.x); AST `parameters` node traversal + textual fallback.
+  - `track_taint_zig` / `collect_zig_params` / `find_zig_dangerous_flows` / `collect_zig_exports` — Zig `ChildProcess.exec`, `ChildProcess.run`, `std.process.exec`, `spawnAndWait`; textual export with `extract_zig_function_name` for `pub fn name(` / `fn name(` parsing.
+  - `export_cross_file_records` extended: `"lua"`, `"gd"`, `"zig"` dispatch arms added.
+  - 9 new deterministic unit tests (true-positive + true-negative + export-record per language).
+- `crates/forge/Cargo.toml`: `tree-sitter-zig.workspace = true` added.
+
+**Phase 2 — Offensive Ingestion Audit:**
+
+- Audited CLI interface for black-box artifact ingestion gaps.
+- Identified five ingestion target types: JS sourcemaps, npm tarballs, APK (via jadx), Electron `.asar`, Docker OCI layers.
+- Designed `janitor hunt` subcommand blueprint (Phase A–D implementation plan).
+
+**Phase 3 — Innovation Log:**
+
+- `.INNOVATION_LOG.md`: P1-1 status updated (all Group 2 languages complete through v10.1.8); Group 2 table removed from Remaining section; Group 3 (Objective-C, GLSL) retained as next target.
+- `.INNOVATION_LOG.md`: New `P0-4 — Offensive Ingestion Pipelines` section added: full `janitor hunt` blueprint with TAM rationale (~$8M ARR), five ingestion target types, Phase A–D implementation plan.
+
+## 2026-04-14 — Release Rescue & Cloud Infra Taint Strike (v10.1.7)
+
+**Directive:** Rescue uncommitted v10.1.6 code (Codex token-exhaustion recovery), then expand the taint producer spine into Cloud Infrastructure grammars (Bash, Nix, HCL/Terraform), reorganize the remaining-language roadmap into Group 2 (Systems & Gaming) and Group 3 (Apple & Graphics), and release.
+
+**Phase 1 — v10.1.6 Rescue:**
+- Committed and released all v10.1.6 code previously written by Codex but not committed (Dynamic ESG, Swift/Scala taint, SARIF/CEF outputs, GitHub Actions SHA pin updates, `.gitignore` OpSec hardening). GH Release v10.1.6 published.
+
+**Phase 2 — Cloud Infra Taint Producers (Group 1):**
+- `crates/forge/src/taint_propagate.rs`:
+  - `collect_bash_params` / `find_bash_dangerous_flows` / `track_taint_bash` — detects `eval "$1"`, `eval "$@"`, and named-local aliases in bash `function_definition` nodes; `collect_bash_exports` wired into `export_cross_file_records` for `sh|bash|cmd|zsh`.
+  - `collect_nix_params` / `find_nix_exec_flows` / `track_taint_nix` — detects `builtins.exec` with set-pattern formals `{ cmd }:` and simple bindings; `collect_nix_exports` wired for `nix` (grammar node kind `function_expression`).
+  - `find_hcl_dangerous_flows` / `extract_hcl_var_flows` / `track_taint_hcl` — detects `provisioner "local-exec"` and `data "external"` blocks with `${var.X}` / `${local.X}` template interpolations; `collect_hcl_exports` wired for `tf|hcl`.
+  - `export_cross_file_records` dispatch extended: `sh|bash|cmd|zsh`, `nix`, `tf|hcl`.
+  - 9 new deterministic tests: 3 true-positive / true-negative / export-record per language.
+
+**Phase 3 — Innovation Log:**
+- `.INNOVATION_LOG.md`: P1-1 updated — Bash/Nix/HCL/Terraform promoted to COMPLETED for v10.1.7; remaining lanes reorganized into Group 2 (Lua, GDScript, Zig) and Group 3 (Objective-C, GLSL).
+
+## 2026-04-14 — Dynamic ESG & Fintech Taint Strike (v10.1.6)
+
+**Directive:** Replace static ESG energy math with measured telemetry, extend the taint producer spine into Swift and Scala, add SARIF/CEF strike artefacts for enterprise ingestion, reprioritize the remaining-language roadmap toward Bash/Terraform/Nix, verify under single-threaded tests, and execute the governed release path.
+
+**Phase 1 — Dynamic ESG Telemetry:**
+- `crates/cli/src/report.rs`:
+  - added authoritative telemetry helpers: `compute_ci_energy_saved_kwh_from_metrics()` and `compute_ci_energy_saved_kwh()`.
+  - energy now derives from measured bounce duration: `(duration_seconds / 3600) * 0.150`.
+  - critical threats multiply that base telemetry by 5 estimated averted CI reruns.
+  - synthetic webhook payload now uses the same helper instead of a static `0.1`.
+- `crates/cli/src/main.rs`, `crates/cli/src/git_drive.rs`, `crates/cli/src/daemon.rs`, `crates/cli/src/cbom.rs`:
+  - removed the `0.1 kWh` fiction from live emitters and test fixtures.
+  - bounce, hyper-drive, daemon, and CBOM surfaces now route through the shared telemetry helper.
+
+**Phase 2 — Swift & Scala Taint Producers:**
+- `crates/forge/src/taint_propagate.rs`:
+  - added `collect_swift_params`, `track_taint_swift`, `collect_swift_exports`.
+  - targeted Swift sinks: `NSTask`, `Process`, `Foundation.Process`, and `launch()` chains.
+  - added `collect_scala_params`, `track_taint_scala`, `collect_scala_exports`.
+  - targeted Scala sinks: `Runtime.getRuntime().exec()` and `sys.process.Process()`.
+  - `export_cross_file_records` now dispatches `"swift"` and `"scala"`.
+  - added deterministic Swift/Scala producer tests (positive, negative, export-record coverage).
+
+**Phase 3 — Strike Artifact Expansion:**
+- `tools/generate_client_package.sh`:
+  - strike packages now emit `gauntlet_report.sarif` and `gauntlet_export.cef` into `strikes/<repo_name>/`.
+  - package manifest/case-study inventory updated so enterprise evaluators see native GitHub Advanced Security and SIEM-ready artefacts.
+
+**Phase 4 — Innovation Ledger Rewrite:**
+- `.INNOVATION_LOG.md`:
+  - purged Swift and Scala from the remaining-language table.
+  - rewrote P1-1 to prioritize Bash, Terraform/HCL, and Nix as the next critical infrastructure tier.
+
+## 2026-04-14 — Operational Silence & Semantic Depth (v10.1.5)
+
+**Directive:** Git hygiene / OpSec silence (remove `.agent_governance` from public index); Dependabot annihilation (notify 6→8, zip 2→8, jsonwebtoken 9→10, axum 0.8.8→0.8.9, GitHub Actions: harden-runner 2.16.1→2.17.0, actions/cache 5.0.4→5.0.5, actions/upload-artifact 7.0.0→7.0.1); taint producer expansion (C/C++, Rust, Kotlin); P1-1 filed for remaining 11 languages.
+
+**Phase 1 — Git Hygiene & OpSec Silence:**
+- `git rm -r --cached .agent_governance` — 37 governance files removed from public index; remain on local disk.
+- `.gitignore` updated: `.agent_governance/`, `.codex` (bare), `.cursorrules` added to Section 4 (AI Assistant Instructions).
+
+**Phase 2 — Dependabot Annihilation:**
+- `notify = "6.1"` → `"8"` (workspace `Cargo.toml`) — notify 8.2.0 resolves with zero API breakage.
+- `zip = "2"` → `"8"` (workspace `Cargo.toml`) — zip 8.5.1 resolves with zero API breakage.
+- `jsonwebtoken = "9"` → `"10"` (`crates/gov/Cargo.toml`) — JWT 10.3.0 resolves with zero API breakage.
+- `cargo update` — axum 0.8.8 → 0.8.9, inotify 0.9.6 → 0.11.1, windows-sys family updated.
+- `.github/workflows/*.yml` (8 files) — `step-security/harden-runner` `fe10465` (v2.16.1) → `f808768` (v2.17.0); `actions/cache` `668228` (v5.0.4) → `27d5ce7` (v5.0.5); `actions/upload-artifact` `bbbca2d` (v7.0.0) → `043fb46` (v7.0.1).
+
+**Phase 3 — Taint Producers (C/C++, Rust, Kotlin):**
+- `crates/forge/src/taint_propagate.rs`:
+  - `collect_cpp_params` / `find_tainted_cpp_sinks` — C/C++ `system()`, `popen()`, `execv*()`; `find_cpp_os_sinks`; `CPP_DANGEROUS_CALLS` constant (12 sinks).
+  - `collect_rust_params` / `find_tainted_rust_sinks` — Rust `Command::new(param)`, `libc::system(param)`, `::exec(param)`; `RUST_DANGEROUS_CALLS`.
+  - `collect_kotlin_params` / `find_tainted_kotlin_sinks` — Kotlin `Runtime.exec(param)`, `ProcessBuilder(param)`, raw JDBC exec sinks; `KOTLIN_DANGEROUS_CALLS` (8 patterns).
+  - `export_cross_file_records` extended: `"cpp"|"cxx"|"cc"|"c"|"h"|"hpp"` → `collect_cpp_exports`; `"rs"` → `collect_rust_exports`; `"kt"|"kts"` → `collect_kotlin_exports`.
+  - 8 new deterministic tests: true-positive + true-negative + export-record for each of C++, Rust, Kotlin.
+
+**Phase 4 — Innovation Log:**
+- `.INNOVATION_LOG.md` P1-1 created: "Full Taint Producers for Remaining Languages" — lists Swift, Scala, Lua, Bash, Nix, GDScript, Objective-C, HCL, Terraform, GLSL, Zig with sink classes and commercial priority.
+
 ## 2026-04-14 — FIPS 140-3 Lifecycle & Boundary Definition (v10.1.4)
 
 **Directive:** Close the final two P0 federal compliance blockers: automated PQC key rotation (IA-5) and formal FIPS 140-3 cryptographic boundary documentation (SC-13); verify under single-threaded tests; execute the governed release path.

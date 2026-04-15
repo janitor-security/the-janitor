@@ -33,6 +33,7 @@ tree-sitter-lua.workspace = true
 tree-sitter-nix.workspace = true
 tree-sitter-gdscript.workspace = true
 tree-sitter-hcl.workspace = true
+tree-sitter-zig.workspace = true
 arc-swap.workspace = true
 git2.workspace = true
 rkyv.workspace = true

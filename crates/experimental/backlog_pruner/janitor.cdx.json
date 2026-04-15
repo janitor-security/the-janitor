@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:96a48ade-2e0a-4cf9-867c-a3bd2c452294",
+  "serialNumber": "urn:uuid:09524cea-114b-47ba-8462-d646321bf944",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.036118768Z",
+    "timestamp": "2026-04-15T07:19:06.431313465Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9",
       "name": "backlog_pruner",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/backlog_pruner@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9 bin-target-0",
           "name": "backlog_pruner",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/backlog_pruner@10.1.4?download_url=file://.#src/lib.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/backlog_pruner@10.1.9?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -293,6 +293,37 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-lang/cfg-if"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
+      "author": "RustCrypto Developers",
+      "name": "const-oid",
+      "version": "0.9.6",
+      "description": "Const-friendly implementation of the ISO/IEC Object Identifier (OID) standard as defined in ITU X.660, with support for BER/DER encoding/decoding as well as heapless no_std (i.e. embedded) support ",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/const-oid@0.9.6",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/const-oid"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/formats/tree/master/const-oid"
         }
       ]
     },
@@ -1715,7 +1746,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -1769,6 +1800,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6"
+    },
+    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#constant_time_eq@0.4.2"
     },
     {
@@ -1788,6 +1822,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
+        "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
         "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
         "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1"
       ]
@@ -1817,7 +1852,8 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
-        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
+        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
+        "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
     {

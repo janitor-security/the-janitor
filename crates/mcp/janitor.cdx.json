@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:14ecab46-d686-4ff9-be0d-f4bc17e7718f",
+  "serialNumber": "urn:uuid:bc2808d7-0a8a-4e73-b037-954e71b8f6a7",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.078016598Z",
+    "timestamp": "2026-04-15T07:19:06.550340629Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.9",
       "name": "mcp",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mcp@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/mcp@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.9 bin-target-0",
           "name": "mcp",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/mcp@10.1.4?download_url=file://.#src/lib.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/mcp@10.1.9?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.9",
       "name": "anatomist",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/anatomist@10.1.4?download_url=file://../anatomist",
+      "purl": "pkg:cargo/anatomist@10.1.9?download_url=file://../anatomist",
       "externalReferences": [
         {
           "type": "vcs",
@@ -69,16 +69,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.9",
       "name": "common",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.4?download_url=file://../common",
+      "purl": "pkg:cargo/common@10.1.9?download_url=file://../common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -88,16 +88,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.9",
       "name": "advanced_threats",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/advanced_threats@10.1.4?download_url=file://../experimental/advanced_threats",
+      "purl": "pkg:cargo/advanced_threats@10.1.9?download_url=file://../experimental/advanced_threats",
       "externalReferences": [
         {
           "type": "vcs",
@@ -107,16 +107,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9",
       "name": "backlog_pruner",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.1.4?download_url=file://../experimental/backlog_pruner",
+      "purl": "pkg:cargo/backlog_pruner@10.1.9?download_url=file://../experimental/backlog_pruner",
       "externalReferences": [
         {
           "type": "vcs",
@@ -126,16 +126,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.9",
       "name": "forge",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/forge@10.1.4?download_url=file://../forge",
+      "purl": "pkg:cargo/forge@10.1.9?download_url=file://../forge",
       "externalReferences": [
         {
           "type": "vcs",
@@ -145,16 +145,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "name": "polyglot",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.4?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.1.9?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -164,16 +164,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9",
       "name": "vault",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.1.4?download_url=file://../vault",
+      "purl": "pkg:cargo/vault@10.1.9?download_url=file://../vault",
       "externalReferences": [
         {
           "type": "vcs",
@@ -2196,37 +2196,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/jhpratt/deranged"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2",
-      "author": "The Rust-Fuzz Project Developers, Nick Fitzgerald <fitzgen@gmail.com>, Manish Goregaokar <manishsmail@gmail.com>, Andre Bogus <bogusandre@gmail.com>, Corey Farwell <coreyf@rwell.org>",
-      "name": "derive_arbitrary",
-      "version": "1.4.2",
-      "description": "Derives arbitrary traits",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/derive_arbitrary@1.4.2",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/arbitrary/"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-fuzz/arbitrary"
         }
       ]
     },
@@ -4947,6 +4916,33 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-openssl/rust-openssl"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "author": "RustCrypto Developers",
+      "name": "pem-rfc7468",
+      "version": "0.7.0",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/pem-rfc7468@0.7.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"
         }
       ]
     },
@@ -9833,6 +9829,36 @@
     },
     {
       "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#zlib-rs@0.6.3",
+      "name": "zlib-rs",
+      "version": "0.6.3",
+      "description": "A memory-safe zlib implementation written in rust",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "purl": "pkg:cargo/zlib-rs@0.6.3",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/trifectatechfoundation/zlib-rs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/trifectatechfoundation/zlib-rs"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
       "author": "David Tolnay <dtolnay@gmail.com>",
       "name": "zmij",
@@ -9954,14 +9980,14 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#dunce@1.0.5",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
@@ -9993,7 +10019,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -10018,7 +10044,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -10030,7 +10056,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -10040,17 +10066,17 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.9",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
@@ -10079,26 +10105,27 @@
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-swift@0.7.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-typescript@0.23.2",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-yaml@0.7.2",
+        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-zig@1.1.2",
         "registry+https://github.com/rust-lang/crates.io-index#wasmtime@43.0.1",
         "registry+https://github.com/rust-lang/crates.io-index#zstd@0.13.3"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.1.9",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.4",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.4",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.9",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.1.9",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
         "registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4"
+        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -10127,7 +10154,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
@@ -10156,10 +10183,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.4.2",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2"
-      ]
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.4.2"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
@@ -10532,6 +10556,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#der@0.7.10",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
+        "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
@@ -10542,17 +10567,10 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117"
-      ]
-    },
-    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
+        "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
         "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
         "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1"
       ]
@@ -10673,7 +10691,8 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#flate2@1.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
-        "registry+https://github.com/rust-lang/crates.io-index#miniz_oxide@0.8.9"
+        "registry+https://github.com/rust-lang/crates.io-index#miniz_oxide@0.8.9",
+        "registry+https://github.com/rust-lang/crates.io-index#zlib-rs@0.6.3"
       ]
     },
     {
@@ -10755,7 +10774,8 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
-        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
+        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
+        "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
     {
@@ -11082,6 +11102,12 @@
         "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
         "registry+https://github.com/rust-lang/crates.io-index#pkg-config@0.3.33",
         "registry+https://github.com/rust-lang/crates.io-index#vcpkg@0.2.15"
+      ]
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#base64ct@1.8.3"
       ]
     },
     {
@@ -11426,6 +11452,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#signature@2.2.0",
       "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
         "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4"
       ]
     },
@@ -12292,6 +12319,9 @@
         "registry+https://github.com/rust-lang/crates.io-index#zerofrom@0.1.7",
         "registry+https://github.com/rust-lang/crates.io-index#zerovec-derive@0.11.3"
       ]
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#zlib-rs@0.6.3"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21"

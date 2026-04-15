@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:7351a469-bc9f-4ab2-84c1-7beb260a3cba",
+  "serialNumber": "urn:uuid:0b6939d8-f40f-4828-ab84-13ff336e713b",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.124182383Z",
+    "timestamp": "2026-04-15T07:19:06.671627543Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.9",
       "name": "janitor-fuzz",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/janitor-fuzz@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/janitor-fuzz@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.9 bin-target-0",
           "name": "janitor_fuzz",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/janitor-fuzz@10.1.4?download_url=file://.#src/lib.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/janitor-fuzz@10.1.9?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "name": "polyglot",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.4?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.1.9?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -161,37 +161,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-lang/cc-rs"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2",
-      "author": "The Rust-Fuzz Project Developers, Nick Fitzgerald <fitzgen@gmail.com>, Manish Goregaokar <manishsmail@gmail.com>, Andre Bogus <bogusandre@gmail.com>, Corey Farwell <coreyf@rwell.org>",
-      "name": "derive_arbitrary",
-      "version": "1.4.2",
-      "description": "Derives arbitrary traits",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/derive_arbitrary@1.4.2",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/arbitrary/"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-fuzz/arbitrary"
         }
       ]
     },
@@ -465,68 +434,6 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-      "author": "David Tolnay <dtolnay@gmail.com>, Alex Crichton <alex@alexcrichton.com>",
-      "name": "proc-macro2",
-      "version": "1.0.106",
-      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/proc-macro2@1.0.106",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/proc-macro2"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/proc-macro2"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-      "author": "David Tolnay <dtolnay@gmail.com>",
-      "name": "quote",
-      "version": "1.0.45",
-      "description": "Quasi-quoting macro quote!(...)",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/quote@1.0.45",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/quote/"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/quote"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14",
       "author": "The Rust Project Developers, Andrew Gallant <jamslam@gmail.com>",
       "name": "regex-automata",
@@ -747,37 +654,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/sfackler/streaming-iterator"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-      "author": "David Tolnay <dtolnay@gmail.com>",
-      "name": "syn",
-      "version": "2.0.117",
-      "description": "Parser for Rust source code",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "purl": "pkg:cargo/syn@2.0.117",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/syn"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/syn"
         }
       ]
     },
@@ -1479,37 +1355,6 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24",
-      "author": "David Tolnay <dtolnay@gmail.com>",
-      "name": "unicode-ident",
-      "version": "1.0.24",
-      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31",
-      "scope": "required",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "(MIT OR Apache-2.0) AND Unicode-3.0"
-        }
-      ],
-      "purl": "pkg:cargo/unicode-ident@1.0.24",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/unicode-ident"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/unicode-ident"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
       "author": "David Tolnay <dtolnay@gmail.com>",
       "name": "zmij",
@@ -1542,10 +1387,10 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#libfuzzer-sys@0.4.12",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-javascript@0.25.0",
@@ -1553,7 +1398,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -1588,10 +1433,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.4.2",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2"
-      ]
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.4.2"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
@@ -1600,14 +1442,6 @@
         "registry+https://github.com/rust-lang/crates.io-index#jobserver@0.1.34",
         "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
         "registry+https://github.com/rust-lang/crates.io-index#shlex@1.3.0"
-      ]
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.4.2",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117"
       ]
     },
     {
@@ -1650,18 +1484,6 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.0"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"
-      ]
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106"
-      ]
-    },
-    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
@@ -1699,14 +1521,6 @@
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#streaming-iterator@0.1.9"
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-      "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-        "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"
-      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -1882,9 +1696,6 @@
         "registry+https://github.com/rust-lang/crates.io-index#streaming-iterator@0.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
       ]
-    },
-    {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21"

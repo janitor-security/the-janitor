@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:981a8a2d-3f36-42e2-acb4-fc750cc48f9e",
+  "serialNumber": "urn:uuid:a20df4e7-0e0f-43e3-a6c9-d3b2bdc13fa7",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.093117681Z",
+    "timestamp": "2026-04-15T07:19:06.592225146Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9",
       "name": "vault",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9 bin-target-0",
           "name": "vault",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/vault@10.1.4?download_url=file://.#src/lib.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/vault@10.1.9?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -544,6 +544,33 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-lang/libc"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "author": "RustCrypto Developers",
+      "name": "pem-rfc7468",
+      "version": "0.7.0",
+      "description": "PEM Encoding (RFC 7468) for PKIX, PKCS, and CMS Structures, implementing a strict subset of the original Privacy-Enhanced Mail encoding intended specifically for use with cryptographic keys, certificates, and other messages. Provides a no_std-friendly, constant-time implementation suitable for use with cryptographic private keys. ",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/pem-rfc7468@0.7.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/formats/tree/master/pem-rfc7468"
         }
       ]
     },
@@ -1204,7 +1231,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
@@ -1263,6 +1290,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#der@0.7.10",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
+        "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
@@ -1270,6 +1298,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
+        "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
         "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
         "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1"
       ]
@@ -1297,7 +1326,8 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
-        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5"
+        "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
+        "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
     },
     {
@@ -1309,6 +1339,12 @@
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#base64ct@1.8.3"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#pkcs8@0.10.2",
@@ -1376,6 +1412,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#signature@2.2.0",
       "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7",
         "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4"
       ]
     },

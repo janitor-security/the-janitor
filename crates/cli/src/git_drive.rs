@@ -654,6 +654,7 @@ fn bounce_one(
     pr_num: u32,
     repo_slug: &str,
 ) -> Option<BounceLogEntry> {
+    let bounce_started = std::time::Instant::now();
     // Extract the commit author directly from the Git object so the PDF Top
     // Contributors list is populated when running in hyper-drive (offline) mode,
     // which bypasses the GitHub API and has no other source of author metadata.
@@ -685,6 +686,7 @@ fn bounce_one(
     // the PR only changes cosmetic tokens — bypass the full bounce pipeline.
     if forge::slop_filter::semantic_null_pr_check(repo_path, &merge_base_sha, pr_sha) {
         let sig = forge::pr_collider::PrDeltaSignature::from_bytes(pr_sha.as_bytes());
+        let analysis_duration_ms = bounce_started.elapsed().as_millis() as u64;
         return Some(BounceLogEntry {
             pr_number: Some(pr_num as u64),
             author,
@@ -708,8 +710,17 @@ fn bounce_one(
             policy_hash: String::new(),
             version_silos: Vec::new(),
             agentic_pct: 0.0,
-            ci_energy_saved_kwh: 0.1,
-            provenance: crate::report::Provenance::default(),
+            ci_energy_saved_kwh: crate::report::compute_ci_energy_saved_kwh(
+                analysis_duration_ms,
+                0,
+                Some("SEMANTIC_NULL"),
+                &[],
+                &[],
+            ),
+            provenance: crate::report::Provenance {
+                analysis_duration_ms,
+                ..crate::report::Provenance::default()
+            },
             governor_status: None,
             pqc_sig: None,
             pqc_slh_sig: None,
@@ -795,6 +806,14 @@ fn bounce_one(
     // Minimal MinHash signature for cross-PR collision hints in reports.
     let sig = forge::pr_collider::PrDeltaSignature::from_bytes(pr_sha.as_bytes());
 
+    let analysis_duration_ms = bounce_started.elapsed().as_millis() as u64;
+    let ci_energy_saved_kwh = crate::report::compute_ci_energy_saved_kwh(
+        analysis_duration_ms,
+        slop_score,
+        score.necrotic_flag.as_deref(),
+        &score.antipattern_details,
+        &score.collided_pr_numbers,
+    );
     Some(BounceLogEntry {
         pr_number: Some(pr_num as u64),
         author,
@@ -818,8 +837,9 @@ fn bounce_one(
         policy_hash: String::new(),
         version_silos,
         agentic_pct: 0.0,
-        ci_energy_saved_kwh: if slop_score > 0 { 0.1 } else { 0.0 },
+        ci_energy_saved_kwh,
         provenance: crate::report::Provenance {
+            analysis_duration_ms,
             source_bytes_processed,
             ..crate::report::Provenance::default()
         },

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:43998155-5592-4214-9017-7ae28284db69",
+  "serialNumber": "urn:uuid:eb871785-fd08-4ffb-a562-d40306ba6670",
   "metadata": {
-    "timestamp": "2026-04-14T09:03:47.086761318Z",
+    "timestamp": "2026-04-15T07:19:06.575281589Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "name": "polyglot",
-      "version": "10.1.4",
+      "version": "10.1.9",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.4?download_url=file://.",
+      "purl": "pkg:cargo/polyglot@10.1.9?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9 bin-target-0",
           "name": "polyglot",
-          "version": "10.1.4",
-          "purl": "pkg:cargo/polyglot@10.1.4?download_url=file://.#src/lib.rs"
+          "version": "10.1.9",
+          "purl": "pkg:cargo/polyglot@10.1.9?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1310,7 +1310,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",

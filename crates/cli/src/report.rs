@@ -30,6 +30,10 @@ use std::path::Path;
 ///
 /// Source: industry Workslop research (2026). See <https://builtin.com/articles/what-is-workslop>.
 pub const MINUTES_PER_TRIAGE: f64 = 12.0;
+/// Enterprise telemetry baseline: one CI node draws 150 W = 0.150 kW.
+pub const CI_NODE_POWER_KW: f64 = 0.150;
+/// Estimated number of CI reruns averted when a critical threat is intercepted.
+pub const CRITICAL_THREAT_AVERTED_RERUNS: f64 = 5.0;
 /// Sovereign default: localhost only.
 ///
 /// The Janitor does not phone home by default.  Enterprises MUST configure
@@ -62,6 +66,43 @@ pub struct GovernorAttestation {
 /// Critical Threats are billed at **$150** per intercept in the TEI ledger.
 pub fn is_critical_threat(e: &BounceLogEntry) -> bool {
     e.antipatterns.iter().any(|a| a.contains("security:")) || !e.collided_pr_numbers.is_empty()
+}
+
+/// Convert measured bounce duration into CI energy saved telemetry.
+///
+/// The telemetry basis is hardware-bound rather than static marketing math:
+/// `duration_seconds / 3600 * 0.150 kW`.  Critical threats are multiplied by
+/// an estimated five averted CI reruns.
+pub fn compute_ci_energy_saved_kwh_from_metrics(
+    analysis_duration_ms: u64,
+    actionable: bool,
+    critical: bool,
+) -> f64 {
+    if !actionable || analysis_duration_ms == 0 {
+        return 0.0;
+    }
+    let duration_seconds = analysis_duration_ms as f64 / 1000.0;
+    let mut energy_kwh = (duration_seconds / 3600.0) * CI_NODE_POWER_KW;
+    if critical {
+        energy_kwh *= CRITICAL_THREAT_AVERTED_RERUNS;
+    }
+    energy_kwh
+}
+
+/// Authoritative CI energy helper for bounce log emission.
+pub fn compute_ci_energy_saved_kwh(
+    analysis_duration_ms: u64,
+    slop_score: u32,
+    necrotic_flag: Option<&str>,
+    antipatterns: &[String],
+    collided_pr_numbers: &[u32],
+) -> f64 {
+    let critical = antipatterns
+        .iter()
+        .any(|detail| detail.contains("security:"))
+        || !collided_pr_numbers.is_empty();
+    let actionable = critical || slop_score > 0 || necrotic_flag.is_some();
+    compute_ci_energy_saved_kwh_from_metrics(analysis_duration_ms, actionable, critical)
 }
 
 fn resolve_webhook_secret(cfg: &common::policy::WebhookConfig) -> String {
@@ -350,7 +391,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         policy_hash: "test".to_string(),
         version_silos: vec![],
         agentic_pct: 100.0,
-        ci_energy_saved_kwh: 0.1,
+        ci_energy_saved_kwh: compute_ci_energy_saved_kwh_from_metrics(60_000, true, true),
         provenance: Provenance::default(),
         governor_status: None,
         pqc_sig: None,
@@ -619,11 +660,12 @@ pub struct BounceLogEntry {
     #[serde(default)]
     pub agentic_pct: f64,
 
-    /// CI datacenter energy saved by blocking this PR, in kilowatt-hours.
+    /// CI datacenter energy saved by this intercept, in kilowatt-hours.
     ///
-    /// Basis: industry-average CI run = 15 minutes; a heavy CI server draws ~400 W;
-    /// therefore one blocked PR = 15 min × 400 W = **0.1 kWh** of avoided grid load.
-    /// Set to `0.1` when `slop_score > 0` (actionable intercept), `0.0` otherwise.
+    /// Computed dynamically from measured bounce duration:
+    /// `(analysis_duration_ms / 1000 / 3600) × 0.150 kW`.
+    /// Critical threats multiply that base value by five estimated averted
+    /// reruns; clean entries remain `0.0`.
     #[serde(default)]
     pub ci_energy_saved_kwh: f64,
 
@@ -3586,6 +3628,19 @@ mod tests {
         assert_eq!(ocsf["resources"][0]["name"], "owner/repo");
         assert_eq!(ocsf["resources"][0]["uid"], "abc123");
         assert_eq!(ocsf["finding_info"]["uid"], "owner/repo:99:abc123");
+    }
+
+    #[test]
+    fn test_dynamic_ci_energy_saved_non_critical() {
+        let energy = compute_ci_energy_saved_kwh_from_metrics(3_600_000, true, false);
+        assert!((energy - 0.150).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_dynamic_ci_energy_saved_critical_multiplies_reruns() {
+        let antipatterns = vec!["security:runtime_exec".to_string()];
+        let energy = compute_ci_energy_saved_kwh(3_600_000, 100, None, &antipatterns, &[]);
+        assert!((energy - 0.750).abs() < f64::EPSILON);
     }
 }
 

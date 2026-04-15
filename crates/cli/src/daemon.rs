@@ -389,6 +389,13 @@ pub mod unix {
                         let collided_pr_numbers_response = near_matches.clone();
 
                         // fields are None.  Best-effort: I/O errors are silently dropped.
+                        let ci_energy_saved_kwh = crate::report::compute_ci_energy_saved_kwh(
+                            0,
+                            slop_score,
+                            score.necrotic_flag.as_deref(),
+                            &score.antipattern_details,
+                            &near_matches,
+                        );
                         let log_entry = crate::report::BounceLogEntry {
                             pr_number: None,
                             author: author.clone(),
@@ -412,7 +419,7 @@ pub mod unix {
                             policy_hash: String::new(),
                             version_silos: Vec::new(),
                             agentic_pct: 0.0,
-                            ci_energy_saved_kwh: if slop_score > 0 { 0.1 } else { 0.0 },
+                            ci_energy_saved_kwh,
                             provenance: crate::report::Provenance::default(),
                             governor_status: None,
                             pqc_sig: None,
