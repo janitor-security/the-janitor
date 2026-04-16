@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-15-mobiledesktop-recon-native-query-engine-v10111" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)
@@ -1616,6 +1625,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-15-mobiledesktop-recon-native-query-engine-v10111" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)
@@ -2656,6 +2674,45 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112">2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)</h2>
+<p><strong>Directive:</strong> Remove the dummy-path <code>hunt</code> UX defect, add Java archive ingestion, audit black-box bounty ingestion and taint gaps, rewrite the innovation ledger into an offensive roadmap, verify under single-threaded tests, and execute the governed release path.</p>
+<p><strong>Phase 1 — Hunt CLI UX Repair:</strong>
+- <code>crates/cli/src/main.rs</code>:
+  - <code>Commands::Hunt.path</code> changed from <code>PathBuf</code> to <code>Option&lt;PathBuf&gt;</code>.
+  - Added <code>--jar &lt;path&gt;</code> to the <code>Hunt</code> subcommand.
+  - Updated command docs/examples so remote/archive fetchers no longer require the fake <code>.</code> positional argument.
+- <code>crates/cli/src/hunt.rs</code>:
+  - <code>cmd_hunt</code> now accepts <code>scan_root: Option&lt;&amp;Path&gt;</code>.
+  - Added exact-one-source validation: clean <code>anyhow::bail!</code> when no source is provided, and clean <code>anyhow::bail!</code> when operators supply multiple competing sources.
+  - Supported source set is now <code>&lt;path&gt;</code> or exactly one of <code>--sourcemap</code>, <code>--npm</code>, <code>--apk</code>, <code>--jar</code>, <code>--asar</code>.</p>
+<p><strong>Phase 2 — Java Archive Ingestion (P0-5):</strong>
+- <code>crates/cli/src/hunt.rs</code>:
+  - Added <code>ingest_jar(path)</code> using <code>zip::ZipArchive</code> + <code>tempfile::TempDir</code>.
+  - Implemented archive-path sanitization (<code>sanitize_archive_entry_path</code>) to reject root, prefix, and parent-directory traversal components during extraction.
+  - Extracted JAR contents into a tempdir, scanned the reconstructed tree through the existing hunt pipeline, and relied on RAII tempdir cleanup.
+- <code>crates/cli/Cargo.toml</code>:
+  - No dependency change required; <code>zip.workspace = true</code> was already present.
+- Tests:
+  - Added <code>jar_extraction_scans_embedded_java_source</code> covering a synthetic <code>.jar</code> that contains Java <code>Runtime.getRuntime().exec(cmd)</code> source and must emit a hunt finding.</p>
+<p><strong>Phase 3 — Hostile Bounty Hunter Audit:</strong>
+- Current ingestion coverage confirmed: <code>Local</code>, <code>Sourcemap</code>, <code>NPM</code>, <code>APK</code>, <code>ASAR</code>, <code>JAR</code>.
+- Highest-ROI missing artifact lanes identified:
+  - <code>--docker</code> / OCI image layer reconstruction (pure Rust, final merged rootfs scan)
+  - <code>--whl</code> / PyPI wheel unpacking (pure Rust ZIP lane)
+  - <code>--ipa</code> / iOS application bundle ingestion (pure Rust ZIP + plist/web-asset/string extraction)
+- Taint / sink gaps identified:
+  - Server-Side Template Injection coverage is materially incomplete across Python (<code>jinja2</code>), Java (<code>FreeMarker</code>, <code>Velocity</code>, <code>Thymeleaf</code>), and Node (<code>ejs</code>, <code>pug</code>, <code>handlebars</code>).
+  - Python unsafe loader coverage should expand beyond <code>pickle</code> into <code>yaml.load</code>, <code>marshal.loads</code>, and shell-enabled subprocess patterns.
+  - JVM deserialization coverage should expand beyond <code>ObjectInputStream</code> / <code>XMLDecoder</code> / <code>XStream</code> into modern polymorphic deserializer families encountered in bounty targets.</p>
+<p><strong>Phase 4 — Innovation Roadmap Rewrite:</strong>
+- <code>.INNOVATION_LOG.md</code> fully purged of completed/resolved entries.
+- Rewritten as a pure offensive roadmap containing the top three pure-Rust, highest-ROI gaps:
+  - P0-1 <code>janitor hunt --docker</code>
+  - P0-2 <code>janitor hunt --whl</code>
+  - P0-3 <code>janitor hunt --ipa</code></p>
+<p><strong>Phase 5 — Governance / Ledger Notes:</strong>
+- <code>Cargo.toml</code>: workspace version <code>10.1.11</code> → <code>10.1.12</code>.
+- <code>docs/IMPLEMENTATION_BACKLOG.md</code> does not exist in this repository; session ledger recorded in this authoritative changelog instead of inventing a conflicting backlog file.</p>
 <h2 id="2026-04-15-mobiledesktop-recon-native-query-engine-v10111">2026-04-15 — Mobile/Desktop Recon &amp; Native Query Engine (v10.1.11)</h2>
 <p><strong>Directive:</strong> Complete P0-4 Phases C (APK) and D (ASAR); implement P2-7 native jaq-style filtering; eliminate runtime <code>jq</code> dependency; release v10.1.11.</p>
 <p><strong>Phase C — APK Ingestion via jadx:</strong>
