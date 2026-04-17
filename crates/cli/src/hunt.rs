@@ -710,6 +710,7 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
                 severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
+                exploit_witness: None,
             });
         }
     }

@@ -1380,6 +1380,7 @@ impl PRBouncer for PatchBouncer {
                 severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
+                exploit_witness: None,
             });
         }
 

@@ -268,6 +268,7 @@ mod tests {
             severity: Some("KevCritical".to_string()),
             remediation: Some("Remove the hidden reviewer-invisible payload.".to_string()),
             docs_url: None,
+            exploit_witness: None,
         };
 
         let payload = build_issue_payload(&config, &finding);
@@ -324,6 +325,7 @@ mod tests {
                 severity: Some("KevCritical".to_string()),
                 remediation: Some("remove postinstall worm".to_string()),
                 docs_url: None,
+                exploit_witness: None,
             },
             StructuredFinding {
                 id: "finding-401".to_string(),
@@ -333,6 +335,7 @@ mod tests {
                 severity: Some("KevCritical".to_string()),
                 remediation: Some("rotate credentials".to_string()),
                 docs_url: None,
+                exploit_witness: None,
             },
             StructuredFinding {
                 id: "finding-timeout".to_string(),
@@ -342,6 +345,7 @@ mod tests {
                 severity: Some("KevCritical".to_string()),
                 remediation: Some("retry later".to_string()),
                 docs_url: None,
+                exploit_witness: None,
             },
         ];
         let sender = MockJiraSender::new(vec![
@@ -405,6 +409,7 @@ mod tests {
             severity: Some("KevCritical".to_string()),
             remediation: None,
             docs_url: None,
+            exploit_witness: None,
         };
 
         // search_total = 1 → open ticket exists → send must not be called.
@@ -453,6 +458,7 @@ mod tests {
             severity: Some("KevCritical".to_string()),
             remediation: Some("Rotate the leaked credential immediately.".to_string()),
             docs_url: None,
+            exploit_witness: None,
         };
         let janitor_tmp = tempdir().expect("tempdir");
         let janitor_dir = janitor_tmp.path().join(".janitor");

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:93f7eebd-5e45-46e3-87a9-843d003e1695",
+  "serialNumber": "urn:uuid:05bb7d6f-c165-41a2-83d6-22bfad9bf337",
   "metadata": {
-    "timestamp": "2026-04-17T13:18:10.378444160Z",
+    "timestamp": "2026-04-17T19:01:32.310411969Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.2",
       "name": "cli",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/cli@10.2.0-alpha.1?download_url=file://.",
+      "purl": "pkg:cargo/cli@10.2.0-alpha.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.2 bin-target-0",
           "name": "janitor",
-          "version": "10.2.0-alpha.1",
-          "purl": "pkg:cargo/cli@10.2.0-alpha.1?download_url=file://.#src/main.rs"
+          "version": "10.2.0-alpha.2",
+          "purl": "pkg:cargo/cli@10.2.0-alpha.2?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.2",
       "name": "anatomist",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/anatomist@10.2.0-alpha.1?download_url=file://../anatomist",
+      "purl": "pkg:cargo/anatomist@10.2.0-alpha.2?download_url=file://../anatomist",
       "externalReferences": [
         {
           "type": "vcs",
@@ -69,16 +69,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
       "name": "common",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.2.0-alpha.1?download_url=file://../common",
+      "purl": "pkg:cargo/common@10.2.0-alpha.2?download_url=file://../common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -88,16 +88,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.2",
       "name": "dashboard",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/dashboard@10.2.0-alpha.1?download_url=file://../dashboard",
+      "purl": "pkg:cargo/dashboard@10.2.0-alpha.2?download_url=file://../dashboard",
       "externalReferences": [
         {
           "type": "vcs",
@@ -107,16 +107,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.2",
       "name": "advanced_threats",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/advanced_threats@10.2.0-alpha.1?download_url=file://../experimental/advanced_threats",
+      "purl": "pkg:cargo/advanced_threats@10.2.0-alpha.2?download_url=file://../experimental/advanced_threats",
       "externalReferences": [
         {
           "type": "vcs",
@@ -126,16 +126,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.2",
       "name": "backlog_pruner",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.2.0-alpha.1?download_url=file://../experimental/backlog_pruner",
+      "purl": "pkg:cargo/backlog_pruner@10.2.0-alpha.2?download_url=file://../experimental/backlog_pruner",
       "externalReferences": [
         {
           "type": "vcs",
@@ -145,16 +145,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.2",
       "name": "forge",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/forge@10.2.0-alpha.1?download_url=file://../forge",
+      "purl": "pkg:cargo/forge@10.2.0-alpha.2?download_url=file://../forge",
       "externalReferences": [
         {
           "type": "vcs",
@@ -164,29 +164,29 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.2",
       "name": "include_deflator",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/include_deflator@10.2.0-alpha.1?download_url=file://../include_deflator"
+      "purl": "pkg:cargo/include_deflator@10.2.0-alpha.2?download_url=file://../include_deflator"
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.2",
       "name": "mcp",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mcp@10.2.0-alpha.1?download_url=file://../mcp",
+      "purl": "pkg:cargo/mcp@10.2.0-alpha.2?download_url=file://../mcp",
       "externalReferences": [
         {
           "type": "vcs",
@@ -196,16 +196,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.2",
       "name": "polyglot",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.2.0-alpha.1?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.2.0-alpha.2?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -215,16 +215,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.2",
       "name": "reaper",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/reaper@10.2.0-alpha.1?download_url=file://../reaper",
+      "purl": "pkg:cargo/reaper@10.2.0-alpha.2?download_url=file://../reaper",
       "externalReferences": [
         {
           "type": "vcs",
@@ -234,16 +234,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2",
       "name": "shadow",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/shadow@10.2.0-alpha.1?download_url=file://../shadow",
+      "purl": "pkg:cargo/shadow@10.2.0-alpha.2?download_url=file://../shadow",
       "externalReferences": [
         {
           "type": "vcs",
@@ -253,16 +253,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2",
       "name": "vault",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.2.0-alpha.1?download_url=file://../vault",
+      "purl": "pkg:cargo/vault@10.2.0-alpha.2?download_url=file://../vault",
       "externalReferences": [
         {
           "type": "vcs",
@@ -3770,6 +3770,37 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-embedded/embedded-hal"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#ena@0.14.4",
+      "author": "Niko Matsakis <niko@alum.mit.edu>",
+      "name": "ena",
+      "version": "0.14.4",
+      "description": "Union-find, congruence closure, and other unification code. Based on code from rustc.",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "eabffdaee24bd1bf95c5ef7cec31260444317e72ea56c4c91750e8b7ee58d5f1"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/ena@0.14.4",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/rust-lang/ena"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/ena"
         }
       ]
     },
@@ -14305,14 +14336,14 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#dunce@1.0.5",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
@@ -14344,57 +14375,57 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/cli#10.2.0-alpha.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.2",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#clap@4.6.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#csv@1.4.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#dotenvy@0.15.7",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
         "registry+https://github.com/rust-lang/crates.io-index#fips204@0.4.6",
         "registry+https://github.com/rust-lang/crates.io-index#fips205@0.4.1",
         "registry+https://github.com/rust-lang/crates.io-index#flate2@1.1.9",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
         "registry+https://github.com/rust-lang/crates.io-index#hex@0.4.3",
         "registry+https://github.com/rust-lang/crates.io-index#hmac@0.13.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#indicatif@0.18.4",
         "registry+https://github.com/rust-lang/crates.io-index#jaq-core@1.5.1",
         "registry+https://github.com/rust-lang/crates.io-index#jaq-interpret@1.5.0",
         "registry+https://github.com/rust-lang/crates.io-index#jaq-parse@1.0.3",
         "registry+https://github.com/rust-lang/crates.io-index#jaq-std@1.6.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#notify@8.2.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#rayon@1.12.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
         "registry+https://github.com/rust-lang/crates.io-index#rustls-pemfile@2.2.0",
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
         "registry+https://github.com/rust-lang/crates.io-index#sha2@0.11.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#tar@0.4.45",
         "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
         "registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.1",
         "registry+https://github.com/rust-lang/crates.io-index#ureq@3.3.0",
         "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.0",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#walkdir@2.5.0",
         "registry+https://github.com/rust-lang/crates.io-index#zip@8.5.1"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -14419,16 +14450,16 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-alpha.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
         "registry+https://github.com/rust-lang/crates.io-index#ratatui@0.30.0",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -14440,7 +14471,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -14450,22 +14481,25 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
+        "registry+https://github.com/rust-lang/crates.io-index#ena@0.14.4",
+        "registry+https://github.com/rust-lang/crates.io-index#fixedbitset@0.5.7",
         "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+        "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -14496,7 +14530,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -14510,21 +14544,21 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/mcp#10.2.0-alpha.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/anatomist#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.2",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-alpha.2",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.2",
         "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
         "registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1"
+        "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -14553,7 +14587,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -14567,7 +14601,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
@@ -14575,7 +14609,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
@@ -15295,6 +15329,12 @@
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#embedded-io@0.6.1"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#ena@0.14.4",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#log@0.4.29"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#encoding_rs@0.8.35",

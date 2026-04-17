@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-17 — IFDS Solver Spine & Exploit Witness Envelope (v10.2.0-alpha.2)
+
+**Directive:** Execute P1-1 Part 2 by introducing an interprocedural IFDS solver, bind deterministic exploit proofs into `StructuredFinding`, formalize offensive monetization in the innovation ledger, and prepare the `10.2.0-alpha.2` release path.
+
+**Phase 1 — IFDS Solver:**
+- `crates/forge/Cargo.toml`: added `fixedbitset`, `smallvec`, and `ena`.
+- `crates/forge/src/ifds.rs` *(new)*: introduced a summary-caching RHS-style solver over `petgraph::DiGraph<String, ()>`. Dataflow facts are `InputFact { function, label }`; per-function models declare call bindings, sink bindings, and passthrough summaries. Reachability is tracked with `FixedBitSet`; taint labels are canonicalized through `ena`; call-site payloads stay stack-local via `SmallVec`.
+- Summary cache contract: `(function, input_label) -> Summary { outputs, witnesses }` for O(1) subsequent reuse within a process on repeated facts.
+- Deterministic exploit proof generation is built into the summary walk so a seeded taint fact produces an exact call chain when a sink becomes reachable.
+
+**Phase 2 — Exploitability Proof Emitter:**
+- `crates/common/src/slop.rs`: added canonical `ExploitWitness` and optional `StructuredFinding.exploit_witness`.
+- `crates/forge/src/exploitability.rs` *(new)*: added `attach_exploit_witness(finding, witness)` to bind proof artifacts into the machine-readable finding envelope.
+- `crates/forge/src/lib.rs`: exported `ifds` and `exploitability`.
+- `crates/mcp/src/lib.rs`, `crates/forge/src/slop_filter.rs`, `crates/cli/src/hunt.rs`, `crates/cli/src/report.rs`, `crates/cli/src/jira.rs`: all explicit `StructuredFinding` constructors now initialize `exploit_witness` deterministically.
+
+**Phase 3 — Monetization Blueprint:**
+- `.INNOVATION_LOG.md`: added `P0-4: Cryptographic License Enforcement for Offensive Operations`, defining `janitor.lic`, Community Mode degradation, and BUSL-1.1 enforcement constraints for offensive features.
+
+**Verification Ledger:**
+- Added forge unit coverage proving a 3-hop chain `Controller.handle -> UserService.validate -> Database.query` reaches a sink and populates the summary cache.
+- `cargo test -p forge --lib -- --test-threads=1` exits 0.
+- `cargo test --workspace -- --test-threads=1` exits 0.
+
 ## 2026-04-17 — Deep Taint Foundation & OCI Container Strike (v10.2.0-alpha.1)
 
 **Directive:** Lay the interprocedural taint foundation (IFDS call graph + sanitizer registry) and add Docker/OCI image ingestion to the offensive hunt pipeline.

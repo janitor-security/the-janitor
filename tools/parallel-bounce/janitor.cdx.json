@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:02337fa0-9aec-4ace-b41c-11743078d7e1",
+  "serialNumber": "urn:uuid:7d852ec3-e080-494b-80bc-f8fa30f19c7e",
   "metadata": {
-    "timestamp": "2026-04-17T13:18:10.494999112Z",
+    "timestamp": "2026-04-17T19:01:32.446975699Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.2",
       "name": "parallel-bounce",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/parallel-bounce@10.2.0-alpha.1?download_url=file://.",
+      "purl": "pkg:cargo/parallel-bounce@10.2.0-alpha.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.2 bin-target-0",
           "name": "parallel-bounce",
-          "version": "10.2.0-alpha.1",
-          "purl": "pkg:cargo/parallel-bounce@10.2.0-alpha.1?download_url=file://.#src/main.rs"
+          "version": "10.2.0-alpha.2",
+          "purl": "pkg:cargo/parallel-bounce@10.2.0-alpha.2?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -707,7 +707,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#rayon@1.12.0",

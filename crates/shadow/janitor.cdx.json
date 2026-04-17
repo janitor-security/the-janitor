@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:df3bf4a5-40a4-4a9d-982c-17d969eef5cf",
+  "serialNumber": "urn:uuid:66931a7d-2bef-4753-821c-83b3d44ab195",
   "metadata": {
-    "timestamp": "2026-04-17T13:18:10.441177421Z",
+    "timestamp": "2026-04-17T19:01:32.380931128Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2",
       "name": "shadow",
-      "version": "10.2.0-alpha.1",
+      "version": "10.2.0-alpha.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/shadow@10.2.0-alpha.1?download_url=file://.",
+      "purl": "pkg:cargo/shadow@10.2.0-alpha.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2 bin-target-0",
           "name": "shadow",
-          "version": "10.2.0-alpha.1",
-          "purl": "pkg:cargo/shadow@10.2.0-alpha.1?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.2",
+          "purl": "pkg:cargo/shadow@10.2.0-alpha.2?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -334,7 +334,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/shadow#10.2.0-alpha.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",

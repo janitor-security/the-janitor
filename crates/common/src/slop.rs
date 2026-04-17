@@ -7,6 +7,21 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Deterministic exploitability proof for a confirmed source-to-sink chain.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExploitWitness {
+    /// Function where the tainted source originates.
+    pub source_function: String,
+    /// Human-readable label of the tainted source fact.
+    pub source_label: String,
+    /// Function that contains the reached sink.
+    pub sink_function: String,
+    /// Human-readable label of the reached sink.
+    pub sink_label: String,
+    /// Exact interprocedural call chain proving reachability.
+    pub call_chain: Vec<String>,
+}
+
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.
 ///
 /// Fields map to the `{ "id": "security:...", "file": "src/main.rs", "line": 42 }`
@@ -55,4 +70,8 @@ pub struct StructuredFinding {
     /// Azure DevOps surface the "How to fix" link inside the PR review UI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docs_url: Option<String>,
+
+    /// Deterministic proof that a source reaches a sink across function boundaries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exploit_witness: Option<ExploitWitness>,
 }

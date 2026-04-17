@@ -940,6 +940,7 @@ fn run_lint_file(file_path: &str, contents: &str) -> Result<serde_json::Value> {
                 severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
+                exploit_witness: None,
             }
         })
         .collect();
