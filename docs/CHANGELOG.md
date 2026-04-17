@@ -3,6 +3,28 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-16 — Tactical Recon Patch (v10.1.13)
+
+**Directive:** Apply a surgical hotfix to the mobile ingestion path by constraining JADX resource usage, eliminate `unpinned_asset` false positives from comment text, verify under single-threaded tests, and execute the governed release path.
+
+**Phase 1 — JADX OOM Mitigation:**
+- `crates/cli/src/hunt.rs`:
+  - `ingest_apk(path)` now spawns `jadx` with `JAVA_OPTS=-Xmx4G`.
+  - Added `-j 1` so APK decompilation stays single-threaded and does not fan out JVM heap pressure across worker threads.
+
+**Phase 2 — AST Precision Hotfix (`unpinned_asset`):**
+- `crates/forge/src/slop_hunter.rs`:
+  - Added `find_supply_chain_slop_with_context(language, parsed)` so the supply-chain detector can consult the cached AST when needed.
+  - For the `<script src="http...">` `security:unpinned_asset` branch, the detector now resolves the matching syntax node and walks `node.parent()` until root, suppressing the finding if any traversed node kind contains `comment`.
+  - The AST walk is bounded by parent-chain height and returns immediately on parse failure or non-JS-family languages, preserving deterministic performance and eliminating comment-only false positives.
+- `crates/cli/src/hunt.rs`:
+  - The hunt scanning pipeline now uses the context-aware supply-chain detector path so the comment suppression applies during artifact ingestion, not only in standalone detector tests.
+
+**Phase 3 — Verification / Release Ledger:**
+- `crates/forge/src/slop_hunter.rs`:
+  - Added `test_http_script_url_inside_js_comment_is_ignored` to prove comment-contained `http://` references do not emit `security:unpinned_asset`.
+- `Cargo.toml`: workspace version `10.1.12` → `10.1.13`.
+
 ## 2026-04-16 — Bounty Hunter Vanguard & UX Refactor (v10.1.12)
 
 **Directive:** Remove the dummy-path `hunt` UX defect, add Java archive ingestion, audit black-box bounty ingestion and taint gaps, rewrite the innovation ledger into an offensive roadmap, verify under single-threaded tests, and execute the governed release path.

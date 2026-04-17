@@ -718,7 +718,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     findings.extend(find_credential_slop(source));
     // Language-agnostic: supply-chain integrity scan runs on every source file.
     // Catches external script loading without SRI and GitHub Pages URL embedding.
-    findings.extend(find_supply_chain_slop(source));
+    findings.extend(find_supply_chain_slop_with_context(language, parsed));
     findings
 }
 
@@ -2365,8 +2365,27 @@ fn supply_chain_automaton() -> &'static AhoCorasick {
 /// Returns one [`SlopFinding`] per match at [`Severity::Critical`] (+50 pts).
 /// Never panics or returns an error.
 pub fn find_supply_chain_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let parsed = ParsedUnit::unparsed(source);
+    find_supply_chain_slop_with_context("", &parsed)
+}
+
+/// Scan `parsed` source for supply-chain integrity violations with optional
+/// AST-aware suppression for comment-contained `http://` matches.
+///
+/// Only the `security:unpinned_asset` `<script src="http…">` branch consults
+/// the AST, and only for JavaScript-family sources where comment nodes are
+/// well-defined. All other matches remain byte-only and linear-time.
+pub fn find_supply_chain_slop_with_context(
+    language: &str,
+    parsed: &ParsedUnit<'_>,
+) -> Vec<SlopFinding> {
     let ac = supply_chain_automaton();
+    let source = parsed.source;
     ac.find_iter(source)
+        .filter(|mat| {
+            let pattern_idx = mat.pattern().as_usize();
+            !(pattern_idx == 0 && should_ignore_supply_chain_http_match(language, parsed, mat))
+        })
         .map(|mat| SlopFinding {
             start_byte: mat.start(),
             end_byte: mat.end(),
@@ -2375,6 +2394,42 @@ pub fn find_supply_chain_slop(source: &[u8]) -> Vec<SlopFinding> {
             severity: Severity::Critical,
         })
         .collect()
+}
+
+fn should_ignore_supply_chain_http_match(
+    language: &str,
+    parsed: &ParsedUnit<'_>,
+    mat: &aho_corasick::Match,
+) -> bool {
+    if !matches!(language, "js" | "jsx" | "ts" | "tsx") {
+        return false;
+    }
+
+    let Some(eng) = engine() else {
+        return false;
+    };
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) | Err(_) => return false,
+    };
+    let root = tree.root_node();
+    let end = mat.end().saturating_sub(1);
+    let Some(node) = root.descendant_for_byte_range(mat.start(), end) else {
+        return false;
+    };
+
+    node_or_parent_is_comment(node)
+}
+
+fn node_or_parent_is_comment(node: Node<'_>) -> bool {
+    let mut cursor = Some(node);
+    while let Some(current) = cursor {
+        if current.kind().contains("comment") {
+            return true;
+        }
+        cursor = current.parent();
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -6492,6 +6547,18 @@ mod credential_tests {
         assert!(
             findings.is_empty(),
             "relative script path must not trigger supply-chain detector"
+        );
+    }
+
+    #[test]
+    fn test_http_script_url_inside_js_comment_is_ignored() {
+        let src = b"// <script src=\"http://cdn.example.com/payload.js\"></script>\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unpinned_asset")),
+            "comment-contained http:// script reference must not trigger unpinned_asset"
         );
     }
 

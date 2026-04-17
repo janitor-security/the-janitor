@@ -22,7 +22,9 @@
 
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
-use forge::slop_hunter::{find_credential_slop, find_slop, find_supply_chain_slop, ParsedUnit};
+use forge::slop_hunter::{
+    find_credential_slop, find_slop, find_supply_chain_slop_with_context, ParsedUnit,
+};
 use std::io::Read as _;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -264,8 +266,11 @@ fn ingest_apk(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let tmpdir = tempfile::TempDir::new().context("failed to create APK decompilation tmpdir")?;
 
     let status = std::process::Command::new("jadx")
+        .env("JAVA_OPTS", "-Xmx4G")
         .arg("-d")
         .arg(tmpdir.path())
+        .arg("-j")
+        .arg("1")
         .arg(path)
         .status()
         .context("failed to spawn jadx")?;
@@ -524,7 +529,7 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
         let unit = ParsedUnit::unparsed(&source);
         let mut raw = find_slop(ext, &unit);
         raw.extend(find_credential_slop(&source));
-        raw.extend(find_supply_chain_slop(&source));
+        raw.extend(find_supply_chain_slop_with_context(ext, &unit));
 
         for f in raw {
             all.push(StructuredFinding {
