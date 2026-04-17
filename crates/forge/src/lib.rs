@@ -23,6 +23,7 @@
 
 pub mod agnostic_shield;
 pub mod brain;
+pub mod callgraph;
 pub mod cst_diff;
 pub mod deobfuscate;
 pub mod fold;
@@ -30,6 +31,7 @@ pub mod hashing;
 pub mod metadata;
 pub mod migration_guard;
 pub mod pr_collider;
+pub mod sanitizer;
 pub mod shadow_git;
 pub mod slop_filter;
 pub mod slop_hunter;

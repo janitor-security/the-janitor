@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:6ec3e9ba-8b8d-441d-96cd-e3659827c5c4",
+  "serialNumber": "urn:uuid:6cb652de-1c94-4e5a-b344-4917a6fb2a44",
   "metadata": {
-    "timestamp": "2026-04-17T06:17:01.349177570Z",
+    "timestamp": "2026-04-17T13:18:10.425610619Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.14",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1",
       "name": "vault",
-      "version": "10.1.14",
+      "version": "10.2.0-alpha.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.1.14?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.2.0-alpha.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.14 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1 bin-target-0",
           "name": "vault",
-          "version": "10.1.14",
-          "purl": "pkg:cargo/vault@10.1.14?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.1",
+          "purl": "pkg:cargo/vault@10.2.0-alpha.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1231,7 +1231,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.1.14",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",

@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-17 — Deep Taint Foundation & OCI Container Strike (v10.2.0-alpha.1)
+
+**Directive:** Lay the interprocedural taint foundation (IFDS call graph + sanitizer registry) and add Docker/OCI image ingestion to the offensive hunt pipeline.
+
+**Phase 1 — Interprocedural Call Graph (P1-1):**
+- `crates/forge/src/callgraph.rs` *(new)*: `CallGraph = DiGraph<String, ()>`; `build_call_graph(language, source)` drives a tree-sitter recursive walk with a 200-level depth guard. Supported: `py`, `js/jsx`, `ts/tsx`, `java`, `go`. Caller→callee edges are deduplicated (no multigraph pollution). 7 unit tests; Python tests use fully explicit `\n    ` indentation (Rust `b"\` line-continuation strips leading spaces, defeating Python's syntactic whitespace).
+- `crates/forge/src/sanitizer.rs` *(new)*: `SanitizerRegistry` maps function names to `Vec<TaintKind>` killed. Default specs: HTML/XSS escaping, URL encoding, SQL parameterization, path sanitization, type coercion, regex validators, crypto hashing. `parameterize` kills `UserInput` but NOT `DatabaseResult` (conservative — parameterization proves input is safe for the DB layer, not the inverse). 9 unit tests including the conservative kill-set assertion.
+- `crates/forge/src/lib.rs`: `pub mod callgraph;` and `pub mod sanitizer;` added.
+- `crates/forge/Cargo.toml`: `petgraph.workspace = true` added.
+
+**Phase 2 — Docker/OCI Ingestion (P1-2a):**
+- `crates/cli/src/hunt.rs`: `DOCKER_LAYER_BUDGET = 512 MiB` circuit breaker; `--docker <image_tar_path>` flag; `ingest_docker(path)` unpacks `docker save` tarballs — first pass buffers `manifest.json` + `*/layer.tar` entries, second pass applies whiteout semantics (`.wh..wh..opq` clears directory, `.wh.<name>` deletes sibling) into a RAII `TempDir`, then delegates to `scan_directory`. 2 unit tests: synthetic docker tar with embedded AWS key (verifies credential detection) and missing-manifest rejection.
+- `crates/cli/src/main.rs`: `docker: Option<PathBuf>` field added to `Hunt` variant; wired to `HuntArgs`.
+
+**Verification / Release Ledger:**
+- `Cargo.toml`: workspace version `10.1.14` → `10.2.0-alpha.1`.
+- `just audit` exits 0; 475 tests pass.
+
 ## 2026-04-16 — Git Synchronization & Pipeline Hardening (v10.1.14)
 
 **Directive:** Publish agent governance rules as an open-source showcase, harden the release pipeline commit/tag sequence to fail-closed with explicit error messages, eradicate redundant detector calls in `scan_directory`, and update the parity test to reflect the hardened format.

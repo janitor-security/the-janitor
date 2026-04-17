@@ -1020,6 +1020,11 @@ enum Commands {
         /// Node.js dependency) into a temporary directory, scanned, then deleted.
         #[arg(long)]
         asar: Option<PathBuf>,
+        /// Path to a `docker save` tarball.  Layers are extracted in order into
+        /// a temporary directory with whiteout semantics applied, then scanned.
+        /// Total layer data is capped at 512 MiB.
+        #[arg(long)]
+        docker: Option<PathBuf>,
         /// Native `jq`-compatible filter expression applied to the JSON output
         /// before printing.  No runtime `jq` binary required.
         ///
@@ -1489,6 +1494,7 @@ async fn main() -> anyhow::Result<()> {
             apk,
             jar,
             asar,
+            docker,
             filter,
             corpus_path,
         } => {
@@ -1499,6 +1505,7 @@ async fn main() -> anyhow::Result<()> {
                 apk_path: apk.as_deref(),
                 jar_path: jar.as_deref(),
                 asar_path: asar.as_deref(),
+                docker_path: docker.as_deref(),
                 filter_expr: filter.as_deref(),
                 corpus_path: corpus_path.as_deref(),
             })?;

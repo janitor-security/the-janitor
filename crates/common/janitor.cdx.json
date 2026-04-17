@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:a7d59163-671d-4303-8254-344330137ed2",
+  "serialNumber": "urn:uuid:7c83bdda-6408-4463-8a6e-9b9c6ccc7e67",
   "metadata": {
-    "timestamp": "2026-04-17T06:17:01.248114577Z",
+    "timestamp": "2026-04-17T13:18:10.338506616Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.14",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
       "name": "common",
-      "version": "10.1.14",
+      "version": "10.2.0-alpha.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.1.14?download_url=file://.",
+      "purl": "pkg:cargo/common@10.2.0-alpha.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.14 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1 bin-target-0",
           "name": "common",
-          "version": "10.1.14",
-          "purl": "pkg:cargo/common@10.1.14?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.1",
+          "purl": "pkg:cargo/common@10.2.0-alpha.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -5111,7 +5111,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.1.14",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-alpha.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

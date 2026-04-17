@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:65ae72de-ab3b-4c79-8e7e-7fd174c0d147",
+  "serialNumber": "urn:uuid:f54a9f41-d22b-4821-91b0-5a53f38d25f0",
   "metadata": {
-    "timestamp": "2026-04-17T06:17:01.341038936Z",
+    "timestamp": "2026-04-17T13:18:10.418952060Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.14",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
       "name": "polyglot",
-      "version": "10.1.14",
+      "version": "10.2.0-alpha.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.1.14?download_url=file://.",
+      "purl": "pkg:cargo/polyglot@10.2.0-alpha.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.14 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1 bin-target-0",
           "name": "polyglot",
-          "version": "10.1.14",
-          "purl": "pkg:cargo/polyglot@10.1.14?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.1",
+          "purl": "pkg:cargo/polyglot@10.2.0-alpha.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1310,7 +1310,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.1.14",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",

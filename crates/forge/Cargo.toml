@@ -42,6 +42,7 @@ memmap2.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 aho-corasick.workspace = true
+petgraph.workspace = true
 zstd = "0.13"
 wasmtime.workspace = true
 serde_json.workspace = true

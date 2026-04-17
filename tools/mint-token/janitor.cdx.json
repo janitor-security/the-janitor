@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:95734e9a-dde1-463d-8111-e8afb1a16221",
+  "serialNumber": "urn:uuid:9462979c-1b70-4c46-9d15-1e2699a05df9",
   "metadata": {
-    "timestamp": "2026-04-17T06:17:01.417093952Z",
+    "timestamp": "2026-04-17T13:18:10.488126960Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.14",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.1",
       "name": "mint-token",
-      "version": "10.1.14",
+      "version": "10.2.0-alpha.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.1.14?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.2.0-alpha.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.14 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.1 bin-target-0",
           "name": "mint-token",
-          "version": "10.1.14",
-          "purl": "pkg:cargo/mint-token@10.1.14?download_url=file://.#src/main.rs"
+          "version": "10.2.0-alpha.1",
+          "purl": "pkg:cargo/mint-token@10.2.0-alpha.1?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -1711,7 +1711,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.1.14",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

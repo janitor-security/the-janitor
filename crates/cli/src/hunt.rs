@@ -1,9 +1,10 @@
 //! `janitor hunt` — Offensive security scanner for bug-bounty engagements.
 //!
 //! Recursively walks a target directory (or a source tree reconstructed from a
-//! JavaScript sourcemap / npm tarball / Android APK / Java JAR / Electron ASAR), runs the
-//! full Janitor detector suite on every file, and emits results as a single
-//! JSON array of [`common::slop::StructuredFinding`] to stdout.
+//! JavaScript sourcemap / npm tarball / Android APK / Java JAR / Electron ASAR /
+//! Docker image tarball), runs the full Janitor detector suite on every file, and
+//! emits results as a single JSON array of [`common::slop::StructuredFinding`] to
+//! stdout.
 //!
 //! ## Modes
 //!
@@ -14,6 +15,7 @@
 //! janitor hunt --apk app.apk                      # Android APK (requires jadx)
 //! janitor hunt --jar app.jar                      # Java archive
 //! janitor hunt --asar app.asar                    # Electron ASAR archive
+//! janitor hunt --docker image.tar                 # docker save tarball
 //! janitor hunt ./target --filter '.[] | select(.severity == "Critical")'
 //! ```
 //!
@@ -31,6 +33,8 @@ use walkdir::WalkDir;
 const HTTP_BODY_LIMIT: u64 = 16 * 1024 * 1024;
 /// 1 MiB — per-file circuit breaker matching slop_hunter.rs.
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
+/// 512 MiB — total layer data buffered during docker save extraction.
+const DOCKER_LAYER_BUDGET: usize = 512 * 1024 * 1024;
 
 pub struct HuntArgs<'a> {
     pub scan_root: Option<&'a Path>,
@@ -39,6 +43,7 @@ pub struct HuntArgs<'a> {
     pub apk_path: Option<&'a Path>,
     pub jar_path: Option<&'a Path>,
     pub asar_path: Option<&'a Path>,
+    pub docker_path: Option<&'a Path>,
     pub filter_expr: Option<&'a str>,
     pub corpus_path: Option<&'a Path>,
 }
@@ -61,6 +66,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         apk_path,
         jar_path,
         asar_path,
+        docker_path,
         filter_expr,
         corpus_path,
     } = args;
@@ -71,16 +77,17 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         + usize::from(npm_pkg.is_some())
         + usize::from(apk_path.is_some())
         + usize::from(jar_path.is_some())
-        + usize::from(asar_path.is_some());
+        + usize::from(asar_path.is_some())
+        + usize::from(docker_path.is_some());
 
     if source_count == 0 {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, or --asar"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, or --docker"
         );
     }
     if source_count > 1 {
         anyhow::bail!(
-            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, or --asar"
+            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, --asar, or --docker"
         );
     }
 
@@ -94,11 +101,13 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         ingest_jar(jar)?
     } else if let Some(asar) = asar_path {
         ingest_asar(asar)?
+    } else if let Some(docker) = docker_path {
+        ingest_docker(docker)?
     } else if let Some(root) = scan_root {
         scan_directory(root)?
     } else {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, or --asar"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, or --docker"
         );
     };
 
@@ -282,6 +291,171 @@ fn ingest_apk(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
 
     scan_directory(tmpdir.path())
     // tmpdir drops here — decompiled source deleted
+}
+
+// ---------------------------------------------------------------------------
+// Docker save tarball ingestion  (Phase P1-2a)
+// ---------------------------------------------------------------------------
+
+/// Internal manifest entry from `manifest.json` in a `docker save` tarball.
+#[derive(serde::Deserialize)]
+struct DockerManifestEntry {
+    #[serde(rename = "Layers")]
+    layers: Vec<String>,
+}
+
+/// Ingest a `docker save` tarball, merge layers into a unified filesystem
+/// tree in a `tempfile::TempDir`, scan the tree, and return findings.
+///
+/// ## docker save format
+///
+/// ```text
+/// manifest.json            — JSON array of DockerManifestEntry
+/// <hash>.json              — image config (ignored during scan)
+/// <layer_id>/layer.tar     — one tar per layer, applied in order
+/// ```
+///
+/// Whiteout files emitted by the union filesystem are honoured:
+/// - `.wh.<name>` — deletes the sibling file/dir named `<name>`
+/// - `.wh..wh..opq` — clears the containing directory (opaque whiteout)
+///
+/// ## Circuit breaker
+///
+/// Total buffered layer data is capped at `DOCKER_LAYER_BUDGET` (512 MiB).
+/// Any tarball that would exceed this limit is skipped.
+fn ingest_docker(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
+    use std::io::Read as _;
+
+    let file =
+        std::fs::File::open(path).with_context(|| format!("open docker tar {}", path.display()))?;
+    let mut outer = tar::Archive::new(file);
+
+    // First pass: buffer manifest.json and all layer tars keyed by path.
+    let mut manifest_bytes: Option<Vec<u8>> = None;
+    let mut layer_bufs: std::collections::HashMap<String, Vec<u8>> =
+        std::collections::HashMap::new();
+    let mut total_layer_bytes: usize = 0;
+
+    for entry in outer.entries().context("iterate docker tar entries")? {
+        let mut entry = entry.context("read docker tar entry")?;
+        let entry_path = entry
+            .path()
+            .context("docker tar entry path")?
+            .to_string_lossy()
+            .replace('\\', "/")
+            .to_string();
+
+        if entry_path == "manifest.json" {
+            let mut buf = Vec::new();
+            entry
+                .read_to_end(&mut buf)
+                .context("read manifest.json from docker tar")?;
+            manifest_bytes = Some(buf);
+        } else if entry_path.ends_with("/layer.tar") || entry_path == "layer.tar" {
+            let mut buf = Vec::new();
+            entry
+                .read_to_end(&mut buf)
+                .context("read layer.tar from docker tar")?;
+            let new_total = total_layer_bytes.saturating_add(buf.len());
+            if new_total > DOCKER_LAYER_BUDGET {
+                // Skip layers that breach the circuit breaker.
+                continue;
+            }
+            total_layer_bytes = new_total;
+            layer_bufs.insert(entry_path, buf);
+        }
+    }
+
+    let manifest_bytes =
+        manifest_bytes.ok_or_else(|| anyhow::anyhow!("docker tar missing manifest.json"))?;
+    let manifests: Vec<DockerManifestEntry> = serde_json::from_slice(&manifest_bytes)
+        .context("docker manifest.json is not valid JSON")?;
+    let manifest = manifests
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("docker manifest.json contains no entries"))?;
+
+    let tmpdir =
+        tempfile::TempDir::new().context("failed to create docker layer extraction tmpdir")?;
+
+    // Apply layers in order, honouring whiteout semantics.
+    for layer_path in &manifest.layers {
+        // Normalise path separators from manifest.json (may use backslash on Windows images).
+        let normalised = layer_path.replace('\\', "/");
+        let Some(layer_data) = layer_bufs.get(&normalised) else {
+            // Layer not buffered (exceeded circuit breaker or absent) — skip.
+            continue;
+        };
+
+        let mut layer_tar = tar::Archive::new(layer_data.as_slice());
+        for entry in layer_tar.entries().context("iterate layer tar entries")? {
+            let mut entry = entry.context("read layer tar entry")?;
+            let raw_path = entry
+                .path()
+                .context("layer entry path")?
+                .to_string_lossy()
+                .replace('\\', "/")
+                .to_string();
+
+            // Sanitize path to prevent traversal.
+            let Some(rel) = sanitize_archive_entry_path(&raw_path) else {
+                continue;
+            };
+
+            let file_name = rel
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            // Opaque whiteout — clear the entire containing directory.
+            if file_name == ".wh..wh..opq" {
+                if let Some(parent) = rel.parent() {
+                    let dir_to_clear = tmpdir.path().join(parent);
+                    if dir_to_clear.exists() {
+                        std::fs::remove_dir_all(&dir_to_clear).ok();
+                        std::fs::create_dir_all(&dir_to_clear).ok();
+                    }
+                }
+                continue;
+            }
+
+            // Regular whiteout — delete the named sibling.
+            if let Some(stripped) = file_name.strip_prefix(".wh.") {
+                if let Some(parent) = rel.parent() {
+                    let target = tmpdir.path().join(parent).join(stripped);
+                    if target.is_file() {
+                        std::fs::remove_file(&target).ok();
+                    } else if target.is_dir() {
+                        std::fs::remove_dir_all(&target).ok();
+                    }
+                }
+                continue;
+            }
+
+            let dest = tmpdir.path().join(&rel);
+
+            if entry.header().entry_type().is_dir() {
+                std::fs::create_dir_all(&dest)
+                    .with_context(|| format!("create layer dir {}", dest.display()))?;
+                continue;
+            }
+
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("create layer parent {}", parent.display()))?;
+            }
+
+            let mut buf = Vec::new();
+            entry
+                .read_to_end(&mut buf)
+                .with_context(|| format!("read layer file {raw_path}"))?;
+            std::fs::write(&dest, &buf)
+                .with_context(|| format!("write layer file {}", dest.display()))?;
+        }
+    }
+
+    scan_directory(tmpdir.path())
+    // tmpdir drops here — merged layer tree deleted
 }
 
 // ---------------------------------------------------------------------------
@@ -914,6 +1088,107 @@ mod tests {
         assert!(
             ingest_asar(&path).is_err(),
             "invalid ASAR magic must return an error"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Docker save tarball ingestion
+    // -----------------------------------------------------------------------
+
+    /// Build a minimal in-memory `docker save` tar containing one layer.
+    /// The layer tar contains `filename` with `content`.
+    fn build_docker_tar(filename: &str, content: &[u8]) -> Vec<u8> {
+        // Build inner layer.tar bytes.
+        let mut layer_tar_bytes: Vec<u8> = Vec::new();
+        {
+            let mut layer_builder = tar::Builder::new(&mut layer_tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            layer_builder
+                .append_data(&mut header, filename, content)
+                .unwrap();
+            layer_builder.finish().unwrap();
+        }
+
+        // Build manifest.json.
+        let manifest = serde_json::json!([{
+            "Config": "abc123.json",
+            "RepoTags": ["test:latest"],
+            "Layers": ["layer0/layer.tar"]
+        }]);
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+
+        // Build outer docker save tar.
+        let mut outer_bytes: Vec<u8> = Vec::new();
+        {
+            let mut outer = tar::Builder::new(&mut outer_bytes);
+
+            // manifest.json
+            let mut mhdr = tar::Header::new_gnu();
+            mhdr.set_size(manifest_bytes.len() as u64);
+            mhdr.set_mode(0o644);
+            mhdr.set_cksum();
+            outer
+                .append_data(&mut mhdr, "manifest.json", manifest_bytes.as_slice())
+                .unwrap();
+
+            // layer0/layer.tar
+            let mut lhdr = tar::Header::new_gnu();
+            lhdr.set_size(layer_tar_bytes.len() as u64);
+            lhdr.set_mode(0o644);
+            lhdr.set_cksum();
+            outer
+                .append_data(&mut lhdr, "layer0/layer.tar", layer_tar_bytes.as_slice())
+                .unwrap();
+
+            outer.finish().unwrap();
+        }
+
+        outer_bytes
+    }
+
+    #[test]
+    fn docker_ingest_extracts_and_scans_layer_content() {
+        let content = b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';\n";
+        let docker_bytes = build_docker_tar("app/index.js", content);
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tar_path = tmp.path().join("image.tar");
+        std::fs::write(&tar_path, &docker_bytes).unwrap();
+
+        let findings = ingest_docker(&tar_path).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id.contains("credential")),
+            "docker layer JS with AWS key must produce a credential finding"
+        );
+    }
+
+    #[test]
+    fn docker_ingest_rejects_missing_manifest() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let tar_path = tmp.path().join("bad.tar");
+
+        // Build a tar with no manifest.json.
+        let mut bytes: Vec<u8> = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut bytes);
+            let content = b"irrelevant";
+            let mut hdr = tar::Header::new_gnu();
+            hdr.set_size(content.len() as u64);
+            hdr.set_mode(0o644);
+            hdr.set_cksum();
+            builder
+                .append_data(&mut hdr, "some_file.txt", content.as_ref())
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        std::fs::write(&tar_path, &bytes).unwrap();
+
+        assert!(
+            ingest_docker(&tar_path).is_err(),
+            "docker tar without manifest.json must return an error"
         );
     }
 
