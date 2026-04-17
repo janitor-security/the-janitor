@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-16-git-synchronization-pipeline-hardening-v10114" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-16 — Git Synchronization &amp; Pipeline Hardening (v10.1.14)
@@ -1643,6 +1652,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-16-git-synchronization-pipeline-hardening-v10114" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-16 — Git Synchronization &amp; Pipeline Hardening (v10.1.14)
@@ -2710,6 +2728,19 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1">2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)</h2>
+<p><strong>Directive:</strong> Lay the interprocedural taint foundation (IFDS call graph + sanitizer registry) and add Docker/OCI image ingestion to the offensive hunt pipeline.</p>
+<p><strong>Phase 1 — Interprocedural Call Graph (P1-1):</strong>
+- <code>crates/forge/src/callgraph.rs</code> <em>(new)</em>: <code>CallGraph = DiGraph&lt;String, ()&gt;</code>; <code>build_call_graph(language, source)</code> drives a tree-sitter recursive walk with a 200-level depth guard. Supported: <code>py</code>, <code>js/jsx</code>, <code>ts/tsx</code>, <code>java</code>, <code>go</code>. Caller→callee edges are deduplicated (no multigraph pollution). 7 unit tests; Python tests use fully explicit <code>\n</code> indentation (Rust <code>b"\</code> line-continuation strips leading spaces, defeating Python's syntactic whitespace).
+- <code>crates/forge/src/sanitizer.rs</code> <em>(new)</em>: <code>SanitizerRegistry</code> maps function names to <code>Vec&lt;TaintKind&gt;</code> killed. Default specs: HTML/XSS escaping, URL encoding, SQL parameterization, path sanitization, type coercion, regex validators, crypto hashing. <code>parameterize</code> kills <code>UserInput</code> but NOT <code>DatabaseResult</code> (conservative — parameterization proves input is safe for the DB layer, not the inverse). 9 unit tests including the conservative kill-set assertion.
+- <code>crates/forge/src/lib.rs</code>: <code>pub mod callgraph;</code> and <code>pub mod sanitizer;</code> added.
+- <code>crates/forge/Cargo.toml</code>: <code>petgraph.workspace = true</code> added.</p>
+<p><strong>Phase 2 — Docker/OCI Ingestion (P1-2a):</strong>
+- <code>crates/cli/src/hunt.rs</code>: <code>DOCKER_LAYER_BUDGET = 512 MiB</code> circuit breaker; <code>--docker &lt;image_tar_path&gt;</code> flag; <code>ingest_docker(path)</code> unpacks <code>docker save</code> tarballs — first pass buffers <code>manifest.json</code> + <code>*/layer.tar</code> entries, second pass applies whiteout semantics (<code>.wh..wh..opq</code> clears directory, <code>.wh.&lt;name&gt;</code> deletes sibling) into a RAII <code>TempDir</code>, then delegates to <code>scan_directory</code>. 2 unit tests: synthetic docker tar with embedded AWS key (verifies credential detection) and missing-manifest rejection.
+- <code>crates/cli/src/main.rs</code>: <code>docker: Option&lt;PathBuf&gt;</code> field added to <code>Hunt</code> variant; wired to <code>HuntArgs</code>.</p>
+<p><strong>Verification / Release Ledger:</strong>
+- <code>Cargo.toml</code>: workspace version <code>10.1.14</code> → <code>10.2.0-alpha.1</code>.
+- <code>just audit</code> exits 0; 475 tests pass.</p>
 <h2 id="2026-04-16-git-synchronization-pipeline-hardening-v10114">2026-04-16 — Git Synchronization &amp; Pipeline Hardening (v10.1.14)</h2>
 <p><strong>Directive:</strong> Publish agent governance rules as an open-source showcase, harden the release pipeline commit/tag sequence to fail-closed with explicit error messages, eradicate redundant detector calls in <code>scan_directory</code>, and update the parity test to reflect the hardened format.</p>
 <p><strong>Phase 1 — Un-Ignore Agent Governance:</strong>
