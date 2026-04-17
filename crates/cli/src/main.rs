@@ -993,16 +993,39 @@ enum Commands {
     /// janitor hunt ./target-repo | jq '.[] | select(.id == "security:credential_leak")'
     ///
     /// # Reconstruct and scan a bundled JS app from its sourcemap
-    /// janitor hunt . --sourcemap https://example.com/static/app.js.map
+    /// janitor hunt --sourcemap https://example.com/static/app.js.map
     /// ```
     Hunt {
-        /// Directory to scan.  Use `.` to scan the current working directory.
-        path: PathBuf,
-        /// Optional JavaScript sourcemap URL.  When provided, the source tree
-        /// is reconstructed from the sourcemap before scanning; `path` is
-        /// ignored (the reconstructed tmpdir is scanned instead).
+        /// Directory to scan. Required only for local scans.
+        path: Option<PathBuf>,
+        /// JavaScript sourcemap URL.  When provided, the source tree is
+        /// reconstructed from the map's `sources[]` + `sourcesContent[]` into
+        /// a temporary directory and scanned.  The tmpdir is deleted via RAII.
         #[arg(long)]
         sourcemap: Option<String>,
+        /// npm package spec to fetch and scan, e.g. `lodash@4.17.21` or
+        /// `lodash` (resolves latest).  The tarball is extracted into a
+        /// temporary directory, scanned, then deleted via RAII.
+        #[arg(long)]
+        npm: Option<String>,
+        /// Path to an Android APK file.  Requires `jadx` in PATH.  The APK
+        /// is decompiled into a temporary directory, scanned, then deleted.
+        #[arg(long)]
+        apk: Option<PathBuf>,
+        /// Path to a Java `.jar` archive. Extracted in pure Rust into a
+        /// temporary directory, scanned, then deleted via RAII.
+        #[arg(long)]
+        jar: Option<PathBuf>,
+        /// Path to an Electron `.asar` archive.  Extracted in pure Rust (no
+        /// Node.js dependency) into a temporary directory, scanned, then deleted.
+        #[arg(long)]
+        asar: Option<PathBuf>,
+        /// Native `jq`-compatible filter expression applied to the JSON output
+        /// before printing.  No runtime `jq` binary required.
+        ///
+        /// Example: `'.[] | select(.severity == "Critical")'`
+        #[arg(long)]
+        filter: Option<String>,
         /// Path to an alternative slopsquat corpus file (`.rkyv` format).
         /// When omitted the compiled-in corpus is used.
         #[arg(long)]
@@ -1462,9 +1485,23 @@ async fn main() -> anyhow::Result<()> {
         Commands::Hunt {
             path,
             sourcemap,
+            npm,
+            apk,
+            jar,
+            asar,
+            filter,
             corpus_path,
         } => {
-            hunt::cmd_hunt(path, sourcemap.as_deref(), corpus_path.as_deref())?;
+            hunt::cmd_hunt(hunt::HuntArgs {
+                scan_root: path.as_deref(),
+                sourcemap_url: sourcemap.as_deref(),
+                npm_pkg: npm.as_deref(),
+                apk_path: apk.as_deref(),
+                jar_path: jar.as_deref(),
+                asar_path: asar.as_deref(),
+                filter_expr: filter.as_deref(),
+                corpus_path: corpus_path.as_deref(),
+            })?;
         }
     }
 

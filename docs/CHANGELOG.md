@@ -3,6 +3,98 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-16 — Bounty Hunter Vanguard & UX Refactor (v10.1.12)
+
+**Directive:** Remove the dummy-path `hunt` UX defect, add Java archive ingestion, audit black-box bounty ingestion and taint gaps, rewrite the innovation ledger into an offensive roadmap, verify under single-threaded tests, and execute the governed release path.
+
+**Phase 1 — Hunt CLI UX Repair:**
+- `crates/cli/src/main.rs`:
+  - `Commands::Hunt.path` changed from `PathBuf` to `Option<PathBuf>`.
+  - Added `--jar <path>` to the `Hunt` subcommand.
+  - Updated command docs/examples so remote/archive fetchers no longer require the fake `.` positional argument.
+- `crates/cli/src/hunt.rs`:
+  - `cmd_hunt` now accepts `scan_root: Option<&Path>`.
+  - Added exact-one-source validation: clean `anyhow::bail!` when no source is provided, and clean `anyhow::bail!` when operators supply multiple competing sources.
+  - Supported source set is now `<path>` or exactly one of `--sourcemap`, `--npm`, `--apk`, `--jar`, `--asar`.
+
+**Phase 2 — Java Archive Ingestion (P0-5):**
+- `crates/cli/src/hunt.rs`:
+  - Added `ingest_jar(path)` using `zip::ZipArchive` + `tempfile::TempDir`.
+  - Implemented archive-path sanitization (`sanitize_archive_entry_path`) to reject root, prefix, and parent-directory traversal components during extraction.
+  - Extracted JAR contents into a tempdir, scanned the reconstructed tree through the existing hunt pipeline, and relied on RAII tempdir cleanup.
+- `crates/cli/Cargo.toml`:
+  - No dependency change required; `zip.workspace = true` was already present.
+- Tests:
+  - Added `jar_extraction_scans_embedded_java_source` covering a synthetic `.jar` that contains Java `Runtime.getRuntime().exec(cmd)` source and must emit a hunt finding.
+
+**Phase 3 — Hostile Bounty Hunter Audit:**
+- Current ingestion coverage confirmed: `Local`, `Sourcemap`, `NPM`, `APK`, `ASAR`, `JAR`.
+- Highest-ROI missing artifact lanes identified:
+  - `--docker` / OCI image layer reconstruction (pure Rust, final merged rootfs scan)
+  - `--whl` / PyPI wheel unpacking (pure Rust ZIP lane)
+  - `--ipa` / iOS application bundle ingestion (pure Rust ZIP + plist/web-asset/string extraction)
+- Taint / sink gaps identified:
+  - Server-Side Template Injection coverage is materially incomplete across Python (`jinja2`), Java (`FreeMarker`, `Velocity`, `Thymeleaf`), and Node (`ejs`, `pug`, `handlebars`).
+  - Python unsafe loader coverage should expand beyond `pickle` into `yaml.load`, `marshal.loads`, and shell-enabled subprocess patterns.
+  - JVM deserialization coverage should expand beyond `ObjectInputStream` / `XMLDecoder` / `XStream` into modern polymorphic deserializer families encountered in bounty targets.
+
+**Phase 4 — Innovation Roadmap Rewrite:**
+- `.INNOVATION_LOG.md` fully purged of completed/resolved entries.
+- Rewritten as a pure offensive roadmap containing the top three pure-Rust, highest-ROI gaps:
+  - P0-1 `janitor hunt --docker`
+  - P0-2 `janitor hunt --whl`
+  - P0-3 `janitor hunt --ipa`
+
+**Phase 5 — Governance / Ledger Notes:**
+- `Cargo.toml`: workspace version `10.1.11` → `10.1.12`.
+- `docs/IMPLEMENTATION_BACKLOG.md` does not exist in this repository; session ledger recorded in this authoritative changelog instead of inventing a conflicting backlog file.
+
+## 2026-04-15 — Mobile/Desktop Recon & Native Query Engine (v10.1.11)
+
+**Directive:** Complete P0-4 Phases C (APK) and D (ASAR); implement P2-7 native jaq-style filtering; eliminate runtime `jq` dependency; release v10.1.11.
+
+**Phase C — APK Ingestion via jadx:**
+- `crates/cli/src/hunt.rs`: `ingest_apk(path)` — preflight `jadx --version` (bail if not in PATH); `tempfile::TempDir` RAII decompilation target; `jadx -d <tmpdir> <apk>` spawned and awaited; `scan_directory(tmpdir.path())` on decompiled source; tmpdir drops on return. No test (requires jadx binary).
+
+**Phase D — Electron ASAR Ingestion (pure Rust):**
+- `crates/cli/src/hunt.rs`: `ingest_asar(path)` — parses Chromium Pickle header (`magic=4`, `header_buf_size`, `json_len`, JSON at byte 16, file data at `8 + header_buf_size`); `extract_asar_dir(node, file_data, dest_dir)` — recursive JSON traversal; path traversal guard (rejects names containing `..`, `/`, `\`); ASAR `offset` field parsed as decimal string (not JSON number); `tempfile::TempDir` RAII cleanup. Tests: `asar_extraction_scans_embedded_credential` (synthetic ASAR with AWS key pattern), `asar_rejects_bad_magic`.
+
+**Phase 3 — P2-7 Native jq-style Filter:**
+- `crates/cli/Cargo.toml`: `jaq-core = "1"`, `jaq-parse = "1"`, `jaq-std = "1"` added.
+- `crates/cli/src/hunt.rs`: `apply_jaq_filter(filter_str, findings_json)` — `jaq_core::load::{Arena, File, Loader}` + `jaq_std::defs()` for standard library; `Compiler::<_, Native<_>>::default().with_funs().compile()`; `Val::from(serde_json::Value)` input; results collected to `Value::Array`. Tests: `jaq_filter_selects_by_severity`, `jaq_filter_iterates_all_elements`, `jaq_filter_invalid_syntax_returns_error`.
+- `cmd_hunt` extended: `apk_path: Option<&Path>`, `asar_path: Option<&Path>`, `filter_expr: Option<&str>` parameters; `--filter` applied after collection (post-scan JSON transform).
+- `crates/cli/src/main.rs`: `Hunt` variant gains `--apk`, `--asar`, `--filter` fields; handler passes all new params to `cmd_hunt`.
+
+## 2026-04-15 — Agent Brain Surgery & Offensive Ingestion Pipeline (v10.1.10)
+
+**Directive:** Purge AI scaffolding from the public git index; fix all governance file references from `docs/IMPLEMENTATION_BACKLOG.md` → `docs/CHANGELOG.md` and `docs/INNOVATION_LOG.md` → `.INNOVATION_LOG.md`; add npm tarball ingestion to `janitor hunt`; release v10.1.10.
+
+**Phase 1 — Agent Brain Surgery:**
+- `.agent_governance/skills/evolution-tracker/SKILL.md`: all `docs/IMPLEMENTATION_BACKLOG.md` refs → `docs/CHANGELOG.md`; all `docs/INNOVATION_LOG.md` refs → `.INNOVATION_LOG.md`.
+- `.agent_governance/commands/release.md`: same replacements.
+- `.agent_governance/commands/ciso-pulse.md`: `docs/INNOVATION_LOG.md` → `.INNOVATION_LOG.md`.
+- `.agent_governance/README.md`: both replacements.
+- `docs/INNOVATION_LOG.md` migrated to `.INNOVATION_LOG.md` (project root, gitignored).
+- `docs/IMPLEMENTATION_BACKLOG.md` deleted (redundant with `docs/CHANGELOG.md`).
+- `.gitignore`: added `.INNOVATION_LOG.md` and `docs/IMPLEMENTATION_BACKLOG.md` guards.
+
+**Phase 2 — Git Index Purge:**
+- `git rm --cached .agents .claude .codex .cursorrules` — removed all tracked AI scaffolding symlinks and files.
+- `.agent_governance/` (37 files, pre-staged) deleted from index.
+- Dedicated commit `c6e98fc`: `chore: eradicate AI scaffolding from public index`.
+
+**Phase 3 — P0-4 Phase B (npm Tarball Ingestion):**
+- `crates/cli/Cargo.toml`: added `tempfile = "3"`, `flate2 = "1"`, `tar = "0.4"` to `[dependencies]`; `tempfile` moved from dev-only to production (enables RAII tmpdir in hunt command).
+- `crates/cli/src/hunt.rs` *(rewritten)*:
+  - `ingest_sourcemap(url)` — `ureq` GET with 16 MiB limit; `with_config().limit().read_json()`; `tempfile::TempDir` RAII reconstruction; path traversal guard.
+  - `ingest_npm(pkg)` — parse `"name@version"` spec; resolve latest via `registry.npmjs.org/<name>/latest` if no version; fetch `<name>/-/<name>-<ver>.tgz`; stream `with_config().limit().reader()` → `flate2::read::GzDecoder` → `tar::Archive::new().unpack(tmpdir.path())`; `TempDir` RAII cleanup.
+  - `parse_npm_spec(pkg)` — handles scoped packages (`@scope/name@ver`).
+  - `resolve_npm_latest(name)` — JSON metadata endpoint.
+  - `cmd_hunt` signature extended: `npm: Option<&str>` added.
+  - 4 new npm tests: `parse_npm_spec_versioned`, `parse_npm_spec_unversioned`, `parse_npm_spec_scoped_versioned`, `parse_npm_spec_scoped_unversioned`, `npm_tarball_extraction_scans_extracted_files` (in-memory tarball round-trip).
+  - `sourcemap_reconstruction_scans_inline_content` test added.
+- `crates/cli/src/main.rs`: `Commands::Hunt` extended with `--npm <pkg>` flag; handler passes `npm.as_deref()` to `cmd_hunt`.
+
 ## 2026-04-14 — Offensive Hunt Engine & Final Taint Spine (v10.1.9)
 
 **Directive:** Complete P1-1 Group 3 (Objective-C, GLSL) taint producers; forge native `janitor hunt` command for bug-bounty offensive scanning; add P2-7 native filtering proposal; release v10.1.9.

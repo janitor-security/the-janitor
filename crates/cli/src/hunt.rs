@@ -1,79 +1,494 @@
 //! `janitor hunt` — Offensive security scanner for bug-bounty engagements.
 //!
 //! Recursively walks a target directory (or a source tree reconstructed from a
-//! JavaScript sourcemap), runs the full Janitor detector suite on every file,
-//! and emits results as a single JSON array of [`common::slop::StructuredFinding`]
-//! to stdout.  No summary tables, no SlopScore — raw signal only.
+//! JavaScript sourcemap / npm tarball / Android APK / Java JAR / Electron ASAR), runs the
+//! full Janitor detector suite on every file, and emits results as a single
+//! JSON array of [`common::slop::StructuredFinding`] to stdout.
 //!
-//! ## Output format
+//! ## Modes
 //!
 //! ```text
-//! janitor hunt ./target           # scan a local directory
-//! janitor hunt . --sourcemap https://example.com/app.js.map
+//! janitor hunt ./target                           # local directory
+//! janitor hunt --sourcemap https://x.com/a.map    # JS sourcemap
+//! janitor hunt --npm lodash@4.17.21               # npm package
+//! janitor hunt --apk app.apk                      # Android APK (requires jadx)
+//! janitor hunt --jar app.jar                      # Java archive
+//! janitor hunt --asar app.asar                    # Electron ASAR archive
+//! janitor hunt ./target --filter '.[] | select(.severity == "Critical")'
 //! ```
 //!
-//! Stdout is always a valid JSON array:
-//! ```json
-//! [{ "id": "security:command_injection", "file": "src/server.js", "line": 42, ... }]
-//! ```
-//!
-//! Pipe through `jq` for filtering, e.g.:
-//! ```text
-//! janitor hunt ./target | jq '.[] | select(.id == "security:credential_leak")'
-//! ```
+//! Stdout is always a valid JSON array.  Use `--filter` for native `jq`-style
+//! filtering (no runtime `jq` dependency required).
 
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
 use forge::slop_hunter::{find_credential_slop, find_slop, find_supply_chain_slop, ParsedUnit};
-use std::path::{Path, PathBuf};
-use uuid::Uuid;
+use std::io::Read as _;
+use std::path::Path;
 use walkdir::WalkDir;
 
-// 1 MiB — matches the circuit-breaker threshold in slop_hunter.rs
+/// 16 MiB — HTTP body cap for sourcemap and npm registry responses.
+const HTTP_BODY_LIMIT: u64 = 16 * 1024 * 1024;
+/// 1 MiB — per-file circuit breaker matching slop_hunter.rs.
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 
-/// Entry point for the `janitor hunt` subcommand.
+pub struct HuntArgs<'a> {
+    pub scan_root: Option<&'a Path>,
+    pub sourcemap_url: Option<&'a str>,
+    pub npm_pkg: Option<&'a str>,
+    pub apk_path: Option<&'a Path>,
+    pub jar_path: Option<&'a Path>,
+    pub asar_path: Option<&'a Path>,
+    pub filter_expr: Option<&'a str>,
+    pub corpus_path: Option<&'a Path>,
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+/// Entry point for `janitor hunt`.
 ///
-/// Scans `scan_root` (or a sourcemap-reconstructed tmpdir) and emits all
-/// findings as a JSON array to stdout.  No printing occurs on error — the
-/// caller receives an `anyhow::Result`.
-pub fn cmd_hunt(
-    scan_root: &Path,
-    sourcemap_url: Option<&str>,
-    corpus_path: Option<&Path>,
-) -> anyhow::Result<()> {
-    let _ = corpus_path; // reserved for slopsquat corpus override (P2-7)
+/// A local `scan_root` or one remote/archive fetcher is required. All modes produce a
+/// `Vec<StructuredFinding>`
+/// serialised as JSON to stdout.  If `filter_expr` is provided the JSON output
+/// is piped through a native `jq`-compatible filter before printing.
+pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
+    let HuntArgs {
+        scan_root,
+        sourcemap_url,
+        npm_pkg,
+        apk_path,
+        jar_path,
+        asar_path,
+        filter_expr,
+        corpus_path,
+    } = args;
+    let _ = corpus_path; // reserved — slopsquat corpus override
 
-    // When a sourcemap URL is provided, reconstruct the source tree first and
-    // scan the temporary directory instead of the caller-supplied path.
-    let (tmpdir, effective_root) = if let Some(url) = sourcemap_url {
-        let dir = reconstruct_sourcemap(url).context("sourcemap ingestion failed")?;
-        let root = dir.clone();
-        (Some(dir), root)
-    } else {
-        (None, scan_root.to_path_buf())
-    };
+    let source_count = usize::from(scan_root.is_some())
+        + usize::from(sourcemap_url.is_some())
+        + usize::from(npm_pkg.is_some())
+        + usize::from(apk_path.is_some())
+        + usize::from(jar_path.is_some())
+        + usize::from(asar_path.is_some());
 
-    let findings = scan_directory(&effective_root)?;
-
-    // Clean up the sourcemap tmpdir after scanning.
-    if let Some(dir) = tmpdir {
-        let _ = std::fs::remove_dir_all(&dir);
+    if source_count == 0 {
+        anyhow::bail!(
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, or --asar"
+        );
+    }
+    if source_count > 1 {
+        anyhow::bail!(
+            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, or --asar"
+        );
     }
 
-    let json =
-        serde_json::to_string_pretty(&findings).context("failed to serialise findings as JSON")?;
+    let findings = if let Some(url) = sourcemap_url {
+        ingest_sourcemap(url)?
+    } else if let Some(pkg) = npm_pkg {
+        ingest_npm(pkg)?
+    } else if let Some(apk) = apk_path {
+        ingest_apk(apk)?
+    } else if let Some(jar) = jar_path {
+        ingest_jar(jar)?
+    } else if let Some(asar) = asar_path {
+        ingest_asar(asar)?
+    } else if let Some(root) = scan_root {
+        scan_directory(root)?
+    } else {
+        anyhow::bail!(
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, or --asar"
+        );
+    };
+
+    let json_val =
+        serde_json::to_value(&findings).context("failed to convert findings to JSON value")?;
+
+    let output_val = if let Some(expr) = filter_expr {
+        apply_jaq_filter(expr, json_val)?
+    } else {
+        json_val
+    };
+
+    let json = serde_json::to_string_pretty(&output_val)
+        .context("failed to serialise findings as JSON")?;
     println!("{json}");
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Directory walker
+// Sourcemap ingestion  (Phase A)
+// ---------------------------------------------------------------------------
+
+/// Download a JavaScript sourcemap, reconstruct the source tree into a
+/// `tempfile::TempDir`, scan it, and return findings.  The tempdir is
+/// automatically deleted when the function returns (RAII drop).
+fn ingest_sourcemap(url: &str) -> anyhow::Result<Vec<StructuredFinding>> {
+    let agent = ureq::Agent::new_with_defaults();
+    let map: serde_json::Value = agent
+        .get(url)
+        .call()
+        .map_err(|_| anyhow::anyhow!("sourcemap HTTP fetch failed"))?
+        .body_mut()
+        .with_config()
+        .limit(HTTP_BODY_LIMIT)
+        .read_json::<serde_json::Value>()
+        .context("sourcemap response is not valid JSON")?;
+
+    let sources = map["sources"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("sourcemap missing 'sources' array"))?;
+    let contents = map["sourcesContent"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    // RAII: tempdir is deleted when `tmpdir` drops at end of scope.
+    let tmpdir = tempfile::TempDir::new().context("failed to create sourcemap tmpdir")?;
+
+    for (i, source_val) in sources.iter().enumerate() {
+        let raw = source_val.as_str().unwrap_or("");
+        let safe = sanitize_sourcemap_path(raw, i);
+        let dest = tmpdir.path().join(&safe);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create parent for sourcemap entry {i}"))?;
+        }
+        let content = contents.get(i).and_then(|v| v.as_str()).unwrap_or("");
+        std::fs::write(&dest, content.as_bytes())
+            .with_context(|| format!("write sourcemap entry {i}"))?;
+    }
+
+    scan_directory(tmpdir.path())
+    // tmpdir drops here — reconstructed tree deleted
+}
+
+// ---------------------------------------------------------------------------
+// npm tarball ingestion  (Phase B)
+// ---------------------------------------------------------------------------
+
+/// Download an npm package tarball, extract it to a `tempfile::TempDir`,
+/// scan the extracted tree, and return findings.
+///
+/// `pkg` may be `"lodash"` (resolves latest) or `"lodash@4.17.21"`.
+fn ingest_npm(pkg: &str) -> anyhow::Result<Vec<StructuredFinding>> {
+    let (name, version) = parse_npm_spec(pkg);
+    let resolved_version = if version.is_empty() {
+        resolve_npm_latest(name)?
+    } else {
+        version.to_owned()
+    };
+
+    let tgz_url = format!("https://registry.npmjs.org/{name}/-/{name}-{resolved_version}.tgz");
+
+    let agent = ureq::Agent::new_with_defaults();
+    let mut response = agent
+        .get(&tgz_url)
+        .call()
+        .map_err(|_| anyhow::anyhow!("npm registry fetch failed for {name}@{resolved_version}"))?;
+
+    // Stream through GzDecoder → tar::Archive → tempdir (RAII drop).
+    let tmpdir = tempfile::TempDir::new().context("failed to create npm tmpdir")?;
+    {
+        let body_reader = response
+            .body_mut()
+            .with_config()
+            .limit(HTTP_BODY_LIMIT)
+            .reader();
+        let gz = flate2::read::GzDecoder::new(body_reader);
+        let mut archive = tar::Archive::new(gz);
+        archive
+            .unpack(tmpdir.path())
+            .context("failed to extract npm tarball")?;
+    }
+
+    scan_directory(tmpdir.path())
+    // tmpdir drops here — extracted package deleted
+}
+
+/// Parse `"name@version"` → `("name", "version")`.
+/// Handles scoped packages like `"@scope/name@1.0.0"`.
+fn parse_npm_spec(pkg: &str) -> (&str, &str) {
+    // For scoped packages (@scope/name), the `@` version separator can only
+    // appear after the `/`.  Find the last `@` that is not at position 0.
+    if let Some(at) = pkg[1..].rfind('@') {
+        let pos = at + 1; // offset into original string
+        (&pkg[..pos], &pkg[pos + 1..])
+    } else {
+        (pkg, "")
+    }
+}
+
+/// Resolve the latest published version for an npm package via the registry
+/// metadata endpoint (`https://registry.npmjs.org/<name>/latest`).
+fn resolve_npm_latest(name: &str) -> anyhow::Result<String> {
+    let url = format!("https://registry.npmjs.org/{name}/latest");
+    let agent = ureq::Agent::new_with_defaults();
+    let meta: serde_json::Value = agent
+        .get(&url)
+        .call()
+        .map_err(|_| anyhow::anyhow!("npm registry metadata fetch failed for {name}"))?
+        .body_mut()
+        .with_config()
+        .limit(HTTP_BODY_LIMIT)
+        .read_json::<serde_json::Value>()
+        .context("npm registry metadata is not valid JSON")?;
+
+    meta["version"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("npm registry response missing 'version' field"))
+}
+
+// ---------------------------------------------------------------------------
+// APK ingestion via jadx  (Phase C)
+// ---------------------------------------------------------------------------
+
+/// Decompile an Android APK using `jadx`, scan the decompiled source tree,
+/// and return findings.  The decompiled tree is deleted via RAII on return.
+///
+/// # Errors
+///
+/// Returns an error if `jadx` is not installed, decompilation fails, or the
+/// scan encounters an I/O error.
+fn ingest_apk(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
+    // Preflight: verify jadx is available in PATH.
+    std::process::Command::new("jadx")
+        .arg("--version")
+        .output()
+        .map_err(|_| {
+            anyhow::anyhow!("jadx is not installed or not in PATH. Required for APK decompilation.")
+        })?;
+
+    let tmpdir = tempfile::TempDir::new().context("failed to create APK decompilation tmpdir")?;
+
+    let status = std::process::Command::new("jadx")
+        .arg("-d")
+        .arg(tmpdir.path())
+        .arg(path)
+        .status()
+        .context("failed to spawn jadx")?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "jadx decompilation failed with exit code {:?}",
+            status.code()
+        );
+    }
+
+    scan_directory(tmpdir.path())
+    // tmpdir drops here — decompiled source deleted
+}
+
+// ---------------------------------------------------------------------------
+// JAR ingestion  (Phase D)
+// ---------------------------------------------------------------------------
+
+/// Extract a Java `.jar` archive into a `tempfile::TempDir`, scan the expanded
+/// tree, and return findings.
+fn ingest_jar(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("failed to open JAR archive {}", path.display()))?;
+    let mut archive = zip::ZipArchive::new(file).context("failed to parse JAR archive as ZIP")?;
+    let tmpdir = tempfile::TempDir::new().context("failed to create JAR extraction tmpdir")?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .with_context(|| format!("failed to read JAR entry {i}"))?;
+        let Some(safe_rel) = sanitize_archive_entry_path(entry.name()) else {
+            continue;
+        };
+        let dest = tmpdir.path().join(safe_rel);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&dest)
+                .with_context(|| format!("create JAR directory {}", dest.display()))?;
+            continue;
+        }
+
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create JAR parent {}", parent.display()))?;
+        }
+
+        let mut buf = Vec::new();
+        entry
+            .read_to_end(&mut buf)
+            .with_context(|| format!("read JAR file {}", entry.name()))?;
+        std::fs::write(&dest, &buf)
+            .with_context(|| format!("write extracted JAR file {}", dest.display()))?;
+    }
+
+    scan_directory(tmpdir.path())
+}
+
+// ---------------------------------------------------------------------------
+// Electron ASAR ingestion  (Phase E)
+// ---------------------------------------------------------------------------
+
+/// Parse an Electron `.asar` archive in pure Rust, extract its contents to a
+/// `tempfile::TempDir`, scan the extracted tree, and return findings.
+///
+/// ## ASAR format (Chromium Pickle):
+///
+/// ```text
+/// [0..4]           uint32 LE = 4              (outer pickle header_size)
+/// [4..8]           uint32 LE = header_buf_size (size of the inner pickle)
+/// [8..12]          uint32 LE = inner payload   (4 + json_len, 4-byte aligned)
+/// [12..16]         uint32 LE = json_len
+/// [16..16+json_len] UTF-8 JSON header
+/// [8+header_buf_size..] concatenated file data
+/// ```
+fn ingest_asar(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
+    let data = std::fs::read(path).context("failed to read ASAR file")?;
+
+    if data.len() < 16 {
+        anyhow::bail!(
+            "not a valid ASAR archive: file too short ({} bytes)",
+            data.len()
+        );
+    }
+
+    let magic = u32::from_le_bytes(data[0..4].try_into().unwrap());
+    if magic != 4 {
+        anyhow::bail!(
+            "not a valid ASAR archive: bad outer pickle header (expected 4, got {magic})"
+        );
+    }
+
+    let header_buf_size = u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
+    let json_len = u32::from_le_bytes(data[12..16].try_into().unwrap()) as usize;
+
+    let json_end = 16usize
+        .checked_add(json_len)
+        .ok_or_else(|| anyhow::anyhow!("ASAR json_len overflow"))?;
+    if data.len() < json_end {
+        anyhow::bail!(
+            "ASAR header JSON truncated: need {json_end} bytes, have {}",
+            data.len()
+        );
+    }
+
+    let header_json: serde_json::Value =
+        serde_json::from_slice(&data[16..json_end]).context("ASAR header JSON is not valid")?;
+
+    let data_offset = 8usize
+        .checked_add(header_buf_size)
+        .ok_or_else(|| anyhow::anyhow!("ASAR data_offset overflow"))?;
+    if data.len() < data_offset {
+        anyhow::bail!(
+            "ASAR data region missing: need offset {data_offset}, have {} bytes",
+            data.len()
+        );
+    }
+
+    let tmpdir = tempfile::TempDir::new().context("failed to create ASAR extraction tmpdir")?;
+
+    if let Some(files) = header_json.get("files") {
+        extract_asar_dir(files, &data[data_offset..], tmpdir.path())?;
+    }
+
+    scan_directory(tmpdir.path())
+    // tmpdir drops here — extracted tree deleted
+}
+
+/// Recursively extract a directory node from the ASAR header JSON.
+///
+/// `node` is the object under a `"files"` key.
+/// `file_data` is the raw concatenated file data region.
+/// `dest_dir` is the target directory on the local filesystem.
+fn extract_asar_dir(
+    node: &serde_json::Value,
+    file_data: &[u8],
+    dest_dir: &Path,
+) -> anyhow::Result<()> {
+    let entries = match node.as_object() {
+        Some(o) => o,
+        None => return Ok(()),
+    };
+
+    for (name, entry) in entries {
+        // Path traversal guard: reject any name with separators or dots-only.
+        if name.contains("..") || name.contains('/') || name.contains('\\') {
+            continue;
+        }
+        let dest = dest_dir.join(name);
+
+        if let Some(sub_files) = entry.get("files") {
+            // Directory node — recurse.
+            std::fs::create_dir_all(&dest)
+                .with_context(|| format!("create ASAR subdir {}", dest.display()))?;
+            extract_asar_dir(sub_files, file_data, &dest)?;
+        } else {
+            // File node — extract bytes by offset + size.
+            // ASAR stores offset as a decimal string, not a JSON number.
+            let offset = entry
+                .get("offset")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
+            let size = entry.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+            let end = offset.saturating_add(size);
+            if end > file_data.len() {
+                // Truncated file — skip rather than panic.
+                continue;
+            }
+            std::fs::write(&dest, &file_data[offset..end])
+                .with_context(|| format!("write ASAR file {}", dest.display()))?;
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Native jq-style filter  (Phase 3 / P2-7)
+// ---------------------------------------------------------------------------
+
+/// Apply a `jq`-compatible filter expression to a `serde_json::Value` using
+/// the pure-Rust [`jaq`](https://crates.io/crates/jaq-interpret) engine.
+///
+/// Returns a `Value::Array` of all output values produced by the filter.
+fn apply_jaq_filter(
+    filter_str: &str,
+    findings_json: serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    use jaq_interpret::{Ctx, FilterT as _, ParseCtx, RcIter, Val};
+
+    // Parse the filter expression.
+    let (prog, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
+    if !errs.is_empty() {
+        anyhow::bail!("jaq: filter parse failed — check filter syntax");
+    }
+    let prog = prog.ok_or_else(|| anyhow::anyhow!("jaq: empty filter expression"))?;
+
+    // Compile: load native core functions + standard library definitions.
+    let mut defs = ParseCtx::new(Vec::new());
+    defs.insert_natives(jaq_core::core());
+    defs.insert_defs(jaq_std::std());
+    let filter = defs.compile(prog);
+
+    // Execute against the findings JSON.
+    let inputs = RcIter::new(core::iter::empty());
+
+    let results: Vec<serde_json::Value> = filter
+        .run((Ctx::new([], &inputs), Val::from(findings_json)))
+        .filter_map(|r| r.ok())
+        .map(serde_json::Value::from)
+        .collect();
+
+    Ok(serde_json::Value::Array(results))
+}
+
+// ---------------------------------------------------------------------------
+// Directory walker (shared by all ingestion paths)
 // ---------------------------------------------------------------------------
 
 /// Walk `dir` recursively, run all detectors on every file, and return the
 /// unified finding list.  Files > 1 MiB and unreadable files are silently
-/// skipped (consistent with the hot-path circuit breaker in `slop_filter.rs`).
+/// skipped.
 fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let mut all: Vec<StructuredFinding> = Vec::new();
 
@@ -87,7 +502,6 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
         }
         let file_path = entry.path();
 
-        // Circuit breaker — skip oversized files.
         if std::fs::metadata(file_path)
             .map(|m| m.len() > MAX_FILE_BYTES)
             .unwrap_or(false)
@@ -101,33 +515,24 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
         };
 
         let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-
         let rel_path = file_path
             .strip_prefix(dir)
             .unwrap_or(file_path)
             .to_string_lossy()
             .to_string();
 
-        // Language-specific detector pass.
         let unit = ParsedUnit::unparsed(&source);
         let mut raw = find_slop(ext, &unit);
-
-        // Language-agnostic passes — credentials and supply-chain run on every
-        // file regardless of extension.
         raw.extend(find_credential_slop(&source));
         raw.extend(find_supply_chain_slop(&source));
 
         for f in raw {
-            let line = byte_to_line(&source, f.start_byte);
-            let id = extract_rule_id(&f.description);
-            let severity_str = format!("{:?}", f.severity);
-
             all.push(StructuredFinding {
-                id,
+                id: extract_rule_id(&f.description),
                 file: Some(rel_path.clone()),
-                line: Some(line),
+                line: Some(byte_to_line(&source, f.start_byte)),
                 fingerprint: fingerprint_finding(&source, f.start_byte, f.end_byte),
-                severity: Some(severity_str),
+                severity: Some(format!("{:?}", f.severity)),
                 remediation: None,
                 docs_url: None,
             });
@@ -138,57 +543,14 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
 }
 
 // ---------------------------------------------------------------------------
-// Sourcemap ingestion
+// Helpers
 // ---------------------------------------------------------------------------
 
-/// Download a JavaScript sourcemap from `url`, reconstruct the source tree
-/// into `/tmp/janitor-hunt-<uuid>/`, and return the path to that directory.
-fn reconstruct_sourcemap(url: &str) -> anyhow::Result<PathBuf> {
-    let agent = ureq::Agent::new_with_defaults();
-    let map: serde_json::Value = agent
-        .get(url)
-        .call()
-        .map_err(|_| anyhow::anyhow!("sourcemap HTTP fetch failed"))?
-        .body_mut()
-        .read_json()
-        .context("sourcemap response body is not valid JSON")?;
-
-    let sources = map["sources"]
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("sourcemap missing 'sources' array"))?;
-    let contents = map["sourcesContent"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-
-    let tmpdir = std::env::temp_dir().join(format!("janitor-hunt-{}", Uuid::new_v4()));
-    std::fs::create_dir_all(&tmpdir).context("failed to create sourcemap tmpdir")?;
-
-    for (i, source_val) in sources.iter().enumerate() {
-        let raw_path = source_val.as_str().unwrap_or("");
-        let safe = sanitize_sourcemap_path(raw_path, i);
-        let dest = tmpdir.join(&safe);
-
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create parent dir for sourcemap entry {i}"))?;
-        }
-
-        let content = contents.get(i).and_then(|v| v.as_str()).unwrap_or("");
-
-        std::fs::write(&dest, content.as_bytes())
-            .with_context(|| format!("failed to write sourcemap entry {i}"))?;
-    }
-
-    Ok(tmpdir)
-}
-
-/// Sanitise a raw sourcemap `sources[]` path entry to prevent path traversal.
+/// Sanitise a raw sourcemap `sources[]` path to prevent path traversal.
 ///
-/// Strips known webpack/file URL prefixes, removes `../` sequences, and caps
-/// depth at 3 path components to constrain the reconstructed tree.
+/// Strips `webpack:///`, `file://`, and `//` prefixes; removes `../` sequences;
+/// caps depth at 3 components.
 pub fn sanitize_sourcemap_path(raw: &str, index: usize) -> String {
-    // Strip known prefixes.
     let stripped = raw
         .trim_start_matches("webpack:///")
         .trim_start_matches("webpack://")
@@ -196,13 +558,11 @@ pub fn sanitize_sourcemap_path(raw: &str, index: usize) -> String {
         .trim_start_matches("file://")
         .trim_start_matches("//");
 
-    // Remove any path traversal sequences.
     let clean = stripped
         .replace("../", "")
         .replace("..\\", "")
         .replace("..", "");
 
-    // Normalise separators and collect non-empty components.
     let components: Vec<&str> = clean
         .split(['/', '\\'])
         .filter(|s| !s.is_empty() && *s != ".")
@@ -212,47 +572,51 @@ pub fn sanitize_sourcemap_path(raw: &str, index: usize) -> String {
         return format!("source_{index}");
     }
 
-    // Cap depth: keep the last 3 components to bound the reconstructed tree.
     let capped = if components.len() > 3 {
         &components[components.len() - 3..]
     } else {
         &components[..]
     };
-
     capped.join("/")
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Convert a byte offset in `source` to a 1-indexed line number.
 fn byte_to_line(source: &[u8], byte_offset: usize) -> u32 {
     let capped = byte_offset.min(source.len());
-    let newlines = source[..capped].iter().filter(|&&b| b == b'\n').count();
-    newlines as u32 + 1
+    source[..capped].iter().filter(|&&b| b == b'\n').count() as u32 + 1
 }
 
-/// Extract the machine-readable rule ID from a `SlopFinding::description`.
-///
-/// Descriptions follow the format `"rule_id — human readable message"`.
-/// This function returns the portion before the ` — ` separator, or the
-/// entire description when no separator is present.
 fn extract_rule_id(description: &str) -> String {
     description
-        .split(" \u{2014} ") // U+2014 EM DASH with surrounding spaces
+        .split(" \u{2014} ") // U+2014 EM DASH with spaces
         .next()
         .unwrap_or(description)
         .to_owned()
 }
 
-/// Produce an 8-byte BLAKE3 fingerprint of the finding's source window.
 fn fingerprint_finding(source: &[u8], start: usize, end: usize) -> String {
     let s = start.min(source.len());
     let e = end.min(source.len());
     let window = if s < e { &source[s..e] } else { &source[s..s] };
-    let hash = blake3::hash(window);
-    hex::encode(&hash.as_bytes()[..8])
+    hex::encode(&blake3::hash(window).as_bytes()[..8])
+}
+
+fn sanitize_archive_entry_path(raw: &str) -> Option<std::path::PathBuf> {
+    use std::path::{Component, PathBuf};
+
+    let mut clean = PathBuf::new();
+    for component in Path::new(raw).components() {
+        match component {
+            Component::Normal(seg) => clean.push(seg),
+            Component::CurDir => {}
+            Component::RootDir | Component::ParentDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    if clean.as_os_str().is_empty() {
+        None
+    } else {
+        Some(clean)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -262,63 +626,70 @@ fn fingerprint_finding(source: &[u8], start: usize, end: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
+
+    // -----------------------------------------------------------------------
+    // sanitize_sourcemap_path
+    // -----------------------------------------------------------------------
 
     #[test]
     fn sanitize_strips_webpack_prefix() {
-        let result = sanitize_sourcemap_path("webpack:///src/components/App.js", 0);
-        assert_eq!(result, "src/components/App.js");
+        assert_eq!(
+            sanitize_sourcemap_path("webpack:///src/components/App.js", 0),
+            "src/components/App.js"
+        );
     }
 
     #[test]
     fn sanitize_blocks_path_traversal() {
         let result = sanitize_sourcemap_path("webpack:///../../etc/passwd", 0);
-        assert!(
-            !result.contains(".."),
-            "must strip path traversal sequences"
-        );
-        // After stripping `../` sequences: `etc/passwd` remains — that's fine,
-        // it is depth-capped and lands under the tmpdir.
-        let segments: Vec<&str> = result.split('/').collect();
-        assert!(segments.len() <= 3, "depth must be capped at 3");
+        assert!(!result.contains(".."), "must strip path traversal");
+        assert!(result.split('/').count() <= 3, "depth must be capped at 3");
     }
 
     #[test]
     fn sanitize_caps_depth_at_three() {
         let result = sanitize_sourcemap_path("webpack:///a/b/c/d/e/f/g.js", 0);
-        let segments: Vec<&str> = result.split('/').collect();
-        assert!(segments.len() <= 3, "depth must be capped at 3");
+        assert!(result.split('/').count() <= 3, "depth must be capped at 3");
     }
 
     #[test]
     fn sanitize_empty_path_returns_fallback() {
-        let result = sanitize_sourcemap_path("", 7);
-        assert_eq!(result, "source_7");
+        assert_eq!(sanitize_sourcemap_path("", 7), "source_7");
     }
+
+    // -----------------------------------------------------------------------
+    // extract_rule_id / byte_to_line
+    // -----------------------------------------------------------------------
 
     #[test]
     fn extract_rule_id_splits_on_em_dash() {
-        let desc = "security:command_injection \u{2014} system() with dynamic arg";
-        assert_eq!(extract_rule_id(desc), "security:command_injection");
+        assert_eq!(
+            extract_rule_id("security:command_injection \u{2014} system() with dynamic arg"),
+            "security:command_injection"
+        );
     }
 
     #[test]
     fn extract_rule_id_no_separator_returns_whole() {
-        let desc = "security:raw_finding";
-        assert_eq!(extract_rule_id(desc), "security:raw_finding");
+        assert_eq!(extract_rule_id("security:raw"), "security:raw");
     }
 
     #[test]
     fn byte_to_line_counts_newlines() {
         let src = b"line1\nline2\nline3\n";
         assert_eq!(byte_to_line(src, 0), 1);
-        assert_eq!(byte_to_line(src, 6), 2); // 'l' of "line2"
-        assert_eq!(byte_to_line(src, 12), 3); // 'l' of "line3"
+        assert_eq!(byte_to_line(src, 6), 2);
+        assert_eq!(byte_to_line(src, 12), 3);
     }
+
+    // -----------------------------------------------------------------------
+    // scan_directory — credential detection
+    // -----------------------------------------------------------------------
 
     #[test]
     fn scan_directory_emits_credential_finding() {
         let dir = tempfile::TempDir::new().unwrap();
-        // AWS access key prefix — fires find_credential_slop
         std::fs::write(
             dir.path().join("config.yml"),
             b"AKIAIOSFODNN7EXAMPLE = true",
@@ -338,18 +709,247 @@ mod tests {
     #[test]
     fn scan_directory_skips_oversized_file() {
         let dir = tempfile::TempDir::new().unwrap();
-        // Create a sparse file just over 1 MiB.
         let path = dir.path().join("big.bin");
-        let file = std::fs::File::create(&path).unwrap();
-        file.set_len(1024 * 1024 + 1).unwrap();
-        // Scanning must succeed without error; no finding emitted for the
-        // skipped file (contents are NUL, no credentials).
+        let f = std::fs::File::create(&path).unwrap();
+        f.set_len(MAX_FILE_BYTES + 1).unwrap();
         let findings = scan_directory(dir.path()).unwrap();
         assert!(
             findings
                 .iter()
                 .all(|f| f.file.as_deref() != Some("big.bin")),
             "oversized file must be skipped"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Sourcemap ingestion — mock JSON round-trip
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn sourcemap_reconstruction_scans_inline_content() {
+        let map = serde_json::json!({
+            "version": 3,
+            "sources": ["webpack:///src/server.js"],
+            "sourcesContent": [
+                "const exec = require('child_process');\n\
+                 exec.execSync('rm -rf ' + userInput);\n\
+                 const key = 'AKIAIOSFODNN7EXAMPLEKEY123';\n"
+            ]
+        });
+        let map_str = serde_json::to_string(&map).unwrap();
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dest = tmp.path().join("src").join("server.js");
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+
+        let content = map["sourcesContent"][0].as_str().unwrap();
+        std::fs::write(&dest, content.as_bytes()).unwrap();
+
+        let findings = scan_directory(tmp.path()).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id.contains("credential")),
+            "reconstructed source with AWS key must produce a credential finding; map={map_str}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // npm spec parsing
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_npm_spec_versioned() {
+        let (name, ver) = parse_npm_spec("lodash@4.17.21");
+        assert_eq!(name, "lodash");
+        assert_eq!(ver, "4.17.21");
+    }
+
+    #[test]
+    fn parse_npm_spec_unversioned() {
+        let (name, ver) = parse_npm_spec("lodash");
+        assert_eq!(name, "lodash");
+        assert_eq!(ver, "");
+    }
+
+    #[test]
+    fn parse_npm_spec_scoped_versioned() {
+        let (name, ver) = parse_npm_spec("@scope/pkg@2.0.0");
+        assert_eq!(name, "@scope/pkg");
+        assert_eq!(ver, "2.0.0");
+    }
+
+    #[test]
+    fn parse_npm_spec_scoped_unversioned() {
+        let (name, ver) = parse_npm_spec("@scope/pkg");
+        assert_eq!(name, "@scope/pkg");
+        assert_eq!(ver, "");
+    }
+
+    // -----------------------------------------------------------------------
+    // npm tarball extraction round-trip (mock tarball in memory)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn npm_tarball_extraction_scans_extracted_files() {
+        let mut tar_bytes: Vec<u8> = Vec::new();
+        {
+            let gz = flate2::write::GzEncoder::new(&mut tar_bytes, flate2::Compression::fast());
+            let mut tar = tar::Builder::new(gz);
+
+            let content = b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';\n";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append_data(&mut header, "package/index.js", content.as_ref())
+                .unwrap();
+            tar.into_inner().unwrap().finish().unwrap();
+        }
+
+        let extract_dir = tempfile::TempDir::new().unwrap();
+        {
+            let gz = flate2::read::GzDecoder::new(tar_bytes.as_slice());
+            let mut archive = tar::Archive::new(gz);
+            archive.unpack(extract_dir.path()).unwrap();
+        }
+
+        let findings = scan_directory(extract_dir.path()).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id.contains("credential")),
+            "extracted JS with AWS key must produce a credential finding"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // JAR extraction round-trip
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn jar_extraction_scans_embedded_java_source() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let jar_path = tmp.path().join("sample.jar");
+        let file = std::fs::File::create(&jar_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        let content = b"class Demo { void run(String cmd) throws Exception { Runtime.getRuntime().exec(cmd); } }\n";
+        zip.start_file("src/Demo.java", options).unwrap();
+        zip.write_all(content).unwrap();
+        zip.finish().unwrap();
+
+        let findings = ingest_jar(&jar_path).unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|f| { f.id.contains("runtime_exec") || f.id.contains("command_injection") }),
+            "JAR-extracted Java source with Runtime.exec must produce a finding"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ASAR parser — synthetic archive round-trip  (Phase D)
+    // -----------------------------------------------------------------------
+
+    /// Build a minimal in-memory ASAR archive containing `filename` with `content`.
+    fn build_asar(filename: &str, content: &[u8]) -> Vec<u8> {
+        let file_header = serde_json::json!({
+            "files": {
+                filename: {
+                    "size": content.len(),
+                    "offset": "0"
+                }
+            }
+        });
+        let json_str = serde_json::to_string(&file_header).unwrap();
+        let json_bytes = json_str.as_bytes();
+        let json_len = json_bytes.len();
+
+        // Inner pickle payload: [json_len as u32] + json_bytes, 4-byte aligned.
+        let inner_payload = 4 + json_len;
+        let inner_payload_padded = (inner_payload + 3) & !3;
+        let inner_pickle_size = 4 + inner_payload_padded;
+
+        let mut asar: Vec<u8> = Vec::new();
+        // Outer pickle: header_size=4, then inner_pickle_size.
+        asar.extend_from_slice(&4u32.to_le_bytes());
+        asar.extend_from_slice(&(inner_pickle_size as u32).to_le_bytes());
+        // Inner pickle: payload_size, then json_len string prefix, then JSON.
+        asar.extend_from_slice(&(inner_payload_padded as u32).to_le_bytes());
+        asar.extend_from_slice(&(json_len as u32).to_le_bytes());
+        asar.extend_from_slice(json_bytes);
+        // Padding to 4-byte boundary.
+        for _ in 0..(inner_payload_padded - inner_payload) {
+            asar.push(0);
+        }
+        // File data.
+        asar.extend_from_slice(content);
+        asar
+    }
+
+    #[test]
+    fn asar_extraction_scans_embedded_credential() {
+        let content = b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';\n";
+        let asar_bytes = build_asar("index.js", content);
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let asar_path = tmp.path().join("app.asar");
+        std::fs::write(&asar_path, &asar_bytes).unwrap();
+
+        let findings = ingest_asar(&asar_path).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id.contains("credential")),
+            "ASAR-extracted JS with AWS key must produce a credential finding"
+        );
+    }
+
+    #[test]
+    fn asar_rejects_bad_magic() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("bad.asar");
+        // Magic = 0x01020304, not 0x00000004.
+        std::fs::write(
+            &path,
+            b"\x01\x02\x03\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+        )
+        .unwrap();
+        assert!(
+            ingest_asar(&path).is_err(),
+            "invalid ASAR magic must return an error"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // jaq native filter  (Phase 3 / P2-7)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn jaq_filter_selects_by_severity() {
+        let input = serde_json::json!([
+            {"id": "security:a", "severity": "Critical"},
+            {"id": "security:b", "severity": "Low"}
+        ]);
+        let result = apply_jaq_filter(".[] | select(.severity == \"Critical\")", input).unwrap();
+        let arr = result.as_array().unwrap();
+        assert_eq!(
+            arr.len(),
+            1,
+            "filter must select exactly one Critical finding"
+        );
+        assert_eq!(arr[0]["id"].as_str().unwrap(), "security:a");
+    }
+
+    #[test]
+    fn jaq_filter_iterates_all_elements() {
+        let input = serde_json::json!([{"id": "a"}, {"id": "b"}, {"id": "c"}]);
+        let result = apply_jaq_filter(".[]", input).unwrap();
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr.len(), 3, ".[] must iterate over all elements");
+    }
+
+    #[test]
+    fn jaq_filter_invalid_syntax_returns_error() {
+        let input = serde_json::json!([]);
+        assert!(
+            apply_jaq_filter("invalid ][[ syntax", input).is_err(),
+            "malformed filter must return an error"
         );
     }
 }
