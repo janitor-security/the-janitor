@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-16-tactical-recon-patch-v10113" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-16 — Tactical Recon Patch (v10.1.13)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)
@@ -1625,6 +1634,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-16-tactical-recon-patch-v10113" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-16 — Tactical Recon Patch (v10.1.13)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)
@@ -2674,6 +2692,23 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-16-tactical-recon-patch-v10113">2026-04-16 — Tactical Recon Patch (v10.1.13)</h2>
+<p><strong>Directive:</strong> Apply a surgical hotfix to the mobile ingestion path by constraining JADX resource usage, eliminate <code>unpinned_asset</code> false positives from comment text, verify under single-threaded tests, and execute the governed release path.</p>
+<p><strong>Phase 1 — JADX OOM Mitigation:</strong>
+- <code>crates/cli/src/hunt.rs</code>:
+  - <code>ingest_apk(path)</code> now spawns <code>jadx</code> with <code>JAVA_OPTS=-Xmx4G</code>.
+  - Added <code>-j 1</code> so APK decompilation stays single-threaded and does not fan out JVM heap pressure across worker threads.</p>
+<p><strong>Phase 2 — AST Precision Hotfix (<code>unpinned_asset</code>):</strong>
+- <code>crates/forge/src/slop_hunter.rs</code>:
+  - Added <code>find_supply_chain_slop_with_context(language, parsed)</code> so the supply-chain detector can consult the cached AST when needed.
+  - For the <code>&lt;script src="http..."&gt;</code> <code>security:unpinned_asset</code> branch, the detector now resolves the matching syntax node and walks <code>node.parent()</code> until root, suppressing the finding if any traversed node kind contains <code>comment</code>.
+  - The AST walk is bounded by parent-chain height and returns immediately on parse failure or non-JS-family languages, preserving deterministic performance and eliminating comment-only false positives.
+- <code>crates/cli/src/hunt.rs</code>:
+  - The hunt scanning pipeline now uses the context-aware supply-chain detector path so the comment suppression applies during artifact ingestion, not only in standalone detector tests.</p>
+<p><strong>Phase 3 — Verification / Release Ledger:</strong>
+- <code>crates/forge/src/slop_hunter.rs</code>:
+  - Added <code>test_http_script_url_inside_js_comment_is_ignored</code> to prove comment-contained <code>http://</code> references do not emit <code>security:unpinned_asset</code>.
+- <code>Cargo.toml</code>: workspace version <code>10.1.12</code> → <code>10.1.13</code>.</p>
 <h2 id="2026-04-16-bounty-hunter-vanguard-ux-refactor-v10112">2026-04-16 — Bounty Hunter Vanguard &amp; UX Refactor (v10.1.12)</h2>
 <p><strong>Directive:</strong> Remove the dummy-path <code>hunt</code> UX defect, add Java archive ingestion, audit black-box bounty ingestion and taint gaps, rewrite the innovation ledger into an offensive roadmap, verify under single-threaded tests, and execute the governed release path.</p>
 <p><strong>Phase 1 — Hunt CLI UX Repair:</strong>
