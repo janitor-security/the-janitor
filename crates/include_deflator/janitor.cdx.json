@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:12c24e82-ba46-4f45-af76-a5e74bc750b2",
+  "serialNumber": "urn:uuid:43bd3cbb-1cfd-4bd7-a54b-90fa86d89b92",
   "metadata": {
-    "timestamp": "2026-04-15T07:19:06.518231552Z",
+    "timestamp": "2026-04-17T06:17:01.319395116Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,23 +14,23 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.9",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.14",
       "name": "include_deflator",
-      "version": "10.1.9",
+      "version": "10.1.14",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/include_deflator@10.1.9?download_url=file://.",
+      "purl": "pkg:cargo/include_deflator@10.1.14?download_url=file://.",
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.9 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.14 bin-target-0",
           "name": "include_deflator",
-          "version": "10.1.9",
-          "purl": "pkg:cargo/include_deflator@10.1.9?download_url=file://.#src/lib.rs"
+          "version": "10.1.14",
+          "purl": "pkg:cargo/include_deflator@10.1.14?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -2553,7 +2553,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.9",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.1.14",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",

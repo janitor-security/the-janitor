@@ -27,20 +27,23 @@ preflight_line="$(grep -n 'gpg --batch --yes --pinentry-mode error --clearsign' 
 sync_line="$(grep -n 'just sync-versions' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 audit_line="$(grep -n 'just audit' "${JUSTFILE}" | tail -1 | cut -d: -f1)"
 build_line="$(grep -n 'cargo build --release --workspace' "${JUSTFILE}" | tail -1 | cut -d: -f1)"
-commit_line="$(grep -n 'git add crates/ tools/ docs/ \.agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
+git_add_line="$(grep -n 'git add crates/ tools/ docs/ \.agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml' "${JUSTFILE}" | head -1 | cut -d: -f1)"
+commit_line="$(grep -n 'git commit -S -m "chore: release v{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 tag_line="$(grep -n 'git tag -s v{{version}} -m "release v{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 
 [[ -n "${preflight_line}" ]] || fail "fast-release is missing the GPG pre-flight gate"
 [[ -n "${sync_line}" ]] || fail "fast-release is missing sync-versions"
 [[ -n "${audit_line}" ]] || fail "fast-release is missing audit"
 [[ -n "${build_line}" ]] || fail "fast-release is missing cargo build"
-[[ -n "${commit_line}" ]] || fail "fast-release staging sequence drifted"
+[[ -n "${git_add_line}" ]] || fail "fast-release staging sequence drifted (git add)"
+[[ -n "${commit_line}" ]] || fail "fast-release staging sequence drifted (git commit)"
 [[ -n "${tag_line}" ]] || fail "fast-release is missing the signed tag step"
 
 (( preflight_line < sync_line )) || fail "pre-flight no longer precedes sync-versions"
 (( sync_line < audit_line )) || fail "sync-versions no longer precedes audit"
 (( audit_line < build_line )) || fail "audit no longer precedes build"
-(( build_line < commit_line )) || fail "build no longer precedes commit"
+(( build_line < git_add_line )) || fail "build no longer precedes git add"
+(( git_add_line < commit_line )) || fail "git add no longer precedes commit"
 (( commit_line < tag_line )) || fail "commit no longer precedes tag"
 
 if grep -Eq 'git commit -a|git add \.' "${JUSTFILE}"; then

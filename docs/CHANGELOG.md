@@ -3,6 +3,23 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-16 — Git Synchronization & Pipeline Hardening (v10.1.14)
+
+**Directive:** Publish agent governance rules as an open-source showcase, harden the release pipeline commit/tag sequence to fail-closed with explicit error messages, eradicate redundant detector calls in `scan_directory`, and update the parity test to reflect the hardened format.
+
+**Phase 1 — Un-Ignore Agent Governance:**
+- `.gitignore`: Removed `.agent_governance/` from the AI instructions block. The governance rules directory is now tracked in source control as a public showcase of structured AI engineering.
+
+**Phase 2 — Release Pipeline Hardening:**
+- `justfile` (`fast-release`): Split `git add ... && git commit` one-liner into two discrete lines. Added `|| { echo "FATAL: Commit failed."; exit 1; }` guard after `git commit -S` and `|| { echo "FATAL: Tag failed."; exit 1; }` guard after `git tag -s`. Pipeline now fails-closed with explicit operator-readable messages rather than relying on `set -e` propagation.
+- `tools/tests/test_release_parity.sh`: Updated the `commit_line` grep pattern to match the new two-line form; split `git_add_line` check from `commit_line` check; added ordering assertion `build_line < git_add_line < commit_line < tag_line`.
+
+**Phase 3 — Redundant Detector Eradication:**
+- `crates/cli/src/hunt.rs` (`scan_directory`): Removed direct calls to `find_credential_slop` and `find_supply_chain_slop_with_context`. `find_slop` already calls both internally (slop_hunter.rs lines 718–721); the explicit calls were duplicating detection. Import trimmed to `use forge::slop_hunter::{find_slop, ParsedUnit}`.
+
+**Verification / Release Ledger:**
+- `Cargo.toml`: workspace version `10.1.13` → `10.1.14`.
+
 ## 2026-04-16 — Tactical Recon Patch (v10.1.13)
 
 **Directive:** Apply a surgical hotfix to the mobile ingestion path by constraining JADX resource usage, eliminate `unpinned_asset` false positives from comment text, verify under single-threaded tests, and execute the governed release path.

@@ -175,8 +175,9 @@ fast-release version:
 	    echo "Idempotency guard: Release v{{version}} already exists. Halting gracefully."
 	    exit 0
 	fi
-	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml && git commit -S -m "chore: release v{{version}}"
-	git tag -s v{{version}} -m "release v{{version}}"
+	git add crates/ tools/ docs/ .agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml
+	git commit -S -m "chore: release v{{version}}" || { echo "FATAL: Commit failed."; exit 1; }
+	git tag -s v{{version}} -m "release v{{version}}" || { echo "FATAL: Tag failed."; exit 1; }
 	MAJOR="$(echo "{{version}}" | cut -d. -f1)"
 	git tag -fa "v${MAJOR}" -m "v${MAJOR} → v{{version}}"
 	git push origin HEAD:main "v{{version}}"

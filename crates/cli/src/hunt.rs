@@ -22,9 +22,7 @@
 
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
-use forge::slop_hunter::{
-    find_credential_slop, find_slop, find_supply_chain_slop_with_context, ParsedUnit,
-};
+use forge::slop_hunter::{find_slop, ParsedUnit};
 use std::io::Read as _;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -527,9 +525,7 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             .to_string();
 
         let unit = ParsedUnit::unparsed(&source);
-        let mut raw = find_slop(ext, &unit);
-        raw.extend(find_credential_slop(&source));
-        raw.extend(find_supply_chain_slop_with_context(ext, &unit));
+        let raw = find_slop(ext, &unit);
 
         for f in raw {
             all.push(StructuredFinding {

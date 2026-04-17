@@ -48,6 +48,13 @@ hex.workspace = true
 ed25519-dalek.workspace = true
 zip.workspace = true
 notify.workspace = true
+tempfile = "3"
+flate2 = "1"
+tar = "0.4"
+jaq-core = "1"
+jaq-parse = "1"
+jaq-std = "1"
+jaq-interpret = "1"
 
 [build-dependencies]
 common = { path = "../common" }
