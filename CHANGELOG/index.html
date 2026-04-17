@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-17-ifds-solver-spine-exploit-witness-envelope-v1020-alpha2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — IFDS Solver Spine &amp; Exploit Witness Envelope (v10.2.0-alpha.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)
@@ -1652,6 +1661,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-17-ifds-solver-spine-exploit-witness-envelope-v1020-alpha2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — IFDS Solver Spine &amp; Exploit Witness Envelope (v10.2.0-alpha.2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)
@@ -2728,6 +2746,24 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-17-ifds-solver-spine-exploit-witness-envelope-v1020-alpha2">2026-04-17 — IFDS Solver Spine &amp; Exploit Witness Envelope (v10.2.0-alpha.2)</h2>
+<p><strong>Directive:</strong> Execute P1-1 Part 2 by introducing an interprocedural IFDS solver, bind deterministic exploit proofs into <code>StructuredFinding</code>, formalize offensive monetization in the innovation ledger, and prepare the <code>10.2.0-alpha.2</code> release path.</p>
+<p><strong>Phase 1 — IFDS Solver:</strong>
+- <code>crates/forge/Cargo.toml</code>: added <code>fixedbitset</code>, <code>smallvec</code>, and <code>ena</code>.
+- <code>crates/forge/src/ifds.rs</code> <em>(new)</em>: introduced a summary-caching RHS-style solver over <code>petgraph::DiGraph&lt;String, ()&gt;</code>. Dataflow facts are <code>InputFact { function, label }</code>; per-function models declare call bindings, sink bindings, and passthrough summaries. Reachability is tracked with <code>FixedBitSet</code>; taint labels are canonicalized through <code>ena</code>; call-site payloads stay stack-local via <code>SmallVec</code>.
+- Summary cache contract: <code>(function, input_label) -&gt; Summary { outputs, witnesses }</code> for O(1) subsequent reuse within a process on repeated facts.
+- Deterministic exploit proof generation is built into the summary walk so a seeded taint fact produces an exact call chain when a sink becomes reachable.</p>
+<p><strong>Phase 2 — Exploitability Proof Emitter:</strong>
+- <code>crates/common/src/slop.rs</code>: added canonical <code>ExploitWitness</code> and optional <code>StructuredFinding.exploit_witness</code>.
+- <code>crates/forge/src/exploitability.rs</code> <em>(new)</em>: added <code>attach_exploit_witness(finding, witness)</code> to bind proof artifacts into the machine-readable finding envelope.
+- <code>crates/forge/src/lib.rs</code>: exported <code>ifds</code> and <code>exploitability</code>.
+- <code>crates/mcp/src/lib.rs</code>, <code>crates/forge/src/slop_filter.rs</code>, <code>crates/cli/src/hunt.rs</code>, <code>crates/cli/src/report.rs</code>, <code>crates/cli/src/jira.rs</code>: all explicit <code>StructuredFinding</code> constructors now initialize <code>exploit_witness</code> deterministically.</p>
+<p><strong>Phase 3 — Monetization Blueprint:</strong>
+- <code>.INNOVATION_LOG.md</code>: added <code>P0-4: Cryptographic License Enforcement for Offensive Operations</code>, defining <code>janitor.lic</code>, Community Mode degradation, and BUSL-1.1 enforcement constraints for offensive features.</p>
+<p><strong>Verification Ledger:</strong>
+- Added forge unit coverage proving a 3-hop chain <code>Controller.handle -&gt; UserService.validate -&gt; Database.query</code> reaches a sink and populates the summary cache.
+- <code>cargo test -p forge --lib -- --test-threads=1</code> exits 0.
+- <code>cargo test --workspace -- --test-threads=1</code> exits 0.</p>
 <h2 id="2026-04-17-deep-taint-foundation-oci-container-strike-v1020-alpha1">2026-04-17 — Deep Taint Foundation &amp; OCI Container Strike (v10.2.0-alpha.1)</h2>
 <p><strong>Directive:</strong> Lay the interprocedural taint foundation (IFDS call graph + sanitizer registry) and add Docker/OCI image ingestion to the offensive hunt pipeline.</p>
 <p><strong>Phase 1 — Interprocedural Call Graph (P1-1):</strong>
