@@ -179,7 +179,16 @@ pub struct IfdsSolver {
 
 impl IfdsSolver {
     /// Construct a solver from the call graph and per-function models.
-    pub fn new(graph: DiGraph<String, ()>, models: HashMap<String, FunctionModel>) -> Self {
+    ///
+    /// Accepts any `DiGraph<String, E>` — the IFDS reachability engine only
+    /// needs the topology, not the edge weight.  This lets callers pass the
+    /// richer [`crate::callgraph::CallGraph`] (which carries arg-position
+    /// bindings on each edge) without a lossy pre-conversion.
+    pub fn new<E>(graph: DiGraph<String, E>, models: HashMap<String, FunctionModel>) -> Self
+    where
+        E: Clone,
+    {
+        let graph: DiGraph<String, ()> = graph.map(|_, n| n.clone(), |_, _| ());
         let node_by_name = graph
             .node_indices()
             .map(|idx| (graph[idx].clone(), idx))

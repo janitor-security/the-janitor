@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v10.2.0-alpha.5 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
+**v10.2.0-alpha.6 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
 
 ---
 

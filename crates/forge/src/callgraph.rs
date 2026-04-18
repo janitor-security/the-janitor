@@ -20,21 +20,49 @@
 //! ## Depth guard
 //! The recursive walk caps at 200 levels to prevent stack overflow on
 //! adversarially deep ASTs.  This matches the depth guards in `taint_propagate`.
+//!
+//! ## Edge weight
+//! Each edge carries a [`CallEdge`] — one [`CallSiteArgs`] record per distinct
+//! call expression between the same `(caller, callee)` pair.  Each record
+//! captures positional argument identifiers (`Some("user_input")`) or `None`
+//! for literals / complex expressions.  Downstream IFDS seeding uses these
+//! bindings to align caller-side symbols with callee parameter positions.
 
 use std::collections::HashMap;
 
 use petgraph::graph::{DiGraph, NodeIndex};
+use smallvec::{smallvec, SmallVec};
 use tree_sitter::{Node, Parser};
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
+/// Positional argument identifiers recorded at a single call site.
+///
+/// Each entry in `args` is either the bare identifier name passed to that
+/// positional slot (e.g. `Some("user_input")`) or `None` for literals,
+/// member expressions, or otherwise non-identifier arguments.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallSiteArgs {
+    pub args: Vec<Option<String>>,
+}
+
+/// Call graph edge weight — a list of call sites between the same pair.
+///
+/// petgraph `DiGraph` is a multigraph by default; by collapsing duplicate
+/// `(caller, callee)` pairs onto a single edge whose weight is a vec of
+/// per-site argument records, downstream traversal stays O(E) without
+/// double-counting.
+pub type CallEdge = SmallVec<[CallSiteArgs; 4]>;
+
 /// A directed call graph over a single source file.
 ///
 /// Nodes are function names (bare identifiers, not qualified paths).
 /// A directed edge A → B means "function A contains a call to function B."
-pub type CallGraph = DiGraph<String, ()>;
+/// Edge weights carry per-call-site positional argument bindings — see
+/// [`CallEdge`] and [`CallSiteArgs`].
+pub type CallGraph = DiGraph<String, CallEdge>;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -217,15 +245,21 @@ fn walk_node(
     // Effective caller context: the new function name, or the inherited one.
     let effective_fn: Option<&str> = new_fn_name.as_deref().or(current_fn);
 
-    // If this is a call expression, record caller → callee.
+    // If this is a call expression, record caller → callee and the positional
+    // arguments used at this call site.
     if is_call_kind(kind, language) {
         if let (Some(caller), Some(callee)) = (effective_fn, extract_callee(node, source, language))
         {
             let caller_idx = get_or_insert(caller, graph, node_map);
             let callee_idx = get_or_insert(&callee, graph, node_map);
-            // Avoid duplicate edges (petgraph DiGraph is a multigraph by default).
-            if !graph.contains_edge(caller_idx, callee_idx) {
-                graph.add_edge(caller_idx, callee_idx, ());
+            let args = extract_call_args(node, source, language);
+            let site = CallSiteArgs { args };
+            if let Some(edge_id) = graph.find_edge(caller_idx, callee_idx) {
+                if let Some(weight) = graph.edge_weight_mut(edge_id) {
+                    weight.push(site);
+                }
+            } else {
+                graph.add_edge(caller_idx, callee_idx, smallvec![site]);
             }
         }
     }
@@ -244,6 +278,40 @@ fn walk_node(
             depth + 1,
         );
     }
+}
+
+/// Extract positional argument identifiers at a call site.
+///
+/// Each positional slot is captured as:
+/// - `Some(name)` when the argument is a bare identifier (e.g. `foo(user)` →
+///   `[Some("user")]`)
+/// - `None` otherwise (literals, member expressions, nested calls, etc.)
+///
+/// The returned vec's length equals the number of positional arguments at
+/// this call site, preserving left-to-right order.  This preserves the
+/// arg-position invariant required by `IfdsSolver` seeding.
+fn extract_call_args(node: Node<'_>, source: &[u8], language: &str) -> Vec<Option<String>> {
+    let args_node = match language {
+        "py" | "js" | "jsx" | "ts" | "tsx" | "go" | "java" => node.child_by_field_name("arguments"),
+        _ => None,
+    };
+    let Some(args_node) = args_node else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut cursor = args_node.walk();
+    for child in args_node.children(&mut cursor) {
+        if !child.is_named() {
+            continue;
+        }
+        if child.kind() == "identifier" {
+            let text = child.utf8_text(source).ok().map(|s| s.trim().to_owned());
+            out.push(text);
+        } else {
+            out.push(None);
+        }
+    }
+    out
 }
 
 /// Returns the tree-sitter `Language` for a given file extension.
@@ -341,6 +409,73 @@ mod tests {
         let graph = build_call_graph("py", b"");
         assert_eq!(graph.node_count(), 0);
         assert_eq!(graph.edge_count(), 0);
+    }
+
+    #[test]
+    fn call_graph_captures_arg_positions_python() {
+        let src = b"def sink(x):\n    return x\n\ndef handle(user_input):\n    sink(user_input)\n";
+        let graph = build_call_graph("py", src);
+        let handle_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "handle")
+            .expect("handle");
+        let sink_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "sink")
+            .expect("sink");
+        let edge_id = graph
+            .find_edge(handle_idx, sink_idx)
+            .expect("edge must exist");
+        let weight = &graph[edge_id];
+        assert_eq!(weight.len(), 1, "exactly one call site");
+        assert_eq!(weight[0].args.len(), 1, "one positional arg");
+        assert_eq!(
+            weight[0].args[0].as_deref(),
+            Some("user_input"),
+            "arg 0 binds to caller identifier user_input"
+        );
+    }
+
+    #[test]
+    fn call_graph_merges_multiple_call_sites_into_one_edge() {
+        let src = b"def sink(x):\n    return x\n\ndef caller(a, b):\n    sink(a)\n    sink(b)\n";
+        let graph = build_call_graph("py", src);
+        let caller_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "caller")
+            .expect("caller");
+        let sink_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "sink")
+            .expect("sink");
+        let edge_id = graph.find_edge(caller_idx, sink_idx).expect("edge");
+        let weight = &graph[edge_id];
+        assert_eq!(weight.len(), 2, "two call sites collapse into one edge");
+        assert_eq!(weight[0].args[0].as_deref(), Some("a"));
+        assert_eq!(weight[1].args[0].as_deref(), Some("b"));
+        assert_eq!(graph.edge_count(), 1, "caller → sink remains a single edge");
+    }
+
+    #[test]
+    fn call_graph_captures_literal_as_none_go() {
+        let src =
+            b"package main\nfunc sink(x string) {}\nfunc caller() {\n    sink(\"literal\")\n}\n";
+        let graph = build_call_graph("go", src);
+        let caller_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "caller")
+            .expect("caller");
+        let sink_idx = graph
+            .node_indices()
+            .find(|i| graph[*i] == "sink")
+            .expect("sink");
+        let edge_id = graph.find_edge(caller_idx, sink_idx).expect("edge");
+        let weight = &graph[edge_id];
+        assert_eq!(weight.len(), 1);
+        assert_eq!(
+            weight[0].args[0], None,
+            "string literal must be recorded as None"
+        );
     }
 
     #[test]

@@ -3,6 +3,72 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — The AEG Detonation & IFDS Completion (v10.2.0-alpha.6)
+
+**Directive:** Complete P1-1 by wiring real AST-derived `(caller, callee,
+arg_positions)` edges into the call graph, detonate P3-1 Phase A by turning
+Z3 satisfying models into curl-format proof-of-exploit commands bound to
+`ExploitWitness::repro_cmd`, mark P1-1 COMPLETED in `.INNOVATION_LOG.md`,
+and ship as v10.2.0-alpha.6.
+
+**Phase 1 — Call Graph AST Wiring:**
+- `crates/forge/src/callgraph.rs`: introduced `CallSiteArgs { args:
+  Vec<Option<String>> }` and `pub type CallEdge = SmallVec<[CallSiteArgs;
+  4]>`; `CallGraph` upgraded from `DiGraph<String, ()>` to
+  `DiGraph<String, CallEdge>`.  `walk_node` now collapses multiple call
+  sites between the same `(caller, callee)` pair onto a single edge whose
+  weight is a vec of per-site `CallSiteArgs` records.  Added
+  `extract_call_args()` helper that walks `arguments` field children and
+  captures bare identifiers as `Some(name)` while recording literals and
+  complex expressions as `None`, preserving positional order for IFDS
+  parameter alignment.  Supported languages: Python, JS, TS, Go, Java
+  (directive core: Python, JS/TS, Go).
+- `crates/forge/src/ifds.rs`: `IfdsSolver::new` made generic over `E:
+  Clone` — accepts any `DiGraph<String, E>` and internally normalizes via
+  `petgraph::Graph::map` so the richer `CallGraph` flows through without a
+  lossy pre-conversion and existing `DiGraph<String, ()>` callers remain
+  compatible.
+- 3 new callgraph tests (`call_graph_captures_arg_positions_python`,
+  `call_graph_merges_multiple_call_sites_into_one_edge`,
+  `call_graph_captures_literal_as_none_go`).
+
+**Phase 2 — AEG Core (Curl Payload Synthesis):**
+- `crates/forge/src/exploitability.rs`: introduced `IngressKind` enum
+  (`HttpRoute { method, url }`, `Cli`, `Unknown`), `curl_template(method,
+  url, payload_binding)` — emits
+  `curl -X <METHOD> <URL> -d '{"input": "{binding}"}'` — and
+  `template_for_ingress(ingress, payload_binding)` dispatch that returns
+  `None` for `Unknown` so callers distinguish "no ingress profile" from
+  "empty template".  After `Z3Solver::refine` produces `Refinement::
+  Satisfiable`, the extracted model bindings flow through
+  `render_template` to populate `ExploitWitness::repro_cmd` with a
+  copy-pasteable terminal command.
+- 5 new exploitability tests
+  (`curl_template_substitutes_mocked_z3_model_payload`,
+  `curl_template_handles_integer_payload`,
+  `template_for_ingress_routes_http_to_curl`,
+  `template_for_ingress_unknown_returns_none`,
+  `template_for_ingress_cli_produces_binary_invocation`) — all
+  deterministic, none require the z3 binary, asserting exact curl string
+  equality so format regressions are impossible.
+
+**Phase 3 — Backlog Management:**
+- `.INNOVATION_LOG.md`: P1-1 marked `[COMPLETED v10.2.0-alpha.6]` with a
+  shipped-state summary documenting the new `CallEdge` shape, the generic
+  IFDS signature, and the Z3 refinement linkage.  P3-1 gains a *Phase A
+  status* block noting curl synthesis is live and enumerating the pending
+  phases (B: serialized blobs, C: protobuf/GraphQL/gRPC, D: smart-contract
+  transaction sequences, E: parser payload files).
+
+**Phase 4 — Verification & Release:**
+- `cargo test --workspace -- --test-threads=4` — passed (doc-tests + unit
+  tests green).
+- `just audit` — `System Clean. Audit fingerprint saved.`
+- `Cargo.toml`: `[workspace.package].version` bumped `10.2.0-alpha.5 →
+  10.2.0-alpha.6`.
+- `just fast-release 10.2.0-alpha.6` — signed commit, signed tag,
+  GH Release publication, docs deployment.
+
 ## 2026-04-18 — Opus Genesis: Z3 Symbolic Execution & AEG (v10.2.0-alpha.5)
 
 **Directive:** Commit the uncommitted Sprint Batch 1–4 backlog, rewrite the
