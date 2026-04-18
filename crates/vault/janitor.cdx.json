@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:6ff466b7-2dc1-490a-a7be-d57115812229",
+  "serialNumber": "urn:uuid:c71cae60-6f14-4ea6-b951-ae0b9829cd8f",
   "metadata": {
-    "timestamp": "2026-04-17T19:01:32.364850094Z",
+    "timestamp": "2026-04-18T04:48:01.172547115Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3",
       "name": "vault",
-      "version": "10.2.0-alpha.2",
+      "version": "10.2.0-alpha.3",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.2.0-alpha.2?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.2.0-alpha.3?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3 bin-target-0",
           "name": "vault",
-          "version": "10.2.0-alpha.2",
-          "purl": "pkg:cargo/vault@10.2.0-alpha.2?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.3",
+          "purl": "pkg:cargo/vault@10.2.0-alpha.3?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1231,7 +1231,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.2",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",

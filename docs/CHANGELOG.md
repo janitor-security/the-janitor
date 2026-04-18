@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-17 — IFDS Live Integration & Agent Brain Surgery (v10.2.0-alpha.3)
+
+**Directive:** Wire the IFDS solver into the live taint catalog, bind deterministic exploit witnesses into emitted `StructuredFinding` records, correct agent governance log rules, delete stale strike directories, and prepare the `10.2.0-alpha.3` governed release.
+
+**Phase 1 — Workspace Hygiene & Governance Repair:**
+- Deleted `bug_hunt_strikes/`, `tools/bug_hunt_strikes/`, and the obsolete `docs/IMPLEMENTATION_BACKLOG.md` workspace backlog.
+- `.agent_governance/rules/response-format.md`: corrected the innovation ledger reference from `docs/INNOVATION_LOG.md` to the root-local `.INNOVATION_LOG.md`.
+- `.cursorrules` *(local governance index)*: rewired shared-ledger guidance so completed directives append only to `docs/CHANGELOG.md`, while forward-looking roadmap items remain exclusive to `.INNOVATION_LOG.md`.
+
+**Phase 2 — IFDS Live Integration:**
+- `crates/forge/src/taint_catalog.rs`:
+  - upgraded `scan_cross_file_sinks(...)` from sink-name matching into an IFDS-backed verifier for `py`, `js/jsx`, `ts/tsx`, `java`, and `go`.
+  - synthesized function signatures and call bindings directly from the local AST, joined outbound callees against the persisted `TaintCatalog`, and materialized catalog-backed IFDS sink summaries for external functions.
+  - enriched `CrossFileSinkFinding` with optional `ExploitWitness`.
+  - added a 3-hop regression proving `handle -> validate -> execute` yields a deterministic exploit witness through the live catalog path.
+- `crates/forge/src/slop_filter.rs`:
+  - captured solver-produced witnesses per confirmed cross-file sink span.
+  - bound those witnesses into the final `common::slop::StructuredFinding` envelope via `crates/forge/src/exploitability.rs`, so JSON/MCP consumers now receive the exact multi-hop exploit chain.
+
+**Verification Ledger:**
+- `cargo test -p forge taint_catalog::tests::python_ifds_emits_three_hop_exploit_witness -- --test-threads=1` exits 0.
+- `cargo test --workspace -- --test-threads=1` exits 0.
+- `just audit` exits 0.
+
 ## 2026-04-17 — IFDS Solver Spine & Exploit Witness Envelope (v10.2.0-alpha.2)
 
 **Directive:** Execute P1-1 Part 2 by introducing an interprocedural IFDS solver, bind deterministic exploit proofs into `StructuredFinding`, formalize offensive monetization in the innovation ledger, and prepare the `10.2.0-alpha.2` release path.

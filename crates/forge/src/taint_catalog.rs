@@ -19,6 +19,7 @@
 //! non-empty `sink_kinds`.  Supported languages: Python, JavaScript/JSX, Java.
 //! Returns an empty vec for unsupported languages or when no catalog is loaded.
 
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
@@ -27,6 +28,7 @@ use anyhow::Result;
 use memmap2::Mmap;
 use tree_sitter::Node;
 
+use common::slop::ExploitWitness;
 use common::taint::TaintExportRecord;
 
 /// Maximum on-disk size of the taint catalog (10 MiB).
@@ -115,6 +117,19 @@ impl CatalogView {
         self.archived()
             .iter()
             .any(|r| r.symbol_name == symbol_name && r.propagates_to_return)
+    }
+
+    /// Returns the deserialized records for `symbol_name`.
+    ///
+    /// O(N) linear scan — allocation is limited to the returned records.
+    pub fn records_for_symbol(&self, symbol_name: &str) -> Vec<TaintExportRecord> {
+        self.archived()
+            .iter()
+            .filter(|record| record.symbol_name == symbol_name)
+            .filter_map(|record| {
+                rkyv::deserialize::<TaintExportRecord, rkyv::rancor::Error>(record).ok()
+            })
+            .collect()
     }
 
     /// Returns `true` if the catalog contains at least one record.
@@ -245,6 +260,8 @@ pub struct CrossFileSinkFinding {
     pub start_byte: usize,
     /// End byte of the call expression in the added source.
     pub end_byte: usize,
+    /// Deterministic IFDS proof when a tainted parameter reaches the sink.
+    pub exploit_witness: Option<ExploitWitness>,
 }
 
 /// Scan `source` (already parsed into `tree`) for calls to cataloged sink functions.
@@ -273,7 +290,8 @@ pub fn scan_cross_file_sinks(
     if catalog.is_empty() {
         return vec![];
     }
-    match lang {
+    let mut findings = ifds_cross_file_sinks(lang, source, tree.root_node(), catalog);
+    let fallback = match lang {
         "py" => scan_python(source, tree.root_node(), catalog),
         "js" | "jsx" => scan_js(source, tree.root_node(), catalog),
         // TypeScript uses identical call_expression / arguments node structure to JS.
@@ -289,7 +307,537 @@ pub fn scan_cross_file_sinks(
         "swift" => scan_swift(source, tree.root_node(), catalog),
         "scala" => scan_scala(source, tree.root_node(), catalog),
         _ => vec![],
+    };
+    let mut seen = findings
+        .iter()
+        .map(|finding| {
+            (
+                finding.callee_name.clone(),
+                finding.start_byte,
+                finding.end_byte,
+            )
+        })
+        .collect::<HashSet<_>>();
+    for finding in fallback {
+        if seen.insert((
+            finding.callee_name.clone(),
+            finding.start_byte,
+            finding.end_byte,
+        )) {
+            findings.push(finding);
+        }
     }
+    findings
+}
+
+#[derive(Debug, Clone, Default)]
+struct FunctionSignature {
+    params: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CallRecord {
+    caller: String,
+    callee: String,
+    start_byte: usize,
+    end_byte: usize,
+    arg_refs: Vec<Option<String>>,
+}
+
+fn ifds_cross_file_sinks(
+    lang: &str,
+    source: &[u8],
+    root: Node<'_>,
+    catalog: &CatalogView,
+) -> Vec<CrossFileSinkFinding> {
+    if !matches!(lang, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go") {
+        return Vec::new();
+    }
+
+    let signatures = collect_function_signatures(root, source, lang);
+    if signatures.is_empty() {
+        return Vec::new();
+    }
+    let calls = collect_call_records(root, source, lang);
+    if calls.is_empty() {
+        return Vec::new();
+    }
+
+    let graph = crate::callgraph::build_call_graph(lang, source);
+    if graph.node_count() == 0 {
+        return Vec::new();
+    }
+
+    let mut models: HashMap<String, crate::ifds::FunctionModel> = HashMap::new();
+    for (name, signature) in &signatures {
+        let mut model = crate::ifds::FunctionModel::default();
+        apply_catalog_summary(&mut model, catalog, name);
+        // Keep local signatures live in the model map even if a function is only
+        // an internal relay and has no catalog entry of its own yet.
+        if !signature.params.is_empty() || !model.sinks.is_empty() {
+            models.insert(name.clone(), model);
+        }
+    }
+
+    for call in &calls {
+        let Some(caller_sig) = signatures.get(&call.caller) else {
+            continue;
+        };
+        let Some(callee_sig) = target_signature(&signatures, catalog, &call.callee) else {
+            continue;
+        };
+        apply_catalog_summary(
+            models.entry(call.callee.clone()).or_default(),
+            catalog,
+            &call.callee,
+        );
+        let mut bindings = smallvec::SmallVec::new();
+        for (arg_index, arg_ref) in call.arg_refs.iter().enumerate() {
+            let Some(arg_ref) = arg_ref.as_deref() else {
+                continue;
+            };
+            if !caller_sig.params.iter().any(|param| param == arg_ref) {
+                continue;
+            }
+            let Some(callee_param) = callee_sig.params.get(arg_index) else {
+                continue;
+            };
+            bindings.push(crate::ifds::CallBinding {
+                caller_label: crate::ifds::TaintLabel::new(taint_label_for_param_name(arg_ref)),
+                callee_label: crate::ifds::TaintLabel::new(taint_label_for_param_name(
+                    callee_param,
+                )),
+            });
+        }
+        if !bindings.is_empty() {
+            models
+                .entry(call.caller.clone())
+                .or_default()
+                .calls
+                .push(crate::ifds::CallSite {
+                    callee: call.callee.clone(),
+                    bindings,
+                });
+        }
+    }
+
+    if models.is_empty() {
+        return Vec::new();
+    }
+
+    let seeds = signatures
+        .iter()
+        .flat_map(|(name, signature)| {
+            signature
+                .params
+                .iter()
+                .enumerate()
+                .map(move |(index, param)| crate::ifds::InputFact {
+                    function: name.clone(),
+                    label: crate::ifds::TaintLabel::new(taint_label_for_param(param, index)),
+                })
+        })
+        .collect::<Vec<_>>();
+    if seeds.is_empty() {
+        return Vec::new();
+    }
+
+    let mut solver = crate::ifds::IfdsSolver::new(graph, models);
+    let result = solver.solve(&seeds);
+    if result.witnesses.is_empty() {
+        return Vec::new();
+    }
+
+    let mut findings = Vec::new();
+    let mut seen = HashSet::new();
+    for witness in result.witnesses {
+        if witness.call_chain.len() < 2 {
+            continue;
+        }
+        let source_label = witness.source_label.clone();
+        let source_function = witness.source_function.clone();
+        let next_callee = witness.call_chain[1].clone();
+        let Some(call) = calls.iter().find(|call| {
+            call.caller == source_function
+                && call.callee == next_callee
+                && call
+                    .arg_refs
+                    .iter()
+                    .flatten()
+                    .any(|arg| taint_label_for_param_name(arg) == source_label)
+        }) else {
+            continue;
+        };
+        let key = (
+            call.caller.clone(),
+            call.callee.clone(),
+            call.start_byte,
+            call.end_byte,
+        );
+        if seen.insert(key) {
+            findings.push(CrossFileSinkFinding {
+                callee_name: call.callee.clone(),
+                start_byte: call.start_byte,
+                end_byte: call.end_byte,
+                exploit_witness: Some(witness),
+            });
+        }
+    }
+
+    findings
+}
+
+fn apply_catalog_summary(
+    model: &mut crate::ifds::FunctionModel,
+    catalog: &CatalogView,
+    symbol_name: &str,
+) {
+    for record in catalog.records_for_symbol(symbol_name) {
+        for tainted in &record.tainted_params {
+            let label = taint_label_for_param(&tainted.param_name, tainted.param_index as usize);
+            for sink_kind in &record.sink_kinds {
+                model.sinks.push(crate::ifds::SinkBinding {
+                    label: crate::ifds::TaintLabel::new(label.clone()),
+                    sink_label: sink_label(&record.symbol_name, *sink_kind),
+                });
+            }
+        }
+    }
+}
+
+fn target_signature(
+    local_signatures: &HashMap<String, FunctionSignature>,
+    catalog: &CatalogView,
+    callee: &str,
+) -> Option<FunctionSignature> {
+    if let Some(signature) = local_signatures.get(callee) {
+        return Some(signature.clone());
+    }
+    let records = catalog.records_for_symbol(callee);
+    if records.is_empty() {
+        return None;
+    }
+    let widest = records
+        .iter()
+        .max_by_key(|record| record.tainted_params.len())?;
+    let mut params = widest
+        .tainted_params
+        .iter()
+        .map(|param| param.param_name.clone())
+        .collect::<Vec<_>>();
+    if params.is_empty() {
+        return None;
+    }
+    for (index, param) in params.iter_mut().enumerate() {
+        if param.is_empty() {
+            *param = format!("arg_{index}");
+        }
+    }
+    Some(FunctionSignature { params })
+}
+
+fn collect_function_signatures(
+    root: Node<'_>,
+    source: &[u8],
+    lang: &str,
+) -> HashMap<String, FunctionSignature> {
+    let mut signatures = HashMap::new();
+    walk_function_signatures(root, source, lang, &mut signatures, 0);
+    signatures
+}
+
+fn walk_function_signatures(
+    node: Node<'_>,
+    source: &[u8],
+    lang: &str,
+    signatures: &mut HashMap<String, FunctionSignature>,
+    depth: u32,
+) {
+    if depth > 200 {
+        return;
+    }
+    if is_supported_fn_def(node.kind(), lang) {
+        if let Some(name) = function_name(node, source, lang) {
+            signatures.entry(name).or_insert_with(|| FunctionSignature {
+                params: function_params(node, source, lang),
+            });
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_function_signatures(child, source, lang, signatures, depth + 1);
+    }
+}
+
+fn collect_call_records(root: Node<'_>, source: &[u8], lang: &str) -> Vec<CallRecord> {
+    let mut calls = Vec::new();
+    walk_call_records(root, source, lang, None, &mut calls, 0);
+    calls
+}
+
+fn walk_call_records(
+    node: Node<'_>,
+    source: &[u8],
+    lang: &str,
+    current_fn: Option<String>,
+    calls: &mut Vec<CallRecord>,
+    depth: u32,
+) {
+    if depth > 200 {
+        return;
+    }
+    let next_fn = if is_supported_fn_def(node.kind(), lang) {
+        function_name(node, source, lang).or(current_fn.clone())
+    } else {
+        current_fn.clone()
+    };
+
+    if is_supported_call(node.kind(), lang) {
+        if let (Some(caller), Some(callee)) = (next_fn.clone(), call_callee(node, source, lang)) {
+            calls.push(CallRecord {
+                caller,
+                callee,
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+                arg_refs: call_argument_refs(node, source, lang),
+            });
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        walk_call_records(child, source, lang, next_fn.clone(), calls, depth + 1);
+    }
+}
+
+fn is_supported_fn_def(kind: &str, lang: &str) -> bool {
+    match lang {
+        "py" => kind == "function_definition",
+        "js" | "jsx" | "ts" | "tsx" => {
+            matches!(
+                kind,
+                "function_declaration" | "method_definition" | "function"
+            )
+        }
+        "java" => matches!(kind, "method_declaration" | "constructor_declaration"),
+        "go" => matches!(kind, "function_declaration" | "method_declaration"),
+        _ => false,
+    }
+}
+
+fn is_supported_call(kind: &str, lang: &str) -> bool {
+    match lang {
+        "py" => kind == "call",
+        "js" | "jsx" | "ts" | "tsx" => kind == "call_expression",
+        "java" => kind == "method_invocation",
+        "go" => kind == "call_expression",
+        _ => false,
+    }
+}
+
+fn function_name(node: Node<'_>, source: &[u8], lang: &str) -> Option<String> {
+    match lang {
+        "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go" => node
+            .child_by_field_name("name")
+            .and_then(|name| name.utf8_text(source).ok())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned),
+        _ => None,
+    }
+}
+
+fn function_params(node: Node<'_>, source: &[u8], lang: &str) -> Vec<String> {
+    match lang {
+        "py" => {
+            let Some(params) = node.child_by_field_name("parameters") else {
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            let mut cursor = params.walk();
+            for child in params.named_children(&mut cursor) {
+                if child.kind() == "identifier" {
+                    if let Ok(name) = child.utf8_text(source) {
+                        out.push(name.to_string());
+                    }
+                }
+            }
+            out
+        }
+        "js" | "jsx" | "ts" | "tsx" => {
+            let Some(params) = node.child_by_field_name("parameters") else {
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            let mut cursor = params.walk();
+            for child in params.named_children(&mut cursor) {
+                if let Some(name) = extract_js_param_name(child, source) {
+                    out.push(name);
+                }
+            }
+            out
+        }
+        "java" => {
+            let Some(params) = node.child_by_field_name("parameters") else {
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            let mut cursor = params.walk();
+            for child in params.named_children(&mut cursor) {
+                if let Some(name_node) = child.child_by_field_name("name") {
+                    if let Ok(name) = name_node.utf8_text(source) {
+                        out.push(name.to_string());
+                    }
+                }
+            }
+            out
+        }
+        "go" => {
+            let Some(params) = node.child_by_field_name("parameters") else {
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            let mut cursor = params.walk();
+            for child in params.named_children(&mut cursor) {
+                if child.kind() != "parameter_declaration" {
+                    continue;
+                }
+                let mut param_cursor = child.walk();
+                for grandchild in child.named_children(&mut param_cursor) {
+                    if grandchild.kind() == "identifier" {
+                        if let Ok(name) = grandchild.utf8_text(source) {
+                            out.push(name.to_string());
+                        }
+                    }
+                }
+            }
+            out
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn extract_js_param_name(node: Node<'_>, source: &[u8]) -> Option<String> {
+    match node.kind() {
+        "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+        "required_parameter" | "optional_parameter" | "rest_pattern" => {
+            let pattern = node
+                .child_by_field_name("pattern")
+                .or_else(|| node.child_by_field_name("name"))?;
+            extract_js_param_name(pattern, source)
+        }
+        "assignment_pattern" => {
+            let left = node
+                .child_by_field_name("left")
+                .or_else(|| node.child_by_field_name("name"))?;
+            extract_js_param_name(left, source)
+        }
+        _ => {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                if let Some(name) = extract_js_param_name(child, source) {
+                    return Some(name);
+                }
+            }
+            None
+        }
+    }
+}
+
+fn call_callee(node: Node<'_>, source: &[u8], lang: &str) -> Option<String> {
+    match lang {
+        "py" => {
+            let function = node.child_by_field_name("function")?;
+            match function.kind() {
+                "identifier" => function.utf8_text(source).ok().map(str::to_owned),
+                "attribute" => function
+                    .child_by_field_name("attribute")
+                    .and_then(|attr| attr.utf8_text(source).ok())
+                    .map(str::to_owned),
+                _ => None,
+            }
+        }
+        "js" | "jsx" | "ts" | "tsx" => {
+            let function = node.child_by_field_name("function")?;
+            match function.kind() {
+                "identifier" => function.utf8_text(source).ok().map(str::to_owned),
+                "member_expression" => function
+                    .child_by_field_name("property")
+                    .and_then(|prop| prop.utf8_text(source).ok())
+                    .map(str::to_owned),
+                _ => None,
+            }
+        }
+        "java" => node
+            .child_by_field_name("name")
+            .and_then(|name| name.utf8_text(source).ok())
+            .map(str::to_owned),
+        "go" => {
+            let function = node.child_by_field_name("function")?;
+            match function.kind() {
+                "identifier" => function.utf8_text(source).ok().map(str::to_owned),
+                "selector_expression" => function
+                    .child_by_field_name("field")
+                    .and_then(|field| field.utf8_text(source).ok())
+                    .map(str::to_owned),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn call_argument_refs(node: Node<'_>, source: &[u8], lang: &str) -> Vec<Option<String>> {
+    let Some(args) = node.child_by_field_name("arguments") else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut cursor = args.walk();
+    for child in args.named_children(&mut cursor) {
+        out.push(argument_ref(child, source, lang));
+    }
+    out
+}
+
+fn argument_ref(node: Node<'_>, source: &[u8], lang: &str) -> Option<String> {
+    match lang {
+        "py" => match node.kind() {
+            "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+            "keyword_argument" => node
+                .child_by_field_name("value")
+                .and_then(|value| argument_ref(value, source, lang)),
+            _ => None,
+        },
+        "js" | "jsx" | "ts" | "tsx" => match node.kind() {
+            "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+            _ => None,
+        },
+        "java" => match node.kind() {
+            "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+            _ => None,
+        },
+        "go" => match node.kind() {
+            "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn taint_label_for_param(name: &str, index: usize) -> String {
+    if name.is_empty() {
+        format!("param:arg_{index}")
+    } else {
+        taint_label_for_param_name(name)
+    }
+}
+
+fn taint_label_for_param_name(name: &str) -> String {
+    format!("param:{name}")
+}
+
+fn sink_label(symbol_name: &str, kind: common::taint::TaintKind) -> String {
+    format!("sink:{kind:?}:{symbol_name}")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,6 +880,7 @@ fn walk_python_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -418,6 +967,7 @@ fn walk_js_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -484,6 +1034,7 @@ fn walk_java_calls(
                             callee_name: callee.to_string(),
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -564,6 +1115,7 @@ fn walk_ts_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -625,6 +1177,7 @@ fn walk_go_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -697,6 +1250,7 @@ fn walk_ruby_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -776,6 +1330,7 @@ fn walk_php_calls(
                     callee_name: callee,
                     start_byte: node.start_byte(),
                     end_byte: node.end_byte(),
+                    exploit_witness: None,
                 });
             }
         }
@@ -870,6 +1425,7 @@ fn walk_csharp_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -973,6 +1529,7 @@ fn walk_kotlin_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -1070,6 +1627,7 @@ fn walk_cpp_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -1164,6 +1722,7 @@ fn walk_rust_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -1266,6 +1825,7 @@ fn walk_swift_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -1371,6 +1931,7 @@ fn walk_scala_calls(
                             callee_name: callee,
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
+                            exploit_witness: None,
                         });
                     }
                 }
@@ -1581,6 +2142,56 @@ mod tests {
             findings.is_empty(),
             "uncataloged function must not produce cross-file finding"
         );
+    }
+
+    #[test]
+    fn python_ifds_emits_three_hop_exploit_witness() {
+        let (_dir, path) = tmp_catalog_path();
+        let records = vec![TaintExportRecord {
+            symbol_name: "execute".to_string(),
+            file_path: "db.py".to_string(),
+            tainted_params: vec![TaintedParam {
+                param_index: 0,
+                param_name: "sql_text".to_string(),
+                kind: TaintKind::UserInput,
+            }],
+            sink_kinds: vec![TaintKind::DatabaseResult],
+            propagates_to_return: false,
+        }];
+        write_catalog(&path, &records).expect("write");
+        let catalog = CatalogView::open(&path).expect("open");
+
+        let src = r#"
+def handle(user_input):
+    validate(user_input)
+
+def validate(payload):
+    execute(payload)
+"#;
+        let tree = parse_python(src);
+        let findings = scan_cross_file_sinks("py", src.as_bytes(), &tree, &catalog);
+        let witness = findings
+            .iter()
+            .find_map(|finding| {
+                let witness = finding.exploit_witness.as_ref()?;
+                (witness.call_chain
+                    == vec![
+                        "handle".to_string(),
+                        "validate".to_string(),
+                        "execute".to_string(),
+                    ])
+                .then(|| witness.clone())
+            })
+            .expect("expected a three-hop IFDS witness");
+        assert_eq!(
+            witness.call_chain,
+            vec![
+                "handle".to_string(),
+                "validate".to_string(),
+                "execute".to_string(),
+            ]
+        );
+        assert_eq!(witness.source_label, "param:user_input");
     }
 
     // ── TypeScript cross-file taint ─────────────────────────────────────────

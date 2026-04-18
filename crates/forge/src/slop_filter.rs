@@ -1256,6 +1256,8 @@ impl PRBouncer for PatchBouncer {
         // CT-013: capture the catalog's BLAKE3 hash so the sealed DecisionCapsule
         // can prove exactly which taint catalog state drove this decision.
         let mut taint_catalog_hash: Option<String> = None;
+        let mut cross_file_witnesses: HashMap<(usize, usize), common::slop::ExploitWitness> =
+            HashMap::new();
         if matches!(ext, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go") {
             if let Some(catalog_path) = self.catalog_path.as_deref() {
                 if let Some(catalog) = crate::taint_catalog::CatalogView::open(catalog_path) {
@@ -1263,6 +1265,9 @@ impl PRBouncer for PatchBouncer {
                     for sink in
                         crate::taint_catalog::scan_cross_file_sinks(ext, source, &tree, &catalog)
                     {
+                        if let Some(witness) = sink.exploit_witness.clone() {
+                            cross_file_witnesses.insert((sink.start_byte, sink.end_byte), witness);
+                        }
                         raw_findings.push(crate::slop_hunter::SlopFinding {
                             start_byte: sink.start_byte,
                             end_byte: sink.end_byte,
@@ -1368,7 +1373,7 @@ impl PRBouncer for PatchBouncer {
         for f in accepted {
             let line = byte_offset_to_line(source, f.start_byte);
             antipattern_details.push(format!("{} (line={line})", f.description));
-            structured_findings.push(common::slop::StructuredFinding {
+            let mut finding = common::slop::StructuredFinding {
                 id: f.description.clone(),
                 file: Some(file_path.clone()),
                 line: Some(line),
@@ -1381,7 +1386,14 @@ impl PRBouncer for PatchBouncer {
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
-            });
+            };
+            if extract_rule_id(&f.description) == "security:cross_file_taint_sink" {
+                if let Some(witness) = cross_file_witnesses.get(&(f.start_byte, f.end_byte)) {
+                    finding =
+                        crate::exploitability::attach_exploit_witness(finding, witness.clone());
+                }
+            }
+            structured_findings.push(finding);
         }
 
         // Dead symbols added — name already exists in registry.

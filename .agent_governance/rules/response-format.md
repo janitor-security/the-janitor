@@ -37,7 +37,7 @@ Direct-triage backlog changes logged this session. Format:
 If none: <!-- no triage changes this session -->
 
 ## [NEXT RECOMMENDED ACTION]
-The single highest-priority actionable item from `docs/INNOVATION_LOG.md`.
+The single highest-priority actionable item from `.INNOVATION_LOG.md`.
 State: the P0/P1/P2 ID, the file to modify, the function to change, the exact
 command to begin, and the commercial justification. No vague "consider"
 language — name the action and quantify the TAM / TEI expansion unlocked.
@@ -60,14 +60,14 @@ and explicitly answer:
 - Final directive summaries (any session that modifies files or runs commands)
   are NOT exempt. The format is non-negotiable.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
-  `docs/INNOVATION_LOG.md` and state the commercial justification — it is not
+  `.INNOVATION_LOG.md` and state the commercial justification — it is not
   a free-form opinion.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
   summaries and must remain terminal-only.
 
 ## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
 
-You MUST scan the **entire** `docs/INNOVATION_LOG.md` — P0, P1, and P2 — before
+You MUST scan the **entire** `.INNOVATION_LOG.md` — P0, P1, and P2 — before
 selecting the next action.  Do NOT default to the section you just edited or the
 last file you touched.
 
