@@ -981,10 +981,9 @@ enum Commands {
     ///
     /// Recursively walks `path`, runs the full Janitor detector suite (credential
     /// scanning, supply-chain analysis, injection pattern detection, and taint
-    /// propagation) on every file, and emits a single JSON array of findings to
-    /// stdout.  No SlopScore is computed and no summary table is printed —
-    /// the output is raw structured signal suitable for `jq` filtering and SIEM
-    /// ingestion.
+    /// propagation) on every file, and emits either a JSON array of findings or
+    /// a Bugcrowd-ready Markdown report to stdout.  No SlopScore is computed and
+    /// no summary table is printed.
     ///
     /// ## Examples
     ///
@@ -1031,6 +1030,10 @@ enum Commands {
         /// Example: `'.[] | select(.severity == "Critical")'`
         #[arg(long)]
         filter: Option<String>,
+        /// Output format: `json` (default) or `bugcrowd` for triage-ready
+        /// Markdown grouped by finding class.
+        #[arg(long, default_value = "json")]
+        format: String,
         /// Path to an alternative slopsquat corpus file (`.rkyv` format).
         /// When omitted the compiled-in corpus is used.
         #[arg(long)]
@@ -1496,6 +1499,7 @@ async fn main() -> anyhow::Result<()> {
             asar,
             docker,
             filter,
+            format,
             corpus_path,
         } => {
             hunt::cmd_hunt(hunt::HuntArgs {
@@ -1507,6 +1511,7 @@ async fn main() -> anyhow::Result<()> {
                 asar_path: asar.as_deref(),
                 docker_path: docker.as_deref(),
                 filter_expr: filter.as_deref(),
+                format: format.as_str(),
                 corpus_path: corpus_path.as_deref(),
             })?;
         }

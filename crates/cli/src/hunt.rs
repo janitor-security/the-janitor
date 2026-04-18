@@ -3,7 +3,8 @@
 //! Recursively walks a target directory (or a source tree reconstructed from a
 //! JavaScript sourcemap / npm tarball / Android APK / Java JAR / Electron ASAR /
 //! Docker image tarball), runs the full Janitor detector suite on every file, and
-//! emits results as a single JSON array of [`common::slop::StructuredFinding`] to
+//! emits results as either a JSON array of
+//! [`common::slop::StructuredFinding`] or a Bugcrowd-ready Markdown report to
 //! stdout.
 //!
 //! ## Modes
@@ -19,12 +20,13 @@
 //! janitor hunt ./target --filter '.[] | select(.severity == "Critical")'
 //! ```
 //!
-//! Stdout is always a valid JSON array.  Use `--filter` for native `jq`-style
-//! filtering (no runtime `jq` dependency required).
+//! JSON mode supports `--filter` for native `jq`-style filtering (no runtime
+//! `jq` dependency required).
 
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
 use forge::slop_hunter::{find_slop, ParsedUnit};
+use std::collections::BTreeMap;
 use std::io::Read as _;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -45,6 +47,7 @@ pub struct HuntArgs<'a> {
     pub asar_path: Option<&'a Path>,
     pub docker_path: Option<&'a Path>,
     pub filter_expr: Option<&'a str>,
+    pub format: &'a str,
     pub corpus_path: Option<&'a Path>,
 }
 
@@ -54,10 +57,11 @@ pub struct HuntArgs<'a> {
 
 /// Entry point for `janitor hunt`.
 ///
-/// A local `scan_root` or one remote/archive fetcher is required. All modes produce a
-/// `Vec<StructuredFinding>`
-/// serialised as JSON to stdout.  If `filter_expr` is provided the JSON output
-/// is piped through a native `jq`-compatible filter before printing.
+/// A local `scan_root` or one remote/archive fetcher is required. All modes
+/// produce a `Vec<StructuredFinding>`. JSON mode serialises findings directly to
+/// stdout; Bugcrowd mode renders grouped Markdown reports. If `filter_expr` is
+/// provided the JSON output is piped through a native `jq`-compatible filter
+/// before printing.
 pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     let HuntArgs {
         scan_root,
@@ -68,9 +72,21 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         asar_path,
         docker_path,
         filter_expr,
+        format,
         corpus_path,
     } = args;
     let _ = corpus_path; // reserved — slopsquat corpus override
+
+    match format {
+        "json" | "bugcrowd" => {}
+        _ => anyhow::bail!(
+            "unsupported hunt output format '{format}' (expected 'json' or 'bugcrowd')"
+        ),
+    }
+
+    if filter_expr.is_some() && format != "json" {
+        anyhow::bail!("--filter is supported only with --format json");
+    }
 
     let source_count = usize::from(scan_root.is_some())
         + usize::from(sourcemap_url.is_some())
@@ -111,6 +127,11 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         );
     };
 
+    if format == "bugcrowd" {
+        println!("{}", format_bugcrowd_report(&findings));
+        return Ok(());
+    }
+
     let json_val =
         serde_json::to_value(&findings).context("failed to convert findings to JSON value")?;
 
@@ -124,6 +145,171 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         .context("failed to serialise findings as JSON")?;
     println!("{json}");
     Ok(())
+}
+
+fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
+    let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
+    for finding in findings {
+        grouped
+            .entry(finding.id.as_str())
+            .or_default()
+            .push(finding);
+    }
+
+    let mut reports = Vec::with_capacity(grouped.len().max(1));
+    for (rule_id, group) in grouped {
+        let mut sorted_group = group;
+        sorted_group.sort_by(|left, right| {
+            let left_key = (
+                left.file.as_deref().unwrap_or("~"),
+                left.line.unwrap_or(u32::MAX),
+                left.fingerprint.as_str(),
+            );
+            let right_key = (
+                right.file.as_deref().unwrap_or("~"),
+                right.line.unwrap_or(u32::MAX),
+                right.fingerprint.as_str(),
+            );
+            left_key.cmp(&right_key)
+        });
+
+        let details = sorted_group
+            .iter()
+            .map(|finding| {
+                format!(
+                    "- File: {}, Line: {}",
+                    finding.file.as_deref().unwrap_or("unknown"),
+                    finding
+                        .line
+                        .map(|line| line.to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let highest_severity = sorted_group
+            .iter()
+            .filter_map(|finding| finding.severity.as_deref())
+            .max_by_key(|severity| severity_rank(severity));
+
+        let business_impact = business_impact_statement(rule_id, highest_severity);
+        let mitigation = suggested_mitigation(&sorted_group);
+
+        reports.push(format!(
+            "**Summary Title:** Multiple instances of {rule_id} in target\n\
+**VRT Category:** {}\n\
+**Vulnerability Details:**\n\
+During a static analysis of the target artifacts, the following critical security sinks were identified:\n\
+{details}\n\
+**Business Impact:** {business_impact}\n\
+**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]\n\
+**Suggested Mitigation:** {mitigation}",
+            vrt_category(rule_id)
+        ));
+    }
+
+    if reports.is_empty() {
+        return String::from(
+            "**Summary Title:** Multiple instances of no_findings in target\n\
+**VRT Category:** Informational\n\
+**Vulnerability Details:**\n\
+During a static analysis of the target artifacts, no findings were identified.\n\
+**Business Impact:** No direct business impact was identified because the scan did not emit any findings.\n\
+**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]\n\
+**Suggested Mitigation:** No mitigation required.",
+        );
+    }
+
+    reports.join("\n\n---\n\n")
+}
+
+fn vrt_category(rule_id: &str) -> &'static str {
+    if rule_id.contains("xss") {
+        "Cross-Site Scripting (XSS) > DOM-Based"
+    } else if rule_id.contains("credential")
+        || rule_id.contains("secret")
+        || rule_id.contains("hardcoded")
+    {
+        "Server Security Misconfiguration > Hardcoded Credentials"
+    } else if rule_id.contains("command_injection") {
+        "Server-Side Code Injection > OS Command Injection"
+    } else if rule_id.contains("sql") {
+        "SQL Injection"
+    } else if rule_id.contains("ssrf") {
+        "Server-Side Request Forgery (SSRF)"
+    } else if rule_id.contains("path_traversal") || rule_id.contains("directory_traversal") {
+        "Path Traversal"
+    } else if rule_id.contains("template") || rule_id.contains("ssti") {
+        "Server-Side Code Injection > Server-Side Template Injection"
+    } else if rule_id.contains("deserialize") {
+        "Insecure Deserialization"
+    } else if rule_id.contains("idor") || rule_id.contains("auth") {
+        "Broken Access Control"
+    } else {
+        "Informational"
+    }
+}
+
+fn severity_rank(severity: &str) -> u8 {
+    match severity {
+        "KevCritical" => 6,
+        "Exhaustion" => 5,
+        "Critical" => 4,
+        "High" => 3,
+        "Medium" => 2,
+        "Low" => 1,
+        _ => 0,
+    }
+}
+
+fn business_impact_statement(rule_id: &str, severity: Option<&str>) -> String {
+    if rule_id.contains("credential") || rule_id.contains("secret") || rule_id.contains("hardcoded")
+    {
+        return String::from(
+            "Embedded secrets can permit unauthorized access to internal systems, enable account takeover, and create durable compromise paths for an attacker.",
+        );
+    }
+    if rule_id.contains("xss") {
+        return String::from(
+            "A DOM-based XSS sink can enable session theft, arbitrary action execution in a victim browser, and lateral compromise of privileged user workflows.",
+        );
+    }
+    if rule_id.contains("command_injection") {
+        return String::from(
+            "Command injection sinks can yield direct remote code execution, host compromise, and rapid pivoting into adjacent infrastructure.",
+        );
+    }
+
+    match severity {
+        Some("KevCritical") | Some("Critical") => String::from(
+            "The identified sinks can enable high-impact compromise of confidentiality, integrity, and availability if they are reachable in production workflows.",
+        ),
+        Some("High") => String::from(
+            "The identified sinks can expose sensitive data or privileged functionality and materially increase the likelihood of exploitable compromise.",
+        ),
+        Some("Medium") | Some("Low") => String::from(
+            "The identified sinks increase attack surface and can become exploitable when combined with reachable input control or adjacent weaknesses.",
+        ),
+        _ => String::from(
+            "The identified sinks require manual triage to determine exploitability, but they represent concrete attack-surface expansion that warrants remediation.",
+        ),
+    }
+}
+
+fn suggested_mitigation(findings: &[&StructuredFinding]) -> String {
+    let mut mitigations = findings
+        .iter()
+        .filter_map(|finding| finding.remediation.as_deref())
+        .collect::<Vec<_>>();
+    mitigations.sort_unstable();
+    mitigations.dedup();
+
+    if mitigations.is_empty() {
+        String::from("Review the affected sink usage, remove unsafe data flow into the target API, and apply the framework-native safe alternative.")
+    } else {
+        mitigations.join(" ")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -958,6 +1144,35 @@ mod tests {
         let (name, ver) = parse_npm_spec("@scope/pkg");
         assert_eq!(name, "@scope/pkg");
         assert_eq!(ver, "");
+    }
+
+    #[test]
+    fn bugcrowd_formatter_emits_required_headers() {
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("static/app.js".to_string()),
+            line: Some(42),
+            fingerprint: "abc123".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: Some(
+                "Replace innerHTML with textContent or a vetted sanitizer.".to_string(),
+            ),
+            docs_url: None,
+            exploit_witness: None,
+        };
+
+        let report = format_bugcrowd_report(&[finding]);
+        assert!(report.contains(
+            "**Summary Title:** Multiple instances of security:dom_xss_innerHTML in target"
+        ));
+        assert!(report.contains("**VRT Category:**"));
+        assert!(report.contains("**Vulnerability Details:**"));
+        assert!(report.contains("**Business Impact:**"));
+        assert!(report
+            .contains("**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]"));
+        assert!(report.contains(
+            "**Suggested Mitigation:** Replace innerHTML with textContent or a vetted sanitizer."
+        ));
     }
 
     // -----------------------------------------------------------------------

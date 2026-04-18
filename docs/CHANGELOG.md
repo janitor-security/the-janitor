@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — Sprint Batch 5 (Bugcrowd VRT Report Generator)
+
+**Directive:** Execute P2-7 by extending `janitor hunt` with a native Bugcrowd/VRT Markdown output mode, verify with the mandated `-- --test-threads=4` cargo test invocation plus `just audit`, purge the completed roadmap item from `.INNOVATION_LOG.md`, and stop after a local commit with no release.
+
+**Phase 1 — Hunt Formatter Path:**
+- `crates/cli/src/main.rs`: added `--format` to the `Hunt` subcommand with `json` default and wired the selected value into `hunt::HuntArgs`.
+- `crates/cli/src/hunt.rs`: extended `HuntArgs` with `format`, validated the accepted formats (`json`, `bugcrowd`), and fail-closed on `--filter` when a non-JSON report format is requested.
+- `crates/cli/src/hunt.rs`: introduced `format_bugcrowd_report(findings: &[StructuredFinding]) -> String`, grouping findings by `id`, mapping common rule IDs into Bugcrowd-style VRT categories, emitting deterministic Markdown sections for vulnerability details, business impact, PoC placeholder, and suggested mitigation, and preserving the existing JSON path unchanged for `--format json`.
+
+**Phase 2 — Regression Coverage:**
+- `crates/cli/src/hunt.rs`: added `bugcrowd_formatter_emits_required_headers`, asserting the generated Markdown contains the required Bugcrowd report headers and mitigation text for a dummy `StructuredFinding`.
+
+**Phase 3 — Blueprint Hygiene:**
+- `.INNOVATION_LOG.md`: purged `P2-7 — Autonomous Recon & Bugcrowd Report Generator` after the formatter lane shipped.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exits `0`.
+- `just audit` exits `0`.
+- No release executed.
+
 ## 2026-04-18 — The AEG Detonation & IFDS Completion (v10.2.0-alpha.6)
 
 **Directive:** Complete P1-1 by wiring real AST-derived `(caller, callee,
