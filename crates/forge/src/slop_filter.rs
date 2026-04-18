@@ -1066,6 +1066,12 @@ impl PRBouncer for PatchBouncer {
 
         let query = Query::new(&cfg.language, cfg.query_src)
             .map_err(|e| anyhow::anyhow!("Query compile error for .{ext}: {e}"))?;
+        let controller_surfaces = crate::authz::extract_controller_surface_with_file(
+            &tree,
+            ext,
+            source,
+            file_path.clone(),
+        );
 
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
@@ -1396,8 +1402,19 @@ impl PRBouncer for PatchBouncer {
             };
             if extract_rule_id(&f.description) == "security:cross_file_taint_sink" {
                 if let Some(witness) = cross_file_witnesses.get(&(f.start_byte, f.end_byte)) {
+                    let mut enriched_witness = witness.clone();
+                    if let Some(surface) = crate::authz::match_surface_for_witness(
+                        &controller_surfaces,
+                        &enriched_witness.source_function,
+                        Some(line),
+                    ) {
+                        enriched_witness.route_path = Some(surface.surface.route_path.clone());
+                        enriched_witness.http_method = Some(surface.surface.http_method.clone());
+                        enriched_witness.auth_requirement =
+                            surface.surface.auth_requirement.clone();
+                    }
                     finding =
-                        crate::exploitability::attach_exploit_witness(finding, witness.clone());
+                        crate::exploitability::attach_exploit_witness(finding, enriched_witness);
                 }
             }
             structured_findings.push(finding);

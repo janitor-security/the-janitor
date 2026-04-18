@@ -26,6 +26,16 @@ pub struct ExploitWitness {
     /// emitted by a detector without a repro template.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repro_cmd: Option<String>,
+    /// HTTP route path associated with the ingress handler, e.g. `"/api/v1/users"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_path: Option<String>,
+    /// HTTP method associated with the ingress handler, e.g. `"POST"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_method: Option<String>,
+    /// Optional authorization annotation or middleware requirement extracted
+    /// from the ingress handler, e.g. `"ADMIN"` or `"Authenticated"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_requirement: Option<String>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.

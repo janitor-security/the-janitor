@@ -345,6 +345,9 @@ impl IfdsSolver {
                     sink_label: sink.sink_label.clone(),
                     call_chain: vec![input.function.clone()],
                     repro_cmd: None,
+                    route_path: None,
+                    http_method: None,
+                    auth_requirement: None,
                 });
             }
         }
@@ -395,6 +398,9 @@ impl IfdsSolver {
                         sink_label: witness.sink_label.clone(),
                         call_chain,
                         repro_cmd: witness.repro_cmd.clone(),
+                        route_path: witness.route_path.clone(),
+                        http_method: witness.http_method.clone(),
+                        auth_requirement: witness.auth_requirement.clone(),
                     });
                 }
             }

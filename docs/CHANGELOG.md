@@ -3,6 +3,33 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — Sprint Batch 6 (API Router Map & Surface Extraction)
+
+**Directive:** Execute P1-3 by extracting framework-aware API router surfaces for Spring Boot, Flask/FastAPI, and Express; enrich exploit witnesses with exact ingress method/path metadata; verify with the mandated `cargo test --workspace -- --test-threads=4` plus `just audit`; mark the controller-surface lane complete in `.INNOVATION_LOG.md`; and stop after a local commit with no release.
+
+**Phase 1 — Endpoint Surface Registry:**
+- `crates/forge/src/authz.rs` *(new)*: introduced `EndpointSurface { file, route_path, http_method, auth_requirement }` plus framework-aware AST extraction helpers and deterministic route normalization.
+- `crates/forge/src/lib.rs`: exported the new `authz` module.
+
+**Phase 2 — Framework Extraction:**
+- `crates/forge/src/authz.rs`: added Spring controller parsing for `@RequestMapping`, `@GetMapping`, `@PostMapping`, including class-level + method-level route joins and `@PreAuthorize` / `@PermitAll` auth extraction.
+- `crates/forge/src/authz.rs`: added Python route parsing for Flask/FastAPI decorators such as `@app.route("/path", methods=["POST"])`, `@app.get("/path")`, and `@app.post("/path")`, plus `@login_required` / `@public_endpoint` style auth mapping.
+- `crates/forge/src/authz.rs`: added JS/TS Express parsing for `app.get("/path", ...)` / `router.post("/path", ...)` surfaces and visible middleware-style auth extraction when the auth wrapper name is present in the handler call.
+
+**Phase 3 — Exploit Witness Enrichment:**
+- `crates/forge/src/slop_filter.rs`: extracted controller surfaces per file during AST analysis and cross-referenced confirmed cross-file taint findings against witness source function + line location.
+- `crates/common/src/slop.rs`: extended `ExploitWitness` with optional `route_path`, `http_method`, and `auth_requirement` fields so downstream AEG consumers can target the exact ingress surface.
+- `crates/forge/src/ifds.rs` and `crates/forge/src/exploitability.rs`: propagated the new witness metadata through solver-generated and test helper witness construction.
+
+**Phase 4 — Regression Coverage & Blueprint Hygiene:**
+- `crates/forge/src/authz.rs`: added deterministic extraction tests for a Spring Boot controller, a Flask route, and an Express router, asserting the correct method/path/auth surface is recovered.
+- `.INNOVATION_LOG.md`: marked the P1-3 controller-surface extraction lane complete while leaving the remaining authorization-model work active.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exits `0`.
+- `just audit` exits `0`.
+- No release executed.
+
 ## 2026-04-18 — Sprint Batch 5 (Bugcrowd VRT Report Generator)
 
 **Directive:** Execute P2-7 by extending `janitor hunt` with a native Bugcrowd/VRT Markdown output mode, verify with the mandated `-- --test-threads=4` cargo test invocation plus `just audit`, purge the completed roadmap item from `.INNOVATION_LOG.md`, and stop after a local commit with no release.
