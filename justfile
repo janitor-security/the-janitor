@@ -44,7 +44,7 @@ audit:
 	cargo fmt --all -- --check
 	cargo clippy --workspace -- -D warnings
 	cargo check --workspace
-	cargo test --workspace -- --test-threads=1
+	cargo test --workspace -- --test-threads=4
 	bash ./tools/tests/test_release_parity.sh
 	./tools/verify_doc_parity.sh
 	# Persist audit fingerprint so fast-release can skip redundant re-audit.

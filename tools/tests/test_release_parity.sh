@@ -12,22 +12,42 @@ fail() {
 [[ -f "${JUSTFILE}" ]] || fail "missing justfile at ${JUSTFILE}"
 [[ -f "${RELEASE_DOC}" ]] || fail "missing release doc at ${RELEASE_DOC}"
 
-doc_test_line="$(grep -n 'cargo test --workspace -- --test-threads=1' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
-doc_audit_line="$(grep -n 'just audit' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
-[[ -n "${doc_test_line}" ]] || fail "release doc does not require serialized workspace tests"
-[[ -n "${doc_audit_line}" ]] || fail "release doc does not require just audit"
-(( doc_test_line < doc_audit_line )) || fail "release doc does not preserve test -> audit order"
-grep -Fq 'Do **not** run `just fast-release`.' "${RELEASE_DOC}" \
-    || fail "release doc does not forbid just fast-release"
-grep -Fq 'Do **not** run `just release`.' "${RELEASE_DOC}" \
-    || fail "release doc does not forbid just release"
-grep -Fq 'Do **not** create commits.' "${RELEASE_DOC}" \
-    || fail "release doc does not forbid agent commits"
-grep -Fq 'Do **not** create tags.' "${RELEASE_DOC}" \
-    || fail "release doc does not forbid agent tags"
-grep -Fq 'for the Sovereign Operator to review, commit, sign, tag, and publish manually.' "${RELEASE_DOC}" \
-    || fail "release doc does not preserve the operator handoff"
+# Law 0: per-prompt commit mandate.
+grep -Fq 'git commit -a -m' "${RELEASE_DOC}" \
+    || fail "release doc missing the per-prompt git commit -a mandate (Law 0)"
+grep -Fq 'EVERY' "${RELEASE_DOC}" \
+    || fail "release doc missing the EVERY-prompt emphasis for the commit mandate"
 
+# Law II: test-threads=4 mandate.
+grep -Fq 'cargo test --workspace -- --test-threads=4' "${RELEASE_DOC}" \
+    || fail "release doc missing the --test-threads=4 mandate (Law II)"
+if grep -Fq 'cargo test --workspace -- --test-threads=1' "${RELEASE_DOC}"; then
+    fail "release doc still references --test-threads=1 — conflicts with Law II"
+fi
+
+# Step order inside the commanded release execution block. The ordered block
+# starts at "## Release Execution Order" — earlier mentions of the same
+# tokens in exceptions or Law sections do not count.
+exec_block_start="$(grep -n '^## Release Execution Order' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
+[[ -n "${exec_block_start}" ]] || fail "release doc is missing the Release Execution Order section"
+doc_test_line="$(awk -v start="${exec_block_start}" 'NR > start && /cargo test --workspace -- --test-threads=4/ { print NR; exit }' "${RELEASE_DOC}")"
+doc_audit_line="$(awk -v start="${exec_block_start}" 'NR > start && /^just audit$/ { print NR; exit }' "${RELEASE_DOC}")"
+doc_fastrelease_line="$(awk -v start="${exec_block_start}" 'NR > start && /just fast-release <version>/ { print NR; exit }' "${RELEASE_DOC}")"
+[[ -n "${doc_test_line}" ]] || fail "release execution block does not schedule the test gate"
+[[ -n "${doc_audit_line}" ]] || fail "release execution block does not schedule just audit"
+[[ -n "${doc_fastrelease_line}" ]] || fail "release execution block does not schedule fast-release"
+(( doc_test_line < doc_audit_line )) || fail "release doc does not preserve test -> audit order"
+(( doc_audit_line < doc_fastrelease_line )) || fail "release doc does not preserve audit -> fast-release order"
+
+# Hard prohibitions that must survive every rewrite.
+grep -Fq 'Co-authored-by' "${RELEASE_DOC}" \
+    || fail "release doc dropped the Co-authored-by prohibition"
+grep -Fq 'force-push' "${RELEASE_DOC}" \
+    || fail "release doc dropped the force-push prohibition"
+grep -Fq -- '--no-verify' "${RELEASE_DOC}" \
+    || fail "release doc dropped the --no-verify prohibition"
+
+# Justfile fast-release structural guarantees.
 release_exec_line="$(grep -n 'exec just fast-release "{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 [[ -n "${release_exec_line}" ]] || fail "release recipe does not delegate to fast-release"
 
@@ -54,8 +74,9 @@ tag_line="$(grep -n 'git tag -s v{{version}} -m "release v{{version}}"' "${JUSTF
 (( git_add_line < commit_line )) || fail "git add no longer precedes commit"
 (( commit_line < tag_line )) || fail "commit no longer precedes tag"
 
-if grep -Eq 'git commit -a|git add \.' "${JUSTFILE}"; then
-    fail "release surface is no longer allowlisted"
+# The justfile audit recipe must match Law II — no lingering --test-threads=1.
+if grep -Fq 'cargo test --workspace -- --test-threads=1' "${JUSTFILE}"; then
+    fail "justfile audit still invokes --test-threads=1 — conflicts with release doc Law II"
 fi
 
 echo "release parity OK"

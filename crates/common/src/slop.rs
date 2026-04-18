@@ -20,6 +20,12 @@ pub struct ExploitWitness {
     pub sink_label: String,
     /// Exact interprocedural call chain proving reachability.
     pub call_chain: Vec<String>,
+    /// Concrete reproduction command synthesised from a Z3 model after
+    /// symbolic execution confirms the path is satisfiable. `None` when the
+    /// Z3 refinement stage was not run, was inconclusive, or the witness was
+    /// emitted by a detector without a repro template.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repro_cmd: Option<String>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:c71cae60-6f14-4ea6-b951-ae0b9829cd8f",
+  "serialNumber": "urn:uuid:ea64be17-9483-4fc2-b79e-e5aeb42c0944",
   "metadata": {
-    "timestamp": "2026-04-18T04:48:01.172547115Z",
+    "timestamp": "2026-04-18T10:03:00.204193441Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.5",
       "name": "vault",
-      "version": "10.2.0-alpha.3",
+      "version": "10.2.0-alpha.5",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/vault@10.2.0-alpha.3?download_url=file://.",
+      "purl": "pkg:cargo/vault@10.2.0-alpha.5?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.5 bin-target-0",
           "name": "vault",
-          "version": "10.2.0-alpha.3",
-          "purl": "pkg:cargo/vault@10.2.0-alpha.3?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.5",
+          "purl": "pkg:cargo/vault@10.2.0-alpha.5?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -236,16 +236,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.6",
       "author": "RustCrypto Developers",
       "name": "crypto-common",
-      "version": "0.1.7",
+      "version": "0.1.6",
       "description": "Common cryptographic traits",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
+          "content": "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
         }
       ],
       "licenses": [
@@ -253,7 +253,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/crypto-common@0.1.7",
+      "purl": "pkg:cargo/crypto-common@0.1.6",
       "externalReferences": [
         {
           "type": "documentation",
@@ -460,16 +460,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
       "author": "Bartłomiej Kamiński <fizyk20@gmail.com>, Aaron Trent <novacrazy@gmail.com>",
       "name": "generic-array",
-      "version": "0.14.7",
+      "version": "0.14.9",
       "description": "Generic types implementing functionality of arrays",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
+          "content": "4bb6743198531e02858aeaea5398fcc883e71851fcbcb5a2f773e2fb6cb1edf2"
         }
       ],
       "licenses": [
@@ -477,7 +477,7 @@
           "expression": "MIT"
         }
       ],
-      "purl": "pkg:cargo/generic-array@0.14.7",
+      "purl": "pkg:cargo/generic-array@0.14.9",
       "externalReferences": [
         {
           "type": "documentation",
@@ -1231,7 +1231,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/vault#10.2.0-alpha.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
@@ -1247,7 +1247,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7"
+        "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9"
       ]
     },
     {
@@ -1260,9 +1260,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#cpufeatures@0.2.17"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.6",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
+        "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0"
       ]
     },
@@ -1299,7 +1299,7 @@
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#block-buffer@0.10.4",
         "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
-        "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
+        "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.6",
         "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1"
       ]
     },
@@ -1323,7 +1323,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.7",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
         "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",

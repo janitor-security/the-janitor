@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:d83beff7-f994-43ab-9934-0c4ea217861c",
+  "serialNumber": "urn:uuid:2ac0d49e-d46a-49f2-870d-ed9f0f4c7d99",
   "metadata": {
-    "timestamp": "2026-04-18T04:48:01.162834530Z",
+    "timestamp": "2026-04-18T10:03:00.197690648Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.5",
       "name": "polyglot",
-      "version": "10.2.0-alpha.3",
+      "version": "10.2.0-alpha.5",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.2.0-alpha.3?download_url=file://.",
+      "purl": "pkg:cargo/polyglot@10.2.0-alpha.5?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.5 bin-target-0",
           "name": "polyglot",
-          "version": "10.2.0-alpha.3",
-          "purl": "pkg:cargo/polyglot@10.2.0-alpha.3?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.5",
+          "purl": "pkg:cargo/polyglot@10.2.0-alpha.5?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -609,16 +609,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.1",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.5",
       "author": "Max Brunsfeld <maxbrunsfeld@gmail.com>, Amaan Qureshi <amaanq12@gmail.com>",
       "name": "tree-sitter-c-sharp",
-      "version": "0.23.1",
+      "version": "0.23.5",
       "description": "C# grammar for tree-sitter",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "67f06accca7b45351758663b8215089e643d53bd9a660ce0349314263737fcb0"
+          "content": "c1aac67f1ad71de1d6d39708d34811081c26dfa495658de6c14c34200849357c"
         }
       ],
       "licenses": [
@@ -626,7 +626,7 @@
           "expression": "MIT"
         }
       ],
-      "purl": "pkg:cargo/tree-sitter-c-sharp@0.23.1",
+      "purl": "pkg:cargo/tree-sitter-c-sharp@0.23.5",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1310,12 +1310,12 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c@0.24.1",
-        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.1",
+        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.5",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-gdscript@6.1.0",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-glsl@0.2.0",
@@ -1432,7 +1432,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.1",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-c-sharp@0.23.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"

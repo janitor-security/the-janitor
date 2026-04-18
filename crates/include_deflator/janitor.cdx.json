@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:04883939-e6f9-4112-8241-8757118eebf4",
+  "serialNumber": "urn:uuid:54ce7932-19a9-47ef-9fa1-688c0d927fb6",
   "metadata": {
-    "timestamp": "2026-04-18T04:48:01.134701774Z",
+    "timestamp": "2026-04-18T10:03:00.176171247Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,23 +14,23 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.5",
       "name": "include_deflator",
-      "version": "10.2.0-alpha.3",
+      "version": "10.2.0-alpha.5",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/include_deflator@10.2.0-alpha.3?download_url=file://.",
+      "purl": "pkg:cargo/include_deflator@10.2.0-alpha.5?download_url=file://.",
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.5 bin-target-0",
           "name": "include_deflator",
-          "version": "10.2.0-alpha.3",
-          "purl": "pkg:cargo/include_deflator@10.2.0-alpha.3?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-alpha.5",
+          "purl": "pkg:cargo/include_deflator@10.2.0-alpha.5?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -203,16 +203,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1",
       "author": "The Rust Project Developers",
       "name": "bitflags",
-      "version": "2.11.0",
+      "version": "2.11.1",
       "description": "A macro to generate structures which behave like bitflags. ",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
+          "content": "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
         }
       ],
       "licenses": [
@@ -220,7 +220,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/bitflags@2.11.0",
+      "purl": "pkg:cargo/bitflags@2.11.1",
       "externalReferences": [
         {
           "type": "documentation",
@@ -2553,7 +2553,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/include_deflator#10.2.0-alpha.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -2585,7 +2585,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#arrayvec@0.7.6"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -2651,7 +2651,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
+        "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1",
         "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
         "registry+https://github.com/rust-lang/crates.io-index#libgit2-sys@0.18.3+1.9.2",
         "registry+https://github.com/rust-lang/crates.io-index#log@0.4.29",

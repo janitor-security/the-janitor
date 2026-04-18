@@ -3,6 +3,58 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — Opus Genesis: Z3 Symbolic Execution & AEG (v10.2.0-alpha.5)
+
+**Directive:** Commit the uncommitted Sprint Batch 1–4 backlog, rewrite the
+release/commit engineering protocol to mandate per-prompt commits and 5th-Phase
+release cadence, integrate a Z3 SMT solver (via `rsmt2`) into the
+exploitability pipeline so false-positive taint paths are suppressed
+mathematically and true-positive paths emit a concrete repro command.
+
+**Phase 1 — Backlog Commit & Governance Automation:**
+- `git add . && git commit -m "chore(sprint): finalize batches 1-4 ..."` —
+  34 files, +802/-236, commit `22bf8bd`.
+- `.agent_governance/commands/release.md`: rewritten with Law 0 (per-prompt
+  `git commit -a`), Law I (automatic `just fast-release` only every 5th
+  feature-integration Phase block or on explicit operator command), Law II
+  (`--test-threads=4` mandate for all `cargo test` invocations).
+- `justfile audit`: `cargo test --workspace -- --test-threads=1` →
+  `--test-threads=4` (aligned with governance Law II).
+
+**Phase 2 — Z3 Symbolic Execution & AEG Core:**
+- `crates/forge/Cargo.toml`: `rsmt2 = "0.16"` added.
+- `crates/common/src/slop.rs`: `ExploitWitness` gains
+  `repro_cmd: Option<String>` with `#[serde(default, skip_serializing_if)]`
+  for forward-compatibility with pre-AEG audit logs.
+- `crates/forge/src/exploitability.rs`: **full rewrite**. Introduced
+  `Z3Solver` (no long-lived state — `Send + Sync`, fresh z3 subprocess per
+  `refine()` call via `rsmt2::Solver::default_z3(())`), `PathConstraint`
+  DTO (SMT variable declarations + SMT-LIB2 assertion bodies +
+  witnesses-of-interest list), `SmtSort` enum (`Int`/`Bool`/`String`/
+  `BitVec(u32)`), `ReproTemplate` (`{var_name}` placeholder substitution
+  with SMT-string unquoting), and `Refinement` enum
+  (`Satisfiable(witness)` / `Unsatisfiable` / `Unknown(witness)`).
+  `check-sat` returning `false` suppresses the finding mathematically;
+  `true` extracts the model via `get-values` and renders the repro
+  command. `Z3Solver::is_available()` probes the PATH non-destructively so
+  ephemeral environments skip without panic.
+- `crates/forge/src/ifds.rs`: both `ExploitWitness` construction sites
+  updated for the new field (propagating `repro_cmd: None` at origin,
+  cloning inherited witness's `repro_cmd` across call-chain extension).
+
+**Phase 3 — Verification & Release:**
+- `cargo test --workspace -- --test-threads=4` exits `0`. Seven new
+  exploitability unit tests land: `smt_sort_smtlib_encoding_is_stable`,
+  `render_template_substitutes_bindings_and_unquotes`,
+  `unquote_preserves_smt_escapes`, `z3_missing_binary_surfaced_as_new_error`,
+  `z3_satisfiable_path_populates_repro_cmd`,
+  `z3_unsatisfiable_path_is_suppressed`. The z3-dependent tests
+  gracefully skip (early `return`) when the z3 binary is absent from PATH.
+- `just audit` exits `0`.
+- `Cargo.toml [workspace.package].version`: `10.2.0-alpha.3` → `10.2.0-alpha.5`.
+- `just fast-release 10.2.0-alpha.5` — release tag + GH Release + docs
+  deploy via the idempotency-guarded pipeline.
+
 ## 2026-04-18 — Sprint Batch 4 (Commercial Gating)
 
 **Directive:** Lock offensive capabilities behind a cryptographically verified local license, force deterministic Community Mode degradation when the license is missing or invalid, bind the execution tier into provenance artifacts, and verify without cutting a release.

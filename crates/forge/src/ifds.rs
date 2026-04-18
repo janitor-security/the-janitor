@@ -335,6 +335,7 @@ impl IfdsSolver {
                     sink_function: input.function.clone(),
                     sink_label: sink.sink_label.clone(),
                     call_chain: vec![input.function.clone()],
+                    repro_cmd: None,
                 });
             }
         }
@@ -384,6 +385,7 @@ impl IfdsSolver {
                         sink_function: witness.sink_function.clone(),
                         sink_label: witness.sink_label.clone(),
                         call_chain,
+                        repro_cmd: witness.repro_cmd.clone(),
                     });
                 }
             }
