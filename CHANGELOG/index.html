@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-18-the-aeg-detonation-ifds-completion-v1020-alpha6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — The AEG Detonation &amp; IFDS Completion (v10.2.0-alpha.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)
@@ -1715,6 +1724,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-18-the-aeg-detonation-ifds-completion-v1020-alpha6" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — The AEG Detonation &amp; IFDS Completion (v10.2.0-alpha.6)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)
@@ -2854,6 +2872,66 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-18-the-aeg-detonation-ifds-completion-v1020-alpha6">2026-04-18 — The AEG Detonation &amp; IFDS Completion (v10.2.0-alpha.6)</h2>
+<p><strong>Directive:</strong> Complete P1-1 by wiring real AST-derived <code>(caller, callee,
+arg_positions)</code> edges into the call graph, detonate P3-1 Phase A by turning
+Z3 satisfying models into curl-format proof-of-exploit commands bound to
+<code>ExploitWitness::repro_cmd</code>, mark P1-1 COMPLETED in <code>.INNOVATION_LOG.md</code>,
+and ship as v10.2.0-alpha.6.</p>
+<p><strong>Phase 1 — Call Graph AST Wiring:</strong>
+- <code>crates/forge/src/callgraph.rs</code>: introduced <code>CallSiteArgs { args:
+  Vec&lt;Option&lt;String&gt;&gt; }</code> and <code>pub type CallEdge = SmallVec&lt;[CallSiteArgs;
+  4]&gt;</code>; <code>CallGraph</code> upgraded from <code>DiGraph&lt;String, ()&gt;</code> to
+  <code>DiGraph&lt;String, CallEdge&gt;</code>.  <code>walk_node</code> now collapses multiple call
+  sites between the same <code>(caller, callee)</code> pair onto a single edge whose
+  weight is a vec of per-site <code>CallSiteArgs</code> records.  Added
+  <code>extract_call_args()</code> helper that walks <code>arguments</code> field children and
+  captures bare identifiers as <code>Some(name)</code> while recording literals and
+  complex expressions as <code>None</code>, preserving positional order for IFDS
+  parameter alignment.  Supported languages: Python, JS, TS, Go, Java
+  (directive core: Python, JS/TS, Go).
+- <code>crates/forge/src/ifds.rs</code>: <code>IfdsSolver::new</code> made generic over <code>E:
+  Clone</code> — accepts any <code>DiGraph&lt;String, E&gt;</code> and internally normalizes via
+  <code>petgraph::Graph::map</code> so the richer <code>CallGraph</code> flows through without a
+  lossy pre-conversion and existing <code>DiGraph&lt;String, ()&gt;</code> callers remain
+  compatible.
+- 3 new callgraph tests (<code>call_graph_captures_arg_positions_python</code>,
+  <code>call_graph_merges_multiple_call_sites_into_one_edge</code>,
+  <code>call_graph_captures_literal_as_none_go</code>).</p>
+<p><strong>Phase 2 — AEG Core (Curl Payload Synthesis):</strong>
+- <code>crates/forge/src/exploitability.rs</code>: introduced <code>IngressKind</code> enum
+  (<code>HttpRoute { method, url }</code>, <code>Cli</code>, <code>Unknown</code>), <code>curl_template(method,
+  url, payload_binding)</code> — emits
+  <code>curl -X &lt;METHOD&gt; &lt;URL&gt; -d '{"input": "{binding}"}'</code> — and
+  <code>template_for_ingress(ingress, payload_binding)</code> dispatch that returns
+  <code>None</code> for <code>Unknown</code> so callers distinguish "no ingress profile" from
+  "empty template".  After <code>Z3Solver::refine</code> produces <code>Refinement::
+  Satisfiable</code>, the extracted model bindings flow through
+  <code>render_template</code> to populate <code>ExploitWitness::repro_cmd</code> with a
+  copy-pasteable terminal command.
+- 5 new exploitability tests
+  (<code>curl_template_substitutes_mocked_z3_model_payload</code>,
+  <code>curl_template_handles_integer_payload</code>,
+  <code>template_for_ingress_routes_http_to_curl</code>,
+  <code>template_for_ingress_unknown_returns_none</code>,
+  <code>template_for_ingress_cli_produces_binary_invocation</code>) — all
+  deterministic, none require the z3 binary, asserting exact curl string
+  equality so format regressions are impossible.</p>
+<p><strong>Phase 3 — Backlog Management:</strong>
+- <code>.INNOVATION_LOG.md</code>: P1-1 marked <code>[COMPLETED v10.2.0-alpha.6]</code> with a
+  shipped-state summary documenting the new <code>CallEdge</code> shape, the generic
+  IFDS signature, and the Z3 refinement linkage.  P3-1 gains a <em>Phase A
+  status</em> block noting curl synthesis is live and enumerating the pending
+  phases (B: serialized blobs, C: protobuf/GraphQL/gRPC, D: smart-contract
+  transaction sequences, E: parser payload files).</p>
+<p><strong>Phase 4 — Verification &amp; Release:</strong>
+- <code>cargo test --workspace -- --test-threads=4</code> — passed (doc-tests + unit
+  tests green).
+- <code>just audit</code> — <code>System Clean. Audit fingerprint saved.</code>
+- <code>Cargo.toml</code>: <code>[workspace.package].version</code> bumped <code>10.2.0-alpha.5 →
+  10.2.0-alpha.6</code>.
+- <code>just fast-release 10.2.0-alpha.6</code> — signed commit, signed tag,
+  GH Release publication, docs deployment.</p>
 <h2 id="2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5">2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)</h2>
 <p><strong>Directive:</strong> Commit the uncommitted Sprint Batch 1–4 backlog, rewrite the
 release/commit engineering protocol to mandate per-prompt commits and 5th-Phase
