@@ -6,12 +6,16 @@ on:
       - main
 
 # Workflow-level: deny all by default.
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   slop-gate:
     name: Structural Firewall
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     # Job-level: read PR diff + write step summary.
     permissions:
       contents: read
@@ -26,6 +30,9 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+
+      - name: Enable sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       # Dogfooding: run the composite action from the current branch so every
       # PR to this repo is itself gated by the version of the action it carries.

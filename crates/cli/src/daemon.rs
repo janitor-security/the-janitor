@@ -397,6 +397,7 @@ pub mod unix {
                             &near_matches,
                         );
                         let log_entry = crate::report::BounceLogEntry {
+                            execution_tier: "Community".to_string(),
                             pr_number: None,
                             author: author.clone(),
                             timestamp: crate::utc_now_iso8601(),

@@ -465,6 +465,18 @@ pub struct RbacConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct JanitorPolicy {
+    /// Runtime execution tier after license verification.
+    ///
+    /// Starts in Community mode and is upgraded in-process only when a valid
+    /// janitor.lic is present. Repository policy files must not self-assert a
+    /// commercial tier, so deserialization always falls back to the default.
+    #[serde(
+        default = "JanitorPolicy::default_execution_tier",
+        skip_deserializing,
+        skip_serializing
+    )]
+    pub execution_tier: String,
+
     /// Composite slop-score threshold above which `janitor bounce` reports a
     /// gate failure.
     ///
@@ -648,6 +660,7 @@ pub struct JanitorPolicy {
 impl Default for JanitorPolicy {
     fn default() -> Self {
         Self {
+            execution_tier: Self::default_execution_tier(),
             min_slop_score: 100,
             require_issue_link: false,
             allowed_zombies: false,
@@ -668,6 +681,12 @@ impl Default for JanitorPolicy {
             suppressions: None,
             rbac: RbacConfig::default(),
         }
+    }
+}
+
+impl JanitorPolicy {
+    fn default_execution_tier() -> String {
+        "Community".to_string()
     }
 }
 
@@ -1087,9 +1106,12 @@ mod tests {
                 approved: false,
             }]),
             rbac: RbacConfig::default(),
+            execution_tier: "Community".to_string(),
         };
         let serialised = toml::to_string(&original).unwrap();
-        let deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
+        let mut deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();
+        assert_eq!(deserialised.execution_tier, "Community");
+        deserialised.execution_tier = original.execution_tier.clone();
         assert_eq!(original, deserialised);
     }
 

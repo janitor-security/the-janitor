@@ -34,6 +34,8 @@ init:
 audit:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	echo "↳ Batch-mode hint: run 'just shell' first to enter the pinned Nix environment once."
+	echo "↳ This avoids repeated flake re-evaluation latency on every 'just audit' invocation."
 	if [[ -z "${IN_NIX_SHELL:-}" ]] && command -v nix &>/dev/null; then
 	    echo "↳ Entering Nix hermetic shell for reproducible audit..."
 	    exec nix develop --command just audit
@@ -45,7 +47,10 @@ audit:
 	cargo test --workspace -- --test-threads=1
 	bash ./tools/tests/test_release_parity.sh
 	./tools/verify_doc_parity.sh
-	echo "✅ System Clean."
+	# Persist audit fingerprint so fast-release can skip redundant re-audit.
+	mkdir -p .janitor
+	find crates/ -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}' > .janitor/.audit_hash
+	echo "✅ System Clean. Audit fingerprint saved."
 
 build:
 	#!/usr/bin/env bash
@@ -60,6 +65,27 @@ clean:
 	cargo clean
 	find . -name "*.rkyv" -not -path "./.git/*" -delete
 	@echo "💥 Target directory and rkyv artefacts vaporized."
+
+# Aggressively reclaim WSL/host disk space without destroying the release cache.
+# Wipes debug incremental artifacts (the dominant VHDX growth driver).
+# Preserves target/release so the release binary stays intact.
+prune:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	echo "→ Pruning debug/incremental build artifacts..."
+	cargo clean --profile dev 2>/dev/null || cargo clean --doc 2>/dev/null || true
+	# Remove incremental compilation cache (largest VHDX contributor).
+	rm -rf target/debug/incremental target/debug/.fingerprint target/debug/deps
+	echo "→ Removing leftover rkyv snapshot artifacts..."
+	find . -name "*.rkyv" -not -path "./.git/*" -delete 2>/dev/null || true
+	# Nix garbage collection (no-op if nix is not installed).
+	if command -v nix-collect-garbage &>/dev/null; then
+	    echo "→ Running nix-collect-garbage -d..."
+	    nix-collect-garbage -d
+	else
+	    echo "↷ nix-collect-garbage not found — skipping Nix GC."
+	fi
+	echo "✅ Prune complete. Run 'df -h' to verify reclaimed space."
 
 # Verify bit-for-bit binary reproducibility (SLSA Level 4).
 #
@@ -150,12 +176,30 @@ fast-release version:
 	    exit 1
 	fi
 	just sync-versions
-	just audit
-	cargo build --release --workspace
-	cargo cyclonedx --manifest-path crates/cli/Cargo.toml --all --format json --spec-version 1.5 --override-filename janitor.cdx
+	# Idempotent audit gate: skip test suite if crates/ is unchanged since last audit.
+	CURRENT_HASH="$(find crates/ -type f | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')"
+	SAVED_HASH="$(cat .janitor/.audit_hash 2>/dev/null || echo '')"
+	if [[ -n "${SAVED_HASH}" && "${CURRENT_HASH}" == "${SAVED_HASH}" ]]; then
+	    echo "Audit state unchanged — skipping redundant test suite."
+	else
+	    just audit
+	fi
+	cargo build --release -p cli
+	mkdir -p .janitor
+	CARGO_LOCK_HASH_PATH=".janitor/cargo_lock.hash"
+	CURRENT_CARGO_LOCK_HASH="$(sha256sum Cargo.lock | awk '{print $1}')"
 	SBOM_SOURCE="crates/cli/janitor.cdx.json"
 	SBOM_PATH="target/release/janitor.cdx.json"
-	cp "${SBOM_SOURCE}" "${SBOM_PATH}"
+	if [[ -f "${CARGO_LOCK_HASH_PATH}" ]] \
+	   && [[ "$(cat "${CARGO_LOCK_HASH_PATH}")" == "${CURRENT_CARGO_LOCK_HASH}" ]] \
+	   && [[ -f "${SBOM_PATH}" ]]; then
+	    echo "SBOM cache hit — Cargo.lock unchanged and ${SBOM_PATH} already present."
+	else
+	    cargo cyclonedx --manifest-path crates/cli/Cargo.toml --all --format json --spec-version 1.5 --override-filename janitor.cdx
+	    cp "${SBOM_SOURCE}" "${SBOM_PATH}"
+	    printf '%s\n' "${CURRENT_CARGO_LOCK_HASH}" > "${CARGO_LOCK_HASH_PATH}"
+	    echo "SBOM regenerated — Cargo.lock hash updated."
+	fi
 	strip target/release/janitor
 	# SLSA Level 4: compute SHA-384 digest (and optional ML-DSA-65 sig) for binary provenance.
 	# Produces target/release/janitor.sha384 always; target/release/janitor.sig if JANITOR_PQC_KEY is set.

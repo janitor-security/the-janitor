@@ -41,6 +41,12 @@ The single highest-priority actionable item from `.INNOVATION_LOG.md`.
 State: the P0/P1/P2 ID, the file to modify, the function to change, the exact
 command to begin, and the commercial justification. No vague "consider"
 language — name the action and quantify the TAM / TEI expansion unlocked.
+The Next Recommended Action MUST exclusively propose the next logical P0 or P1
+implementation task directly from `.INNOVATION_LOG.md`, providing the file
+paths and a brief commercial justification.
+Explicitly forbid manual operator shell guidance in this section. Do not
+suggest manual git commands, staging, signing, `/compact`, or other workflow
+rituals. The section is for implementation sequencing only.
 
 ## [SOVEREIGN TRANSLATION]
 A terminal-only operator brief. Never write this section into markdown logs or
@@ -62,6 +68,8 @@ and explicitly answer:
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
   `.INNOVATION_LOG.md` and state the commercial justification — it is not
   a free-form opinion.
+- The `[NEXT RECOMMENDED ACTION]` section MUST NOT recommend manual git
+  commands, release commands, or operator housekeeping steps.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
   summaries and must remain terminal-only.
 

@@ -9,7 +9,8 @@ on:
     - cron: '30 1 * * 0'
 
 # Workflow-level: deny all by default.
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   analyze:

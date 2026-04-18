@@ -1,6 +1,6 @@
 # Command: /release <v>
 
-Cut a tagged GitHub release with the full audit gate.
+Batched Engineering governance for operator-directed releases only.
 
 ## Usage
 
@@ -11,67 +11,59 @@ Cut a tagged GitHub release with the full audit gate.
 Where `<v>` is a bare version string — e.g. `9.0.1`, NOT `v9.0.1`.
 The recipe prepends `v` for the git tag automatically.
 
-## AI-Guided Release Sequence (strictly linear — no re-auditing)
+## Batched Engineering Standard
 
-Execute **in order**. Do not skip or reorder steps.
+Unless the Sovereign Operator explicitly commands a release, agents must treat
+all work as a batch-preparation pass, not a publish pass.
 
-### Step 1 — Version bump (single file)
-Edit `Cargo.toml [workspace.package].version` to `<v>`.
-This is the **only** file that requires a version change. All crates inherit
-the version via `version.workspace = true`. Do not edit crate-level `Cargo.toml`
-files or any `docs/` file to reflect the version — Cargo propagates it.
+### Default agent stop state
 
-### Step 2 — Update governance logs
+Execute **in order**. Stop after Step 4.
+
+### Step 1 — Requested file modifications
+Complete only the code, docs, or workflow edits explicitly requested by the
+directive. Do not invent release work.
+
+### Step 2 — Governance logs
 1. Append the current session's directive to `docs/CHANGELOG.md`.
-2. Append CT entries (or `<!-- no telemetry findings this session -->`) to
-   `.INNOVATION_LOG.md` under a `## Continuous Telemetry — YYYY-MM-DD` section.
-3. Run the Evolution Tracker Auto-Purge check: if all findings under any H2/H3
-   section are marked `[COMPLETED — ...]`, delete that section now.
+2. Update `.INNOVATION_LOG.md` only when the directive explicitly changes the
+   roadmap, closes backlog items, or seeds new architecture.
 
-Both logs **must** be current before Step 3. See `.claude/skills/evolution-tracker/SKILL.md`.
+### Step 3 — Deterministic test gate
+```bash
+cargo test --workspace -- --test-threads=1
+```
+Hard stop on any failure.
 
-### Step 3 — Audit (once)
+### Step 4 — Full audit gate
 ```bash
 just audit
 ```
-Hard stop on any failure. Do **not** re-run audit after this point — the working
-tree must be clean from this step forward.
+Hard stop on any failure.
 
-### Step 4 — Release
-```bash
-just fast-release <v>
-```
-The recipe skips the audit dependency (audit was already run in Step 3) and
-performs: commits staged changes → tags `v<v>` + floating `v<major>` →
-pushes `HEAD:main` + tags → creates GitHub Release → runs `just deploy-docs`.
+### Mandatory stop
+After Step 4, agents must stop and leave the modified files in the working tree
+for the Sovereign Operator to review, commit, sign, tag, and publish manually.
 
-**Absolute Law:** You MUST NEVER use `just release`. You must ALWAYS use
-`just fast-release <v>` after a successful `just audit`. Double-auditing is a
-violation of the 8GB Law.
+## Absolute prohibitions without explicit operator command
 
-### GPG fallback (if `just fast-release` fails with `fatal: no tag message?`)
+- Do **not** run `just fast-release`.
+- Do **not** run `just release`.
+- Do **not** create commits.
+- Do **not** create tags.
+- Do **not** push branches or tags.
+- Do **not** create GitHub Releases.
+- Do **not** deploy docs.
 
-The global git config `tag.gpgSign = true` requires an explicit message on all
-tags. If `just fast-release` aborts at the `git tag v<v>` step, run manually:
-
-```bash
-git tag -s v<v> -m "v<v> — <short description>"
-MAJOR=$(echo <v> | cut -d. -f1)
-git tag -fa "v${MAJOR}" -m "v${MAJOR} → v<v>"
-cargo build --release --workspace && strip target/release/janitor
-git push origin HEAD:main "v<v>"
-git push origin "v${MAJOR}" --force
-"/mnt/c/Program Files/GitHub CLI/gh.exe" release create "v<v>" target/release/janitor \
-    --title "v<v> — <short description>" --notes-file README.md --latest
-just deploy-docs
-```
+The only exception is a directive that explicitly commands those actions.
 
 ## Preconditions
 
-- Must be on `main` branch with a clean working tree **after** Step 2.
-- `Cargo.toml [workspace.package].version` set to `<v>` (done in Step 1).
+- `/release <v>` is operator-only. Agents must not invoke it speculatively.
+- If a release is explicitly commanded, the operator must separately authorize
+  version bumps, commit/tag creation, and publishing.
 
 ## When to invoke
 
-- After every engine version bump that has been merged to `main`.
-- See `.claude/rules/deployment-coupling.md` for the mandatory invocation policy.
+- Only when the Sovereign Operator explicitly commands a release batch.
+- Normal prompts use Batched Engineering and stop after tests plus audit.

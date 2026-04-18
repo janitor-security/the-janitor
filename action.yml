@@ -34,6 +34,31 @@ runs:
   using: 'composite'
   steps:
 
+    - name: Resolve Bootstrap Tag
+      id: bootstrap
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        BOOTSTRAP_TAG="$(gh release view --repo janitor-security/the-janitor --json tagName -q .tagName 2>/dev/null || true)"
+        if [ -z "${BOOTSTRAP_TAG}" ]; then
+          BOOTSTRAP_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+        fi
+        if [ -z "${BOOTSTRAP_TAG}" ]; then
+          echo "failed to resolve bootstrap release tag" >&2
+          exit 1
+        fi
+        echo "tag=${BOOTSTRAP_TAG}" >> "$GITHUB_OUTPUT"
+        echo "BOOTSTRAP_TAG=${BOOTSTRAP_TAG}" >> "$GITHUB_ENV"
+
+    - name: Restore Bootstrap Cache
+      id: bootstrap-cache
+      uses: actions/cache@v4
+      with:
+        path: /tmp/janitor-bin/bootstrap
+        key: janitor-bootstrap-${{ runner.os }}-${{ steps.bootstrap.outputs.tag }}
+
     # Step 1 — Download and verify the Janitor binary via non-circular trust chain.
     #
     # SLSA Level 4 provenance: the binary in CI is the exact artifact emitted by
@@ -54,7 +79,6 @@ runs:
     #      The bootstrap binary carries the release verifying key for the NEW release.
     #   5. `verify-asset` exits 1 on any hash/signature mismatch → Action fails hard.
     #
-    # IMPORTANT: update BOOTSTRAP_TAG each time a new release ships.
     - name: Download and Verify Janitor Binary
       shell: bash
       run: |
@@ -62,49 +86,58 @@ runs:
         ACTION_TAG="${{ github.action_ref }}"
         # Normalize: ensure the tag starts with 'v' for the GitHub Release URL.
         [[ "${ACTION_TAG}" == v* ]] || ACTION_TAG="v${ACTION_TAG}"
-        INSTALL_DIR=/tmp/janitor-bin
-        mkdir -p "${INSTALL_DIR}"
+        CURRENT_DIR=/tmp/janitor-bin/current
+        BOOTSTRAP_DIR=/tmp/janitor-bin/bootstrap/${BOOTSTRAP_TAG}
+        mkdir -p "${CURRENT_DIR}" "${BOOTSTRAP_DIR}"
         BASE_URL="https://github.com/janitor-security/the-janitor/releases/download/${ACTION_TAG}"
+        BOOTSTRAP_URL="https://github.com/janitor-security/the-janitor/releases/download/${BOOTSTRAP_TAG}"
 
-        # ── Download new release artifacts.
-        curl -fsSL "${BASE_URL}/janitor"     -o "${INSTALL_DIR}/janitor"
-        curl -fsSL "${BASE_URL}/janitor.sha384"  -o "${INSTALL_DIR}/janitor.sha384"
-        curl -fsSL "${BASE_URL}/janitor.sig" -o "${INSTALL_DIR}/janitor.sig" || true
+        # ── Download current release artifacts.
+        curl -fsSL "${BASE_URL}/janitor" -o "${CURRENT_DIR}/janitor" &
+        curl -fsSL "${BASE_URL}/janitor.sha384" -o "${CURRENT_DIR}/janitor.sha384" &
+        (
+          curl -fsSL "${BASE_URL}/janitor.sig" -o "${CURRENT_DIR}/janitor.sig" || true
+        ) &
+        wait
 
         # ── Bootstrap: fetch the previous known-good Janitor binary as the verifier.
         # This binary is from a prior release cycle whose integrity was already
         # established.  It carries the ML-DSA-65 release verifying key and can
         # authenticate the current release artifact without relying on any asset
         # co-hosted with the binary under verification (circular trust eliminated).
-        #
-        # UPDATE THIS TAG ON EVERY NEW RELEASE.
-        BOOTSTRAP_TAG="v10.0.0-rc.9"
-        BOOTSTRAP_BIN="${INSTALL_DIR}/janitor-bootstrap"
-        BOOTSTRAP_URL="https://github.com/janitor-security/the-janitor/releases/download/${BOOTSTRAP_TAG}/janitor"
-        curl -fsSL "${BOOTSTRAP_URL}" -o "${BOOTSTRAP_BIN}"
+        if [ ! -x "${BOOTSTRAP_DIR}/janitor" ]; then
+          curl -fsSL "${BOOTSTRAP_URL}/janitor" -o "${BOOTSTRAP_DIR}/janitor" &
+          curl -fsSL "${BOOTSTRAP_URL}/janitor.sha384" -o "${BOOTSTRAP_DIR}/janitor.sha384" &
+          (
+            curl -fsSL "${BOOTSTRAP_URL}/janitor.sig" -o "${BOOTSTRAP_DIR}/janitor.sig" || true
+          ) &
+          wait
+        fi
+
+        BOOTSTRAP_BIN="${BOOTSTRAP_DIR}/janitor"
         chmod +x "${BOOTSTRAP_BIN}"
 
         # ── Layer 1: SHA-384 via coreutils.
-        printf '%s  %s\n' "$(tr -d '\n' < "${INSTALL_DIR}/janitor.sha384")" "${INSTALL_DIR}/janitor" | sha384sum -c -
+        printf '%s  %s\n' "$(tr -d '\n' < "${CURRENT_DIR}/janitor.sha384")" "${CURRENT_DIR}/janitor" | sha384sum -c -
         # ── Layer 2: ML-DSA-65 via bootstrap verifier.
         # verify-asset recomputes SHA-384 internally and verifies the detached
         # ML-DSA-65 signature if a .sig file is present.
-        if [ -f "${INSTALL_DIR}/janitor.sig" ]; then
+        if [ -f "${CURRENT_DIR}/janitor.sig" ]; then
             "${BOOTSTRAP_BIN}" verify-asset \
-                --file "${INSTALL_DIR}/janitor" \
-                --hash "${INSTALL_DIR}/janitor.sha384" \
-                --sig  "${INSTALL_DIR}/janitor.sig"
+                --file "${CURRENT_DIR}/janitor" \
+                --hash "${CURRENT_DIR}/janitor.sha384" \
+                --sig  "${CURRENT_DIR}/janitor.sig"
             echo "Trust chain verified: SHA-384 + ML-DSA-65 via bootstrap ${BOOTSTRAP_TAG}"
         else
             # .sig absent (pre-PQC or unsigned release) — SHA-384-only via bootstrap.
             "${BOOTSTRAP_BIN}" verify-asset \
-                --file "${INSTALL_DIR}/janitor" \
-                --hash "${INSTALL_DIR}/janitor.sha384"
+                --file "${CURRENT_DIR}/janitor" \
+                --hash "${CURRENT_DIR}/janitor.sha384"
             echo "Trust chain verified: SHA-384-only via bootstrap ${BOOTSTRAP_TAG} (no .sig)"
         fi
 
-        chmod +x "${INSTALL_DIR}/janitor"
-        echo "JANITOR_BIN=${INSTALL_DIR}/janitor" >> "$GITHUB_ENV"
+        chmod +x "${CURRENT_DIR}/janitor"
+        echo "JANITOR_BIN=${CURRENT_DIR}/janitor" >> "$GITHUB_ENV"
 
     # Step 4 — Extract the PR unified diff.
     - name: Extract Patch
@@ -194,4 +227,4 @@ runs:
       if: always()
       shell: bash
       run: |
-        rm -rf /tmp/janitor-bin /tmp/janitor-selftest-* .janitor-pr.patch /tmp/janitor.sig || true
+        rm -rf /tmp/janitor-bin/current /tmp/janitor-selftest-* .janitor-pr.patch /tmp/janitor.sig || true

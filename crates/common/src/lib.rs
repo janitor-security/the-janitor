@@ -1,5 +1,6 @@
 pub mod bloom;
 pub mod deps;
+pub mod license;
 pub mod physarum;
 pub mod policy;
 pub mod pqc;

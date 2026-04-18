@@ -583,6 +583,7 @@ pub struct PatchBouncer {
     catalog_path: Option<PathBuf>,
     suppressions: Vec<Suppression>,
     deep_scan: bool,
+    execution_tier: String,
 }
 
 impl PatchBouncer {
@@ -592,6 +593,7 @@ impl PatchBouncer {
             root,
             policy.suppressions.unwrap_or_default(),
             false,
+            policy.execution_tier,
         )
     }
 
@@ -601,6 +603,7 @@ impl PatchBouncer {
             root,
             policy.suppressions.unwrap_or_default(),
             deep_scan,
+            policy.execution_tier,
         )
     }
 
@@ -608,6 +611,7 @@ impl PatchBouncer {
         root: &Path,
         suppressions: Vec<Suppression>,
         deep_scan: bool,
+        execution_tier: impl Into<String>,
     ) -> Self {
         Self {
             repo_root: Some(root.to_path_buf()),
@@ -615,6 +619,7 @@ impl PatchBouncer {
             catalog_path: Some(root.join(".janitor").join("taint_catalog.rkyv")),
             suppressions,
             deep_scan,
+            execution_tier: execution_tier.into(),
         }
     }
 
@@ -1258,7 +1263,9 @@ impl PRBouncer for PatchBouncer {
         let mut taint_catalog_hash: Option<String> = None;
         let mut cross_file_witnesses: HashMap<(usize, usize), common::slop::ExploitWitness> =
             HashMap::new();
-        if matches!(ext, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go") {
+        if self.execution_tier == "Sovereign"
+            && matches!(ext, "py" | "js" | "jsx" | "ts" | "tsx" | "java" | "go")
+        {
             if let Some(catalog_path) = self.catalog_path.as_deref() {
                 if let Some(catalog) = crate::taint_catalog::CatalogView::open(catalog_path) {
                     taint_catalog_hash = Some(catalog.catalog_hash().to_owned());
@@ -2040,6 +2047,7 @@ pub fn bounce_git(
             repo_path,
             suppressions.clone(),
             deep_scan,
+            "Community",
         )
         .bounce(patch, registry)
         {
@@ -2194,6 +2202,7 @@ mod tests {
                 approved: false,
             }],
             false,
+            "Community",
         );
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert!(
@@ -2231,6 +2240,7 @@ mod tests {
                 approved: true,
             }],
             false,
+            "Community",
         );
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(score.score(), 0);

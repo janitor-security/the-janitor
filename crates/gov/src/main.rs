@@ -43,6 +43,8 @@ struct Provenance {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BounceLogEntry {
+    #[serde(default = "default_execution_tier")]
+    execution_tier: String,
     #[serde(default)]
     pr_number: Option<u64>,
     #[serde(default)]
@@ -976,6 +978,10 @@ fn normalize_role(role: &str) -> &str {
     }
 }
 
+fn default_execution_tier() -> String {
+    "Community".to_string()
+}
+
 fn approved_suppression_ids() -> &'static HashSet<&'static str> {
     static IDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     IDS.get_or_init(|| HashSet::from(["waive-eval", "approved-ruby-sqli", "approved-php-sqli"]))
@@ -986,6 +992,7 @@ fn build_signed_receipt(
     proof: &InclusionProof,
 ) -> anyhow::Result<SignedDecisionReceipt> {
     let receipt = DecisionReceipt {
+        execution_tier: entry.execution_tier.clone(),
         policy_hash: entry.policy_hash.clone(),
         wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
         commit_sha: entry.commit_sha.clone(),
@@ -1464,6 +1471,7 @@ mod tests {
 
     fn sample_entry() -> BounceLogEntry {
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(7),
             author: Some("agent".to_string()),
             timestamp: "2026-04-06T00:00:00Z".to_string(),
@@ -1581,6 +1589,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn policy_drift_detected_returns_403() {
         std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "expected-hash-abc123");
         let request = Request::builder()
@@ -1610,6 +1619,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn matching_policy_hash_returns_token() {
         set_test_signing_key();
         std::env::set_var("JANITOR_GOV_EXPECTED_POLICY", "correct-hash");
@@ -1686,6 +1696,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn report_route_returns_inclusion_proof() {
         set_test_signing_key();
         let request = Request::builder()
@@ -1728,6 +1739,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn auditor_token_cannot_post_report_returns_403() {
         set_test_signing_key();
         let mut entry = sample_entry();
@@ -1750,6 +1762,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn ci_writer_token_can_post_report_returns_200() {
         set_test_signing_key();
         let mut entry = sample_entry();
@@ -1766,6 +1779,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn analysis_token_endpoint_embeds_role_in_token() {
         set_test_signing_key();
         let request = Request::builder()
@@ -1799,6 +1813,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn analysis_token_defaults_to_ci_writer_when_role_absent() {
         set_test_signing_key();
         let request = Request::builder()
@@ -1911,6 +1926,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn expired_jwt_in_report_returns_401() {
         set_test_signing_key();
         // Craft a token whose exp is in the past (UNIX epoch + 1 second).
@@ -1945,6 +1961,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn valid_jwt_with_auditor_role_cannot_post_report_returns_403() {
         set_test_signing_key();
         let auditor_token = issue_jwt("owner/repo", "auditor").expect("JWT issuance must succeed");
@@ -1998,6 +2015,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn analysis_token_uses_mtls_common_name_for_on_prem_installation_id() {
         set_test_signing_key();
         let app = build_router(AppState {

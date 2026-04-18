@@ -10,12 +10,16 @@ on:
       - main
 
 # Workflow-level: deny all by default.
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   self-attest:
     name: Integrity Scan & Badge Commit
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     permissions:
       contents: write   # required: commit badge back to main
 
@@ -32,6 +36,9 @@ jobs:
           fetch-depth: 0
           # Use default GITHUB_TOKEN — has contents:write via job permission above.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       # Restore cached janitor binary.  Key mirrors action.yml so PR-gate
       # and self-attestation hits share the same cache entry.

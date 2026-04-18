@@ -166,8 +166,12 @@ pub fn render_cbom_for_entry(entry: &BounceLogEntry, repo_slug: &str) -> String 
 fn cbom_metadata_properties(entries: &[BounceLogEntry]) -> Vec<Value> {
     let mut props = Vec::new();
     for entry in entries {
+        let pr = entry.pr_number.unwrap_or(0);
+        props.push(json!({
+            "name": format!("janitor:execution_tier:pr:{pr}"),
+            "value": entry.execution_tier
+        }));
         if let Some(proof) = entry.transparency_log.as_ref() {
-            let pr = entry.pr_number.unwrap_or(0);
             props.push(json!({
                 "name": format!("janitor:transparency_log:pr:{pr}:sequence_index"),
                 "value": proof.sequence_index.to_string()
@@ -245,6 +249,10 @@ fn severity_for_entry(e: &BounceLogEntry) -> &'static str {
 
 fn cbom_entry_properties(entry: &BounceLogEntry, include_signatures: bool) -> Vec<Value> {
     let mut props = Vec::new();
+    props.push(json!({
+        "name": "janitor:execution_tier",
+        "value": entry.execution_tier
+    }));
     if let Some(source) = entry.pqc_key_source.as_deref() {
         props.push(json!({
             "name": "janitor:pqc_key_source",
@@ -321,6 +329,7 @@ mod tests {
 
     fn make_entry(pr_number: u64, score: u32, antipatterns: Vec<String>) -> BounceLogEntry {
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(pr_number),
             author: Some("test-author".to_string()),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
@@ -411,14 +420,12 @@ mod tests {
         entry.pqc_key_source = Some("filesystem".to_string());
         let out = render_cbom_for_entry(&entry, "owner/repo");
         let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(
-            parsed["vulnerabilities"][0]["properties"][0]["name"],
-            "janitor:pqc_key_source"
-        );
-        assert_eq!(
-            parsed["vulnerabilities"][0]["properties"][0]["value"],
-            "filesystem"
-        );
+        let properties = parsed["vulnerabilities"][0]["properties"]
+            .as_array()
+            .expect("properties must be present");
+        assert!(properties.iter().any(|prop| {
+            prop["name"] == "janitor:pqc_key_source" && prop["value"] == "filesystem"
+        }));
     }
 
     #[test]

@@ -3,6 +3,94 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — Sprint Batch 4 (Commercial Gating)
+
+**Directive:** Lock offensive capabilities behind a cryptographically verified local license, force deterministic Community Mode degradation when the license is missing or invalid, bind the execution tier into provenance artifacts, and verify without cutting a release.
+
+**Phase 1 — Cryptographic License Verification:**
+- `crates/common/src/license.rs` *(new)*: introduced the `License` envelope plus `verify_license(path: &Path) -> bool`, resolving `.janitor/janitor.lic` or `JANITOR_LICENSE`, decoding the detached payload/signature format, verifying Ed25519 signatures against the embedded `JANITOR_LICENSE_PUB_KEY`, and hard-failing closed on missing, malformed, invalid, or expired licenses.
+- `crates/common/src/lib.rs`: exported the new `license` module.
+
+**Phase 2 — Community Mode Downgrade:**
+- `crates/common/src/policy.rs`: added runtime-only `execution_tier`, defaulting deterministically to `Community`.
+- `crates/cli/src/main.rs`: added early startup license verification, emits the mandated Community Mode warning on failure, clamps Community Mode Rayon concurrency to `1`, and hard-gates `update-slopsquat` behind a Sovereign license.
+- `crates/forge/src/slop_filter.rs`: threaded `execution_tier` through `PatchBouncer` and skipped the IFDS / cross-file exploitability path unless the execution tier is `Sovereign`.
+- `crates/cli/src/main.rs` tests: added an invalid-license regression proving Community Mode forces degraded thread count and denies Sovereign-only features.
+
+**Phase 3 — Provenance Binding:**
+- `crates/cli/src/report.rs`: bound `execution_tier` into `BounceLogEntry`.
+- `crates/common/src/receipt.rs`: bound `execution_tier` into `DecisionCapsule` and `DecisionReceipt`.
+- `crates/cli/src/cbom.rs`: injected execution-tier properties into both deterministic single-entry CBOMs and aggregate CycloneDX metadata so auditors can distinguish degraded Community scans from Sovereign runs.
+
+**Phase 4 — Blueprint Hygiene:**
+- `.INNOVATION_LOG.md`: purged `P0-4 — Cryptographic License Enforcement for Offensive Operations` as completed, leaving the remaining P1/P2/P3 roadmap intact for later Opus work.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=1` exits `0`.
+- `just audit` exits `0`.
+
+## 2026-04-17 — Sprint Batch 3 (Scorecard Annihilation & Governance Refinement)
+
+**Directive:** Refine agent governance for the next-action summary, patch transitive dependencies, harden GitHub workflows for Dependabot and OSSF Scorecard, and inject April 2026 threat-matrix items without cutting a release.
+
+**Phase 1 — Agent Governance Refinement:**
+- `.agent_governance/rules/response-format.md`: tightened `[NEXT RECOMMENDED ACTION]` so it must propose only the next logical P0/P1 implementation task from `.INNOVATION_LOG.md`, include file paths plus commercial justification, and explicitly forbid manual git or operator-housekeeping commands.
+
+**Phase 2 — Dependabot & OSSF Scorecard Hardening:**
+- `Cargo.lock`: refreshed transitive dependencies via `cargo update`.
+- `SECURITY.md`: added a disclosure policy pointing reporters to `security@thejanitor.app` and declared support for the current major version.
+- `.github/workflows/*.yml`: replaced workflow-level `read-all` defaults with explicit top-level `contents: read` permissions where needed.
+- `.github/workflows/janitor.yml` and `.github/workflows/janitor-pr-gate.yml`: pinned `mozilla-actions/sccache-action` to the full commit SHA `7d986dd989559c6ecdb630a3fd2557667be217ad`.
+
+**Phase 3 — April 2026 Threat Matrix Injection:**
+- `.INNOVATION_LOG.md`: added `P1-6 — OSSF Scorecard & SLSA L4 Full Compliance`.
+- `.INNOVATION_LOG.md`: added `P2-8 — QEMU/Hypervisor Evasion Detection`.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=1` exits `0`.
+- `just audit` exits `0`.
+
+## 2026-04-17 — Active Defense Seeding & Pipeline Finalization (Sprint Batch 2)
+
+**Directive:** Finalize the remaining CI/CD bottlenecks, rewrite agent governance for Batched Engineering, and seed the Phase 3 Labyrinth active-defense architecture without cutting a release.
+
+**Phase 1 — Governance Rewrite:**
+- `.agent_governance/commands/release.md`: replaced the old auto-release sequence with a Batched Engineering mandate. Agents now stop after `cargo test --workspace -- --test-threads=1` and `just audit`, and are explicitly forbidden from running `just fast-release`, committing, tagging, pushing, releasing, or deploying without an explicit Sovereign Operator command.
+
+**Phase 2 — Pipeline Finalization (CF-6 / CF-7 / CF-9 / CF-10):**
+- `justfile`: restored serialized test execution inside `audit` via `cargo test --workspace -- --test-threads=1`.
+- `justfile`: added operator-facing batch hints recommending `just shell` before `just audit` to avoid repeated Nix flake re-evaluation latency.
+- `justfile`: narrowed `fast-release` from `cargo build --release --workspace` to `cargo build --release -p cli`.
+- `justfile`: added `Cargo.lock` hash caching for CycloneDX generation via `.janitor/cargo_lock.hash`; SBOM generation now skips when the hash matches and `target/release/janitor.cdx.json` already exists.
+- `.github/workflows/janitor.yml` and `.github/workflows/janitor-pr-gate.yml`: enabled `sccache` with `mozilla-actions/sccache-action`, `SCCACHE_GHA_ENABLED`, and `RUSTC_WRAPPER=sccache` for CI build cache seeding.
+
+**Phase 3 — Active Defense Seeding:**
+- `.INNOVATION_LOG.md`: purged CF-6, CF-7, CF-9, and CF-10 as resolved.
+- `.INNOVATION_LOG.md`: added `P3-6 — The Labyrinth (Active Defense & LLM Tarpitting)`, defining deterministic hostile-recon detection, infinite cyclomatic deception ASTs, embedded Canary Tokens, adversarial context-window exhaustion, and attribution logging on token use.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=1` exits `0`.
+- `just audit` exits `0`.
+
+## 2026-04-17 — CI/CD Bottleneck Eradication (Sprint Batch 1)
+
+**Directive:** Execute CF-4, CF-3, CF-5, and CF-8 without cutting a release, restoring audit parallelism and removing bootstrap/download waste from the composite GitHub Action.
+
+**Phase 1 — Restore Test Parallelism (CF-4):**
+- `Cargo.toml`: added `serial_test` to workspace-shared dependencies; wired `serial_test.workspace = true` into `crates/cli`, `crates/forge`, and `crates/gov` dev-dependencies.
+- `justfile`: removed the global `--test-threads=1` clamp from `just audit`; workspace tests now run with the default parallel harness.
+- `crates/cli/src/main.rs`: serialized only the shared-state tests that mutate process CWD or reuse a fixed temp path (`cmd_rotate_keys_archives_old_bundle_and_writes_new_one`, the `cmd_init` profile tests, and `sign_asset_produces_correct_sha384_hash`).
+- `crates/gov/src/main.rs`: serialized the env-sensitive token/report tests that mutate `JANITOR_GOV_EXPECTED_POLICY` or rely on the shared governor signing-key environment, preventing process-global races while preserving parallelism for the rest of the suite.
+
+**Phase 2 — Dynamic Bootstrap Provenance and Cache Repair (CF-3 / CF-5 / CF-8):**
+- `action.yml`: introduced a dedicated bootstrap-tag resolver step that derives `BOOTSTRAP_TAG` dynamically from `gh release view --repo janitor-security/the-janitor --json tagName -q .tagName`, with `git describe --tags --abbrev=0` fallback.
+- `action.yml`: added `actions/cache@v4` for `/tmp/janitor-bin/bootstrap`, keyed by `${{ runner.os }}` and the resolved bootstrap tag so the trusted verifier is reused across runs.
+- `action.yml`: split transient current-release assets from cached bootstrap assets, parallelized all binary / `.sha384` / `.sig` downloads with backgrounded `curl` jobs plus `wait`, and preserved cacheability by cleaning only `/tmp/janitor-bin/current` during teardown.
+
+**Verification Ledger:**
+- `cargo test --workspace` exits 0.
+- `just audit` exits 0.
+
 ## 2026-04-17 — IFDS Live Integration & Agent Brain Surgery (v10.2.0-alpha.3)
 
 **Directive:** Wire the IFDS solver into the live taint catalog, bind deterministic exploit witnesses into emitted `StructuredFinding` records, correct agent governance log rules, delete stale strike directories, and prepare the `10.2.0-alpha.3` governed release.

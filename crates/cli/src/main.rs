@@ -1074,16 +1074,13 @@ async fn main() -> anyhow::Result<()> {
 
     let _root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let cli = Cli::parse();
+    let execution_tier = resolve_execution_tier(&_root);
 
     // Initialise the global Rayon thread pool after CLI parse so --concurrency
     // is available.  Stack size is 32 MB per worker to prevent stack overflow
     // on deep tree-sitter ASTs (e.g. rust-lang/rust compiler test suites).
     // unwrap_or(()) — a pre-existing global pool (e.g. from tests) is benign.
-    let rayon_workers = if cli.concurrency == 0 {
-        common::physarum::detect_optimal_concurrency()
-    } else {
-        cli.concurrency
-    };
+    let rayon_workers = effective_rayon_workers(cli.concurrency, &execution_tier);
     rayon::ThreadPoolBuilder::new()
         .num_threads(rayon_workers)
         .stack_size(32 * 1024 * 1024)
@@ -1225,6 +1222,7 @@ async fn main() -> anyhow::Result<()> {
                 .or_else(|| head.clone())
                 .or_else(|| scm_context.commit_sha.clone())
                 .unwrap_or_default();
+            let timeout_execution_tier = execution_tier.clone();
             let timeout_repo_slug = repo_slug
                 .clone()
                 .or_else(|| scm_context.repo_slug.clone())
@@ -1252,6 +1250,7 @@ async fn main() -> anyhow::Result<()> {
                     deep_scan,
                     pqc_key.as_deref(),
                     &wasm_rules,
+                    &execution_tier,
                 )
             });
 
@@ -1270,6 +1269,7 @@ async fn main() -> anyhow::Result<()> {
                         (timeout_governor_url.as_deref(), timeout_token.as_deref())
                     {
                         let timeout_entry = report::BounceLogEntry {
+                            execution_tier: timeout_execution_tier,
                             pr_number: timeout_pr_number,
                             author: None,
                             timestamp: utc_now_iso8601(),
@@ -1359,7 +1359,7 @@ async fn main() -> anyhow::Result<()> {
             daemon::unix::serve(std::path::Path::new(socket), &registry_path).await?;
         }
         Commands::UpdateWisdom { path, ci_mode } => cmd_update_wisdom(path, *ci_mode)?,
-        Commands::UpdateSlopsquat { path } => cmd_update_slopsquat(path)?,
+        Commands::UpdateSlopsquat { path } => cmd_update_slopsquat(path, &execution_tier)?,
         Commands::Export {
             repo,
             out,
@@ -1513,6 +1513,33 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn resolve_execution_tier(project_root: &Path) -> String {
+    if common::license::verify_license(project_root) {
+        "Sovereign".to_string()
+    } else {
+        eprintln!("[LICENSE] Valid janitor.lic not found. Degrading to Community Mode.");
+        "Community".to_string()
+    }
+}
+
+fn effective_rayon_workers(cli_concurrency: usize, execution_tier: &str) -> usize {
+    if execution_tier != "Sovereign" {
+        1
+    } else if cli_concurrency == 0 {
+        common::physarum::detect_optimal_concurrency()
+    } else {
+        cli_concurrency
+    }
+}
+
+fn enforce_sovereign_feature_gate(execution_tier: &str) -> anyhow::Result<()> {
+    if execution_tier == "Sovereign" {
+        Ok(())
+    } else {
+        anyhow::bail!("Native OSV ingestion requires a Sovereign license.")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3259,6 +3286,7 @@ fn cmd_bounce(
     deep_scan_flag: bool,
     pqc_key: Option<&str>,
     wasm_rules_flag: &[String],
+    execution_tier: &str,
 ) -> anyhow::Result<()> {
     use common::policy::JanitorPolicy;
     use common::registry::{MappedRegistry, SymbolRegistry};
@@ -3269,6 +3297,7 @@ fn cmd_bounce(
 
     // Load governance manifest — absent = defaults OK; malformed = hard fail.
     let mut policy = JanitorPolicy::load(project_root)?;
+    policy.execution_tier = execution_tier.to_string();
 
     // ASPM Preflight — verify Jira credentials before analysis begins so the
     // operator sees a clear error at startup rather than a buried fail-open
@@ -3485,6 +3514,7 @@ fn cmd_bounce(
                 project_root,
                 policy.suppressions.clone().unwrap_or_default(),
                 deep_scan,
+                policy.execution_tier.clone(),
             )
             .bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
@@ -3856,6 +3886,7 @@ probable AI context-collapse (hallucinated function reference)"
         &score.collided_pr_numbers,
     );
     let mut log_entry = report::BounceLogEntry {
+        execution_tier: policy.execution_tier.clone(),
         pr_number: resolved_pr_number,
         author: author.map(|s| s.to_owned()),
         timestamp: utc_now_iso8601(),
@@ -4098,6 +4129,7 @@ fn build_decision_capsule(
 ) -> anyhow::Result<common::receipt::DecisionCapsule> {
     let cbom_json = cbom::render_cbom_for_entry(entry, &entry.repo_slug);
     Ok(common::receipt::DecisionCapsule {
+        execution_tier: entry.execution_tier.clone(),
         mutation_roots: score.semantic_mutation_roots.clone(),
         policy_hash: entry.policy_hash.clone(),
         wisdom_hash: entry.wisdom_hash.clone().unwrap_or_default(),
@@ -5058,7 +5090,8 @@ struct OsvPackage {
     ecosystem: String,
 }
 
-fn cmd_update_slopsquat(project_root: &Path) -> anyhow::Result<()> {
+fn cmd_update_slopsquat(project_root: &Path, execution_tier: &str) -> anyhow::Result<()> {
+    enforce_sovereign_feature_gate(execution_tier)?;
     let agent = ureq::Agent::new_with_defaults();
     cmd_update_slopsquat_with_agent(project_root, &agent)
 }
@@ -5950,6 +5983,7 @@ mod pqc_signing_tests {
             vec![]
         };
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(42),
             author: Some("security-team".to_string()),
             timestamp: "2026-04-03T00:00:00Z".to_string(),
@@ -6122,6 +6156,7 @@ mod replay_receipt_tests {
     #[test]
     fn replay_receipt_roundtrip_succeeds() {
         let capsule = DecisionCapsule {
+            execution_tier: "Community".to_string(),
             mutation_roots: vec![CapsuleMutationRoot {
                 language: "js".to_string(),
                 hash: blake3::hash(b"eval(atob(\"boom\"))").to_hex().to_string(),
@@ -6141,6 +6176,7 @@ mod replay_receipt_tests {
         let signing_key = SigningKey::from_bytes(&TEST_GOVERNOR_SIGNING_KEY_SEED);
         let receipt = SignedDecisionReceipt::sign(
             DecisionReceipt {
+                execution_tier: "Community".to_string(),
                 policy_hash: "policy".to_string(),
                 wisdom_hash: "wisdom".to_string(),
                 commit_sha: "deadbeef".to_string(),
@@ -6167,6 +6203,16 @@ mod replay_receipt_tests {
         let result = cmd_replay_receipt(&path);
         let _ = std::fs::remove_file(&path);
         result.unwrap();
+    }
+
+    #[test]
+    fn invalid_license_forces_degraded_runtime_state() {
+        let temp_dir = tempfile::tempdir().expect("tempdir must succeed");
+        let execution_tier = crate::resolve_execution_tier(temp_dir.path());
+
+        assert_eq!(execution_tier, "Community");
+        assert_eq!(crate::effective_rayon_workers(16, &execution_tier), 1);
+        assert!(crate::enforce_sovereign_feature_gate(&execution_tier).is_err());
     }
 }
 
@@ -6268,6 +6314,7 @@ mod governor_routing_tests {
             false,
             None,
             &[],
+            "Community",
         );
         assert!(result.is_ok(), "cmd_bounce should POST to custom governor");
 
@@ -6869,6 +6916,7 @@ mod generate_keys_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn cmd_rotate_keys_archives_old_bundle_and_writes_new_one() {
         let dir = tempfile::tempdir().expect("tempdir");
         let key_path = dir.path().join("janitor_release.key");
@@ -7271,6 +7319,7 @@ mod wasm_pin_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn init_creates_janitor_toml_default() {
         let dir = tempfile::tempdir().unwrap();
         let original = std::env::current_dir().unwrap();
@@ -7291,6 +7340,7 @@ mod wasm_pin_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn init_creates_janitor_toml_enterprise() {
         let dir = tempfile::tempdir().unwrap();
         let original = std::env::current_dir().unwrap();
@@ -7311,6 +7361,7 @@ mod wasm_pin_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn init_refuses_to_overwrite_existing_toml() {
         let dir = tempfile::tempdir().unwrap();
         let original = std::env::current_dir().unwrap();
@@ -7327,6 +7378,7 @@ mod wasm_pin_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn init_creates_janitor_toml_oss() {
         let dir = tempfile::tempdir().unwrap();
         let original = std::env::current_dir().unwrap();
@@ -7446,6 +7498,7 @@ mod sign_asset_tests {
     use sha2::Digest as _;
 
     #[test]
+    #[serial_test::serial]
     fn sign_asset_produces_correct_sha384_hash() {
         let dir = std::env::temp_dir().join("janitor_sign_asset_test");
         std::fs::create_dir_all(&dir).unwrap();

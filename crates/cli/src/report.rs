@@ -370,6 +370,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
 
     // ── Construct synthetic critical_threat payload ──────────────────────────
     let dummy = BounceLogEntry {
+        execution_tier: "Community".to_string(),
         pr_number: Some(0),
         author: Some("janitor-webhook-test".to_string()),
         timestamp: crate::utc_now_iso8601(),
@@ -529,6 +530,8 @@ pub struct Provenance {
 /// each `janitor bounce` invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BounceLogEntry {
+    #[serde(default = "default_execution_tier")]
+    pub execution_tier: String,
     /// PR number, if supplied via `--pr-number`.
     #[serde(default)]
     pub pr_number: Option<u64>,
@@ -751,6 +754,10 @@ pub struct BounceLogEntry {
     /// distinguish noise from genuine AI-introduced regressions.
     #[serde(default)]
     pub cognition_surrender_index: f64,
+}
+
+fn default_execution_tier() -> String {
+    "Community".to_string()
 }
 
 /// Dedicated audit-ledger event for filesystem PQC key rotation.
@@ -3474,6 +3481,7 @@ mod tests {
 
     fn make_clean_entry() -> BounceLogEntry {
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(42),
             author: Some("alice".to_string()),
             timestamp: "2026-03-28T10:00:00Z".to_string(),
@@ -3656,6 +3664,7 @@ mod webhook_tests {
 
     fn make_entry(antipatterns: Vec<String>, necrotic: Option<String>) -> BounceLogEntry {
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(1),
             author: Some("test".to_string()),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
@@ -3868,6 +3877,7 @@ mod soft_fail_tests {
 
     fn make_test_entry() -> BounceLogEntry {
         BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: None,
             author: None,
             timestamp: "2026-04-03T00:00:00Z".to_string(),
@@ -3989,6 +3999,7 @@ mod soft_fail_tests {
         let signing_key = SigningKey::from_bytes(&TEST_GOVERNOR_SIGNING_KEY_SEED);
         let decision_receipt = SignedDecisionReceipt::sign(
             DecisionReceipt {
+                execution_tier: "Community".to_string(),
                 policy_hash: "policy".to_string(),
                 wisdom_hash: "wisdom".to_string(),
                 commit_sha: "deadbeef".to_string(),

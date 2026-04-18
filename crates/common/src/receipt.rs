@@ -99,6 +99,7 @@ impl DecisionScoreVector {
 )]
 #[rkyv(derive(Debug, PartialEq, Eq))]
 pub struct DecisionCapsule {
+    pub execution_tier: String,
     pub mutation_roots: Vec<CapsuleMutationRoot>,
     pub policy_hash: String,
     pub wisdom_hash: String,
@@ -163,6 +164,7 @@ impl DecisionCapsule {
 )]
 #[rkyv(derive(Debug, PartialEq, Eq))]
 pub struct DecisionReceipt {
+    pub execution_tier: String,
     pub policy_hash: String,
     pub wisdom_hash: String,
     pub commit_sha: String,
@@ -304,6 +306,7 @@ pub mod tests {
 
     fn sample_receipt() -> DecisionReceipt {
         DecisionReceipt {
+            execution_tier: "Community".to_string(),
             policy_hash: "policy".to_string(),
             wisdom_hash: "wisdom".to_string(),
             commit_sha: "deadbeef".to_string(),
@@ -336,6 +339,7 @@ pub mod tests {
     #[test]
     fn capsule_hash_and_root_verification_roundtrip() {
         let capsule = DecisionCapsule {
+            execution_tier: "Community".to_string(),
             mutation_roots: vec![CapsuleMutationRoot {
                 language: "js".to_string(),
                 hash: blake3::hash(b"eval(atob(\"boom\"))").to_hex().to_string(),

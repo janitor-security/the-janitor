@@ -54,3 +54,4 @@ base64.workspace = true
 [dev-dependencies]
 tempfile = "3"
 fips204 = { workspace = true }
+serial_test.workspace = true

@@ -463,6 +463,7 @@ fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_
         &root,
         policy.suppressions.unwrap_or_default(),
         false,
+        policy.execution_tier,
     )
     .bounce(&patch_text, &registry)
     .context("PatchBouncer::bounce failed")?;

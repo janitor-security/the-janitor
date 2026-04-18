@@ -62,3 +62,4 @@ rkyv = { version = "0.8", features = ["std", "bytecheck"] }
 
 [dev-dependencies]
 tempfile = "3"
+serial_test.workspace = true

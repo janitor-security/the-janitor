@@ -688,6 +688,7 @@ fn bounce_one(
         let sig = forge::pr_collider::PrDeltaSignature::from_bytes(pr_sha.as_bytes());
         let analysis_duration_ms = bounce_started.elapsed().as_millis() as u64;
         return Some(BounceLogEntry {
+            execution_tier: "Community".to_string(),
             pr_number: Some(pr_num as u64),
             author,
             timestamp: utc_now_iso8601(),
@@ -815,6 +816,7 @@ fn bounce_one(
         &score.collided_pr_numbers,
     );
     Some(BounceLogEntry {
+        execution_tier: "Community".to_string(),
         pr_number: Some(pr_num as u64),
         author,
         timestamp: utc_now_iso8601(),

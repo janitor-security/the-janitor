@@ -12,13 +12,21 @@ fail() {
 [[ -f "${JUSTFILE}" ]] || fail "missing justfile at ${JUSTFILE}"
 [[ -f "${RELEASE_DOC}" ]] || fail "missing release doc at ${RELEASE_DOC}"
 
+doc_test_line="$(grep -n 'cargo test --workspace -- --test-threads=1' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
 doc_audit_line="$(grep -n 'just audit' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
-doc_fast_release_line="$(grep -n 'just fast-release <v>' "${RELEASE_DOC}" | head -1 | cut -d: -f1)"
+[[ -n "${doc_test_line}" ]] || fail "release doc does not require serialized workspace tests"
 [[ -n "${doc_audit_line}" ]] || fail "release doc does not require just audit"
-[[ -n "${doc_fast_release_line}" ]] || fail "release doc does not require just fast-release <v>"
-(( doc_audit_line < doc_fast_release_line )) || fail "release doc does not preserve audit -> fast-release order"
-grep -Fq 'You MUST NEVER use `just release`' "${RELEASE_DOC}" \
+(( doc_test_line < doc_audit_line )) || fail "release doc does not preserve test -> audit order"
+grep -Fq 'Do **not** run `just fast-release`.' "${RELEASE_DOC}" \
+    || fail "release doc does not forbid just fast-release"
+grep -Fq 'Do **not** run `just release`.' "${RELEASE_DOC}" \
     || fail "release doc does not forbid just release"
+grep -Fq 'Do **not** create commits.' "${RELEASE_DOC}" \
+    || fail "release doc does not forbid agent commits"
+grep -Fq 'Do **not** create tags.' "${RELEASE_DOC}" \
+    || fail "release doc does not forbid agent tags"
+grep -Fq 'for the Sovereign Operator to review, commit, sign, tag, and publish manually.' "${RELEASE_DOC}" \
+    || fail "release doc does not preserve the operator handoff"
 
 release_exec_line="$(grep -n 'exec just fast-release "{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 [[ -n "${release_exec_line}" ]] || fail "release recipe does not delegate to fast-release"
@@ -26,7 +34,7 @@ release_exec_line="$(grep -n 'exec just fast-release "{{version}}"' "${JUSTFILE}
 preflight_line="$(grep -n 'gpg --batch --yes --pinentry-mode error --clearsign' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 sync_line="$(grep -n 'just sync-versions' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 audit_line="$(grep -n 'just audit' "${JUSTFILE}" | tail -1 | cut -d: -f1)"
-build_line="$(grep -n 'cargo build --release --workspace' "${JUSTFILE}" | tail -1 | cut -d: -f1)"
+build_line="$(grep -n 'cargo build --release -p cli' "${JUSTFILE}" | tail -1 | cut -d: -f1)"
 git_add_line="$(grep -n 'git add crates/ tools/ docs/ \.agent_governance/ Cargo.toml Cargo.lock README.md mkdocs.yml justfile action.yml' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 commit_line="$(grep -n 'git commit -S -m "chore: release v{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
 tag_line="$(grep -n 'git tag -s v{{version}} -m "release v{{version}}"' "${JUSTFILE}" | head -1 | cut -d: -f1)"
@@ -34,7 +42,7 @@ tag_line="$(grep -n 'git tag -s v{{version}} -m "release v{{version}}"' "${JUSTF
 [[ -n "${preflight_line}" ]] || fail "fast-release is missing the GPG pre-flight gate"
 [[ -n "${sync_line}" ]] || fail "fast-release is missing sync-versions"
 [[ -n "${audit_line}" ]] || fail "fast-release is missing audit"
-[[ -n "${build_line}" ]] || fail "fast-release is missing cargo build"
+[[ -n "${build_line}" ]] || fail "fast-release is missing the cli-only cargo build"
 [[ -n "${git_add_line}" ]] || fail "fast-release staging sequence drifted (git add)"
 [[ -n "${commit_line}" ]] || fail "fast-release staging sequence drifted (git commit)"
 [[ -n "${tag_line}" ]] || fail "fast-release is missing the signed tag step"

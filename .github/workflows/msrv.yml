@@ -16,7 +16,8 @@ on:
       - main
 
 # Deny all permissions at the workflow level; grant only what the job needs.
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   msrv:
