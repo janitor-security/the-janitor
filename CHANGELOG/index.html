@@ -562,6 +562,51 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-18-sprint-batch-4-commercial-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — Sprint Batch 4 (Commercial Gating)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-sprint-batch-3-scorecard-annihilation-governance-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Sprint Batch 3 (Scorecard Annihilation &amp; Governance Refinement)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-active-defense-seeding-pipeline-finalization-sprint-batch-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Active Defense Seeding &amp; Pipeline Finalization (Sprint Batch 2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-cicd-bottleneck-eradication-sprint-batch-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — CI/CD Bottleneck Eradication (Sprint Batch 1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-17-ifds-live-integration-agent-brain-surgery-v1020-alpha3" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-17 — IFDS Live Integration &amp; Agent Brain Surgery (v10.2.0-alpha.3)
@@ -1670,6 +1715,51 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-18-sprint-batch-4-commercial-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-18 — Sprint Batch 4 (Commercial Gating)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-sprint-batch-3-scorecard-annihilation-governance-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Sprint Batch 3 (Scorecard Annihilation &amp; Governance Refinement)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-active-defense-seeding-pipeline-finalization-sprint-batch-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — Active Defense Seeding &amp; Pipeline Finalization (Sprint Batch 2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-17-cicd-bottleneck-eradication-sprint-batch-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-17 — CI/CD Bottleneck Eradication (Sprint Batch 1)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-17-ifds-live-integration-agent-brain-surgery-v1020-alpha3" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-17 — IFDS Live Integration &amp; Agent Brain Surgery (v10.2.0-alpha.3)
@@ -2764,6 +2854,117 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-18-opus-genesis-z3-symbolic-execution-aeg-v1020-alpha5">2026-04-18 — Opus Genesis: Z3 Symbolic Execution &amp; AEG (v10.2.0-alpha.5)</h2>
+<p><strong>Directive:</strong> Commit the uncommitted Sprint Batch 1–4 backlog, rewrite the
+release/commit engineering protocol to mandate per-prompt commits and 5th-Phase
+release cadence, integrate a Z3 SMT solver (via <code>rsmt2</code>) into the
+exploitability pipeline so false-positive taint paths are suppressed
+mathematically and true-positive paths emit a concrete repro command.</p>
+<p><strong>Phase 1 — Backlog Commit &amp; Governance Automation:</strong>
+- <code>git add . &amp;&amp; git commit -m "chore(sprint): finalize batches 1-4 ..."</code> —
+  34 files, +802/-236, commit <code>22bf8bd</code>.
+- <code>.agent_governance/commands/release.md</code>: rewritten with Law 0 (per-prompt
+  <code>git commit -a</code>), Law I (automatic <code>just fast-release</code> only every 5th
+  feature-integration Phase block or on explicit operator command), Law II
+  (<code>--test-threads=4</code> mandate for all <code>cargo test</code> invocations).
+- <code>justfile audit</code>: <code>cargo test --workspace -- --test-threads=1</code> →
+  <code>--test-threads=4</code> (aligned with governance Law II).</p>
+<p><strong>Phase 2 — Z3 Symbolic Execution &amp; AEG Core:</strong>
+- <code>crates/forge/Cargo.toml</code>: <code>rsmt2 = "0.16"</code> added.
+- <code>crates/common/src/slop.rs</code>: <code>ExploitWitness</code> gains
+  <code>repro_cmd: Option&lt;String&gt;</code> with <code>#[serde(default, skip_serializing_if)]</code>
+  for forward-compatibility with pre-AEG audit logs.
+- <code>crates/forge/src/exploitability.rs</code>: <strong>full rewrite</strong>. Introduced
+  <code>Z3Solver</code> (no long-lived state — <code>Send + Sync</code>, fresh z3 subprocess per
+  <code>refine()</code> call via <code>rsmt2::Solver::default_z3(())</code>), <code>PathConstraint</code>
+  DTO (SMT variable declarations + SMT-LIB2 assertion bodies +
+  witnesses-of-interest list), <code>SmtSort</code> enum (<code>Int</code>/<code>Bool</code>/<code>String</code>/
+  <code>BitVec(u32)</code>), <code>ReproTemplate</code> (<code>{var_name}</code> placeholder substitution
+  with SMT-string unquoting), and <code>Refinement</code> enum
+  (<code>Satisfiable(witness)</code> / <code>Unsatisfiable</code> / <code>Unknown(witness)</code>).
+  <code>check-sat</code> returning <code>false</code> suppresses the finding mathematically;
+  <code>true</code> extracts the model via <code>get-values</code> and renders the repro
+  command. <code>Z3Solver::is_available()</code> probes the PATH non-destructively so
+  ephemeral environments skip without panic.
+- <code>crates/forge/src/ifds.rs</code>: both <code>ExploitWitness</code> construction sites
+  updated for the new field (propagating <code>repro_cmd: None</code> at origin,
+  cloning inherited witness's <code>repro_cmd</code> across call-chain extension).</p>
+<p><strong>Phase 3 — Verification &amp; Release:</strong>
+- <code>cargo test --workspace -- --test-threads=4</code> exits <code>0</code>. Seven new
+  exploitability unit tests land: <code>smt_sort_smtlib_encoding_is_stable</code>,
+  <code>render_template_substitutes_bindings_and_unquotes</code>,
+  <code>unquote_preserves_smt_escapes</code>, <code>z3_missing_binary_surfaced_as_new_error</code>,
+  <code>z3_satisfiable_path_populates_repro_cmd</code>,
+  <code>z3_unsatisfiable_path_is_suppressed</code>. The z3-dependent tests
+  gracefully skip (early <code>return</code>) when the z3 binary is absent from PATH.
+- <code>just audit</code> exits <code>0</code>.
+- <code>Cargo.toml [workspace.package].version</code>: <code>10.2.0-alpha.3</code> → <code>10.2.0-alpha.5</code>.
+- <code>just fast-release 10.2.0-alpha.5</code> — release tag + GH Release + docs
+  deploy via the idempotency-guarded pipeline.</p>
+<h2 id="2026-04-18-sprint-batch-4-commercial-gating">2026-04-18 — Sprint Batch 4 (Commercial Gating)</h2>
+<p><strong>Directive:</strong> Lock offensive capabilities behind a cryptographically verified local license, force deterministic Community Mode degradation when the license is missing or invalid, bind the execution tier into provenance artifacts, and verify without cutting a release.</p>
+<p><strong>Phase 1 — Cryptographic License Verification:</strong>
+- <code>crates/common/src/license.rs</code> <em>(new)</em>: introduced the <code>License</code> envelope plus <code>verify_license(path: &amp;Path) -&gt; bool</code>, resolving <code>.janitor/janitor.lic</code> or <code>JANITOR_LICENSE</code>, decoding the detached payload/signature format, verifying Ed25519 signatures against the embedded <code>JANITOR_LICENSE_PUB_KEY</code>, and hard-failing closed on missing, malformed, invalid, or expired licenses.
+- <code>crates/common/src/lib.rs</code>: exported the new <code>license</code> module.</p>
+<p><strong>Phase 2 — Community Mode Downgrade:</strong>
+- <code>crates/common/src/policy.rs</code>: added runtime-only <code>execution_tier</code>, defaulting deterministically to <code>Community</code>.
+- <code>crates/cli/src/main.rs</code>: added early startup license verification, emits the mandated Community Mode warning on failure, clamps Community Mode Rayon concurrency to <code>1</code>, and hard-gates <code>update-slopsquat</code> behind a Sovereign license.
+- <code>crates/forge/src/slop_filter.rs</code>: threaded <code>execution_tier</code> through <code>PatchBouncer</code> and skipped the IFDS / cross-file exploitability path unless the execution tier is <code>Sovereign</code>.
+- <code>crates/cli/src/main.rs</code> tests: added an invalid-license regression proving Community Mode forces degraded thread count and denies Sovereign-only features.</p>
+<p><strong>Phase 3 — Provenance Binding:</strong>
+- <code>crates/cli/src/report.rs</code>: bound <code>execution_tier</code> into <code>BounceLogEntry</code>.
+- <code>crates/common/src/receipt.rs</code>: bound <code>execution_tier</code> into <code>DecisionCapsule</code> and <code>DecisionReceipt</code>.
+- <code>crates/cli/src/cbom.rs</code>: injected execution-tier properties into both deterministic single-entry CBOMs and aggregate CycloneDX metadata so auditors can distinguish degraded Community scans from Sovereign runs.</p>
+<p><strong>Phase 4 — Blueprint Hygiene:</strong>
+- <code>.INNOVATION_LOG.md</code>: purged <code>P0-4 — Cryptographic License Enforcement for Offensive Operations</code> as completed, leaving the remaining P1/P2/P3 roadmap intact for later Opus work.</p>
+<p><strong>Verification Ledger:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> exits <code>0</code>.
+- <code>just audit</code> exits <code>0</code>.</p>
+<h2 id="2026-04-17-sprint-batch-3-scorecard-annihilation-governance-refinement">2026-04-17 — Sprint Batch 3 (Scorecard Annihilation &amp; Governance Refinement)</h2>
+<p><strong>Directive:</strong> Refine agent governance for the next-action summary, patch transitive dependencies, harden GitHub workflows for Dependabot and OSSF Scorecard, and inject April 2026 threat-matrix items without cutting a release.</p>
+<p><strong>Phase 1 — Agent Governance Refinement:</strong>
+- <code>.agent_governance/rules/response-format.md</code>: tightened <code>[NEXT RECOMMENDED ACTION]</code> so it must propose only the next logical P0/P1 implementation task from <code>.INNOVATION_LOG.md</code>, include file paths plus commercial justification, and explicitly forbid manual git or operator-housekeeping commands.</p>
+<p><strong>Phase 2 — Dependabot &amp; OSSF Scorecard Hardening:</strong>
+- <code>Cargo.lock</code>: refreshed transitive dependencies via <code>cargo update</code>.
+- <code>SECURITY.md</code>: added a disclosure policy pointing reporters to <code>security@thejanitor.app</code> and declared support for the current major version.
+- <code>.github/workflows/*.yml</code>: replaced workflow-level <code>read-all</code> defaults with explicit top-level <code>contents: read</code> permissions where needed.
+- <code>.github/workflows/janitor.yml</code> and <code>.github/workflows/janitor-pr-gate.yml</code>: pinned <code>mozilla-actions/sccache-action</code> to the full commit SHA <code>7d986dd989559c6ecdb630a3fd2557667be217ad</code>.</p>
+<p><strong>Phase 3 — April 2026 Threat Matrix Injection:</strong>
+- <code>.INNOVATION_LOG.md</code>: added <code>P1-6 — OSSF Scorecard &amp; SLSA L4 Full Compliance</code>.
+- <code>.INNOVATION_LOG.md</code>: added <code>P2-8 — QEMU/Hypervisor Evasion Detection</code>.</p>
+<p><strong>Verification Ledger:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> exits <code>0</code>.
+- <code>just audit</code> exits <code>0</code>.</p>
+<h2 id="2026-04-17-active-defense-seeding-pipeline-finalization-sprint-batch-2">2026-04-17 — Active Defense Seeding &amp; Pipeline Finalization (Sprint Batch 2)</h2>
+<p><strong>Directive:</strong> Finalize the remaining CI/CD bottlenecks, rewrite agent governance for Batched Engineering, and seed the Phase 3 Labyrinth active-defense architecture without cutting a release.</p>
+<p><strong>Phase 1 — Governance Rewrite:</strong>
+- <code>.agent_governance/commands/release.md</code>: replaced the old auto-release sequence with a Batched Engineering mandate. Agents now stop after <code>cargo test --workspace -- --test-threads=1</code> and <code>just audit</code>, and are explicitly forbidden from running <code>just fast-release</code>, committing, tagging, pushing, releasing, or deploying without an explicit Sovereign Operator command.</p>
+<p><strong>Phase 2 — Pipeline Finalization (CF-6 / CF-7 / CF-9 / CF-10):</strong>
+- <code>justfile</code>: restored serialized test execution inside <code>audit</code> via <code>cargo test --workspace -- --test-threads=1</code>.
+- <code>justfile</code>: added operator-facing batch hints recommending <code>just shell</code> before <code>just audit</code> to avoid repeated Nix flake re-evaluation latency.
+- <code>justfile</code>: narrowed <code>fast-release</code> from <code>cargo build --release --workspace</code> to <code>cargo build --release -p cli</code>.
+- <code>justfile</code>: added <code>Cargo.lock</code> hash caching for CycloneDX generation via <code>.janitor/cargo_lock.hash</code>; SBOM generation now skips when the hash matches and <code>target/release/janitor.cdx.json</code> already exists.
+- <code>.github/workflows/janitor.yml</code> and <code>.github/workflows/janitor-pr-gate.yml</code>: enabled <code>sccache</code> with <code>mozilla-actions/sccache-action</code>, <code>SCCACHE_GHA_ENABLED</code>, and <code>RUSTC_WRAPPER=sccache</code> for CI build cache seeding.</p>
+<p><strong>Phase 3 — Active Defense Seeding:</strong>
+- <code>.INNOVATION_LOG.md</code>: purged CF-6, CF-7, CF-9, and CF-10 as resolved.
+- <code>.INNOVATION_LOG.md</code>: added <code>P3-6 — The Labyrinth (Active Defense &amp; LLM Tarpitting)</code>, defining deterministic hostile-recon detection, infinite cyclomatic deception ASTs, embedded Canary Tokens, adversarial context-window exhaustion, and attribution logging on token use.</p>
+<p><strong>Verification Ledger:</strong>
+- <code>cargo test --workspace -- --test-threads=1</code> exits <code>0</code>.
+- <code>just audit</code> exits <code>0</code>.</p>
+<h2 id="2026-04-17-cicd-bottleneck-eradication-sprint-batch-1">2026-04-17 — CI/CD Bottleneck Eradication (Sprint Batch 1)</h2>
+<p><strong>Directive:</strong> Execute CF-4, CF-3, CF-5, and CF-8 without cutting a release, restoring audit parallelism and removing bootstrap/download waste from the composite GitHub Action.</p>
+<p><strong>Phase 1 — Restore Test Parallelism (CF-4):</strong>
+- <code>Cargo.toml</code>: added <code>serial_test</code> to workspace-shared dependencies; wired <code>serial_test.workspace = true</code> into <code>crates/cli</code>, <code>crates/forge</code>, and <code>crates/gov</code> dev-dependencies.
+- <code>justfile</code>: removed the global <code>--test-threads=1</code> clamp from <code>just audit</code>; workspace tests now run with the default parallel harness.
+- <code>crates/cli/src/main.rs</code>: serialized only the shared-state tests that mutate process CWD or reuse a fixed temp path (<code>cmd_rotate_keys_archives_old_bundle_and_writes_new_one</code>, the <code>cmd_init</code> profile tests, and <code>sign_asset_produces_correct_sha384_hash</code>).
+- <code>crates/gov/src/main.rs</code>: serialized the env-sensitive token/report tests that mutate <code>JANITOR_GOV_EXPECTED_POLICY</code> or rely on the shared governor signing-key environment, preventing process-global races while preserving parallelism for the rest of the suite.</p>
+<p><strong>Phase 2 — Dynamic Bootstrap Provenance and Cache Repair (CF-3 / CF-5 / CF-8):</strong>
+- <code>action.yml</code>: introduced a dedicated bootstrap-tag resolver step that derives <code>BOOTSTRAP_TAG</code> dynamically from <code>gh release view --repo janitor-security/the-janitor --json tagName -q .tagName</code>, with <code>git describe --tags --abbrev=0</code> fallback.
+- <code>action.yml</code>: added <code>actions/cache@v4</code> for <code>/tmp/janitor-bin/bootstrap</code>, keyed by <code>${{ runner.os }}</code> and the resolved bootstrap tag so the trusted verifier is reused across runs.
+- <code>action.yml</code>: split transient current-release assets from cached bootstrap assets, parallelized all binary / <code>.sha384</code> / <code>.sig</code> downloads with backgrounded <code>curl</code> jobs plus <code>wait</code>, and preserved cacheability by cleaning only <code>/tmp/janitor-bin/current</code> during teardown.</p>
+<p><strong>Verification Ledger:</strong>
+- <code>cargo test --workspace</code> exits 0.
+- <code>just audit</code> exits 0.</p>
 <h2 id="2026-04-17-ifds-live-integration-agent-brain-surgery-v1020-alpha3">2026-04-17 — IFDS Live Integration &amp; Agent Brain Surgery (v10.2.0-alpha.3)</h2>
 <p><strong>Directive:</strong> Wire the IFDS solver into the live taint catalog, bind deterministic exploit witnesses into emitted <code>StructuredFinding</code> records, correct agent governance log rules, delete stale strike directories, and prepare the <code>10.2.0-alpha.3</code> governed release.</p>
 <p><strong>Phase 1 — Workspace Hygiene &amp; Governance Repair:</strong>
