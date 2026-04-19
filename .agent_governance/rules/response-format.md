@@ -48,6 +48,15 @@ Explicitly forbid manual operator shell guidance in this section. Do not
 suggest manual git commands, staging, signing, `/compact`, or other workflow
 rituals. The section is for implementation sequencing only.
 
+**Pre-flight — Absolute Eradication Law**: before writing this section,
+verify `.INNOVATION_LOG.md` contains ZERO completion markers
+(`[COMPLETED]`, `[COMPLETE]`, `[RESOLVED]`, `[DONE]`, `[SHIPPED]`,
+`[FIXED]`, `[LANDED]`, or `~~strikethrough~~`). If any remain from the
+current session's shipped work, physically delete those blocks first,
+then re-read the log to select the true highest-value frontier. See
+`.agent_governance/rules/log_hygiene.md`. By construction, every entry
+still in the log is unbuilt — the NRA selects from open frontiers only.
+
 ## [SOVEREIGN TRANSLATION]
 A terminal-only operator brief. Never write this section into markdown logs or
 backlog files. It must explain the implementation in layman's executive terms
@@ -87,5 +96,24 @@ in class). A KevCritical rule in Go or Python outranks a P2 ergonomics fix in
 every scenario unless the P2 item unlocks materially larger market access.
 
 **Hard rule:** if the current session touched a P1 or P2 item, the next action
-MUST still be the highest-value P0 entry unless all P0 entries are marked
-`[COMPLETED]`.  Recency is not a selection criterion.
+MUST still be the highest-value P0 entry that remains in the log. Recency is
+not a selection criterion. Under the Absolute Eradication Law, a P0 entry
+that has been completed is already deleted from the log, not tagged — so the
+selection universe at any moment is exactly the set of open P-entries
+present in the file.
+
+## Absolute Eradication Pre-Flight (reminder)
+
+Before emitting `[NEXT RECOMMENDED ACTION]`, perform the check defined in
+`.agent_governance/rules/log_hygiene.md`:
+
+1. Did the current session ship any feature that is still described in
+   `.INNOVATION_LOG.md`?
+2. If yes, physically delete the corresponding block(s) in the same
+   commit that ships the feature. Do NOT tag, strikethrough, or comment
+   them out. Hard-delete only.
+3. Re-read the purged log before selecting the next action.
+
+A `[NEXT RECOMMENDED ACTION]` authored over a log that still contains
+tombstoned completed work is a governance violation. The log and the
+recommendation are a single atomic artifact.
