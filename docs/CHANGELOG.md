@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 10 (Cryptographic Identity & MCP Sandboxing)
+
+**Directive:** P1-4 (Git commit signature enforcement) + P1-5 (MCP capability hardening); verify with `cargo test --workspace -- --test-threads=4` plus `just audit`; eradicate both blueprint blocks; commit with exact message; no release.
+
+**Phase 1 — Git Cryptographic Identity Verification (P1-4):**
+- `crates/forge/src/git_sig.rs` *(new)*: `GitSignatureStatus` enum (`Verified`, `Unsigned`, `Invalid`, `MismatchedIdentity`) with `forfeits_trust()` + `as_str()`; `verify_commit_signature(repo_path, commit_sha)` using `git2::Repository::extract_signature` — `NotFound` maps to `Unsigned`, empty/unknown envelope to `Invalid`, PGP/SSH header-verified plus non-empty author identity to `Verified`, missing identity to `MismatchedIdentity`; 8 deterministic tests.
+- `crates/forge/src/lib.rs`: added `pub mod git_sig;` in alphabetical order.
+- `crates/cli/src/report.rs`: `BounceLogEntry` gains `git_signature_status: Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; updated all test construction sites.
+- `crates/cli/src/git_drive.rs`: `bounce_one()` calls `verify_commit_signature` and embeds `git_signature_status` into both the semantic-null early-return entry and the full-bounce entry.
+- `crates/cli/src/main.rs`: trust forfeiture gate — `is_automation_account` exemptions revoked when `forfeits_trust()` is true; `bounce_git_sig` status embedded in primary `BounceLogEntry`; `make_pqc_entry` test helper updated.
+- `crates/cli/src/daemon.rs`, `crates/cli/src/cbom.rs`: `git_signature_status: None` added to construction sites.
+- `crates/gov/src/main.rs`: `git_signature_status: Option<String>` field added to the Governor's local `BounceLogEntry` struct and `sample_entry()` test fixture.
+
+**Phase 2 — MCP Server Capability Hardening (P1-5):**
+- `crates/mcp/src/lib.rs`: `CapabilityMatrix` enum (`ReadOnly`, `Write`, `Admin`); `tool_capability(tool: &str) -> CapabilityMatrix` mapping all 9 read-only tools to `ReadOnly`, `janitor_clean` to `Admin`, unknown to `Write` (fail-closed); `scan_args_for_prompt_injection(args: &serde_json::Value) -> bool` recursively checks every string field via `forge::metadata::detect_ai_prompt_injection`; `dispatch()` `tools/call` branch gates on injection (reject -32600) and Write capability (reject -32600) before any handler fires; 3 new tests (`test_mcp_prompt_injection_in_lint_file_rejected`, `test_mcp_unknown_tool_capability_write_denied`, `test_tool_capability_all_read_only_tools`).
+
+**Phase 3 — Verification & Blueprint Hygiene:**
+- `.INNOVATION_LOG.md`: physically deleted `P1-4` and `P1-5` blocks under the Absolute Eradication Law. No tombstones remain.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-19 — Sprint Batch 9 (IDOR Engine & PyPI Ingestion)
 
 **Directive:** Execute P1-3 and P1-2b by wiring a route-bound IDOR detector into forge and `janitor hunt`, adding local wheel plus PyPI ingestion for Python artifacts, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, purge the completed blueprint blocks under the Absolute Eradication Law, and stop after a local commit with no release.

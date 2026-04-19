@@ -433,6 +433,7 @@ pub mod unix {
                             capsule_hash: None,
                             decision_receipt: None,
                             cognition_surrender_index: 0.0,
+                            git_signature_status: None,
                         };
                         crate::report::append_bounce_log(&state.janitor_dir, &log_entry);
 

@@ -406,6 +406,7 @@ pub fn cmd_webhook_test(repo: &std::path::Path) -> anyhow::Result<()> {
         capsule_hash: None,
         decision_receipt: None,
         cognition_surrender_index: 0.0,
+        git_signature_status: None,
     };
 
     let payload = serde_json::to_string(&dummy).context("failed to serialise test payload")?;
@@ -754,6 +755,18 @@ pub struct BounceLogEntry {
     /// distinguish noise from genuine AI-introduced regressions.
     #[serde(default)]
     pub cognition_surrender_index: f64,
+
+    /// Cryptographic signature provenance verdict for the commit under analysis.
+    ///
+    /// One of: `"verified"`, `"unsigned"`, `"invalid"`, `"mismatched_identity"`.
+    /// Absent (`None`) when no commit SHA was available at bounce time (patch-only
+    /// mode) or when the git repository is inaccessible.
+    ///
+    /// `"unsigned"` and `"invalid"` verdicts cause [`BounceLogEntry::is_bot`] to
+    /// be forced `false` regardless of `trusted_bot_authors` / `automation_accounts`
+    /// configuration — trust requires a cryptographic signature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_signature_status: Option<String>,
 }
 
 fn default_execution_tier() -> String {
@@ -3521,6 +3534,7 @@ mod tests {
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            git_signature_status: None,
         }
     }
 
@@ -3700,6 +3714,7 @@ mod webhook_tests {
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            git_signature_status: None,
         }
     }
 
@@ -3913,6 +3928,7 @@ mod soft_fail_tests {
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            git_signature_status: None,
         }
     }
 

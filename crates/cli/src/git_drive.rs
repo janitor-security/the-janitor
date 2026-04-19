@@ -680,6 +680,14 @@ fn bounce_one(
         .map_err(|e| eprintln!("hyper-drive PR#{pr_num}: merge-base failed: {e}"))
         .ok()?;
 
+    // ── Git Signature Verification (P1-4) ─────────────────────────────────────
+    // Verify the cryptographic signature on this commit before evaluating any
+    // trust-based exemptions.  `Unsigned` and `Invalid` commits forfeit all
+    // trusted-author exemptions regardless of `trusted_bot_authors` /
+    // `automation_accounts` configuration — trust requires a signature.
+    let git_sig_status = forge::git_sig::verify_commit_signature(repo_path, pr_sha);
+    let git_sig_str = git_sig_status.as_str().to_owned();
+
     // ── Semantic Null pre-check (full-blob) ──────────────────────────────────
     // Compare full file blobs from the ODB rather than extracted patch lines.
     // If ALL modified source files share identical structural AST skeletons,
@@ -733,6 +741,7 @@ fn bounce_one(
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            git_signature_status: Some(git_sig_str.clone()),
         });
     }
 
@@ -856,6 +865,7 @@ fn bounce_one(
         capsule_hash: None,
         decision_receipt: None,
         cognition_surrender_index: 0.0,
+        git_signature_status: Some(git_sig_str),
     })
 }
 

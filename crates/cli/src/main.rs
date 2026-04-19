@@ -1327,6 +1327,7 @@ async fn main() -> anyhow::Result<()> {
                             capsule_hash: None,
                             decision_receipt: None,
                             cognition_surrender_index: 0.0,
+                            git_signature_status: None,
                         };
                         let timeout_verdict = common::scm::StatusVerdict::timeout(timeout_secs);
                         // Best-effort POST — never echo transport payloads to stderr.
@@ -3562,7 +3563,16 @@ fn cmd_bounce(
                 //   2. `trusted_bot_authors` list in janitor.toml
                 //   3. `[forge].automation_accounts` list in janitor.toml
                 //      (for ecosystem accounts like r-ryantm, app/nixpkgs-ci)
-                let author_is_automation = policy.is_automation_account(author.unwrap_or(""));
+                // Signature gate (P1-4): `Unsigned`/`Invalid` commits forfeit all
+                // trusted-author exemptions — trust requires a cryptographic signature.
+                let commit_sig_valid = resolved_commit_sha
+                    .as_deref()
+                    .map(|sha| {
+                        !forge::git_sig::verify_commit_signature(project_root, sha).forfeits_trust()
+                    })
+                    .unwrap_or(true); // no SHA → no sig check → don't block
+                let author_is_automation =
+                    commit_sig_valid && policy.is_automation_account(author.unwrap_or(""));
                 if scanner.is_pr_unlinked(body) && !author_is_automation {
                     score.unlinked_pr = 1;
                 }
@@ -3897,7 +3907,16 @@ probable AI context-collapse (hallucinated function reference)"
     let pr_state = pr_state_str
         .parse::<report::PrState>()
         .unwrap_or(report::PrState::Open);
-    let is_bot = policy.is_automation_account(author.unwrap_or(""));
+    // Signature gate (P1-4): compute sig status once for BounceLogEntry provenance
+    // and to conditionally revoke trusted-author exemptions.
+    let bounce_git_sig = resolved_commit_sha
+        .as_deref()
+        .map(|sha| forge::git_sig::verify_commit_signature(project_root, sha));
+    let bounce_sig_valid = bounce_git_sig
+        .as_ref()
+        .map(|s| !s.forfeits_trust())
+        .unwrap_or(true);
+    let is_bot = bounce_sig_valid && policy.is_automation_account(author.unwrap_or(""));
     let slop_score_val = score.score();
     let loaded_wisdom = common::wisdom::load_wisdom_with_receipt(&janitor_dir.join("wisdom.rkyv"));
     let wisdom_receipt = loaded_wisdom
@@ -3981,6 +4000,7 @@ probable AI context-collapse (hallucinated function reference)"
                 0.0
             }
         },
+        git_signature_status: bounce_git_sig.as_ref().map(|s| s.as_str().to_owned()),
     };
     let prior_entry = find_prior_bounce_entry(
         &prior_entries,
@@ -6051,6 +6071,7 @@ mod pqc_signing_tests {
             capsule_hash: None,
             decision_receipt: None,
             cognition_surrender_index: 0.0,
+            git_signature_status: None,
         }
     }
 

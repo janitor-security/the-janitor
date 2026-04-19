@@ -112,6 +112,11 @@ struct BounceLogEntry {
     /// RBAC: `auditor` tokens are rejected with HTTP 403.
     #[serde(default)]
     analysis_token: Option<String>,
+    /// Cryptographic signature provenance verdict for the commit under analysis.
+    ///
+    /// One of: `"verified"`, `"unsigned"`, `"invalid"`, `"mismatched_identity"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    git_signature_status: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1506,6 +1511,7 @@ mod tests {
             decision_receipt: None,
             cognition_surrender_index: 0.0,
             analysis_token: None,
+            git_signature_status: None,
         }
     }
 
