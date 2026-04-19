@@ -26,23 +26,32 @@
 
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
+use common::wisdom::{ArchivedSlopsquatCorpus, SlopsquatCorpus};
 use forge::slop_hunter::{find_slop, ParsedUnit};
 use std::collections::BTreeMap;
 use std::io::Read as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// 16 MiB — HTTP body cap for sourcemap and npm registry responses.
 const HTTP_BODY_LIMIT: u64 = 16 * 1024 * 1024;
+/// 64 MiB — wheel / egg download and extraction cap.
+const PYPI_BODY_LIMIT: u64 = 64 * 1024 * 1024;
 /// 1 MiB — per-file circuit breaker matching slop_hunter.rs.
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 /// 512 MiB — total layer data buffered during docker save extraction.
 const DOCKER_LAYER_BUDGET: usize = 512 * 1024 * 1024;
 
+/// Embedded offline-baseline slopsquat corpus produced by `build.rs`.
+static EMBEDDED_SLOPSQUAT: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/slopsquat_corpus.rkyv"));
+
 pub struct HuntArgs<'a> {
     pub scan_root: Option<&'a Path>,
     pub sourcemap_url: Option<&'a str>,
     pub npm_pkg: Option<&'a str>,
+    pub whl_path: Option<&'a Path>,
+    pub pypi_pkg: Option<&'a str>,
     pub apk_path: Option<&'a Path>,
     pub jar_path: Option<&'a Path>,
     pub asar_path: Option<&'a Path>,
@@ -69,6 +78,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         scan_root,
         sourcemap_url,
         npm_pkg,
+        whl_path,
+        pypi_pkg,
         apk_path,
         jar_path,
         asar_path,
@@ -78,7 +89,6 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         format,
         corpus_path,
     } = args;
-    let _ = corpus_path; // reserved — slopsquat corpus override
 
     match format {
         "json" | "bugcrowd" => {}
@@ -94,6 +104,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     let source_count = usize::from(scan_root.is_some())
         + usize::from(sourcemap_url.is_some())
         + usize::from(npm_pkg.is_some())
+        + usize::from(whl_path.is_some())
+        + usize::from(pypi_pkg.is_some())
         + usize::from(apk_path.is_some())
         + usize::from(jar_path.is_some())
         + usize::from(asar_path.is_some())
@@ -102,12 +114,12 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
 
     if source_count == 0 {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --whl, --pypi, --apk, --jar, --asar, --docker, or --ipa"
         );
     }
     if source_count > 1 {
         anyhow::bail!(
-            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
+            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --whl, --pypi, --apk, --jar, --asar, --docker, or --ipa"
         );
     }
 
@@ -115,6 +127,10 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         ingest_sourcemap(url)?
     } else if let Some(pkg) = npm_pkg {
         ingest_npm(pkg)?
+    } else if let Some(path) = whl_path {
+        ingest_whl(path, corpus_path)?
+    } else if let Some(pkg) = pypi_pkg {
+        ingest_pypi(pkg, corpus_path)?
     } else if let Some(apk) = apk_path {
         ingest_apk(apk)?
     } else if let Some(jar) = jar_path {
@@ -129,7 +145,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         scan_directory(root)?
     } else {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --whl, --pypi, --apk, --jar, --asar, --docker, or --ipa"
         );
     };
 
@@ -440,6 +456,233 @@ fn resolve_npm_latest(name: &str) -> anyhow::Result<String> {
         .as_str()
         .map(str::to_owned)
         .ok_or_else(|| anyhow::anyhow!("npm registry response missing 'version' field"))
+}
+
+// ---------------------------------------------------------------------------
+// Python wheel / egg ingestion  (Phase P1-2b)
+// ---------------------------------------------------------------------------
+
+/// Extract a Python `.whl` or `.egg` archive into a temporary directory, scan
+/// the unpacked payload, and return findings.
+fn ingest_whl(path: &Path, corpus_path: Option<&Path>) -> anyhow::Result<Vec<StructuredFinding>> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("failed to open wheel archive {}", path.display()))?;
+    let mut archive =
+        zip::ZipArchive::new(file).context("failed to parse wheel/egg archive as ZIP")?;
+    let tmpdir = tempfile::TempDir::new().context("failed to create wheel extraction tmpdir")?;
+
+    let mut metadata_path: Option<PathBuf> = None;
+    let mut entry_points_path: Option<PathBuf> = None;
+    let mut script_paths = Vec::new();
+
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .with_context(|| format!("failed to read wheel entry {index}"))?;
+        let entry_name = entry.name().replace('\\', "/");
+        let Some(safe_rel) = sanitize_archive_entry_path(&entry_name) else {
+            continue;
+        };
+        let dest = tmpdir.path().join(&safe_rel);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&dest)
+                .with_context(|| format!("create wheel directory {}", dest.display()))?;
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create wheel parent {}", parent.display()))?;
+        }
+
+        let mut buf = Vec::new();
+        entry
+            .read_to_end(&mut buf)
+            .with_context(|| format!("read wheel file {}", entry.name()))?;
+        std::fs::write(&dest, &buf)
+            .with_context(|| format!("write extracted wheel file {}", dest.display()))?;
+
+        if entry_name.ends_with("/METADATA") {
+            metadata_path = Some(dest.clone());
+        } else if entry_name.ends_with("/entry_points.txt") {
+            entry_points_path = Some(dest.clone());
+        }
+
+        let is_python_script = dest.extension().and_then(|ext| ext.to_str()) == Some("py")
+            || buf.starts_with(b"#!/")
+                && std::str::from_utf8(&buf[..buf.len().min(128)])
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    .contains("python");
+        if is_python_script {
+            script_paths.push(dest);
+        }
+    }
+
+    let mut findings = Vec::new();
+    if let Some(metadata_path) = metadata_path.as_deref() {
+        let metadata = std::fs::read_to_string(metadata_path)
+            .with_context(|| format!("read wheel metadata {}", metadata_path.display()))?;
+        if let Some(package_name) = parse_metadata_header(&metadata, "Name") {
+            let artifact_label = path.display().to_string();
+            if let Some(finding) = slopsquat_artifact_finding(
+                &package_name,
+                parse_metadata_header(&metadata, "Version").as_deref(),
+                corpus_path,
+                &artifact_label,
+            ) {
+                findings.push(finding);
+            }
+        }
+    }
+
+    if let Some(entry_points_path) = entry_points_path.as_deref() {
+        let entry_points = std::fs::read_to_string(entry_points_path)
+            .with_context(|| format!("read entry_points {}", entry_points_path.display()))?;
+        for module in parse_entry_point_modules(&entry_points) {
+            if let Some(module_path) = resolve_python_module_path(tmpdir.path(), &module) {
+                findings.extend(scan_python_priority_file(
+                    &module_path,
+                    &relative_to_root(tmpdir.path(), &module_path),
+                )?);
+            }
+        }
+    }
+
+    for script_path in &script_paths {
+        findings.extend(scan_python_priority_file(
+            script_path,
+            &relative_to_root(tmpdir.path(), script_path),
+        )?);
+    }
+
+    findings.extend(scan_directory(tmpdir.path())?);
+    Ok(dedup_findings(findings))
+}
+
+/// Download a wheel from the official PyPI registry, extract it, and scan the
+/// unpacked payload.
+fn ingest_pypi(pkg: &str, corpus_path: Option<&Path>) -> anyhow::Result<Vec<StructuredFinding>> {
+    let (name, version) = parse_pypi_spec(pkg);
+    let version_opt = (!version.is_empty()).then_some(version);
+    if let Some(finding) = slopsquat_artifact_finding(name, version_opt, corpus_path, pkg) {
+        let mut findings = vec![finding];
+        let downloaded = ingest_pypi_download(name, version, corpus_path)?;
+        findings.extend(downloaded);
+        return Ok(dedup_findings(findings));
+    }
+    ingest_pypi_download(name, version, corpus_path)
+}
+
+fn ingest_pypi_download(
+    name: &str,
+    version: &str,
+    corpus_path: Option<&Path>,
+) -> anyhow::Result<Vec<StructuredFinding>> {
+    let meta_url = if version.is_empty() {
+        format!("https://pypi.org/pypi/{name}/json")
+    } else {
+        format!("https://pypi.org/pypi/{name}/{version}/json")
+    };
+    let agent = ureq::Agent::new_with_defaults();
+    let meta: serde_json::Value = agent
+        .get(&meta_url)
+        .call()
+        .map_err(|_| anyhow::anyhow!("PyPI metadata fetch failed for {pkg}", pkg = name))?
+        .body_mut()
+        .with_config()
+        .limit(HTTP_BODY_LIMIT)
+        .read_json::<serde_json::Value>()
+        .context("PyPI metadata response is not valid JSON")?;
+
+    let urls = meta["urls"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("PyPI metadata missing 'urls' array"))?;
+    let wheel_url = urls
+        .iter()
+        .find(|entry| entry["packagetype"].as_str() == Some("bdist_wheel"))
+        .or_else(|| {
+            urls.iter().find(|entry| {
+                entry["filename"]
+                    .as_str()
+                    .is_some_and(|filename| filename.ends_with(".egg"))
+            })
+        })
+        .and_then(|entry| entry["url"].as_str())
+        .ok_or_else(|| anyhow::anyhow!("PyPI artifact set contains no wheel or egg"))?;
+
+    let mut response = agent
+        .get(wheel_url)
+        .call()
+        .map_err(|_| anyhow::anyhow!("PyPI artifact download failed for {name}"))?;
+    let tmpdir = tempfile::TempDir::new().context("failed to create PyPI download tmpdir")?;
+    let filename = urls
+        .iter()
+        .find_map(|entry| {
+            let url = entry["url"].as_str()?;
+            (url == wheel_url)
+                .then(|| entry["filename"].as_str())
+                .flatten()
+        })
+        .unwrap_or("package.whl");
+    let artifact_path = tmpdir.path().join(filename);
+    let mut bytes = Vec::new();
+    response
+        .body_mut()
+        .with_config()
+        .limit(PYPI_BODY_LIMIT)
+        .reader()
+        .read_to_end(&mut bytes)
+        .context("failed to read PyPI artifact body")?;
+    std::fs::write(&artifact_path, &bytes)
+        .with_context(|| format!("write downloaded PyPI artifact {}", artifact_path.display()))?;
+    ingest_whl(&artifact_path, corpus_path)
+}
+
+fn parse_pypi_spec(pkg: &str) -> (&str, &str) {
+    if let Some(at) = pkg.rfind('@') {
+        (&pkg[..at], &pkg[at + 1..])
+    } else {
+        (pkg, "")
+    }
+}
+
+fn parse_metadata_header(metadata: &str, key: &str) -> Option<String> {
+    metadata.lines().find_map(|line| {
+        let (left, right) = line.split_once(':')?;
+        (left.trim().eq_ignore_ascii_case(key)).then(|| right.trim().to_string())
+    })
+}
+
+fn parse_entry_point_modules(entry_points: &str) -> Vec<String> {
+    entry_points
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('[') || trimmed.starts_with('#') {
+                return None;
+            }
+            let (_, target) = trimmed.split_once('=')?;
+            let module = target.trim().split(':').next()?.trim();
+            (!module.is_empty()).then(|| module.to_string())
+        })
+        .collect()
+}
+
+fn resolve_python_module_path(root: &Path, module: &str) -> Option<PathBuf> {
+    let module_rel = module.replace('.', "/");
+    let file_path = root.join(format!("{module_rel}.py"));
+    if file_path.exists() {
+        return Some(file_path);
+    }
+    let init_path = root.join(module_rel).join("__init__.py");
+    init_path.exists().then_some(init_path)
+}
+
+fn scan_python_priority_file(path: &Path, label: &str) -> anyhow::Result<Vec<StructuredFinding>> {
+    let source =
+        std::fs::read(path).with_context(|| format!("read python file {}", path.display()))?;
+    Ok(scan_buffer("py", &source, label))
 }
 
 // ---------------------------------------------------------------------------
@@ -925,24 +1168,10 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             .to_string_lossy()
             .to_string();
 
-        let unit = ParsedUnit::unparsed(&source);
-        let raw = find_slop(ext, &unit);
-
-        for f in raw {
-            all.push(StructuredFinding {
-                id: extract_rule_id(&f.description),
-                file: Some(rel_path.clone()),
-                line: Some(byte_to_line(&source, f.start_byte)),
-                fingerprint: fingerprint_finding(&source, f.start_byte, f.end_byte),
-                severity: Some(format!("{:?}", f.severity)),
-                remediation: None,
-                docs_url: None,
-                exploit_witness: None,
-            });
-        }
+        all.extend(scan_buffer(ext, &source, &rel_path));
     }
 
-    Ok(all)
+    Ok(dedup_findings(all))
 }
 
 // ---------------------------------------------------------------------------
@@ -988,6 +1217,25 @@ fn byte_to_line(source: &[u8], byte_offset: usize) -> u32 {
     source[..capped].iter().filter(|&&b| b == b'\n').count() as u32 + 1
 }
 
+fn scan_buffer(ext: &str, source: &[u8], label: &str) -> Vec<StructuredFinding> {
+    let unit = ParsedUnit::unparsed(source);
+    let mut findings = find_slop(ext, &unit)
+        .into_iter()
+        .map(|finding| StructuredFinding {
+            id: extract_rule_id(&finding.description),
+            file: Some(label.to_string()),
+            line: Some(byte_to_line(source, finding.start_byte)),
+            fingerprint: fingerprint_finding(source, finding.start_byte, finding.end_byte),
+            severity: Some(format!("{:?}", finding.severity)),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: None,
+        })
+        .collect::<Vec<_>>();
+    findings.extend(forge::idor::scan_source(ext, source, label));
+    findings
+}
+
 fn extract_rule_id(description: &str) -> String {
     description
         .split(" \u{2014} ") // U+2014 EM DASH with spaces
@@ -1020,6 +1268,128 @@ fn sanitize_archive_entry_path(raw: &str) -> Option<std::path::PathBuf> {
     } else {
         Some(clean)
     }
+}
+
+fn relative_to_root(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string()
+}
+
+fn dedup_findings(findings: Vec<StructuredFinding>) -> Vec<StructuredFinding> {
+    let mut deduped = Vec::with_capacity(findings.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for finding in findings {
+        let key = (
+            finding.id.clone(),
+            finding.file.clone().unwrap_or_default(),
+            finding.line.unwrap_or_default(),
+            finding.fingerprint.clone(),
+        );
+        if seen.insert(key) {
+            deduped.push(finding);
+        }
+    }
+    deduped
+}
+
+fn slopsquat_artifact_finding(
+    package_name: &str,
+    version: Option<&str>,
+    corpus_path: Option<&Path>,
+    artifact_label: &str,
+) -> Option<StructuredFinding> {
+    let normalized = normalize_package_name(package_name);
+    if normalized.is_empty() {
+        return None;
+    }
+    let corpus = load_effective_slopsquat_corpus(corpus_path).ok()?;
+    let mut matched: Option<(&str, bool)> = None;
+    for known in &corpus.package_names {
+        let known_normalized = normalize_package_name(known);
+        if known_normalized == normalized {
+            matched = Some((known.as_str(), true));
+            break;
+        }
+        if bounded_levenshtein(&normalized, &known_normalized, 1).is_some() {
+            matched = Some((known.as_str(), false));
+            break;
+        }
+    }
+    let (matched_name, exact) = matched?;
+    let version_suffix = version
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("@{value}"))
+        .unwrap_or_default();
+    let relation = if exact {
+        "matches"
+    } else {
+        "is a one-edit near miss of"
+    };
+    Some(StructuredFinding {
+        id: "security:slopsquat_injection".to_string(),
+        file: Some(artifact_label.to_string()),
+        line: Some(1),
+        fingerprint: blake3::hash(format!("{normalized}:{matched_name}").as_bytes())
+            .to_hex()
+            .to_string(),
+        severity: Some("Critical".to_string()),
+        remediation: Some(format!(
+            "PyPI artifact `{package_name}{version_suffix}` {relation} slopsquat corpus entry `{matched_name}`. Reject the artifact, verify provenance, and require an explicitly reviewed package allowlist before ingestion."
+        )),
+        docs_url: None,
+        exploit_witness: None,
+    })
+}
+
+fn load_effective_slopsquat_corpus(corpus_path: Option<&Path>) -> anyhow::Result<SlopsquatCorpus> {
+    if let Some(path) = corpus_path {
+        if let Some(corpus) = common::wisdom::load_slopsquat_corpus(path) {
+            return Ok(corpus);
+        }
+        anyhow::bail!("failed to load slopsquat corpus from {}", path.display());
+    }
+
+    let archived = rkyv::access::<ArchivedSlopsquatCorpus, rkyv::rancor::Error>(EMBEDDED_SLOPSQUAT)
+        .context("embedded slopsquat corpus is corrupt")?;
+    rkyv::deserialize::<SlopsquatCorpus, rkyv::rancor::Error>(archived)
+        .context("embedded slopsquat corpus failed to deserialize")
+}
+
+fn normalize_package_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase().replace('_', "-")
+}
+
+fn bounded_levenshtein(left: &str, right: &str, max_distance: usize) -> Option<usize> {
+    if left == right {
+        return Some(0);
+    }
+    let left_chars = left.chars().collect::<Vec<_>>();
+    let right_chars = right.chars().collect::<Vec<_>>();
+    let length_delta = left_chars.len().abs_diff(right_chars.len());
+    if length_delta > max_distance {
+        return None;
+    }
+
+    let mut prev = (0..=right_chars.len()).collect::<Vec<_>>();
+    let mut curr = vec![0usize; right_chars.len() + 1];
+    for (i, left_char) in left_chars.iter().enumerate() {
+        curr[0] = i + 1;
+        let mut row_min = curr[0];
+        for (j, right_char) in right_chars.iter().enumerate() {
+            let substitution = usize::from(left_char != right_char);
+            curr[j + 1] = (prev[j + 1] + 1)
+                .min(curr[j] + 1)
+                .min(prev[j] + substitution);
+            row_min = row_min.min(curr[j + 1]);
+        }
+        if row_min > max_distance {
+            return None;
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    (prev[right_chars.len()] <= max_distance).then_some(prev[right_chars.len()])
 }
 
 // ---------------------------------------------------------------------------
@@ -1185,6 +1555,72 @@ mod tests {
         let (name, ver) = parse_npm_spec("@scope/pkg");
         assert_eq!(name, "@scope/pkg");
         assert_eq!(ver, "");
+    }
+
+    fn build_whl(metadata_name: &str, python_source: &[u8]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let whl_path = tmp.path().join("sample.whl");
+        let file = std::fs::File::create(&whl_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("pkg/__init__.py", options).unwrap();
+        zip.write_all(python_source).unwrap();
+        zip.start_file("demo-1.0.0.dist-info/METADATA", options)
+            .unwrap();
+        zip.write_all(
+            format!("Metadata-Version: 2.1\nName: {metadata_name}\nVersion: 1.0.0\n").as_bytes(),
+        )
+        .unwrap();
+        zip.start_file("demo-1.0.0.dist-info/entry_points.txt", options)
+            .unwrap();
+        zip.write_all(b"[console_scripts]\ndemo = pkg:main\n")
+            .unwrap();
+        zip.start_file("demo-1.0.0.data/scripts/demo", options)
+            .unwrap();
+        zip.write_all(b"#!/usr/bin/env python3\nfrom pkg import main\nmain()\n")
+            .unwrap();
+        zip.finish().unwrap();
+        tmp
+    }
+
+    #[test]
+    fn wheel_ingest_flags_slopsquat_package_name_immediately() {
+        let wheel = build_whl("djago", b"def main():\n    return 0\n");
+        let corpus_dir = tempfile::TempDir::new().unwrap();
+        let corpus_path = corpus_dir.path().join("slopsquat_corpus.rkyv");
+        let corpus = common::wisdom::SlopsquatCorpus {
+            package_names: vec!["djago".to_string()],
+        };
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&corpus).unwrap();
+        std::fs::write(&corpus_path, bytes.as_slice()).unwrap();
+
+        let findings = ingest_whl(&wheel.path().join("sample.whl"), Some(&corpus_path)).unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.id == "security:slopsquat_injection"),
+            "wheel metadata name in the slopsquat corpus must trigger an immediate Critical finding"
+        );
+    }
+
+    #[test]
+    fn wheel_ingest_surfaces_idor_in_extracted_python_handler() {
+        let wheel = build_whl(
+            "safe-demo",
+            br#"
+@app.get("/users/<int:user_id>")
+def main(user_id):
+    record = db.session.query(User).filter_by(id=user_id).first()
+    return jsonify(record)
+"#,
+        );
+        let findings = ingest_whl(&wheel.path().join("sample.whl"), None).unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.id == "security:missing_ownership_check"),
+            "wheel-extracted python route without an ownership check must trigger the IDOR detector"
+        );
     }
 
     #[test]

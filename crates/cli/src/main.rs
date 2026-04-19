@@ -993,6 +993,9 @@ enum Commands {
     ///
     /// # Reconstruct and scan a bundled JS app from its sourcemap
     /// janitor hunt --sourcemap https://example.com/static/app.js.map
+    ///
+    /// # Fetch and scan a published Python wheel from PyPI
+    /// janitor hunt --pypi requests@2.32.3
     /// ```
     Hunt {
         /// Directory to scan. Required only for local scans.
@@ -1007,6 +1010,14 @@ enum Commands {
         /// temporary directory, scanned, then deleted via RAII.
         #[arg(long)]
         npm: Option<String>,
+        /// Path to a Python `.whl` or `.egg` archive. Extracted into a
+        /// temporary directory, scanned, then deleted via RAII.
+        #[arg(long)]
+        whl: Option<PathBuf>,
+        /// PyPI package spec to fetch and scan, e.g. `requests@2.32.3` or
+        /// `requests` (resolves latest published wheel).
+        #[arg(long)]
+        pypi: Option<String>,
         /// Path to an Android APK file.  Requires `jadx` in PATH.  The APK
         /// is decompiled into a temporary directory, scanned, then deleted.
         #[arg(long)]
@@ -1498,6 +1509,8 @@ async fn main() -> anyhow::Result<()> {
             path,
             sourcemap,
             npm,
+            whl,
+            pypi,
             apk,
             jar,
             asar,
@@ -1511,6 +1524,8 @@ async fn main() -> anyhow::Result<()> {
                 scan_root: path.as_deref(),
                 sourcemap_url: sourcemap.as_deref(),
                 npm_pkg: npm.as_deref(),
+                whl_path: whl.as_deref(),
+                pypi_pkg: pypi.as_deref(),
                 apk_path: apk.as_deref(),
                 jar_path: jar.as_deref(),
                 asar_path: asar.as_deref(),

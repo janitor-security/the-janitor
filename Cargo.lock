@@ -1646,6 +1646,7 @@ dependencies = [
  "git2",
  "memmap2",
  "petgraph 0.8.3",
+ "polyglot",
  "rkyv",
  "rsmt2",
  "serde_json",

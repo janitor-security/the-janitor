@@ -1077,6 +1077,7 @@ impl PRBouncer for PatchBouncer {
             .map(|entry| entry.surface.clone())
             .collect::<Vec<_>>();
         let authz_consistency_findings = crate::authz::check_authz_consistency(&endpoint_surfaces);
+        let idor_findings = crate::idor::scan_tree(&tree, ext, source, &file_path);
 
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
@@ -1386,8 +1387,9 @@ impl PRBouncer for PatchBouncer {
             }
         }
         let mut antipattern_details = Vec::with_capacity(accepted.len());
-        let mut structured_findings =
-            Vec::with_capacity(accepted.len() + authz_consistency_findings.len());
+        let mut structured_findings = Vec::with_capacity(
+            accepted.len() + authz_consistency_findings.len() + idor_findings.len(),
+        );
         for f in accepted {
             let line = byte_offset_to_line(source, f.start_byte);
             antipattern_details.push(format!("{} (line={line})", f.description));
@@ -1425,6 +1427,15 @@ impl PRBouncer for PatchBouncer {
             structured_findings.push(finding);
         }
         for finding in authz_consistency_findings {
+            antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
+            antipattern_details.push(format!(
+                "{} (line={})",
+                finding.id,
+                finding.line.unwrap_or_default()
+            ));
+            structured_findings.push(finding);
+        }
+        for finding in idor_findings {
             antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
             antipattern_details.push(format!(
                 "{} (line={})",

@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 9 (IDOR Engine & PyPI Ingestion)
+
+**Directive:** Execute P1-3 and P1-2b by wiring a route-bound IDOR detector into forge and `janitor hunt`, adding local wheel plus PyPI ingestion for Python artifacts, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, purge the completed blueprint blocks under the Absolute Eradication Law, and stop after a local commit with no release.
+
+**Phase 1 — IDOR Ownership Engine:**
+- `crates/forge/src/idor.rs` *(new)*: introduced a route-aware ownership detector that reuses `EndpointSurface` extraction, enumerates path parameters from `{id}` / `:id` / `<int:id>` routes, identifies principal tokens (`current_user.id`, `req.user.id`, JWT subject claims, and related session identifiers), and emits `security:missing_ownership_check` at `KevCritical` when a path parameter reaches a database lookup before a principal equality guard or principal-bound query predicate.
+- `crates/forge/src/lib.rs`: exported the new `idor` module.
+- `crates/forge/src/slop_filter.rs`: integrated IDOR findings into the `PatchBouncer` structured-finding ledger and severity score so ownership regressions hard-block the same way as the existing authz-consistency lane.
+
+**Phase 2 — Python Wheel / PyPI Offensive Ingestion:**
+- `crates/cli/src/main.rs`: extended `janitor hunt` with `--whl <path>` and `--pypi <name[@version]>`, threading both sources into `hunt::HuntArgs`.
+- `crates/cli/src/hunt.rs`: added `ingest_whl(path, corpus_path)` and `ingest_pypi(name, corpus_path)`, extracting `.whl` / `.egg` archives with `zip::ZipArchive` into `tempfile::TempDir`, prioritizing `METADATA`, `entry_points.txt`, and Python shebang scripts before the full recursive scan, and reusing the new forge IDOR lane during hunt scans.
+- `crates/cli/src/hunt.rs`: activated slopsquat artifact triage against the memory-mapped/embedded `slopsquat_corpus.rkyv`, including one-edit near-miss detection for PyPI package names, and emits an immediate `Critical` `security:slopsquat_injection` finding before deeper analysis.
+
+**Phase 3 — Regression Coverage & Blueprint Hygiene:**
+- `crates/forge/src/idor.rs`: added deterministic tests covering a vulnerable Flask-style route and a safe route guarded by principal equality before the database fetch.
+- `crates/cli/src/hunt.rs`: added wheel-ingestion tests asserting both immediate slopsquat interception and IDOR detection across extracted Python payloads.
+- `.INNOVATION_LOG.md`: physically deleted the `P1-2 — Python Wheel / Egg Offensive Ingestion` and `P1-3 — IDOR Detector` blocks in compliance with the Absolute Eradication Law. No tombstones remain.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-18 — Compiled Artifact Offensive Ingestion (v10.2.0-alpha.7)
 
 **Directive:** Execute P1-2a and P1-2c in Batched Engineering mode by wiring `janitor hunt` to ingest `docker save` tarballs and iOS `.ipa` bundles, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update the strategic blueprint and changelog, and stop after a local commit with no release.

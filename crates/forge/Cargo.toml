@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 common = { path = "../common" }
+polyglot = { path = "../polyglot" }
 backlog_pruner = { path = "../experimental/backlog_pruner" }
 advanced_threats = { path = "../experimental/advanced_threats" }
 blake3.workspace = true

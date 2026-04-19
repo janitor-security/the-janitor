@@ -30,6 +30,7 @@ pub mod deobfuscate;
 pub mod exploitability;
 pub mod fold;
 pub mod hashing;
+pub mod idor;
 pub mod ifds;
 pub mod metadata;
 pub mod migration_guard;
