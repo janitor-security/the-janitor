@@ -70,7 +70,7 @@ Before finalizing any commit, and unconditionally before writing the
 This rule governs `.INNOVATION_LOG.md` specifically. It does NOT apply
 to:
 
-- `docs/IMPLEMENTATION_BACKLOG.md` — historical by design.
+- `docs/CHANGELOG.md` — historical by design.
 - Commit messages, release notes, GitHub Releases — historical by design.
 - Memory system entries under `~/.claude/projects/.../memory/` —
   historical by design.

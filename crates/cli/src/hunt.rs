@@ -71,8 +71,8 @@ pub struct HuntArgs<'a> {
 /// A local `scan_root` or one remote/archive fetcher is required. All modes
 /// produce a `Vec<StructuredFinding>`. JSON mode serialises findings directly to
 /// stdout; Bugcrowd mode renders grouped Markdown reports. If `filter_expr` is
-/// provided the JSON output is piped through a native `jq`-compatible filter
-/// before printing.
+/// provided the result set is piped through a native `jq`-compatible filter
+/// before printing or Markdown rendering.
 pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     let HuntArgs {
         scan_root,
@@ -97,9 +97,20 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         ),
     }
 
-    if filter_expr.is_some() && format != "json" {
-        anyhow::bail!("--filter is supported only with --format json");
-    }
+    let has_explicit_ingest_source = sourcemap_url.is_some()
+        || npm_pkg.is_some()
+        || whl_path.is_some()
+        || pypi_pkg.is_some()
+        || apk_path.is_some()
+        || jar_path.is_some()
+        || asar_path.is_some()
+        || docker_path.is_some()
+        || ipa_path.is_some();
+    let scan_root = if is_placeholder_scan_root(scan_root, has_explicit_ingest_source) {
+        None
+    } else {
+        scan_root
+    };
 
     let source_count = usize::from(scan_root.is_some())
         + usize::from(sourcemap_url.is_some())
@@ -149,19 +160,24 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         );
     };
 
+    let findings = if let Some(expr) = filter_expr {
+        let filtered = apply_jaq_filter(
+            expr,
+            serde_json::to_value(&findings).context("failed to convert findings to JSON value")?,
+        )?;
+        serde_json::from_value::<Vec<StructuredFinding>>(filtered)
+            .context("jaq filter must yield an array of structured findings")?
+    } else {
+        findings
+    };
+
     if format == "bugcrowd" {
         println!("{}", format_bugcrowd_report(&findings));
         return Ok(());
     }
 
-    let json_val =
+    let output_val =
         serde_json::to_value(&findings).context("failed to convert findings to JSON value")?;
-
-    let output_val = if let Some(expr) = filter_expr {
-        apply_jaq_filter(expr, json_val)?
-    } else {
-        json_val
-    };
 
     let json = serde_json::to_string_pretty(&output_val)
         .context("failed to serialise findings as JSON")?;
@@ -1145,6 +1161,10 @@ fn apply_jaq_filter(
     Ok(serde_json::Value::Array(results))
 }
 
+fn is_placeholder_scan_root(scan_root: Option<&Path>, has_explicit_ingest_source: bool) -> bool {
+    has_explicit_ingest_source && scan_root == Some(Path::new("."))
+}
+
 // ---------------------------------------------------------------------------
 // Directory walker (shared by all ingestion paths)
 // ---------------------------------------------------------------------------
@@ -1447,6 +1467,13 @@ mod tests {
         assert_eq!(sanitize_sourcemap_path("", 7), "source_7");
     }
 
+    #[test]
+    fn placeholder_scan_root_is_ignored_when_explicit_source_present() {
+        assert!(is_placeholder_scan_root(Some(Path::new(".")), true));
+        assert!(!is_placeholder_scan_root(Some(Path::new(".")), false));
+        assert!(!is_placeholder_scan_root(Some(Path::new("./target")), true));
+    }
+
     // -----------------------------------------------------------------------
     // extract_rule_id / byte_to_line
     // -----------------------------------------------------------------------
@@ -1702,6 +1729,43 @@ def main(user_id):
         assert!(!report.contains(
             "No automated reproduction command generated. See vulnerable source lines above."
         ));
+    }
+
+    #[test]
+    fn bugcrowd_filter_can_reduce_findings_before_rendering() {
+        let findings = vec![
+            StructuredFinding {
+                id: "security:dom_xss_innerHTML".to_string(),
+                file: Some("captcha.js".to_string()),
+                line: Some(46),
+                fingerprint: "xss1".to_string(),
+                severity: Some("Critical".to_string()),
+                remediation: None,
+                docs_url: None,
+                exploit_witness: None,
+            },
+            StructuredFinding {
+                id: "security:hardcoded_secret".to_string(),
+                file: Some("config.js".to_string()),
+                line: Some(7),
+                fingerprint: "secret1".to_string(),
+                severity: Some("Critical".to_string()),
+                remediation: None,
+                docs_url: None,
+                exploit_witness: None,
+            },
+        ];
+
+        let filtered = apply_jaq_filter(
+            ".[] | select(.id == \"security:dom_xss_innerHTML\")",
+            serde_json::to_value(&findings).unwrap(),
+        )
+        .unwrap();
+        let filtered_findings: Vec<StructuredFinding> = serde_json::from_value(filtered).unwrap();
+        let report = format_bugcrowd_report(&filtered_findings);
+
+        assert!(report.contains("security:dom_xss_innerHTML"));
+        assert!(!report.contains("security:hardcoded_secret"));
     }
 
     // -----------------------------------------------------------------------

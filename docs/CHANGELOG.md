@@ -3,6 +3,28 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 12 (Governance Purge & Auth0 Validation Strike)
+
+**Directive:** Purge obsolete governance references to `docs/IMPLEMENTATION_BACKLOG.md`, delete the dead backlog file, validate the Bugcrowd report generator against the Auth0 `auth0.min.js.map` sourcemap using the exact operator command shape, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.
+
+**Phase 1 — Governance Purge:**
+- `.agent_governance/rules/log_hygiene.md`: replaced the stale historical-file exemption for `docs/IMPLEMENTATION_BACKLOG.md` with `docs/CHANGELOG.md`.
+- `docs/IMPLEMENTATION_BACKLOG.md`: deleted from disk under the purge directive.
+
+**Phase 2 — Bugcrowd Live-Fire Validation:**
+- `crates/cli/src/hunt.rs`: removed the `--filter`/`--format bugcrowd` incompatibility by applying the jaq filter before output formatting and deserializing the filtered result set back into `Vec<StructuredFinding>`.
+- `crates/cli/src/hunt.rs`: normalized positional `.` into a placeholder only when a concrete remote/archive ingest source is also present, allowing the operator's exact `hunt . --sourcemap ...` strike command to execute as intended.
+- `crates/cli/src/hunt.rs`: added regression coverage for placeholder scan-root normalization and filtered Bugcrowd rendering.
+- `auth0_report.md`: generated from the Auth0 9.19.0 production sourcemap strike and reviewed for grouped DOM XSS findings plus PoC fallback rendering.
+
+**Phase 3 — Innovation Ledger:**
+- `.INNOVATION_LOG.md`: retained P3-1 as active and added a validation note stating the Bugcrowd Formatter lane is fully operational against production sourcemaps.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-19 — Sprint Batch 11 (AEG Payload Synthesis & Bugcrowd Report Bridging)
 
 **Directive:** Execute P3-1 Phase B by extending AEG from HTTP ingress into serialized payload witnesses, bridge `ExploitWitness::repro_cmd` directly into Bugcrowd markdown reports, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update the active innovation ledger, and stop after a local commit with no release.
