@@ -3,6 +3,33 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 14 (Sovereign License Minting & Frontend Route Extraction)
+
+**Directive:** Mint a local sovereign license to unlock the offensive engine, re-run the Auth0 DOM XSS Bugcrowd strike in sovereign mode, add frontend route extraction for React Router / Vue Router surfaces, enrich browser-console AEG witnesses with route context when available, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.
+
+**Phase 1 — Sovereign License Minting:**
+- `crates/common/src/license.rs`: added deterministic `encode_license_file()` plus operator-local signing-key resolution derived from `JANITOR_PQC_KEY` or the ignored repo-local `.janitor_release.key`, allowing self-hosted `janitor.lic` issuance without embedding private key material in the binary.
+- `crates/common/src/license.rs`: `verify_license()` now accepts either the locally derived sovereign key or the embedded bootstrap verifier, preserving backwards compatibility while allowing locally minted sovereign licenses to unlock the engine.
+- `crates/cli/src/main.rs`: added `generate-license --expires-in-days <N>` and wired it to emit a base64 payload/signature `janitor.lic` envelope for `License { issued_to, expires_at, features }`.
+
+**Phase 2 — Sovereign Live-Fire Re-Engagement:**
+- `.janitor/janitor.lic`: minted locally via `cargo run -p cli -- generate-license --expires-in-days 365 > .janitor/janitor.lic`.
+- `auth0_report_v2.md`: regenerated from the Auth0 9.19.0 production sourcemap strike in sovereign mode. The report still groups the DOM XSS findings into one Bugcrowd entry and now renders an automated browser-console PoC instead of the fallback text.
+- `auth0_report_v2.md`: validated grouped lines `src/web-auth/captcha.js:46`, `121`, `167`, `172`, and `src/web-auth/username-password.js:52`.
+
+**Phase 3 — Frontend Route Extraction & Browser Witness Enrichment:**
+- `crates/forge/src/authz.rs`: added frontend route extraction for React Router `<Route path=... element={...}>` and Vue Router `{ path: ..., component: ... }` definitions, producing a `(component/file) -> route path` map plus deterministic matching back to vulnerable component files.
+- `crates/forge/src/exploitability.rs`: browser-console repro templates now prefer `Navigate to {frontend_route}` when a frontend route has been mapped to the vulnerable file.
+- `crates/cli/src/hunt.rs`: `scan_directory()` now builds a global frontend route map across reconstructed JS/TS sources and attaches synthetic browser-side `ExploitWitness` commands for DOM XSS / prototype-pollution findings so Bugcrowd markdown receives an automated PoC during `hunt`.
+
+**Phase 4 — Innovation Ledger:**
+- `.INNOVATION_LOG.md`: retained P3-1 as active, recorded sovereign self-hosted license minting as live, and marked frontend route extraction as shipping browser-witness context rather than closing the remaining AEG phases.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-19 — Sprint Batch 13 (AEG Client-Side Witness Synthesis)
 
 **Directive:** Extend AEG beyond backend `curl` witnesses by synthesizing browser-console reproduction steps for client-side DOM findings, wire browser-side sinks to the new ingress kind, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.

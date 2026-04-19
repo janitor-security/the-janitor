@@ -714,7 +714,7 @@ fn resolve_python_module_path(root: &Path, module: &str) -> Option<PathBuf> {
 fn scan_python_priority_file(path: &Path, label: &str) -> anyhow::Result<Vec<StructuredFinding>> {
     let source =
         std::fs::read(path).with_context(|| format!("read python file {}", path.display()))?;
-    Ok(scan_buffer("py", &source, label))
+    Ok(scan_buffer("py", &source, label, &[]))
 }
 
 // ---------------------------------------------------------------------------
@@ -1174,6 +1174,40 @@ fn is_placeholder_scan_root(scan_root: Option<&Path>, has_explicit_ingest_source
 /// skipped.
 fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let mut all: Vec<StructuredFinding> = Vec::new();
+    let mut frontend_routes = Vec::new();
+
+    for entry in WalkDir::new(dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let file_path = entry.path();
+        if std::fs::metadata(file_path)
+            .map(|m| m.len() > MAX_FILE_BYTES)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !matches!(ext, "js" | "jsx" | "ts" | "tsx") {
+            continue;
+        }
+        let source = match std::fs::read(file_path) {
+            Ok(bytes) => bytes,
+            Err(_) => continue,
+        };
+        let rel_path = file_path
+            .strip_prefix(dir)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .to_string();
+        frontend_routes.extend(forge::authz::extract_frontend_routes_from_source(
+            ext, &source, rel_path,
+        ));
+    }
 
     for entry in WalkDir::new(dir)
         .follow_links(false)
@@ -1204,7 +1238,7 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             .to_string_lossy()
             .to_string();
 
-        all.extend(scan_buffer(ext, &source, &rel_path));
+        all.extend(scan_buffer(ext, &source, &rel_path, &frontend_routes));
     }
 
     Ok(dedup_findings(all))
@@ -1253,19 +1287,39 @@ fn byte_to_line(source: &[u8], byte_offset: usize) -> u32 {
     source[..capped].iter().filter(|&&b| b == b'\n').count() as u32 + 1
 }
 
-fn scan_buffer(ext: &str, source: &[u8], label: &str) -> Vec<StructuredFinding> {
+fn scan_buffer(
+    ext: &str,
+    source: &[u8],
+    label: &str,
+    frontend_routes: &[forge::authz::FrontendRoute],
+) -> Vec<StructuredFinding> {
     let unit = ParsedUnit::unparsed(source);
     let mut findings = find_slop(ext, &unit)
         .into_iter()
-        .map(|finding| StructuredFinding {
-            id: extract_rule_id(&finding.description),
-            file: Some(label.to_string()),
-            line: Some(byte_to_line(source, finding.start_byte)),
-            fingerprint: fingerprint_finding(source, finding.start_byte, finding.end_byte),
-            severity: Some(format!("{:?}", finding.severity)),
-            remediation: None,
-            docs_url: None,
-            exploit_witness: None,
+        .map(|finding| {
+            let line = byte_to_line(source, finding.start_byte);
+            let rule_id = extract_rule_id(&finding.description);
+            let mut structured = StructuredFinding {
+                id: rule_id.clone(),
+                file: Some(label.to_string()),
+                line: Some(line),
+                fingerprint: fingerprint_finding(source, finding.start_byte, finding.end_byte),
+                severity: Some(format!("{:?}", finding.severity)),
+                remediation: None,
+                docs_url: None,
+                exploit_witness: None,
+            };
+            if rule_id == "security:dom_xss_innerHTML" || rule_id.contains("prototype_pollution") {
+                let mut witness =
+                    forge::exploitability::browser_sink_witness(label, &rule_id, line);
+                if let Some(route) =
+                    forge::authz::match_frontend_route_for_file(frontend_routes, label)
+                {
+                    witness.route_path = Some(route.route_path.clone());
+                }
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            }
+            structured
         })
         .collect::<Vec<_>>();
     findings.extend(forge::idor::scan_source(ext, source, label));

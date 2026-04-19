@@ -971,6 +971,12 @@ enum Commands {
         /// Output path for the dual-PQC private key bundle.
         out_path: PathBuf,
     },
+    /// Mint a local Sovereign license using operator-held signing custody.
+    GenerateLicense {
+        /// License lifetime in whole days from the current UTC timestamp.
+        #[arg(long)]
+        expires_in_days: u64,
+    },
     /// Rotate an existing Dual-PQC private key bundle and append a ledger event.
     #[command(hide = true)]
     RotateKeys {
@@ -1502,6 +1508,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::GenerateKeys { out_path } => {
             cmd_generate_keys(out_path)?;
+        }
+        Commands::GenerateLicense { expires_in_days } => {
+            cmd_generate_license(
+                &env::current_dir().context("resolve project root")?,
+                *expires_in_days,
+            )?;
         }
         Commands::RotateKeys { key_path } => {
             cmd_rotate_keys(key_path)?;
@@ -6855,6 +6867,38 @@ fn cmd_generate_keys(out_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn generate_license_contents(project_root: &Path, expires_in_days: u64) -> anyhow::Result<String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("system clock is before UNIX_EPOCH; refusing license minting")?
+        .as_secs();
+    let validity_window = expires_in_days
+        .checked_mul(86_400)
+        .ok_or_else(|| anyhow::anyhow!("expires-in-days overflowed u64 seconds"))?;
+    let expires_at = now
+        .checked_add(validity_window)
+        .ok_or_else(|| anyhow::anyhow!("license expiry overflowed u64 timestamp"))?;
+    let issued_to = std::env::var("USER")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "local-sovereign-operator".to_string());
+    let license = common::license::License {
+        issued_to,
+        expires_at,
+        features: vec!["IFDS".to_string(), "AEG".to_string(), "Wasm".to_string()],
+    };
+    let signing_key = common::license::resolve_license_signing_key(project_root)?;
+    common::license::encode_license_file(&license, &signing_key)
+}
+
+fn cmd_generate_license(project_root: &Path, expires_in_days: u64) -> anyhow::Result<()> {
+    println!(
+        "{}",
+        generate_license_contents(project_root, expires_in_days)?
+    );
+    Ok(())
+}
+
 /// Rotate an existing Dual-PQC private key bundle in place and append a ledger event.
 fn cmd_rotate_keys(key_path: &Path) -> anyhow::Result<()> {
     let existing_bytes = std::fs::read(key_path).with_context(|| {
@@ -6926,7 +6970,10 @@ fn cmd_rotate_keys(key_path: &Path) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod generate_keys_tests {
-    use super::{cmd_generate_keys, cmd_rotate_keys, enforce_pqc_key_age, pqc_key_age_exceeds_max};
+    use super::{
+        cmd_generate_keys, cmd_rotate_keys, enforce_pqc_key_age, generate_license_contents,
+        pqc_key_age_exceeds_max,
+    };
     use common::pqc::{ML_DSA_PRIVATE_KEY_LEN, SLH_DSA_PRIVATE_KEY_LEN};
 
     #[test]
@@ -6995,6 +7042,22 @@ mod generate_keys_tests {
         assert!(
             log.contains("\"event_type\":\"pqc_key_rotation\""),
             "rotation must append a dedicated key-rotation event"
+        );
+    }
+
+    #[test]
+    fn generate_license_contents_round_trips_with_local_key_material() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key_path = dir.path().join(".janitor_release.key");
+        cmd_generate_keys(&key_path).expect("seed key generation must succeed");
+        let encoded = generate_license_contents(dir.path(), 365).expect("generate license");
+        let janitor_dir = dir.path().join(".janitor");
+        std::fs::create_dir_all(&janitor_dir).expect("create janitor dir");
+        std::fs::write(janitor_dir.join("janitor.lic"), encoded).expect("write license");
+
+        assert!(
+            common::license::verify_license(dir.path()),
+            "generated janitor.lic must unlock Sovereign mode"
         );
     }
 }
