@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 13 (AEG Client-Side Witness Synthesis)
+
+**Directive:** Extend AEG beyond backend `curl` witnesses by synthesizing browser-console reproduction steps for client-side DOM findings, wire browser-side sinks to the new ingress kind, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.
+
+**Phase 1 — Browser DOM Synthesis:**
+- `crates/forge/src/exploitability.rs`: added `IngressKind::BrowserDOM` plus `BrowserScenario::{DomXss, PrototypePollution}` and a `browser_dom_template()` renderer that emits multi-line browser-console reproduction steps instead of `curl`.
+- `crates/forge/src/exploitability.rs`: `attach_exploit_witness()` now synthesizes client-side `ExploitWitness::repro_cmd` strings when a DOM/prototype finding carries a witness without a precomputed command.
+- `crates/forge/src/exploitability.rs`: added deterministic regression coverage proving DOM witnesses render `// To reproduce this DOM XSS:` and never fall back to `curl`.
+
+**Phase 2 — Sink Wiring:**
+- `crates/forge/src/slop_filter.rs`: browser-side findings with rule IDs such as `security:dom_xss_innerHTML` and prototype-pollution variants now receive a synthetic `ExploitWitness` that flows through the shared exploitability attachment path.
+
+**Phase 3 — Innovation Ledger:**
+- `.INNOVATION_LOG.md`: retained P3-1 as active and marked client-side DOM synthesis as an active shipped lane without closing the remaining AEG phases.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-19 — Sprint Batch 12 (Governance Purge & Auth0 Validation Strike)
 
 **Directive:** Purge obsolete governance references to `docs/IMPLEMENTATION_BACKLOG.md`, delete the dead backlog file, validate the Bugcrowd report generator against the Auth0 `auth0.min.js.map` sourcemap using the exact operator command shape, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.

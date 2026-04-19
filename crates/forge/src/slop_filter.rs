@@ -1407,7 +1407,8 @@ impl PRBouncer for PatchBouncer {
                 docs_url: None,
                 exploit_witness: None,
             };
-            if extract_rule_id(&f.description) == "security:cross_file_taint_sink" {
+            let rule_id = extract_rule_id(&f.description);
+            if rule_id == "security:cross_file_taint_sink" {
                 if let Some(witness) = cross_file_witnesses.get(&(f.start_byte, f.end_byte)) {
                     let mut enriched_witness = witness.clone();
                     if let Some(surface) = crate::authz::match_surface_for_witness(
@@ -1423,6 +1424,12 @@ impl PRBouncer for PatchBouncer {
                     finding =
                         crate::exploitability::attach_exploit_witness(finding, enriched_witness);
                 }
+            } else if rule_id == "security:dom_xss_innerHTML"
+                || rule_id.contains("prototype_pollution")
+            {
+                let witness =
+                    crate::exploitability::browser_sink_witness(&file_path, rule_id, line);
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
             }
             structured_findings.push(finding);
         }
