@@ -1020,10 +1020,14 @@ enum Commands {
         #[arg(long)]
         asar: Option<PathBuf>,
         /// Path to a `docker save` tarball.  Layers are extracted in order into
-        /// a temporary directory with whiteout semantics applied, then scanned.
+        /// a temporary directory, then scanned.
         /// Total layer data is capped at 512 MiB.
         #[arg(long)]
         docker: Option<PathBuf>,
+        /// Path to an iOS `.ipa` bundle. The app payload is extracted into a
+        /// temporary directory, scanned, then deleted via RAII.
+        #[arg(long)]
+        ipa: Option<PathBuf>,
         /// Native `jq`-compatible filter expression applied to the JSON output
         /// before printing.  No runtime `jq` binary required.
         ///
@@ -1498,6 +1502,7 @@ async fn main() -> anyhow::Result<()> {
             jar,
             asar,
             docker,
+            ipa,
             filter,
             format,
             corpus_path,
@@ -1510,6 +1515,7 @@ async fn main() -> anyhow::Result<()> {
                 jar_path: jar.as_deref(),
                 asar_path: asar.as_deref(),
                 docker_path: docker.as_deref(),
+                ipa_path: ipa.as_deref(),
                 filter_expr: filter.as_deref(),
                 format: format.as_str(),
                 corpus_path: corpus_path.as_deref(),

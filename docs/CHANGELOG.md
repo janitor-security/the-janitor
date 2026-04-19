@@ -3,6 +3,29 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-18 — Compiled Artifact Offensive Ingestion (v10.2.0-alpha.7)
+
+**Directive:** Execute P1-2a and P1-2c in Batched Engineering mode by wiring `janitor hunt` to ingest `docker save` tarballs and iOS `.ipa` bundles, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update the strategic blueprint and changelog, and stop after a local commit with no release.
+
+**Phase 1 — Docker/OCI Ingestion:**
+- `crates/cli/src/hunt.rs`: retained `--docker` ingestion support and aligned `ingest_docker(path: &Path)` with the directive's first-iteration behavior by extracting the `docker save` tarball layers sequentially into a `tempfile::TempDir` without whiteout processing, then scanning the merged filesystem for structured findings.
+- `crates/cli/src/hunt.rs`: preserved manifest parsing through the `tar` crate, using `manifest.json` to recover the ordered `Layers` array before replaying each layer tar into the temporary rootfs.
+
+**Phase 2 — iOS IPA Ingestion:**
+- `crates/cli/src/main.rs`: added `--ipa <path>` to the `Hunt` subcommand and threaded the path into `hunt::HuntArgs`.
+- `crates/cli/src/hunt.rs`: added `ipa_path` handling plus `ingest_ipa(path: &Path)`, extracting `Payload/*.app` from the ZIP archive into a `tempfile::TempDir`, parsing `Info.plist` via `plist`, and scanning the extracted app tree for embedded secrets, URLs, and vulnerable bundled assets.
+- `crates/cli/Cargo.toml`: added `plist` to support deterministic IPA metadata parsing.
+
+**Phase 3 — Regression Coverage & Blueprint Hygiene:**
+- `crates/cli/src/hunt.rs`: added `ipa_ingest_extracts_payload_and_scans_web_bundle`, asserting a synthetic IPA with an embedded web bundle secret is detected.
+- `crates/cli/src/hunt.rs`: retained Docker tarball extraction coverage through the existing synthetic `docker save` round-trip tests.
+- `.INNOVATION_LOG.md`: marked `P1-2a` and `P1-2c` complete in the local decadal blueprint.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exits `0`.
+- `just audit` exits `0`.
+- No release executed.
+
 ## 2026-04-18 — Sprint Batch 6 (API Router Map & Surface Extraction)
 
 **Directive:** Execute P1-3 by extracting framework-aware API router surfaces for Spring Boot, Flask/FastAPI, and Express; enrich exploit witnesses with exact ingress method/path metadata; verify with the mandated `cargo test --workspace -- --test-threads=4` plus `just audit`; mark the controller-surface lane complete in `.INNOVATION_LOG.md`; and stop after a local commit with no release.

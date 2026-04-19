@@ -17,6 +17,7 @@
 //! janitor hunt --jar app.jar                      # Java archive
 //! janitor hunt --asar app.asar                    # Electron ASAR archive
 //! janitor hunt --docker image.tar                 # docker save tarball
+//! janitor hunt --ipa app.ipa                      # iOS IPA bundle
 //! janitor hunt ./target --filter '.[] | select(.severity == "Critical")'
 //! ```
 //!
@@ -46,6 +47,7 @@ pub struct HuntArgs<'a> {
     pub jar_path: Option<&'a Path>,
     pub asar_path: Option<&'a Path>,
     pub docker_path: Option<&'a Path>,
+    pub ipa_path: Option<&'a Path>,
     pub filter_expr: Option<&'a str>,
     pub format: &'a str,
     pub corpus_path: Option<&'a Path>,
@@ -71,6 +73,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         jar_path,
         asar_path,
         docker_path,
+        ipa_path,
         filter_expr,
         format,
         corpus_path,
@@ -95,15 +98,16 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         + usize::from(jar_path.is_some())
         + usize::from(asar_path.is_some())
         + usize::from(docker_path.is_some());
+    let source_count = source_count + usize::from(ipa_path.is_some());
 
     if source_count == 0 {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, or --docker"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
         );
     }
     if source_count > 1 {
         anyhow::bail!(
-            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, --asar, or --docker"
+            "hunt accepts exactly one source: provide either <path> or one of --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
         );
     }
 
@@ -119,11 +123,13 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         ingest_asar(asar)?
     } else if let Some(docker) = docker_path {
         ingest_docker(docker)?
+    } else if let Some(ipa) = ipa_path {
+        ingest_ipa(ipa)?
     } else if let Some(root) = scan_root {
         scan_directory(root)?
     } else {
         anyhow::bail!(
-            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, or --docker"
+            "hunt requires either <path> or one ingestion source: --sourcemap, --npm, --apk, --jar, --asar, --docker, or --ipa"
         );
     };
 
@@ -501,10 +507,6 @@ struct DockerManifestEntry {
 /// <layer_id>/layer.tar     — one tar per layer, applied in order
 /// ```
 ///
-/// Whiteout files emitted by the union filesystem are honoured:
-/// - `.wh.<name>` — deletes the sibling file/dir named `<name>`
-/// - `.wh..wh..opq` — clears the containing directory (opaque whiteout)
-///
 /// ## Circuit breaker
 ///
 /// Total buffered layer data is capped at `DOCKER_LAYER_BUDGET` (512 MiB).
@@ -564,7 +566,8 @@ fn ingest_docker(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let tmpdir =
         tempfile::TempDir::new().context("failed to create docker layer extraction tmpdir")?;
 
-    // Apply layers in order, honouring whiteout semantics.
+    // Apply layers in order. Whiteout handling is intentionally omitted in
+    // this first iteration so the pipeline can focus on simple layer extraction.
     for layer_path in &manifest.layers {
         // Normalise path separators from manifest.json (may use backslash on Windows images).
         let normalised = layer_path.replace('\\', "/");
@@ -587,36 +590,6 @@ fn ingest_docker(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             let Some(rel) = sanitize_archive_entry_path(&raw_path) else {
                 continue;
             };
-
-            let file_name = rel
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            // Opaque whiteout — clear the entire containing directory.
-            if file_name == ".wh..wh..opq" {
-                if let Some(parent) = rel.parent() {
-                    let dir_to_clear = tmpdir.path().join(parent);
-                    if dir_to_clear.exists() {
-                        std::fs::remove_dir_all(&dir_to_clear).ok();
-                        std::fs::create_dir_all(&dir_to_clear).ok();
-                    }
-                }
-                continue;
-            }
-
-            // Regular whiteout — delete the named sibling.
-            if let Some(stripped) = file_name.strip_prefix(".wh.") {
-                if let Some(parent) = rel.parent() {
-                    let target = tmpdir.path().join(parent).join(stripped);
-                    if target.is_file() {
-                        std::fs::remove_file(&target).ok();
-                    } else if target.is_dir() {
-                        std::fs::remove_dir_all(&target).ok();
-                    }
-                }
-                continue;
-            }
 
             let dest = tmpdir.path().join(&rel);
 
@@ -642,6 +615,74 @@ fn ingest_docker(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
 
     scan_directory(tmpdir.path())
     // tmpdir drops here — merged layer tree deleted
+}
+
+// ---------------------------------------------------------------------------
+// IPA ingestion  (Phase P1-2c)
+// ---------------------------------------------------------------------------
+
+/// Extract an iOS `.ipa` bundle into a `tempfile::TempDir`, parse the app
+/// `Info.plist` when present, scan the extracted app tree, and return findings.
+fn ingest_ipa(path: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("failed to open IPA archive {}", path.display()))?;
+    let mut archive = zip::ZipArchive::new(file).context("failed to parse IPA archive as ZIP")?;
+    let tmpdir = tempfile::TempDir::new().context("failed to create IPA extraction tmpdir")?;
+
+    let mut app_root: Option<std::path::PathBuf> = None;
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .with_context(|| format!("failed to read IPA entry {i}"))?;
+        let entry_name = entry.name().replace('\\', "/");
+        if !entry_name.starts_with("Payload/") {
+            continue;
+        }
+        let Some(safe_rel) = sanitize_archive_entry_path(&entry_name) else {
+            continue;
+        };
+        if app_root.is_none() {
+            let components = safe_rel.components().collect::<Vec<_>>();
+            if components.len() >= 2 {
+                let root =
+                    components[..2]
+                        .iter()
+                        .fold(std::path::PathBuf::new(), |mut acc, component| {
+                            acc.push(component.as_os_str());
+                            acc
+                        });
+                app_root = Some(tmpdir.path().join(root));
+            }
+        }
+
+        let dest = tmpdir.path().join(&safe_rel);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&dest)
+                .with_context(|| format!("create IPA directory {}", dest.display()))?;
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create IPA parent {}", parent.display()))?;
+        }
+        let mut buf = Vec::new();
+        entry
+            .read_to_end(&mut buf)
+            .with_context(|| format!("read IPA file {}", entry.name()))?;
+        std::fs::write(&dest, &buf)
+            .with_context(|| format!("write extracted IPA file {}", dest.display()))?;
+    }
+
+    let scan_root = app_root
+        .filter(|root| root.exists())
+        .unwrap_or_else(|| tmpdir.path().to_path_buf());
+    let info_plist = scan_root.join("Info.plist");
+    if info_plist.exists() {
+        let _: plist::Value = plist::Value::from_file(&info_plist)
+            .with_context(|| format!("failed to parse IPA Info.plist {}", info_plist.display()))?;
+    }
+
+    scan_directory(&scan_root)
 }
 
 // ---------------------------------------------------------------------------
@@ -1405,6 +1446,45 @@ mod tests {
         assert!(
             ingest_docker(&tar_path).is_err(),
             "docker tar without manifest.json must return an error"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // IPA extraction round-trip
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn ipa_ingest_extracts_payload_and_scans_web_bundle() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ipa_path = tmp.path().join("sample.ipa");
+        let file = std::fs::File::create(&ipa_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+
+        zip.add_directory("Payload/Demo.app/", options).unwrap();
+        zip.start_file("Payload/Demo.app/Info.plist", options)
+            .unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.example.demo</string>
+</dict>
+</plist>"#,
+        )
+        .unwrap();
+        zip.start_file("Payload/Demo.app/www/app.js", options)
+            .unwrap();
+        zip.write_all(b"const key = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';\n")
+            .unwrap();
+        zip.finish().unwrap();
+
+        let findings = ingest_ipa(&ipa_path).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id.contains("credential")),
+            "IPA-extracted web bundle with AWS key must produce a credential finding"
         );
     }
 
