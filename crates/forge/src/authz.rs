@@ -4,6 +4,9 @@
 //! and Express controller definitions so exploit witnesses can bind to real
 //! routes instead of abstract handler names.
 
+use std::collections::HashMap;
+
+use common::slop::StructuredFinding;
 use tree_sitter::{Node, Tree};
 
 /// Public controller/router surface exposed by an application handler.
@@ -13,6 +16,8 @@ pub struct EndpointSurface {
     pub route_path: String,
     pub http_method: String,
     pub auth_requirement: Option<String>,
+    pub controller: Option<String>,
+    pub line: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +69,69 @@ pub(crate) fn match_surface_for_witness<'a>(
     })
 }
 
+/// Check whether endpoint authorization requirements are materially weaker than
+/// the dominant peer requirement inside the same controller/router group.
+pub fn check_authz_consistency(endpoints: &[EndpointSurface]) -> Vec<StructuredFinding> {
+    let mut grouped: HashMap<(String, String), Vec<&EndpointSurface>> = HashMap::new();
+    for endpoint in endpoints {
+        let controller = endpoint
+            .controller
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("file");
+        grouped
+            .entry((endpoint.file.clone(), controller.to_string()))
+            .or_default()
+            .push(endpoint);
+    }
+
+    let mut findings = Vec::new();
+    for ((_file, _controller), group) in grouped {
+        if group.len() < 2 {
+            continue;
+        }
+        let Some((expected_auth, dominant_count)) = dominant_auth_requirement(&group) else {
+            continue;
+        };
+        if dominant_count * 5 < group.len() * 4 {
+            continue;
+        }
+
+        for endpoint in group {
+            let actual_auth = canonical_auth(endpoint.auth_requirement.as_deref());
+            if is_less_restrictive_than_peers(Some(actual_auth.as_str()), &expected_auth) {
+                let remediation = format!(
+                    "Endpoint {} {} lacks the authorization constraint ({}) present on its peers.",
+                    endpoint.http_method, endpoint.route_path, expected_auth
+                );
+                let fingerprint_material = format!(
+                    "{}:{}:{}:{}:{}",
+                    endpoint.file,
+                    endpoint.line.unwrap_or_default(),
+                    endpoint.http_method,
+                    endpoint.route_path,
+                    expected_auth
+                );
+                findings.push(StructuredFinding {
+                    id: "security:missing_authz_check".to_string(),
+                    file: Some(endpoint.file.clone()),
+                    line: endpoint.line,
+                    fingerprint: blake3::hash(fingerprint_material.as_bytes())
+                        .to_hex()
+                        .to_string(),
+                    severity: Some("KevCritical".to_string()),
+                    remediation: Some(remediation),
+                    docs_url: None,
+                    exploit_witness: None,
+                });
+            }
+        }
+    }
+
+    findings
+}
+
 fn extract_spring_surfaces(
     root: Node<'_>,
     source: &[u8],
@@ -85,6 +153,10 @@ fn extract_spring_surfaces(
         let class_auth = class_annotations
             .iter()
             .find_map(|annotation| parse_auth_requirement(annotation));
+        let controller_name = class_node
+            .child_by_field_name("name")
+            .and_then(|node| node.utf8_text(source).ok())
+            .map(str::to_string);
 
         let mut methods = Vec::new();
         collect_nodes_of_kind(body, "method_declaration", &mut methods);
@@ -114,6 +186,8 @@ fn extract_spring_surfaces(
                     route_path: join_route(class_route.as_deref(), Some(method_path.as_str())),
                     http_method,
                     auth_requirement,
+                    controller: controller_name.clone(),
+                    line: Some(line_number_for_byte(source, method_node.start_byte())),
                 },
                 handler_name,
                 start_line: line_number_for_byte(source, method_node.start_byte()),
@@ -159,6 +233,9 @@ fn extract_python_surfaces(
         let Some((http_method, route_path)) = route else {
             continue;
         };
+        let controller_name = decorators
+            .iter()
+            .find_map(|decorator| parse_decorator_controller(decorator));
         let auth_requirement = decorators
             .iter()
             .filter(|decorator| parse_python_route(decorator).is_none())
@@ -173,6 +250,8 @@ fn extract_python_surfaces(
                 route_path,
                 http_method,
                 auth_requirement,
+                controller: controller_name,
+                line: Some(line_number_for_byte(source, function_node.start_byte())),
             },
             handler_name,
             start_line: line_number_for_byte(source, function_node.start_byte()),
@@ -205,6 +284,12 @@ fn extract_express_surfaces(
         let Some(http_method) = parse_express_method(callee_text) else {
             continue;
         };
+        let controller_name = callee_text
+            .split('.')
+            .next()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
         let args = arguments_node
             .named_children(&mut arguments_node.walk())
             .collect::<Vec<_>>();
@@ -238,6 +323,8 @@ fn extract_express_surfaces(
                 route_path,
                 http_method,
                 auth_requirement,
+                controller: controller_name,
+                line: Some(line_number_for_byte(source, call_node.start_byte())),
             },
             handler_name,
             start_line: line_number_for_byte(source, call_node.start_byte()),
@@ -346,6 +433,16 @@ fn parse_python_route(decorator: &str) -> Option<(String, String)> {
     };
 
     Some((method, path))
+}
+
+fn parse_decorator_controller(decorator: &str) -> Option<String> {
+    let name = annotation_name(decorator);
+    let controller = name.split('.').next()?.trim();
+    if controller.is_empty() {
+        None
+    } else {
+        Some(controller.to_string())
+    }
 }
 
 fn parse_express_method(callee: &str) -> Option<String> {
@@ -542,6 +639,64 @@ fn handler_leaf_name(name: &str) -> String {
         .to_string()
 }
 
+fn dominant_auth_requirement(group: &[&EndpointSurface]) -> Option<(String, usize)> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for endpoint in group {
+        let auth = canonical_auth(endpoint.auth_requirement.as_deref());
+        *counts.entry(auth).or_insert(0) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by(|(left_auth, left_count), (right_auth, right_count)| {
+            left_count
+                .cmp(right_count)
+                .then_with(|| auth_strength(left_auth).cmp(&auth_strength(right_auth)))
+                .then_with(|| left_auth.cmp(right_auth))
+        })
+}
+
+fn canonical_auth(auth_requirement: Option<&str>) -> String {
+    let Some(auth_requirement) = auth_requirement
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return "Public".to_string();
+    };
+    auth_requirement.to_string()
+}
+
+fn is_less_restrictive_than_peers(actual_auth: Option<&str>, expected_auth: &str) -> bool {
+    let actual = canonical_auth(actual_auth);
+    if actual == expected_auth {
+        return false;
+    }
+    let actual_strength = auth_strength(&actual);
+    let expected_strength = auth_strength(expected_auth);
+    actual_strength < expected_strength
+        || (expected_strength > 0 && actual_strength == expected_strength && actual == "Public")
+}
+
+fn auth_strength(auth_requirement: &str) -> u8 {
+    let lowered = auth_requirement.trim().to_ascii_lowercase();
+    if lowered.is_empty()
+        || lowered == "public"
+        || lowered == "permitall"
+        || lowered.contains("anonymous")
+    {
+        0
+    } else if lowered.contains("authenticated") || lowered.contains("login") {
+        1
+    } else if lowered.contains("admin")
+        || lowered.contains("root")
+        || lowered.contains("superuser")
+        || lowered.contains("super_admin")
+    {
+        3
+    } else {
+        2
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,6 +726,7 @@ class UserController {
         assert_eq!(surfaces[0].route_path, "/api/v1/users");
         assert_eq!(surfaces[0].http_method, "GET");
         assert_eq!(surfaces[0].auth_requirement.as_deref(), Some("ADMIN"));
+        assert_eq!(surfaces[0].controller.as_deref(), Some("UserController"));
     }
 
     #[test]
@@ -593,6 +749,7 @@ def create_user():
             surfaces[0].auth_requirement.as_deref(),
             Some("Authenticated")
         );
+        assert_eq!(surfaces[0].controller.as_deref(), Some("app"));
     }
 
     #[test]
@@ -611,6 +768,65 @@ router.post("/api/v1/users", requireAdmin, createUser);
         assert_eq!(
             surfaces[0].auth_requirement.as_deref(),
             Some("requireAdmin")
+        );
+        assert_eq!(surfaces[0].controller.as_deref(), Some("router"));
+    }
+
+    #[test]
+    fn flags_endpoint_missing_dominant_auth_requirement() {
+        let endpoints = vec![
+            EndpointSurface {
+                file: "src/UserController.java".to_string(),
+                route_path: "/api/v1/users".to_string(),
+                http_method: "GET".to_string(),
+                auth_requirement: Some("ROLE_ADMIN".to_string()),
+                controller: Some("UserController".to_string()),
+                line: Some(10),
+            },
+            EndpointSurface {
+                file: "src/UserController.java".to_string(),
+                route_path: "/api/v1/users/search".to_string(),
+                http_method: "GET".to_string(),
+                auth_requirement: Some("ROLE_ADMIN".to_string()),
+                controller: Some("UserController".to_string()),
+                line: Some(20),
+            },
+            EndpointSurface {
+                file: "src/UserController.java".to_string(),
+                route_path: "/api/v1/users/{id}".to_string(),
+                http_method: "GET".to_string(),
+                auth_requirement: Some("ROLE_ADMIN".to_string()),
+                controller: Some("UserController".to_string()),
+                line: Some(30),
+            },
+            EndpointSurface {
+                file: "src/UserController.java".to_string(),
+                route_path: "/api/v1/users/{id}/disable".to_string(),
+                http_method: "POST".to_string(),
+                auth_requirement: Some("ROLE_ADMIN".to_string()),
+                controller: Some("UserController".to_string()),
+                line: Some(40),
+            },
+            EndpointSurface {
+                file: "src/UserController.java".to_string(),
+                route_path: "/api/v1/users/{id}".to_string(),
+                http_method: "DELETE".to_string(),
+                auth_requirement: None,
+                controller: Some("UserController".to_string()),
+                line: Some(50),
+            },
+        ];
+
+        let findings = check_authz_consistency(&endpoints);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "security:missing_authz_check");
+        assert_eq!(findings[0].severity.as_deref(), Some("KevCritical"));
+        assert!(
+            findings[0]
+                .remediation
+                .as_deref()
+                .unwrap_or("")
+                .contains("Endpoint DELETE /api/v1/users/{id} lacks the authorization constraint (ROLE_ADMIN) present on its peers.")
         );
     }
 }

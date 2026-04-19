@@ -1072,6 +1072,11 @@ impl PRBouncer for PatchBouncer {
             source,
             file_path.clone(),
         );
+        let endpoint_surfaces = controller_surfaces
+            .iter()
+            .map(|entry| entry.surface.clone())
+            .collect::<Vec<_>>();
+        let authz_consistency_findings = crate::authz::check_authz_consistency(&endpoint_surfaces);
 
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
@@ -1380,9 +1385,9 @@ impl PRBouncer for PatchBouncer {
                 suppressed_by_domain += 1;
             }
         }
-        let antipatterns_found = accepted.len() as u32;
         let mut antipattern_details = Vec::with_capacity(accepted.len());
-        let mut structured_findings = Vec::with_capacity(accepted.len());
+        let mut structured_findings =
+            Vec::with_capacity(accepted.len() + authz_consistency_findings.len());
         for f in accepted {
             let line = byte_offset_to_line(source, f.start_byte);
             antipattern_details.push(format!("{} (line={line})", f.description));
@@ -1419,6 +1424,16 @@ impl PRBouncer for PatchBouncer {
             }
             structured_findings.push(finding);
         }
+        for finding in authz_consistency_findings {
+            antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
+            antipattern_details.push(format!(
+                "{} (line={})",
+                finding.id,
+                finding.line.unwrap_or_default()
+            ));
+            structured_findings.push(finding);
+        }
+        let antipatterns_found = structured_findings.len() as u32;
 
         // Dead symbols added — name already exists in registry.
         let registry_names: HashSet<&str> =
