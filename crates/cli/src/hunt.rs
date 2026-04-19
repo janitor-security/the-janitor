@@ -217,6 +217,7 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
 
         let business_impact = business_impact_statement(rule_id, highest_severity);
         let mitigation = suggested_mitigation(&sorted_group);
+        let proof_of_concept = proof_of_concept_section(&sorted_group);
 
         reports.push(format!(
             "**Summary Title:** Multiple instances of {rule_id} in target\n\
@@ -225,7 +226,8 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
 During a static analysis of the target artifacts, the following critical security sinks were identified:\n\
 {details}\n\
 **Business Impact:** {business_impact}\n\
-**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]\n\
+**Proof of Concept:**\n\
+{proof_of_concept}\n\
 **Suggested Mitigation:** {mitigation}",
             vrt_category(rule_id)
         ));
@@ -238,12 +240,26 @@ During a static analysis of the target artifacts, the following critical securit
 **Vulnerability Details:**\n\
 During a static analysis of the target artifacts, no findings were identified.\n\
 **Business Impact:** No direct business impact was identified because the scan did not emit any findings.\n\
-**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]\n\
+**Proof of Concept:**\n\
+No automated reproduction command generated. See vulnerable source lines above.\n\
 **Suggested Mitigation:** No mitigation required.",
         );
     }
 
     reports.join("\n\n---\n\n")
+}
+
+fn proof_of_concept_section(findings: &[&StructuredFinding]) -> String {
+    if let Some(repro_cmd) = findings
+        .iter()
+        .filter_map(|finding| finding.exploit_witness.as_ref())
+        .filter_map(|witness| witness.repro_cmd.as_deref())
+        .map(str::trim)
+        .find(|cmd| !cmd.is_empty())
+    {
+        return format!("```text\n{repro_cmd}\n```");
+    }
+    "No automated reproduction command generated. See vulnerable source lines above.".to_string()
 }
 
 fn vrt_category(rule_id: &str) -> &'static str {
@@ -1645,10 +1661,46 @@ def main(user_id):
         assert!(report.contains("**VRT Category:**"));
         assert!(report.contains("**Vulnerability Details:**"));
         assert!(report.contains("**Business Impact:**"));
-        assert!(report
-            .contains("**Proof of Concept:** [OPERATOR: INSERT CURL COMMAND OR SCREENSHOT HERE]"));
+        assert!(report.contains("**Proof of Concept:**"));
+        assert!(report.contains(
+            "No automated reproduction command generated. See vulnerable source lines above."
+        ));
         assert!(report.contains(
             "**Suggested Mitigation:** Replace innerHTML with textContent or a vetted sanitizer."
+        ));
+    }
+
+    #[test]
+    fn bugcrowd_formatter_injects_exploit_witness_repro_into_poc() {
+        let finding = StructuredFinding {
+            id: "security:unsafe_deserialization".to_string(),
+            file: Some("api/handler.py".to_string()),
+            line: Some(17),
+            fingerprint: "deser123".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: Some("Replace `pickle.loads` with a safe codec.".to_string()),
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "handler".to_string(),
+                source_label: "param:data".to_string(),
+                sink_function: "pickle.loads".to_string(),
+                sink_label: "sink:unsafe_deserialization".to_string(),
+                call_chain: vec!["handler".to_string(), "pickle.loads".to_string()],
+                repro_cmd: Some(
+                    "python3 -c \"import base64,pickle; pickle.loads(base64.b64decode('Y29zCnN5c3RlbQooUydlY2hvIEpBTklUT1JfUFJPQkUnCnRSLg=='))\""
+                        .to_string(),
+                ),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+            }),
+        };
+
+        let report = format_bugcrowd_report(&[finding]);
+        assert!(report.contains("**Proof of Concept:**\n```text"));
+        assert!(report.contains("pickle.loads(base64.b64decode"));
+        assert!(!report.contains(
+            "No automated reproduction command generated. See vulnerable source lines above."
         ));
     }
 

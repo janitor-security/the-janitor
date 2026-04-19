@@ -3,6 +3,29 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 11 (AEG Payload Synthesis & Bugcrowd Report Bridging)
+
+**Directive:** Execute P3-1 Phase B by extending AEG from HTTP ingress into serialized payload witnesses, bridge `ExploitWitness::repro_cmd` directly into Bugcrowd markdown reports, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update the active innovation ledger, and stop after a local commit with no release.
+
+**Phase 1 — Serialized Payload Synthesis:**
+- `crates/forge/src/exploitability.rs`: added `IngressKind::DeserializationBlob` plus `DeserializationFormat::{PythonPickle, NodeEvalBuffer}` and a deterministic `deserialization_blob_template()` dispatcher.
+- `crates/forge/src/exploitability.rs`: Phase B now emits inert base64 probe capsules for Python `pickle` (`echo JANITOR_PROBE` pickle gadget) and Node `eval(Buffer)` (`console.log('JANITOR_PROBE')`) and binds the synthesized command into `ExploitWitness::repro_cmd` only on satisfiable refinement.
+- `crates/forge/src/exploitability.rs`: added deterministic regression coverage for deserialization template dispatch and satisfiable repro binding.
+
+**Phase 2 — Bugcrowd Report Bridge:**
+- `crates/cli/src/hunt.rs`: replaced the hardcoded PoC placeholder with `proof_of_concept_section()`, which emits a fenced markdown code block when any grouped `StructuredFinding` carries `exploit_witness.repro_cmd`.
+- `crates/cli/src/hunt.rs`: fail-closed fallback now emits `No automated reproduction command generated. See vulnerable source lines above.` when no automated witness is available.
+- `crates/cli/src/hunt.rs`: added regression coverage proving an `ExploitWitness` command is injected into the Bugcrowd PoC section.
+
+**Phase 3 — Active-Ledger Hygiene:**
+- `.INNOVATION_LOG.md`: preserved P3-1 as active and explicitly recorded Phase B as in-progress rather than complete.
+- `docs/IMPLEMENTATION_BACKLOG.md` *(new)*: created the mandatory backlog ledger and appended the Sprint Batch 11 dated entry.
+
+**Verification Ledger:**
+- `cargo test --workspace -- --test-threads=4` exited `0`.
+- `just audit` exited `0` (`✅ System Clean. Audit fingerprint saved.`).
+- No release executed.
+
 ## 2026-04-19 — Sprint Batch 10 (Cryptographic Identity & MCP Sandboxing)
 
 **Directive:** P1-4 (Git commit signature enforcement) + P1-5 (MCP capability hardening); verify with `cargo test --workspace -- --test-threads=4` plus `just audit`; eradicate both blueprint blocks; commit with exact message; no release.
