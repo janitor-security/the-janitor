@@ -1,0 +1,35 @@
+# Auth0 Bug Bounty — In-Scope Targets
+# Source: tools/campaign/auth0_targets.md
+# Excludes: auth0.auth0.com, manage.auth0.com, accounts.auth0.com,
+#          webtask.io, phenix.rocks, sharelock.io, goextend.io,
+#          Auth0 Docs, support.auth0.com, community.auth0.com,
+#          passport-wsfed-saml2 (explicitly Out of Scope)
+
+# --- Tier 1 (Web + Mobile + FGA) ---
+https://config.cic-bug-bounty.auth0app.com
+https://manage.cic-bug-bounty.auth0app.com/
+https://play.google.com/store/apps/details?id=com.auth0.guardian&hl=en_US&gl=US
+https://apps.apple.com/us/app/auth0-guardian/id1093447833
+https://marketplace.auth0.com
+https://dashboard.fga.dev/
+https://api.us1.fga.dev/
+https://customers.us1.fga.dev/
+https://play.fga.dev/
+
+# --- SDK Repositories ---
+https://github.com/auth0/auth0.js
+https://github.com/auth0/lock
+https://github.com/auth0/auth0-spa-js
+https://github.com/auth0/Auth0.Net
+https://github.com/auth0/nextjs-auth0
+https://github.com/auth0/auth0-java
+https://github.com/auth0/react-native-auth0
+https://github.com/auth0/auth0-php
+
+# --- Tier 2 (Public Web Properties) ---
+https://auth0.com
+https://samltool.io
+https://webauthn.me
+https://openidconnect.net
+https://jwt.io
+https://auth0.net

@@ -1430,6 +1430,13 @@ impl PRBouncer for PatchBouncer {
                 let witness =
                     crate::exploitability::browser_sink_witness(&file_path, rule_id, line);
                 finding = crate::exploitability::attach_exploit_witness(finding, witness);
+            } else if rule_id == "security:jwt_validation_bypass"
+                || rule_id == "security:oauth_csrf_missing_state"
+                || rule_id == "security:xxe_saml_parser"
+            {
+                let witness =
+                    crate::exploitability::protocol_bypass_witness(&file_path, rule_id, line, None);
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
             }
             structured_findings.push(finding);
         }

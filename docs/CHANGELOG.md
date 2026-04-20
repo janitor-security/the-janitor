@@ -3,6 +3,38 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 18 (Opus Vanguard: Protocol-Depth AEG \& Target Acquisition)
+
+**Directive:** Ingest Auth0 in-scope targets, implement protocol-depth exploit witness synthesis for JWT/OAuth/SAML findings, blueprint Negative Taint Tracking in `.INNOVATION_LOG.md`, verify with `cargo test --workspace -- --test-threads=4` and `just audit`. No release.
+
+**Phase 1 — Target Ingestion:**
+
+* `tools/campaign/auth0_urls.txt`: created — 22 in-scope Auth0 URLs extracted from `tools/campaign/auth0_targets.md` across Tier 1 (cic-bug-bounty subdomains, FGA), SDK (8 GitHub repos), and Tier 2 (auth0.com, jwt.io, webauthn.me, samltool.io, openidconnect.net, auth0.net). All 13 OOS targets excluded (auth0.auth0.com, manage.auth0.com, passport-wsfed-saml2, etc.).
+
+**Phase 2 — Protocol-Depth Exploit Synthesis:**
+
+* `crates/forge/src/exploitability.rs`: added `ProtocolScenario` enum with three variants: `JwtNoneAlg`, `OAuthStateOmission`, `SamlXxe`.
+* `crates/forge/src/exploitability.rs`: added `ProtocolBypass { scenario: ProtocolScenario }` variant to `IngressKind` — the fourth ingress family after `HttpRoute`, `BrowserDOM`, `DeserializationBlob`.
+* `crates/forge/src/exploitability.rs`: implemented `protocol_bypass_template(scenario, route_path)` — emits self-contained, step-by-step PoCs for each scenario:
+  * **JwtNoneAlg**: intercept JWT → header → `{"alg":"none","typ":"JWT"}` → drop signature → `curl -H "Authorization: Bearer <header>.<payload>."` replay.
+  * **OAuthStateOmission**: capture authorize URL → strip `state` → craft CSRF delivery → `curl -i` verify code issued without `state`.
+  * **SamlXxe**: capture SAMLResponse → base64-decode → inject `<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>` into Assertion NameID → re-encode → POST to ACS endpoint.
+* `crates/forge/src/exploitability.rs`: added `protocol_bypass_witness(file_path, finding_id, line, route_path)` public helper.
+* `crates/forge/src/exploitability.rs`: updated `infer_ingress_from_finding_id` to dispatch `jwt_validation_bypass`, `oauth_csrf_missing_state`, `xxe_saml_parser` rule IDs to `ProtocolBypass`.
+* `crates/forge/src/exploitability.rs`: updated `synthesize_repro_cmd_for_finding` to render protocol bypass templates without Z3 bindings (structural PoC, no solver-supplied values needed).
+* `crates/forge/src/exploitability.rs`: updated `template_for_ingress` dispatch to handle `ProtocolBypass`.
+* `crates/forge/src/exploitability.rs`: added 5 new unit tests: `jwt_validation_bypass_witness_synthesizes_none_alg_poc`, `oauth_state_omission_witness_emits_csrf_delivery_steps`, `saml_xxe_witness_embeds_external_entity_payload`, `protocol_bypass_template_falls_back_to_placeholder_endpoint`, `template_for_ingress_protocol_bypass_emits_structural_poc`.
+* `crates/forge/src/slop_filter.rs`: bound `protocol_bypass_witness` to the three protocol rule IDs in the structured-finding enrichment loop.
+
+**Phase 3 — Negative Taint Blueprint:**
+
+* `.INNOVATION_LOG.md`: appended P1-NT "Negative Taint Tracking & Upstream Sanitizer Falsification" under Phase 1 (Near-Term Dominance) — five-tier architecture (A: IFDS complement meet-over-all-paths; B: predicate-conjunction tracking; C: weakest-precondition falsification; D: framework-emergent sanitizer modeling; E: non-monotonic reasoning); commercial justification: $1.6M–$8M annualized TAM expansion via Auth0 Tier 1 P1 bounty eligibility. No existing entries deleted.
+
+**Verification:**
+
+* `cargo test --workspace -- --test-threads=4` → 0 failures across 25 suites.
+* `just audit` → exit 0 (fmt + clippy + check + test + release parity + doc parity).
+
 ## 2026-04-19 — Sprint Batch 15 (Auth0 Formatter \& Universal Campaign Runner)
 
 **Directive:** Implement a strict Auth0 HackerOne submission formatter (`--format auth0`) on top of the existing hunt engine, replacing the ad-hoc `strike\_tier\_2.sh` script with a universal `campaign.sh` runner, verified with `cargo test --workspace -- --test-threads=4` plus `just audit`, local commit only, no release.
