@@ -11,7 +11,7 @@ use fixedbitset::FixedBitSet;
 use petgraph::graph::{DiGraph, NodeIndex};
 use smallvec::SmallVec;
 
-use crate::negtaint::{NegTaintLabel, NegTaintSolver};
+use crate::negtaint::{sink_predicate_for_label, NegTaintLabel, NegTaintSolver};
 use crate::sanitizer::SanitizerRegistry;
 
 /// Canonical taint label propagated by the IFDS solver.
@@ -280,8 +280,19 @@ impl IfdsSolver {
         let witnesses = dedup_result_witnesses(witnesses)
             .into_iter()
             .map(|mut witness| {
-                let report = negtaint.analyze(&witness.source_function, &witness.sink_function);
-                witness.upstream_validation_absent = report.label == NegTaintLabel::Unvalidated;
+                let sink_predicate = sink_predicate_for_label(&witness.sink_label);
+                let report = negtaint.analyze_with_sink_predicate(
+                    &witness.source_function,
+                    &witness.sink_function,
+                    sink_predicate.as_ref(),
+                );
+                // Both Unvalidated (Tier A) and FalsifiedSanitizer (Tier C)
+                // signal an upstream-validation gap — callers treat them
+                // uniformly in the Auth0 renderer.
+                witness.upstream_validation_absent = matches!(
+                    report.label,
+                    NegTaintLabel::Unvalidated | NegTaintLabel::FalsifiedSanitizer
+                );
                 witness.sanitizer_audit = report.sanitizer_audit;
                 witness
             })

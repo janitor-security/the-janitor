@@ -3,6 +3,36 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 17 (Negative Taint Falsification via Z3 — Tier C)
+
+**Directive:** Implement weakest-precondition falsification for Negative Taint Tracking Tier C: extend `SanitizerSpec` with a logical predicate, pass sanitizer + sink predicates to a z3-backed falsifier, emit a `FalsifiedSanitizer` record with the mandated audit string, render it under the Auth0 "Upstream Validation Audit" section, verify with `cargo test --workspace -- --test-threads=4` and `just audit`; no release.
+
+**Phase 1 — SanitizerPredicate on SanitizerSpec:**
+
+* `crates/forge/src/sanitizer.rs`: added `SanitizerPredicate { output_sort, smt_assertion }` struct expressing the logical constraint a sanitizer enforces on its return value as an SMT-LIB2 assertion body.
+* `crates/forge/src/sanitizer.rs`: added `predicate: Option<SanitizerPredicate>` field to `SanitizerSpec`, a `SanitizerRegistry::predicate_for(name)` lookup, and `sanitizer_with_predicate(...)` constructor helper.
+* `crates/forge/src/sanitizer.rs`: attached canonical predicates to the HTML-escape family (`(not (str.contains output "<"))`), URL-encode family (`(not (str.contains output " "))`), and SQL-quote family (`(not (str.contains output "'"))`). Non-predicated sanitizers (e.g., `strip_tags`) return `None` and fall through to Tier A.
+
+**Phase 2 — Weakest-Precondition Falsifier:**
+
+* `crates/forge/src/negtaint.rs`: added `SinkPredicate { variable, sort, smt_assertion }` describing `φ_required` — the safety contract the sink demands on its incoming value.
+* `crates/forge/src/negtaint.rs`: added `FalsificationVerdict::{Bypassable{name,counterexample}, Robust{name}, Unknown{name}}` and `FalsifiedSanitizerRecord`.
+* `crates/forge/src/negtaint.rs`: added `NegTaintLabel::FalsifiedSanitizer` — the new third state of the meet-over-all-paths lattice, emitted only when Tier A returns `Validated` *and* z3 proves bypassability.
+* `crates/forge/src/negtaint.rs`: implemented `falsify_sanitizer_against_sink(name, sanitizer, sink)` — spawns a z3 subprocess, emits `(declare-const output <sort>) (assert <sanitizer>) (assert (not <sink>)) (check-sat) (get-value (output))`, parses the model, and returns `Bypassable` on `sat` / `Robust` on `unsat` / `Unknown` on anything else (including z3 absent).
+* `crates/forge/src/negtaint.rs`: implemented `parse_first_get_value()` for z3 model output unquoting (strings and integers), `build_falsification_audit_string()` producing the contractual "Sanitizer {name} was invoked, but mathematical falsification proves it is bypassable. Counterexample payload: {model}" string, `z3_is_available()` probe, and `sink_predicate_for_label()` mapping common sink labels (xss/sql/path/shell) to their canonical SMT predicates.
+* `crates/forge/src/negtaint.rs`: added `NegTaintSolver::analyze_with_sink_predicate(source, sink, Option<&SinkPredicate>)` — base `analyze` now delegates with `None` to preserve Tier A behaviour.
+
+**Phase 3 — IFDS Integration & Auth0 Renderer:**
+
+* `crates/forge/src/ifds.rs`: IFDS witness post-processing now derives a `SinkPredicate` from each witness's `sink_label` via `sink_predicate_for_label()` and passes it to `analyze_with_sink_predicate`. `upstream_validation_absent` now fires for both `Unvalidated` (Tier A) and `FalsifiedSanitizer` (Tier C) verdicts.
+* `crates/cli/src/hunt.rs`: existing `upstream_validation_audit_section()` already routes `sanitizer_audit` to the Auth0 "Upstream Validation Audit" section — the Tier C falsification string flows through the same plumbing without renderer changes. New regression test `auth0_formatter_renders_tier_c_falsified_sanitizer_audit` verifies end-to-end rendering.
+
+**Verification Ledger:**
+
+* `cargo test --workspace -- --test-threads=4` — workspace green; forge gained 5 new tests (2 sanitizer predicate coverage, 2 z3 falsification verdict coverage, 1 end-to-end `analyze_with_sink_predicate` demotion, 2 z3 model-parsing coverage, 1 Auth0 renderer regression).
+* `just audit` exited 0.
+* No release executed.
+
 ## 2026-04-20 — Sprint Batch 16 (Negative Taint Inversion)
 
 **Directive:** Replace positive-only upstream validation reasoning with a dedicated negative-taint solver that proves sanitizer absence, emit sanitizer-audit evidence into Bugcrowd/Auth0 markdown reports, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update innovation tracking, and stop after a local commit with no release.

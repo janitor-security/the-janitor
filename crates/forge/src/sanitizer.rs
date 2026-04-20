@@ -33,6 +33,30 @@ pub enum SanitizerRole {
     Validator,
 }
 
+/// Logical constraint that a sanitizer enforces on its return value, expressed
+/// as an SMT-LIB2 assertion body.
+///
+/// This predicate is the `φ_sanitizer` term in the weakest-precondition
+/// falsification `wp(sanitizer, φ_required)`.  The [`crate::negtaint`] Tier C
+/// falsifier asserts `sanitizer_predicate ∧ ¬sink_predicate` and asks z3 for a
+/// concrete counterexample: an `output` value that the sanitizer would return
+/// yet that still violates the sink's safety contract.
+///
+/// The `output` binding is the canonical name used by both sanitizer and sink
+/// predicates.  Callers must declare this constant in the solver session
+/// before asserting either predicate body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SanitizerPredicate {
+    /// SMT-LIB2 sort of the sanitizer's return value — `"String"`, `"Int"`,
+    /// `"Bool"`, or `"(_ BitVec N)"`.
+    pub output_sort: &'static str,
+    /// SMT-LIB2 assertion body describing what the sanitizer guarantees about
+    /// its `output` binding.  Example (HTML escaper):
+    /// `"(not (str.contains output \"<\"))"` — the sanitizer ensures no
+    /// less-than byte appears in the returned value.
+    pub smt_assertion: &'static str,
+}
+
 /// Describes one sanitizer or validator: its name and the taint labels it neutralises.
 #[derive(Debug, Clone)]
 pub struct SanitizerSpec {
@@ -43,6 +67,11 @@ pub struct SanitizerSpec {
     pub kills: Vec<TaintKind>,
     /// Registry role: full sanitizer or upstream validation/typing guard.
     pub role: SanitizerRole,
+    /// Optional logical constraint the sanitizer enforces on its return value.
+    /// Populated for sanitizers whose guarantee can be expressed as a concrete
+    /// SMT-LIB2 predicate — enables Tier C weakest-precondition falsification
+    /// via [`crate::negtaint::NegTaintSolver::falsify_sanitizer_against_sink`].
+    pub predicate: Option<SanitizerPredicate>,
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +153,19 @@ impl SanitizerRegistry {
             .take(limit)
             .collect()
     }
+
+    /// Returns the [`SanitizerPredicate`] registered for `name`, if any.
+    ///
+    /// Present only for sanitizers whose guarantee is expressible as a concrete
+    /// SMT-LIB2 assertion — Tier C falsification skips any sanitizer whose
+    /// predicate is `None`, preserving the conservative "unknown → keep the
+    /// finding" default.
+    pub fn predicate_for(&self, name: &str) -> Option<SanitizerPredicate> {
+        self.specs
+            .iter()
+            .find(|s| s.name == name)
+            .and_then(|s| s.predicate)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -133,35 +175,60 @@ impl SanitizerRegistry {
 fn default_specs() -> Vec<SanitizerSpec> {
     use TaintKind::{FileRead, NetworkResponse, Unknown, UserInput};
 
+    // Canonical predicate: HTML escapers guarantee the literal `<` byte is
+    // absent from the output, but do NOT prove the output is safe as a URL
+    // attribute context (e.g. `javascript:` inside an href).  That gap is the
+    // falsification target for Tier C.
+    let html_predicate = SanitizerPredicate {
+        output_sort: "String",
+        smt_assertion: r#"(not (str.contains output "<"))"#,
+    };
+    // URL encoders guarantee the literal space byte is absent, but do not
+    // prevent dangerous scheme prefixes (`javascript:`, `data:`).
+    let url_predicate = SanitizerPredicate {
+        output_sort: "String",
+        smt_assertion: r#"(not (str.contains output " "))"#,
+    };
+    // SQL single-quote escapers guarantee raw `'` is absent; they do not
+    // prevent comment sequences or stacked-query separators.
+    let sql_quote_predicate = SanitizerPredicate {
+        output_sort: "String",
+        smt_assertion: r#"(not (str.contains output "'"))"#,
+    };
+
     vec![
         // ── HTML / XSS sanitization ─────────────────────────────────────────
-        sanitizer("escape_html", &[UserInput, Unknown]),
-        sanitizer("escapeHtml", &[UserInput, Unknown]),
-        sanitizer("html_escape", &[UserInput, Unknown]),
+        sanitizer_with_predicate("escape_html", &[UserInput, Unknown], html_predicate),
+        sanitizer_with_predicate("escapeHtml", &[UserInput, Unknown], html_predicate),
+        sanitizer_with_predicate("html_escape", &[UserInput, Unknown], html_predicate),
         sanitizer("escape", &[UserInput, Unknown]),
         sanitizer("sanitize", &[UserInput, Unknown]),
-        sanitizer("sanitize_html", &[UserInput, Unknown]),
+        sanitizer_with_predicate("sanitize_html", &[UserInput, Unknown], html_predicate),
         sanitizer("strip_tags", &[UserInput, Unknown]),
-        sanitizer("htmlspecialchars", &[UserInput, Unknown]),
-        sanitizer("htmlentities", &[UserInput, Unknown]),
+        sanitizer_with_predicate("htmlspecialchars", &[UserInput, Unknown], html_predicate),
+        sanitizer_with_predicate("htmlentities", &[UserInput, Unknown], html_predicate),
         // ── URL encoding ────────────────────────────────────────────────────
-        sanitizer("encodeURIComponent", &[UserInput, Unknown]),
-        sanitizer("encodeURI", &[UserInput, Unknown]),
-        sanitizer("urlencode", &[UserInput, Unknown]),
-        sanitizer("rawurlencode", &[UserInput, Unknown]),
+        sanitizer_with_predicate("encodeURIComponent", &[UserInput, Unknown], url_predicate),
+        sanitizer_with_predicate("encodeURI", &[UserInput, Unknown], url_predicate),
+        sanitizer_with_predicate("urlencode", &[UserInput, Unknown], url_predicate),
+        sanitizer_with_predicate("rawurlencode", &[UserInput, Unknown], url_predicate),
         sanitizer("quote", &[UserInput, Unknown]),
-        sanitizer("quote_plus", &[UserInput, Unknown]),
-        sanitizer("url_encode", &[UserInput, Unknown]),
+        sanitizer_with_predicate("quote_plus", &[UserInput, Unknown], url_predicate),
+        sanitizer_with_predicate("url_encode", &[UserInput, Unknown], url_predicate),
         // ── SQL parameterization ────────────────────────────────────────────
         // NOTE: These only kill UserInput, not DatabaseResult — a row value
         // fetched from the DB might still be injection-capable if re-inserted
         // into a raw query without parameterization.
-        sanitizer("parameterize", &[UserInput]),
-        sanitizer("quote_sql", &[UserInput]),
-        sanitizer("mysql_real_escape_string", &[UserInput]),
-        sanitizer("pg_escape_literal", &[UserInput]),
-        sanitizer("pg_escape_string", &[UserInput]),
-        sanitizer("sqlite_escape", &[UserInput]),
+        sanitizer_with_predicate("parameterize", &[UserInput], sql_quote_predicate),
+        sanitizer_with_predicate("quote_sql", &[UserInput], sql_quote_predicate),
+        sanitizer_with_predicate(
+            "mysql_real_escape_string",
+            &[UserInput],
+            sql_quote_predicate,
+        ),
+        sanitizer_with_predicate("pg_escape_literal", &[UserInput], sql_quote_predicate),
+        sanitizer_with_predicate("pg_escape_string", &[UserInput], sql_quote_predicate),
+        sanitizer_with_predicate("sqlite_escape", &[UserInput], sql_quote_predicate),
         // ── Path sanitization ───────────────────────────────────────────────
         sanitizer("basename", &[UserInput, Unknown]),
         sanitizer("normalize", &[UserInput, Unknown]),
@@ -202,6 +269,20 @@ fn sanitizer(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
         name,
         kills: kills.to_vec(),
         role: SanitizerRole::Sanitizer,
+        predicate: None,
+    }
+}
+
+fn sanitizer_with_predicate(
+    name: &'static str,
+    kills: &[TaintKind],
+    predicate: SanitizerPredicate,
+) -> SanitizerSpec {
+    SanitizerSpec {
+        name,
+        kills: kills.to_vec(),
+        role: SanitizerRole::Sanitizer,
+        predicate: Some(predicate),
     }
 }
 
@@ -210,6 +291,7 @@ fn validator(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
         name,
         kills: kills.to_vec(),
         role: SanitizerRole::Validator,
+        predicate: None,
     }
 }
 
@@ -285,10 +367,28 @@ mod tests {
             name: "my_domain_sanitizer",
             kills: vec![TaintKind::UserInput],
             role: SanitizerRole::Sanitizer,
+            predicate: None,
         });
         assert!(reg.is_sanitizer("my_domain_sanitizer"));
         assert!(reg.kills_taint("my_domain_sanitizer", TaintKind::UserInput));
         assert!(!reg.kills_taint("my_domain_sanitizer", TaintKind::FileRead));
+    }
+
+    #[test]
+    fn html_sanitizer_has_predicate_for_tier_c_falsification() {
+        let reg = SanitizerRegistry::with_defaults();
+        let pred = reg
+            .predicate_for("escape_html")
+            .expect("html escaper must expose a predicate for wp falsification");
+        assert_eq!(pred.output_sort, "String");
+        assert!(pred.smt_assertion.contains("str.contains"));
+    }
+
+    #[test]
+    fn unpredicated_sanitizer_returns_none() {
+        let reg = SanitizerRegistry::with_defaults();
+        assert!(reg.predicate_for("strip_tags").is_none());
+        assert!(reg.predicate_for("random_helper").is_none());
     }
 
     #[test]

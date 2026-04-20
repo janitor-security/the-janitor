@@ -2061,6 +2061,54 @@ def main(user_id):
     }
 
     #[test]
+    fn auth0_formatter_renders_tier_c_falsified_sanitizer_audit() {
+        let finding = StructuredFinding {
+            id: "security:sql_injection".to_string(),
+            file: Some("api/users.js".to_string()),
+            line: Some(42),
+            fingerprint: "sqlfals001".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "handler".to_string(),
+                source_label: "param:q".to_string(),
+                sink_function: "db.query".to_string(),
+                sink_label: "sink:sql_query".to_string(),
+                call_chain: vec!["handler".to_string(), "db.query".to_string()],
+                repro_cmd: Some(
+                    "curl -X POST https://target.com/api/users -d '{\"q\": \"1' OR 1=1--\"}'"
+                        .to_string(),
+                ),
+                sanitizer_audit: Some(
+                    "Sanitizer escape_html was invoked, but mathematical falsification proves it is bypassable. Counterexample payload: javascript:alert(1)".to_string(),
+                ),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains("**Upstream Validation Audit**"),
+            "Tier C finding must render Upstream Validation Audit section"
+        );
+        assert!(
+            report.contains(
+                "Sanitizer escape_html was invoked, but mathematical falsification proves it is bypassable."
+            ),
+            "Tier C falsification sentence must be embedded verbatim"
+        );
+        assert!(
+            report.contains("Counterexample payload:"),
+            "Tier C counterexample label must be embedded"
+        );
+    }
+
+    #[test]
     fn bugcrowd_filter_can_reduce_findings_before_rendering() {
         let findings = vec![
             StructuredFinding {
