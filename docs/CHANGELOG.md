@@ -3,6 +3,37 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 20 (Tier B SMT-Entailment — Predicate-Conjunction Tracking)
+
+**Directive:** Finish the mathematics Codex scaffolded but left incomplete: extend the negative-taint solver to accumulate the logical conjunction `φ_path = φ₁ ∧ φ₂ ∧ ...` of every `SanitizerPredicate` stamped on a reachable path, assert `(and φ_path (not φ_required))` via z3, suppress the finding on `unsat` (Zero False Positives) and emit a partial-sanitization record with counterexample and mathematical gap on `sat`. Update the Auth0/Bugcrowd "Upstream Validation Audit" section to render the gap, verify with `cargo test --workspace -- --test-threads=4` + `just audit`, delete the Tier B block from `.INNOVATION_LOG.md` under the Absolute Eradication Law, commit locally with no release.
+
+**Phase 1 — Path-Level SMT Entailment in NegTaintSolver:**
+
+* `crates/forge/src/negtaint.rs`: added `PathEntailmentVerdict::{Entails, DoesNotEntail{path_sanitizers, counterexample}, UnknownOrUnavailable}` — Tier B's ternary verdict with `Entails` meaning `φ_path ⊨ φ_required`.
+* `crates/forge/src/negtaint.rs`: added `PartialSanitizationRecord { path_sanitizers, counterexample, gap_summary }` — the concrete witness populated when a specific execution path's cumulative sanitizer conjunction fails to entail the sink's safety contract.
+* `crates/forge/src/negtaint.rs`: extended `NegTaintReport` with `partial_sanitization: Option<PartialSanitizationRecord>` alongside the retained Tier C `falsified_sanitizer` field.
+* `crates/forge/src/negtaint.rs`: upgraded `PathFold` to track `per_path_validations: Vec<Vec<String>>` — an ordered, per-path list of registered validation names preserved in source-to-sink order so Tier B can build the path-specific predicate conjunction.
+* `crates/forge/src/negtaint.rs`: rewrote `validation_nodes_for_path` to return ordered `Vec<String>` instead of `HashSet<String>`, preserving path ordering for predicate assembly.
+* `crates/forge/src/negtaint.rs`: implemented `prove_path_entailment(path_predicates, sink)` — spawns z3, emits `(set-logic ALL) (declare-const output <sort>) (assert (and φ₁ ... φₙ)) (assert (not φ_required)) (check-sat) (get-value (output))`, and classifies `sat → DoesNotEntail`, `unsat → Entails`, anything else → `UnknownOrUnavailable`.
+* `crates/forge/src/negtaint.rs`: added `NegTaintSolver::prove_first_path_fails_entailment` — iterates reachable paths in observation order, skips paths without predicated sanitizers, skips sort mismatches conservatively, and returns the first path whose conjunction fails the entailment proof.
+* `crates/forge/src/negtaint.rs`: replaced the Tier C pairwise `falsify_first_sanitizer_against_sink` internal helper with Tier B path-level entailment inside `analyze_with_sink_predicate`; the public `falsify_sanitizer_against_sink(...)` pairwise API is retained for external callers.
+* `crates/forge/src/negtaint.rs`: added `build_partial_sanitization_audit_string(record)` emitting the contractual `"Path sanitizers [X, Y, Z] do not mathematically entail the sink's safety contract. Counterexample: output = {model}. Gap: {gap_summary}."` string.
+* `crates/forge/src/negtaint.rs`: added `summarize_entailment_gap`, `sanitizer_domain_label`, `sink_domain_label` — map stamped sanitizer names + sink SMT assertions to human-readable domain strings (`XSS`, `URL-encoding`, `SQL-quoting` on the sanitizer side; `XSS URL-scheme`, `SSRF`, `SQL-injection`, `path-traversal`, `shell-metacharacter` on the sink side).
+* `crates/forge/src/negtaint.rs`: `sink_predicate_for_label` gained SSRF coverage — labels containing `ssrf`, `HttpRequest`, or `fetch` now map to `(not (str.prefixof "http://internal" output))`.
+
+**Phase 2 — Bugcrowd / Auth0 Report Enrichment:**
+
+* `crates/cli/src/hunt.rs`: existing `upstream_validation_audit_section()` already routes `ExploitWitness::sanitizer_audit` verbatim into the Auth0/Bugcrowd "Upstream Validation Audit" sections — the new Tier B audit string containing `Path sanitizers [X] do not mathematically entail ... Gap: path is sanitized against XSS but fails to satisfy SSRF constraints.` flows through the existing plumbing unchanged. New regression test `auth0_formatter_renders_tier_b_partial_sanitization_audit` verifies end-to-end rendering of the Tier B gap summary.
+
+**Phase 3 — Verification Ledger:**
+
+* `cargo test -p forge --lib -- --test-threads=4` — 538 tests green; 4 new Tier B unit tests: `tier_b_single_sanitizer_path_fails_entailment_against_javascript_url_sink`, `tier_b_escape_html_fails_entailment_against_ssrf_sink` (the mandated escapeHtml → SSRF regression), `tier_b_suppresses_finding_when_path_conjunction_entails_sink` (zero-false-positive proof), `tier_b_prove_path_entailment_returns_entails_on_matching_predicates`.
+* `cargo test -p cli --bin janitor -- --test-threads=4` — 115 tests green; 1 new Auth0 renderer regression.
+* `cargo test --workspace -- --test-threads=4` — workspace green (exit 0).
+* `just audit` exited 0 — fmt, clippy, check, test, doc-parity, and release-parity gates all clean.
+* `.INNOVATION_LOG.md` — Tier B predicate-conjunction block physically deleted per Absolute Eradication Law; zero completion markers remain.
+* No release executed.
+
 ## 2026-04-20 — Sprint Batch 17 (Negative Taint Falsification via Z3 — Tier C)
 
 **Directive:** Implement weakest-precondition falsification for Negative Taint Tracking Tier C: extend `SanitizerSpec` with a logical predicate, pass sanitizer + sink predicates to a z3-backed falsifier, emit a `FalsifiedSanitizer` record with the mandated audit string, render it under the Auth0 "Upstream Validation Audit" section, verify with `cargo test --workspace -- --test-threads=4` and `just audit`; no release.

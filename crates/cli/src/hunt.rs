@@ -2109,6 +2109,63 @@ def main(user_id):
     }
 
     #[test]
+    fn auth0_formatter_renders_tier_b_partial_sanitization_audit() {
+        let finding = StructuredFinding {
+            id: "security:ssrf".to_string(),
+            file: Some("api/fetch.js".to_string()),
+            line: Some(17),
+            fingerprint: "tierbssrf001".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "Controller.fetchRemote".to_string(),
+                source_label: "param:url".to_string(),
+                sink_function: "Http.ssrf_fetch".to_string(),
+                sink_label: "sink:ssrf_fetch".to_string(),
+                call_chain: vec![
+                    "Controller.fetchRemote".to_string(),
+                    "escapeHtml".to_string(),
+                    "Http.ssrf_fetch".to_string(),
+                ],
+                repro_cmd: Some(
+                    "curl -X POST https://target.com/api/fetch -d '{\"url\": \"http://internal.admin/secret\"}'"
+                        .to_string(),
+                ),
+                sanitizer_audit: Some(
+                    "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against XSS but fails to satisfy SSRF constraints."
+                        .to_string(),
+                ),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains("**Upstream Validation Audit**"),
+            "Tier B finding must render Upstream Validation Audit section"
+        );
+        assert!(
+            report.contains(
+                "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract."
+            ),
+            "Tier B entailment failure sentence must be embedded verbatim"
+        );
+        assert!(
+            report.contains("Counterexample: output ="),
+            "Tier B counterexample label must be embedded"
+        );
+        assert!(
+            report.contains("Gap: path is sanitized against XSS but fails to satisfy SSRF"),
+            "Tier B gap summary must name both sanitizer and sink domains"
+        );
+    }
+
+    #[test]
     fn bugcrowd_filter_can_reduce_findings_before_rendering() {
         let findings = vec![
             StructuredFinding {
