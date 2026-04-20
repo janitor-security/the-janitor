@@ -650,6 +650,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_python_sqli_slop(eng, parsed));
             f.extend(find_python_ssrf_slop(eng, parsed));
             f.extend(find_python_path_traversal_slop(eng, parsed));
+            f.extend(find_jwt_validation_bypass(source));
+            f.extend(find_saml_xsw_and_xxe(source));
+            f.extend(find_oauth_state_omission(source));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
             f.extend(find_python_slop_ast(eng, parsed));
             f.extend(find_python_phantom_payload_slop(eng, parsed));
@@ -668,6 +671,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_prototype_merge_sink_slop(eng, parsed));
             // Phase 7 R&D: JSX dangerouslySetInnerHTML React XSS attribute walk
             f.extend(find_jsx_dangerous_html_slop(eng, parsed));
+            f.extend(find_jwt_validation_bypass(source));
+            f.extend(find_saml_xsw_and_xxe(source));
+            f.extend(find_oauth_state_omission(source));
             f.extend(find_js_obfuscated_exec_slop(eng, parsed));
             f.extend(find_js_deobfuscated_sink_payloads(eng, parsed));
             f.extend(find_js_phantom_payload_slop(eng, parsed));
@@ -680,6 +686,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_java_slop_fast(source));
             // Phase 2 R&D: method_invocation AST walk (deser + JNDI + runtime exec)
             f.extend(find_java_slop(eng, parsed));
+            f.extend(find_jwt_validation_bypass(source));
+            f.extend(find_saml_xsw_and_xxe(source));
+            f.extend(find_oauth_state_omission(source));
             f.extend(find_java_phantom_payload_slop(eng, parsed));
             f
         }
@@ -688,6 +697,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_go_ssrf_slop(source));
             // Phase 4 R&D: exec.Command shell injection + TLS bypass AST walk
             f.extend(find_go_slop(eng, parsed));
+            f.extend(find_jwt_validation_bypass(source));
+            f.extend(find_saml_xsw_and_xxe(source));
+            f.extend(find_oauth_state_omission(source));
             f
         }
         "rb" => find_ruby_slop(eng, parsed),
@@ -724,6 +736,228 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
 
 fn ascii_lower(source: &[u8]) -> Vec<u8> {
     source.iter().map(u8::to_ascii_lowercase).collect()
+}
+
+fn contains_any_bytes(source: &[u8], needles: &[&[u8]]) -> bool {
+    needles
+        .iter()
+        .any(|needle| source.windows(needle.len()).any(|w| w == *needle))
+}
+
+fn first_match_pos(source: &[u8], needles: &[&[u8]]) -> Option<usize> {
+    needles
+        .iter()
+        .filter_map(|needle| source.windows(needle.len()).position(|w| w == *needle))
+        .min()
+}
+
+fn find_jwt_validation_bypass(source: &[u8]) -> Vec<SlopFinding> {
+    const JWT_MARKERS: &[&[u8]] = &[
+        b"jsonwebtoken",
+        b"jwt.verify(",
+        b"jwt.decode(",
+        b"parsewithclaims(",
+        b"parseunverified(",
+        b"id_token",
+        b"access_token",
+    ];
+    const JWT_CALLS: &[&[u8]] = &[
+        b"jwt.verify(",
+        b"jsonwebtoken.verify(",
+        b"jwt.decode(",
+        b"jsonwebtoken.decode(",
+        b"parsewithclaims(",
+        b"parseunverified(",
+    ];
+    const NONE_ALG_MARKERS: &[&[u8]] = &[
+        b"algorithms",
+        b"algorithm",
+        b"'none'",
+        b"\"none\"",
+        b"nonealgorithm",
+        b"signingmethodnone",
+    ];
+    const AUDIENCE_FALSE_MARKERS: &[&[u8]] = &[
+        b"audience: false",
+        b"audience=false",
+        b"verifyaud: false",
+        b"verify_aud: false",
+        b"validateaudience(false)",
+        b"setverifyaud(false)",
+    ];
+    const EXPIRY_FALSE_MARKERS: &[&[u8]] = &[
+        b"ignoreexpiration: true",
+        b"ignoreexpiration=true",
+        b"verify_exp: false",
+        b"verifyexp: false",
+        b"verifyexpiry: false",
+        b"skipclaimsvalidation: true",
+    ];
+    const AUDIENCE_MARKERS: &[&[u8]] = &[
+        b"audience",
+        b"verifyaud",
+        b"verify_aud",
+        b"validateaudience",
+        b"expectedaudience",
+    ];
+
+    let lower = ascii_lower(source);
+    if !contains_any_bytes(&lower, JWT_MARKERS) {
+        return Vec::new();
+    }
+
+    let mut findings = Vec::new();
+    for call in JWT_CALLS {
+        let mut search_start = 0;
+        while let Some(rel) = lower[search_start..]
+            .windows(call.len())
+            .position(|w| w == *call)
+        {
+            let start = search_start + rel;
+            let end = find_matching_paren(&lower, start + call.len() - 1).unwrap_or(lower.len());
+            let window = &lower[start..end];
+            let decode_only = call.ends_with(b"decode(") || call.ends_with(b"unverified(");
+            let has_none_alg = contains_any_bytes(window, NONE_ALG_MARKERS);
+            let has_bad_aud = contains_any_bytes(window, AUDIENCE_FALSE_MARKERS)
+                || (!contains_any_bytes(window, AUDIENCE_MARKERS)
+                    && (window.starts_with(b"jwt.verify(")
+                        || window.starts_with(b"jsonwebtoken.verify(")
+                        || window.starts_with(b"parsewithclaims(")));
+            let has_bad_exp = contains_any_bytes(window, EXPIRY_FALSE_MARKERS) || decode_only;
+            if has_none_alg || has_bad_aud || has_bad_exp {
+                findings.push(SlopFinding {
+                    start_byte: start,
+                    end_byte: end,
+                    description: "security:jwt_validation_bypass — JWT parsing or verification call accepts the `none` algorithm, skips `aud` validation, or bypasses expiration enforcement (`ignoreExpiration`, `ParseUnverified`, or decode-only flow); this enables token forgery and authentication bypass."
+                        .to_string(),
+                    domain: DOMAIN_FIRST_PARTY,
+                    severity: Severity::KevCritical,
+                });
+                return findings;
+            }
+            search_start = end.min(lower.len());
+        }
+    }
+
+    Vec::new()
+}
+
+fn find_saml_xsw_and_xxe(source: &[u8]) -> Vec<SlopFinding> {
+    const SAML_MARKERS: &[&[u8]] = &[
+        b"saml",
+        b"samlresponse",
+        b"assertion",
+        b"urn:oasis:names:tc:saml",
+    ];
+    const XML_PARSER_MARKERS: &[&[u8]] = &[
+        b"xmldom",
+        b"xml2js",
+        b"documentbuilderfactory.newinstance(",
+        b"saxparserfactory.newinstance(",
+        b"lxml.etree.fromstring",
+        b"xml.etree.elementtree.fromstring",
+        b"xml.dom.minidom.parse",
+        b"xml.newdecoder(",
+    ];
+    const XML_HARDENING_MARKERS: &[&[u8]] = &[
+        b"disallow-doctype-decl",
+        b"external-general-entities",
+        b"external-parameter-entities",
+        b"load-external-dtd",
+        b"feature_secure_processing",
+        b"resolveentities:false",
+        b"resolve_entities=false",
+        b"no_network=true",
+    ];
+    const SIGNATURE_VERIFY_MARKERS: &[&[u8]] = &[
+        b"verifysignature",
+        b"validate(signature",
+        b"signaturevalidator",
+        b"checksignature",
+        b"xmlsec",
+        b"validate_signature",
+    ];
+    const ASSERTION_ID_MARKERS: &[&[u8]] = &[
+        b"assertionid",
+        b"getattribute(\"id\"",
+        b"getattribute('id'",
+        b".attr(\"id\"",
+        b".attr('id'",
+        b"inresponseto",
+        b"subjectconfirmationdata",
+    ];
+
+    let lower = ascii_lower(source);
+    if !contains_any_bytes(&lower, SAML_MARKERS) {
+        return Vec::new();
+    }
+
+    if let Some(start) = first_match_pos(&lower, XML_PARSER_MARKERS) {
+        if !contains_any_bytes(&lower, XML_HARDENING_MARKERS) {
+            return vec![SlopFinding {
+                start_byte: start,
+                end_byte: source.len(),
+                description: "security:xxe_saml_parser — SAML assertion parsing uses an XML parser without explicit XXE hardening (`disallow-doctype-decl` / external entity disablement); external entities can be expanded during SAML processing and expose parser-side SSRF or file disclosure.".to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::KevCritical,
+            }];
+        }
+    }
+
+    if let (Some(verify_pos), Some(assertion_pos)) = (
+        first_match_pos(&lower, SIGNATURE_VERIFY_MARKERS),
+        first_match_pos(&lower, ASSERTION_ID_MARKERS),
+    ) {
+        if verify_pos < assertion_pos {
+            return vec![SlopFinding {
+                start_byte: verify_pos,
+                end_byte: assertion_pos,
+                description: "security:saml_xsw_validation_order — SAML signature validation appears to occur before the assertion identifier or `InResponseTo` binding is extracted; this ordering is vulnerable to XML Signature Wrapping because an unsigned wrapped assertion can be selected after the signature check."
+                    .to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::KevCritical,
+            }];
+        }
+    }
+
+    Vec::new()
+}
+
+fn find_oauth_state_omission(source: &[u8]) -> Vec<SlopFinding> {
+    const AUTHORIZE_MARKERS: &[&[u8]] = &[b"/authorize", b"/oauth2/authorize", b"authorize?"];
+    const RESPONSE_TYPE_MARKERS: &[&[u8]] = &[
+        b"response_type=code",
+        b"response_type=token",
+        b"response_type=id_token",
+    ];
+
+    let lower = ascii_lower(source);
+    if !contains_any_bytes(&lower, AUTHORIZE_MARKERS)
+        || !contains_any_bytes(&lower, RESPONSE_TYPE_MARKERS)
+    {
+        return Vec::new();
+    }
+
+    let missing_state = !contains_any_bytes(&lower, &[b"state="]);
+    let missing_nonce = !contains_any_bytes(&lower, &[b"nonce="])
+        && (contains_any_bytes(
+            &lower,
+            &[b"openid", b"response_type=token", b"response_type=id_token"],
+        ));
+
+    if missing_state || missing_nonce {
+        let start = first_match_pos(&lower, AUTHORIZE_MARKERS).unwrap_or(0);
+        return vec![SlopFinding {
+            start_byte: start,
+            end_byte: source.len(),
+            description: "security:oauth_csrf_missing_state — OAuth or OIDC authorization request is constructed without a `state` CSRF binding or without a required `nonce`; authorization-code or token responses can be replayed across sessions and lead to account hijacking."
+                .to_string(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::KevCritical,
+        }];
+    }
+
+    Vec::new()
 }
 
 fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
@@ -9254,6 +9488,58 @@ mod phase7_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("os_command_injection")),
             "system(literal) must not fire dynamic injection rule"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_jwt_validation_bypass() {
+        let src = br#"const claims = jwt.verify(token, key, { algorithms: ['none'], ignoreExpiration: true });"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("jwt_validation_bypass")),
+            "jwt.verify with `algorithms: ['none']` must fire jwt_validation_bypass"
+        );
+        assert!(
+            findings.iter().any(|f| f.severity == Severity::KevCritical),
+            "jwt validation bypass must rank at KevCritical"
+        );
+        assert!(
+            findings.iter().all(|f| !f.description.contains("curl ")),
+            "JWT findings are detector output only and must not introduce unrelated payload text"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_saml_xxe_parser() {
+        let src = br#"
+            String samlResponse = request.getParameter("SAMLResponse");
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document document = builder.parse(new InputSource(new StringReader(samlResponse)));
+        "#;
+        let findings = find_slop("java", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("xxe_saml_parser")),
+            "SAML XML parsing without XXE hardening must fire xxe_saml_parser"
+        );
+    }
+
+    #[test]
+    fn test_find_slop_dispatches_oauth_state_omission() {
+        let src = br#"
+            const authorizeUrl = "https://tenant.example/authorize?response_type=code&client_id=abc&redirect_uri=https://app.example/callback&scope=openid profile";
+            window.location = authorizeUrl;
+        "#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("oauth_csrf_missing_state")),
+            "OAuth authorize URL without state/nonce must fire oauth_csrf_missing_state"
         );
     }
 }
