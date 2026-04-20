@@ -3,6 +3,32 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-19 — Sprint Batch 15 (Auth0 Formatter & Universal Campaign Runner)
+
+**Directive:** Implement a strict Auth0 HackerOne submission formatter (`--format auth0`) on top of the existing hunt engine, replacing the ad-hoc `strike_tier_2.sh` script with a universal `campaign.sh` runner, verified with `cargo test --workspace -- --test-threads=4` plus `just audit`, local commit only, no release.
+
+**Phase 1 & 2 — Auth0 Output Formatter:**
+- `crates/cli/src/hunt.rs`: added `"auth0"` as a valid `--format` value alongside `"json"` and `"bugcrowd"`.
+- `crates/cli/src/hunt.rs`: implemented `format_auth0_report(findings: &[StructuredFinding]) -> String` — groups findings by rule ID, emits the five mandatory Auth0 submission headers per group:
+  - **Description** — synthesized from `finding.id` and the set of affected file paths.
+  - **Business Impact (how does this affect Auth0?)** — severity/rule-ID-mapped business risk statement (credential harvesting, RCE, XSS, SQL injection paths each get explicit Auth0-tailored text; `KevCritical` escalation path named).
+  - **Working proof of concept** — injects `ExploitWitness::repro_cmd` inside a fenced code block when present; falls back to investigative guidance.
+  - **Discoverability (how likely is this to be discovered)** — call chain length heuristic: `> 1` hops → Low (interprocedural boundary); `== 1` → High (direct sink); no chain → Medium.
+  - **Exploitability (how likely is this to be exploited)** — static High statement.
+- `crates/cli/src/hunt.rs`: added `auth0_business_impact()` helper — credential/command/XSS/SQL rules each get Auth0-specific narrative before falling back to severity tiers.
+- `crates/cli/src/main.rs`: updated CLI doc comment to advertise the `auth0` format variant.
+
+**Phase 3 — Universal Campaign Runner:**
+- `tools/strike_tier_2.sh`: deleted (replaced by `campaign.sh`).
+- `tools/campaign.sh`: created — `set -euo pipefail`; accepts `<targets_file>` (one URL per line) and `<format>`; creates `campaigns/<timestamp>/`; iterates targets and calls `janitor hunt . --sourcemap <target> --filter '.[] | select(.id | startswith("security:"))' --format <format>` writing each result to a `.md` file; skips blank lines and `#` comments; RAII per-target path sanitized to 64 safe chars; executable.
+
+**Phase 4 — Verification:**
+- `crates/cli/src/hunt.rs`: added `auth0_formatter_emits_required_headers` unit test asserting all five mandatory header strings appear, repro_cmd is injected, and multi-hop call chain produces low-discoverability text.
+- `cargo test --workspace -- --test-threads=4` exited `0` (all 25 suites pass).
+- `just audit` exited `0`.
+
+---
+
 ## 2026-04-19 — Sprint Batch 14 (Sovereign License Minting & Frontend Route Extraction)
 
 **Directive:** Mint a local sovereign license to unlock the offensive engine, re-run the Auth0 DOM XSS Bugcrowd strike in sovereign mode, add frontend route extraction for React Router / Vue Router surfaces, enrich browser-console AEG witnesses with route context when available, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.

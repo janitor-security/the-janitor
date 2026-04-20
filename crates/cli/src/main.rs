@@ -1051,8 +1051,8 @@ enum Commands {
         /// Example: `'.[] | select(.severity == "Critical")'`
         #[arg(long)]
         filter: Option<String>,
-        /// Output format: `json` (default) or `bugcrowd` for triage-ready
-        /// Markdown grouped by finding class.
+        /// Output format: `json` (default), `bugcrowd` for triage-ready Markdown
+        /// grouped by finding class, or `auth0` for Auth0 HackerOne submission format.
         #[arg(long, default_value = "json")]
         format: String,
         /// Path to an alternative slopsquat corpus file (`.rkyv` format).
