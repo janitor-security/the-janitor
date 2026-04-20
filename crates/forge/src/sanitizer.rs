@@ -27,7 +27,13 @@ use common::taint::TaintKind;
 // SanitizerSpec
 // ---------------------------------------------------------------------------
 
-/// Describes one sanitizer: its name and the taint labels it neutralises.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SanitizerRole {
+    Sanitizer,
+    Validator,
+}
+
+/// Describes one sanitizer or validator: its name and the taint labels it neutralises.
 #[derive(Debug, Clone)]
 pub struct SanitizerSpec {
     /// Bare function/method name as it appears in call expressions.
@@ -35,6 +41,8 @@ pub struct SanitizerSpec {
     pub name: &'static str,
     /// Taint labels killed when a value passes through this function.
     pub kills: Vec<TaintKind>,
+    /// Registry role: full sanitizer or upstream validation/typing guard.
+    pub role: SanitizerRole,
 }
 
 // ---------------------------------------------------------------------------
@@ -70,14 +78,24 @@ impl SanitizerRegistry {
     pub fn is_sanitizer(&self, name: &str) -> bool {
         self.specs
             .iter()
-            .any(|s| s.name == name && !s.kills.is_empty())
+            .any(|s| s.name == name && s.role == SanitizerRole::Sanitizer && !s.kills.is_empty())
+    }
+
+    /// Returns `true` when `name` is a registered validation or sanitizer node
+    /// that materially constrains upstream input.
+    pub fn is_validation_function(&self, name: &str) -> bool {
+        self.specs.iter().any(|s| {
+            s.name == name && matches!(s.role, SanitizerRole::Validator | SanitizerRole::Sanitizer)
+        })
     }
 
     /// Returns `true` when calling `name` kills a taint of `kind`.
     pub fn kills_taint(&self, name: &str, kind: TaintKind) -> bool {
-        self.specs
-            .iter()
-            .any(|s| s.name == name && s.kills.contains(&kind))
+        self.specs.iter().any(|s| {
+            s.name == name
+                && matches!(s.role, SanitizerRole::Sanitizer | SanitizerRole::Validator)
+                && s.kills.contains(&kind)
+        })
     }
 
     /// Returns all taint kinds killed by `name`.
@@ -101,65 +119,81 @@ fn default_specs() -> Vec<SanitizerSpec> {
 
     vec![
         // ── HTML / XSS sanitization ─────────────────────────────────────────
-        spec("escape_html", &[UserInput, Unknown]),
-        spec("escapeHtml", &[UserInput, Unknown]),
-        spec("html_escape", &[UserInput, Unknown]),
-        spec("escape", &[UserInput, Unknown]),
-        spec("sanitize", &[UserInput, Unknown]),
-        spec("sanitize_html", &[UserInput, Unknown]),
-        spec("strip_tags", &[UserInput, Unknown]),
-        spec("htmlspecialchars", &[UserInput, Unknown]),
-        spec("htmlentities", &[UserInput, Unknown]),
+        sanitizer("escape_html", &[UserInput, Unknown]),
+        sanitizer("escapeHtml", &[UserInput, Unknown]),
+        sanitizer("html_escape", &[UserInput, Unknown]),
+        sanitizer("escape", &[UserInput, Unknown]),
+        sanitizer("sanitize", &[UserInput, Unknown]),
+        sanitizer("sanitize_html", &[UserInput, Unknown]),
+        sanitizer("strip_tags", &[UserInput, Unknown]),
+        sanitizer("htmlspecialchars", &[UserInput, Unknown]),
+        sanitizer("htmlentities", &[UserInput, Unknown]),
         // ── URL encoding ────────────────────────────────────────────────────
-        spec("encodeURIComponent", &[UserInput, Unknown]),
-        spec("encodeURI", &[UserInput, Unknown]),
-        spec("urlencode", &[UserInput, Unknown]),
-        spec("rawurlencode", &[UserInput, Unknown]),
-        spec("quote", &[UserInput, Unknown]),
-        spec("quote_plus", &[UserInput, Unknown]),
-        spec("url_encode", &[UserInput, Unknown]),
+        sanitizer("encodeURIComponent", &[UserInput, Unknown]),
+        sanitizer("encodeURI", &[UserInput, Unknown]),
+        sanitizer("urlencode", &[UserInput, Unknown]),
+        sanitizer("rawurlencode", &[UserInput, Unknown]),
+        sanitizer("quote", &[UserInput, Unknown]),
+        sanitizer("quote_plus", &[UserInput, Unknown]),
+        sanitizer("url_encode", &[UserInput, Unknown]),
         // ── SQL parameterization ────────────────────────────────────────────
         // NOTE: These only kill UserInput, not DatabaseResult — a row value
         // fetched from the DB might still be injection-capable if re-inserted
         // into a raw query without parameterization.
-        spec("parameterize", &[UserInput]),
-        spec("quote_sql", &[UserInput]),
-        spec("mysql_real_escape_string", &[UserInput]),
-        spec("pg_escape_literal", &[UserInput]),
-        spec("pg_escape_string", &[UserInput]),
-        spec("sqlite_escape", &[UserInput]),
+        sanitizer("parameterize", &[UserInput]),
+        sanitizer("quote_sql", &[UserInput]),
+        sanitizer("mysql_real_escape_string", &[UserInput]),
+        sanitizer("pg_escape_literal", &[UserInput]),
+        sanitizer("pg_escape_string", &[UserInput]),
+        sanitizer("sqlite_escape", &[UserInput]),
         // ── Path sanitization ───────────────────────────────────────────────
-        spec("basename", &[UserInput, Unknown]),
-        spec("normalize", &[UserInput, Unknown]),
-        spec("realpath", &[UserInput]),
-        spec("path_safe", &[UserInput, Unknown]),
-        spec("clean_path", &[UserInput, Unknown]),
+        sanitizer("basename", &[UserInput, Unknown]),
+        sanitizer("normalize", &[UserInput, Unknown]),
+        sanitizer("realpath", &[UserInput]),
+        sanitizer("path_safe", &[UserInput, Unknown]),
+        sanitizer("clean_path", &[UserInput, Unknown]),
         // ── Type coercion / numeric validation ──────────────────────────────
         // Integer/float coercion eliminates injection risk for numeric inputs.
-        spec("parseInt", &[UserInput, Unknown, NetworkResponse]),
-        spec("parseFloat", &[UserInput, Unknown, NetworkResponse]),
-        spec("int", &[UserInput, Unknown, NetworkResponse]),
-        spec("float", &[UserInput, Unknown, NetworkResponse]),
-        spec("Number", &[UserInput, Unknown, NetworkResponse]),
-        spec("abs", &[UserInput, Unknown, NetworkResponse]),
+        validator("parseInt", &[UserInput, Unknown, NetworkResponse]),
+        validator("parseFloat", &[UserInput, Unknown, NetworkResponse]),
+        validator("int", &[UserInput, Unknown, NetworkResponse]),
+        validator("float", &[UserInput, Unknown, NetworkResponse]),
+        validator("Number", &[UserInput, Unknown, NetworkResponse]),
+        validator("abs", &[UserInput, Unknown, NetworkResponse]),
         // ── Regex / format validators ────────────────────────────────────────
         // These kill taint only when the value is the RESULT (return value) of
         // validation — not the input argument. The registry records name-level
         // killing; callers are responsible for applying only to return values.
-        spec("validate_email", &[UserInput, Unknown]),
-        spec("validate_uuid", &[UserInput, Unknown]),
-        spec("is_numeric", &[UserInput, Unknown]),
+        validator("validate_email", &[UserInput, Unknown]),
+        validator("validate_uuid", &[UserInput, Unknown]),
+        validator("is_numeric", &[UserInput, Unknown]),
+        // ── Structural validation / typing guards ───────────────────────────
+        validator("typeof_string", &[UserInput, Unknown, NetworkResponse]),
+        validator("isString", &[UserInput, Unknown, NetworkResponse]),
+        validator("Joi.string", &[UserInput, Unknown, NetworkResponse]),
+        validator("express_validator_body", &[UserInput, Unknown]),
+        validator("express_validator_query", &[UserInput, Unknown]),
+        validator("express_validator_param", &[UserInput, Unknown]),
         // ── Cryptographic operations that neutralise file-read content ───────
-        spec("hash", &[FileRead, UserInput, Unknown]),
-        spec("sha256", &[FileRead, UserInput, Unknown]),
-        spec("blake3", &[FileRead, UserInput, Unknown]),
+        sanitizer("hash", &[FileRead, UserInput, Unknown]),
+        sanitizer("sha256", &[FileRead, UserInput, Unknown]),
+        sanitizer("blake3", &[FileRead, UserInput, Unknown]),
     ]
 }
 
-fn spec(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
+fn sanitizer(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
     SanitizerSpec {
         name,
         kills: kills.to_vec(),
+        role: SanitizerRole::Sanitizer,
+    }
+}
+
+fn validator(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
+    SanitizerSpec {
+        name,
+        kills: kills.to_vec(),
+        role: SanitizerRole::Validator,
     }
 }
 
@@ -234,6 +268,7 @@ mod tests {
         reg.push(SanitizerSpec {
             name: "my_domain_sanitizer",
             kills: vec![TaintKind::UserInput],
+            role: SanitizerRole::Sanitizer,
         });
         assert!(reg.is_sanitizer("my_domain_sanitizer"));
         assert!(reg.kills_taint("my_domain_sanitizer", TaintKind::UserInput));
@@ -253,5 +288,14 @@ mod tests {
         let reg = SanitizerRegistry::with_defaults();
         let killed = reg.killed_by("nonexistent_fn");
         assert!(killed.is_empty());
+    }
+
+    #[test]
+    fn default_registry_recognises_validation_functions() {
+        let reg = SanitizerRegistry::with_defaults();
+        assert!(reg.is_validation_function("typeof_string"));
+        assert!(reg.is_validation_function("Joi.string"));
+        assert!(reg.is_validation_function("express_validator_body"));
+        assert!(!reg.is_validation_function("random_helper"));
     }
 }

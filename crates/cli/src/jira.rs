@@ -269,6 +269,7 @@ mod tests {
             remediation: Some("Remove the hidden reviewer-invisible payload.".to_string()),
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         };
 
         let payload = build_issue_payload(&config, &finding);
@@ -326,6 +327,7 @@ mod tests {
                 remediation: Some("remove postinstall worm".to_string()),
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             },
             StructuredFinding {
                 id: "finding-401".to_string(),
@@ -336,6 +338,7 @@ mod tests {
                 remediation: Some("rotate credentials".to_string()),
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             },
             StructuredFinding {
                 id: "finding-timeout".to_string(),
@@ -346,6 +349,7 @@ mod tests {
                 remediation: Some("retry later".to_string()),
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             },
         ];
         let sender = MockJiraSender::new(vec![
@@ -410,6 +414,7 @@ mod tests {
             remediation: None,
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         };
 
         // search_total = 1 → open ticket exists → send must not be called.
@@ -459,6 +464,7 @@ mod tests {
             remediation: Some("Rotate the leaked credential immediately.".to_string()),
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         };
         let janitor_tmp = tempdir().expect("tempdir");
         let janitor_dir = janitor_tmp.path().join(".janitor");

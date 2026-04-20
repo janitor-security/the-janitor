@@ -43,6 +43,23 @@ while IFS= read -r target || [ -n "${target}" ]; do
     out_file="${CAMPAIGN_DIR}/${safe_name}.md"
 
     echo "[campaign] Scanning: ${target} → $(basename "${out_file}")"
+    if [[ "${target}" == *"github.com"* ]]; then
+        repo_name="$(printf '%s' "${target}" | sed -E 's#/*$##' | sed -E 's#.*/##')"
+        clone_root="$(mktemp -d "/tmp/${repo_name}.XXXXXX")"
+        if git clone --depth 1 "${target}" "${clone_root}" > "${out_file}" 2>&1; then
+            "${JANITOR_BIN}" hunt "${clone_root}" \
+                --filter '.[] | select(.id | startswith("security:"))' \
+                --format auth0 >> "${out_file}" 2>&1 || true
+        fi
+        rm -rf "${clone_root}"
+        continue
+    fi
+
+    if [[ "${target}" == *"api."* || "${target}" == *"manage."* ]]; then
+        printf '[campaign] Skipped per ROE: %s\n' "${target}" > "${out_file}"
+        continue
+    fi
+
     "${JANITOR_BIN}" hunt . --sourcemap "${target}" \
         --filter '.[] | select(.id | startswith("security:"))' \
         --format "${FORMAT}" > "${out_file}" 2>&1 || true

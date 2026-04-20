@@ -3,6 +3,31 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 19 (Negative Taint Foundation \& Intelligent Campaigning)
+
+**Directive:** Implement the P1-NT negative-taint foundation so cross-file IFDS witnesses can prove absence of upstream validation, make `tools/campaign.sh` route GitHub targets, skip live API/admin surfaces, and keep sourcemap probing only for web apps; verify with `cargo test --workspace -- --test-threads=4` plus `just audit`; no release.
+
+**Phase 1 — Negative Taint Tracking Foundation:**
+
+* `crates/forge/src/sanitizer.rs`: expanded `SanitizerRegistry` with `SanitizerRole::{Sanitizer, Validator}` and `is_validation_function()`, promoting type-coercion / validation guards into first-class upstream validation nodes.
+* `crates/forge/src/sanitizer.rs`: added default validation entries for structural guards such as `typeof_string`, `Joi.string`, and `express-validator`-style builders (`body`, `query`, `param`) in addition to the existing sanitizers.
+* `crates/common/src/slop.rs`: added `upstream_validation_absent: bool` to both `ExploitWitness` and `StructuredFinding`, default-false and omitted from serialized output unless true.
+* `crates/forge/src/ifds.rs`: implemented a backward graph walk with a meet-over-all-paths intersection lattice (`ValidationMeet`) so each witness computes whether any sanitizer/validation node is shared across upstream source-to-sink paths.
+* `crates/forge/src/ifds.rs`: solver output now sets `ExploitWitness::upstream_validation_absent = true` when the backward meet is empty, and regression coverage proves a path with no sanitizer intersection is flagged.
+* `crates/forge/src/exploitability.rs`: `attach_exploit_witness()` now propagates the witness-level negative-taint verdict onto `StructuredFinding::upstream_validation_absent`.
+
+**Phase 2 — Intelligent Campaign Runner:**
+
+* `tools/campaign.sh`: GitHub targets now clone via `git clone --depth 1`, scan the local checkout in Auth0 format, and clean up the temporary repository.
+* `tools/campaign.sh`: targets containing `api.` or `manage.` are now skipped with an explicit ROE note instead of being probed.
+* `tools/campaign.sh`: non-GitHub, non-API/admin targets retain the existing sourcemap-probing path.
+
+**Verification Ledger:**
+
+* `cargo test --workspace -- --test-threads=4` exited 0.
+* `just audit` exited 0.
+* No release executed.
+
 ## 2026-04-20 — Sprint Batch 18 (Opus Vanguard: Protocol-Depth AEG \& Target Acquisition)
 
 **Directive:** Ingest Auth0 in-scope targets, implement protocol-depth exploit witness synthesis for JWT/OAuth/SAML findings, blueprint Negative Taint Tracking in `.INNOVATION_LOG.md`, verify with `cargo test --workspace -- --test-threads=4` and `just audit`. No release.
@@ -3295,4 +3320,3 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * `docs/INNOVATION\_LOG.md` *(modified)* — P3-2 and Live ASPM Dedup purged from open queue; both marked RESOLVED with version reference in Completed Items.
 
 **Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
-

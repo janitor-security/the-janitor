@@ -36,6 +36,10 @@ pub struct ExploitWitness {
     /// from the ingress handler, e.g. `"ADMIN"` or `"Authenticated"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_requirement: Option<String>,
+    /// True when the IFDS negative-taint meet found no sanitizer or validation
+    /// node shared across the upstream source-to-sink paths.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub upstream_validation_absent: bool,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.
@@ -90,4 +94,9 @@ pub struct StructuredFinding {
     /// Deterministic proof that a source reaches a sink across function boundaries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exploit_witness: Option<ExploitWitness>,
+
+    /// True when the engine proved that the source-to-sink path lacks any
+    /// upstream validation or sanitizer intersection.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub upstream_validation_absent: bool,
 }

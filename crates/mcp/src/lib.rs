@@ -1000,6 +1000,7 @@ fn run_lint_file(file_path: &str, contents: &str) -> Result<serde_json::Value> {
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             }
         })
         .collect();

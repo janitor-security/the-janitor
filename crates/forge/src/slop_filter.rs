@@ -1406,6 +1406,7 @@ impl PRBouncer for PatchBouncer {
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             };
             let rule_id = extract_rule_id(&f.description);
             if rule_id == "security:cross_file_taint_sink" {

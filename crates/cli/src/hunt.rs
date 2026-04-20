@@ -1480,6 +1480,7 @@ fn scan_buffer(
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             };
             if rule_id == "security:dom_xss_innerHTML" || rule_id.contains("prototype_pollution") {
                 let mut witness =
@@ -1602,6 +1603,7 @@ fn slopsquat_artifact_finding(
         )),
         docs_url: None,
         exploit_witness: None,
+        upstream_validation_absent: false,
     })
 }
 
@@ -1905,6 +1907,7 @@ def main(user_id):
             ),
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -1946,7 +1949,9 @@ def main(user_id):
                 route_path: None,
                 http_method: None,
                 auth_requirement: None,
+                upstream_validation_absent: false,
             }),
+            upstream_validation_absent: false,
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -1983,7 +1988,9 @@ def main(user_id):
                 route_path: None,
                 http_method: None,
                 auth_requirement: None,
+                upstream_validation_absent: false,
             }),
+            upstream_validation_absent: false,
         };
 
         let report = format_auth0_report(&[finding]);
@@ -2029,6 +2036,7 @@ def main(user_id):
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             },
             StructuredFinding {
                 id: "security:hardcoded_secret".to_string(),
@@ -2039,6 +2047,7 @@ def main(user_id):
                 remediation: None,
                 docs_url: None,
                 exploit_witness: None,
+                upstream_validation_absent: false,
             },
         ];
 

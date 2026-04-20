@@ -179,6 +179,7 @@ fn structured_findings_from_entry(entry: &BounceLogEntry) -> Vec<common::slop::S
             remediation: None,
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         })
         .collect()
 }
@@ -3800,6 +3801,7 @@ mod webhook_tests {
             remediation: Some("Rotate the credential and remove it from the patch.".to_string()),
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         }];
 
         emit_lifecycle_webhook(&entry, None, &findings, 100, &policy);

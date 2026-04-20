@@ -150,6 +150,7 @@ fn scan_surfaces(
             )),
             docs_url: None,
             exploit_witness: None,
+            upstream_validation_absent: false,
         });
     }
     findings
