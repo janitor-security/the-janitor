@@ -26,6 +26,10 @@ pub struct ExploitWitness {
     /// emitted by a detector without a repro template.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repro_cmd: Option<String>,
+    /// Deterministic negative-taint audit proving that at least one
+    /// source-to-sink path bypasses all registered sanitizers or validators.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sanitizer_audit: Option<String>,
     /// HTTP route path associated with the ingress handler, e.g. `"/api/v1/users"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_path: Option<String>,
@@ -36,8 +40,8 @@ pub struct ExploitWitness {
     /// from the ingress handler, e.g. `"ADMIN"` or `"Authenticated"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_requirement: Option<String>,
-    /// True when the IFDS negative-taint meet found no sanitizer or validation
-    /// node shared across the upstream source-to-sink paths.
+    /// True when negative-taint analysis proves that at least one reachable
+    /// source-to-sink path bypasses all registered sanitizers or validators.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upstream_validation_absent: bool,
 }
@@ -95,8 +99,8 @@ pub struct StructuredFinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exploit_witness: Option<ExploitWitness>,
 
-    /// True when the engine proved that the source-to-sink path lacks any
-    /// upstream validation or sanitizer intersection.
+    /// True when the engine proved that at least one reachable source-to-sink
+    /// path bypasses all registered sanitizers or validators.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upstream_validation_absent: bool,
 }

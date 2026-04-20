@@ -35,6 +35,7 @@ pub mod idor;
 pub mod ifds;
 pub mod metadata;
 pub mod migration_guard;
+pub mod negtaint;
 pub mod pr_collider;
 pub mod sanitizer;
 pub mod shadow_git;

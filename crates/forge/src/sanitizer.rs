@@ -108,6 +108,22 @@ impl SanitizerRegistry {
             .map(|s| s.kills.clone())
             .unwrap_or_default()
     }
+
+    /// Returns a stable, human-readable sample of registered validation names
+    /// suitable for audit strings.
+    pub fn audit_examples(&self, limit: usize) -> Vec<&'static str> {
+        self.specs
+            .iter()
+            .filter(|spec| {
+                matches!(
+                    spec.role,
+                    SanitizerRole::Sanitizer | SanitizerRole::Validator
+                )
+            })
+            .map(|spec| spec.name)
+            .take(limit)
+            .collect()
+    }
 }
 
 // ---------------------------------------------------------------------------

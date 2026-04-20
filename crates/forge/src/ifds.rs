@@ -9,9 +9,9 @@ use common::slop::ExploitWitness;
 use ena::unify::{InPlaceUnificationTable, NoError, UnifyKey, UnifyValue};
 use fixedbitset::FixedBitSet;
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::Direction;
 use smallvec::SmallVec;
 
+use crate::negtaint::{NegTaintLabel, NegTaintSolver};
 use crate::sanitizer::SanitizerRegistry;
 
 /// Canonical taint label propagated by the IFDS solver.
@@ -133,30 +133,6 @@ pub struct Summary {
     pub outputs: SmallVec<[OutputFact; 4]>,
     /// Proven exploit witnesses discovered under this input fact.
     pub witnesses: SmallVec<[ExploitWitness; 2]>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct ValidationMeet {
-    common_nodes: Option<HashSet<String>>,
-    path_count: usize,
-}
-
-impl ValidationMeet {
-    fn observe_path(&mut self, nodes: HashSet<String>) {
-        self.path_count += 1;
-        match &mut self.common_nodes {
-            Some(common) => common.retain(|node| nodes.contains(node)),
-            None => self.common_nodes = Some(nodes),
-        }
-    }
-
-    fn upstream_validation_absent(&self) -> bool {
-        self.path_count == 0
-            || self
-                .common_nodes
-                .as_ref()
-                .is_none_or(std::collections::HashSet::is_empty)
-    }
 }
 
 /// Mutable summary cache.
@@ -298,11 +274,15 @@ impl IfdsSolver {
             })
             .collect::<HashMap<_, _>>();
 
+        let registry = SanitizerRegistry::with_defaults();
+        let negtaint =
+            NegTaintSolver::new(&self.graph, &self.node_by_name, &self.models, &registry);
         let witnesses = dedup_result_witnesses(witnesses)
             .into_iter()
             .map(|mut witness| {
-                witness.upstream_validation_absent =
-                    self.upstream_validation_absent_for_witness(&witness);
+                let report = negtaint.analyze(&witness.source_function, &witness.sink_function);
+                witness.upstream_validation_absent = report.label == NegTaintLabel::Unvalidated;
+                witness.sanitizer_audit = report.sanitizer_audit;
                 witness
             })
             .collect::<Vec<_>>();
@@ -383,6 +363,7 @@ impl IfdsSolver {
                     sink_label: sink.sink_label.clone(),
                     call_chain: vec![input.function.clone()],
                     repro_cmd: None,
+                    sanitizer_audit: None,
                     route_path: None,
                     http_method: None,
                     auth_requirement: None,
@@ -437,6 +418,7 @@ impl IfdsSolver {
                         sink_label: witness.sink_label.clone(),
                         call_chain,
                         repro_cmd: witness.repro_cmd.clone(),
+                        sanitizer_audit: witness.sanitizer_audit.clone(),
                         route_path: witness.route_path.clone(),
                         http_method: witness.http_method.clone(),
                         auth_requirement: witness.auth_requirement.clone(),
@@ -452,120 +434,6 @@ impl IfdsSolver {
         self.summary_cache.insert(input, summary.clone());
         summary
     }
-
-    fn upstream_validation_absent_for_witness(&self, witness: &ExploitWitness) -> bool {
-        self.backward_validation_meet(&witness.source_function, &witness.sink_function)
-            .upstream_validation_absent()
-    }
-
-    fn backward_validation_meet(&self, source: &str, sink: &str) -> ValidationMeet {
-        let Some(&source_idx) = self.node_by_name.get(source) else {
-            return ValidationMeet::default();
-        };
-        let Some(&sink_idx) = self.node_by_name.get(sink) else {
-            return ValidationMeet::default();
-        };
-
-        let registry = SanitizerRegistry::with_defaults();
-        let mut meet = ValidationMeet::default();
-        let mut reverse_path = vec![sink_idx];
-        let mut visited = HashSet::from([sink_idx]);
-        self.walk_backward_paths(
-            source_idx,
-            sink_idx,
-            &registry,
-            &mut visited,
-            &mut reverse_path,
-            &mut meet,
-        );
-        meet
-    }
-
-    fn walk_backward_paths(
-        &self,
-        source_idx: NodeIndex,
-        current_idx: NodeIndex,
-        registry: &SanitizerRegistry,
-        visited: &mut HashSet<NodeIndex>,
-        reverse_path: &mut Vec<NodeIndex>,
-        meet: &mut ValidationMeet,
-    ) {
-        if current_idx == source_idx {
-            let path = reverse_path.iter().rev().copied().collect::<Vec<_>>();
-            meet.observe_path(self.validation_nodes_for_path(&path, registry));
-            return;
-        }
-
-        for predecessor in self
-            .graph
-            .neighbors_directed(current_idx, Direction::Incoming)
-        {
-            if !visited.insert(predecessor) {
-                continue;
-            }
-            reverse_path.push(predecessor);
-            self.walk_backward_paths(
-                source_idx,
-                predecessor,
-                registry,
-                visited,
-                reverse_path,
-                meet,
-            );
-            reverse_path.pop();
-            visited.remove(&predecessor);
-        }
-    }
-
-    fn validation_nodes_for_path(
-        &self,
-        path: &[NodeIndex],
-        registry: &SanitizerRegistry,
-    ) -> HashSet<String> {
-        let mut validations = HashSet::new();
-        for idx in path {
-            let function = &self.graph[*idx];
-            for node in self.effective_validation_nodes(function, registry) {
-                validations.insert(node);
-            }
-        }
-        validations
-    }
-
-    fn effective_validation_nodes(
-        &self,
-        function_name: &str,
-        registry: &SanitizerRegistry,
-    ) -> Vec<String> {
-        let mut nodes = self
-            .models
-            .get(function_name)
-            .map(|model| model.validation_nodes.iter().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
-        for candidate in validation_name_candidates(function_name) {
-            if registry.is_validation_function(candidate) {
-                nodes.push(candidate.to_string());
-            }
-        }
-        nodes.sort();
-        nodes.dedup();
-        nodes
-    }
-}
-
-fn validation_name_candidates(function_name: &str) -> impl Iterator<Item = &str> {
-    let mut candidates = Vec::with_capacity(4);
-    candidates.push(function_name);
-    if let Some(last) = function_name.rsplit("::").next() {
-        candidates.push(last);
-    }
-    if let Some(last) = function_name.rsplit('.').next() {
-        candidates.push(last);
-    }
-    if let Some(last) = function_name.rsplit('/').next() {
-        candidates.push(last);
-    }
-    candidates.into_iter()
 }
 
 fn dedup_outputs(outputs: &mut SmallVec<[OutputFact; 4]>) {

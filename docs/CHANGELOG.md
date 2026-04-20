@@ -3,6 +3,28 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 16 (Negative Taint Inversion)
+
+**Directive:** Replace positive-only upstream validation reasoning with a dedicated negative-taint solver that proves sanitizer absence, emit sanitizer-audit evidence into Bugcrowd/Auth0 markdown reports, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, update innovation tracking, and stop after a local commit with no release.
+
+**Phase 1 — Negative Taint Tracking Inversion:**
+
+* `crates/forge/src/negtaint.rs`: added a standalone meet-over-all-paths negative-taint solver. Variables begin `UNVALIDATED`; only registry-backed sanitizer/validator nodes transition a path to `VALIDATED`; the boolean meet marks the sink `UNVALIDATED` whenever any reachable path bypasses validation.
+* `crates/forge/src/ifds.rs`: replaced the older shared-node validation meet with the new negative-taint solver, so IFDS witnesses now carry path-faithful upstream-validation verdicts instead of requiring the same sanitizer name to appear on every path.
+* `crates/forge/src/sanitizer.rs`: added stable audit examples for human-readable sanitizer falsification strings used in report output.
+
+**Phase 2 — Evidence Generation \& Wiring:**
+
+* `crates/common/src/slop.rs`: added `sanitizer_audit: Option<String>` to `ExploitWitness` and tightened the semantics comments for `upstream_validation_absent` to mean "at least one reachable path bypasses validation."
+* `crates/cli/src/hunt.rs`: Bugcrowd and Auth0 markdown formatters now emit an `**Upstream Validation Audit**` section, injecting `ExploitWitness::sanitizer_audit` when present and a deterministic fallback when absent.
+* `crates/forge/src/exploitability.rs`: synthetic browser/protocol/sample witnesses now initialize `sanitizer_audit` so witness propagation remains total.
+
+**Verification Ledger:**
+
+* `cargo test --workspace -- --test-threads=4` exited 0.
+* `just audit` exited 0.
+* No release executed.
+
 ## 2026-04-20 — Sprint Batch 19 (Negative Taint Foundation \& Intelligent Campaigning)
 
 **Directive:** Implement the P1-NT negative-taint foundation so cross-file IFDS witnesses can prove absence of upstream validation, make `tools/campaign.sh` route GitHub targets, skip live API/admin surfaces, and keep sourcemap probing only for web apps; verify with `cargo test --workspace -- --test-threads=4` plus `just audit`; no release.

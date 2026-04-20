@@ -238,6 +238,7 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
 
         let business_impact = business_impact_statement(rule_id, highest_severity);
         let mitigation = suggested_mitigation(&sorted_group);
+        let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
         let proof_of_concept = proof_of_concept_section(&sorted_group);
 
         reports.push(format!(
@@ -247,6 +248,8 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
 During a static analysis of the target artifacts, the following critical security sinks were identified:\n\
 {details}\n\
 **Business Impact:** {business_impact}\n\
+**Upstream Validation Audit:**\n\
+{upstream_validation_audit}\n\
 **Proof of Concept:**\n\
 {proof_of_concept}\n\
 **Suggested Mitigation:** {mitigation}",
@@ -261,6 +264,8 @@ During a static analysis of the target artifacts, the following critical securit
 **Vulnerability Details:**\n\
 During a static analysis of the target artifacts, no findings were identified.\n\
 **Business Impact:** No direct business impact was identified because the scan did not emit any findings.\n\
+**Upstream Validation Audit:**\n\
+No upstream validation audit generated.\n\
 **Proof of Concept:**\n\
 No automated reproduction command generated. See vulnerable source lines above.\n\
 **Suggested Mitigation:** No mitigation required.",
@@ -272,9 +277,9 @@ No automated reproduction command generated. See vulnerable source lines above.\
 
 /// Render an Auth0-style Markdown vulnerability report for a finding set.
 ///
-/// Groups findings by rule ID and emits the five mandatory Auth0 submission
-/// headers for each group: Description, Business Impact, Working proof of
-/// concept, Discoverability, and Exploitability.
+/// Groups findings by rule ID and emits Auth0-ready submission headers for
+/// each group: Description, Business Impact, Upstream Validation Audit,
+/// Working proof of concept, Discoverability, and Exploitability.
 pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
     let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
     for finding in findings {
@@ -288,6 +293,7 @@ pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
         return String::from(
             "**Description**\nNo security findings were identified in the target.\n\n\
 **Business Impact (how does this affect Auth0?)**\nNo business impact identified.\n\n\
+**Upstream Validation Audit**\nNo upstream validation audit generated.\n\n\
 **Working proof of concept**\nNo proof of concept available.\n\n\
 **Discoverability (how likely is this to be discovered)**\nNot applicable.\n\n\
 **Exploitability (how likely is this to be exploited)**\nNot applicable.",
@@ -335,6 +341,7 @@ externally-influenced input and the dangerous API call."
             .filter_map(|f| f.severity.as_deref())
             .max_by_key(|s| severity_rank(s));
         let business_impact = auth0_business_impact(rule_id, highest_severity);
+        let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
 
         // Working PoC: first available repro_cmd, else fallback.
         let poc = sorted_group
@@ -377,6 +384,7 @@ successfully synthesized and is provided above.";
         reports.push(format!(
             "**Description**\n{description}\n\n\
 **Business Impact (how does this affect Auth0?)**\n{business_impact}\n\n\
+**Upstream Validation Audit**\n{upstream_validation_audit}\n\n\
 **Working proof of concept**\n{poc}\n\n\
 **Discoverability (how likely is this to be discovered)**\n{discoverability}\n\n\
 **Exploitability (how likely is this to be exploited)**\n{exploitability}"
@@ -448,6 +456,17 @@ fn proof_of_concept_section(findings: &[&StructuredFinding]) -> String {
         return format!("```text\n{repro_cmd}\n```");
     }
     "No automated reproduction command generated. See vulnerable source lines above.".to_string()
+}
+
+fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String {
+    findings
+        .iter()
+        .filter_map(|finding| finding.exploit_witness.as_ref())
+        .filter_map(|witness| witness.sanitizer_audit.as_deref())
+        .map(str::trim)
+        .find(|audit| !audit.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "No upstream validation audit generated.".to_string())
 }
 
 fn vrt_category(rule_id: &str) -> &'static str {
@@ -1917,6 +1936,7 @@ def main(user_id):
         assert!(report.contains("**VRT Category:**"));
         assert!(report.contains("**Vulnerability Details:**"));
         assert!(report.contains("**Business Impact:**"));
+        assert!(report.contains("**Upstream Validation Audit:**"));
         assert!(report.contains("**Proof of Concept:**"));
         assert!(report.contains(
             "No automated reproduction command generated. See vulnerable source lines above."
@@ -1946,6 +1966,9 @@ def main(user_id):
                     "python3 -c \"import base64,pickle; pickle.loads(base64.b64decode('Y29zCnN5c3RlbQooUydlY2hvIEpBTklUT1JfUFJPQkUnCnRSLg=='))\""
                         .to_string(),
                 ),
+                sanitizer_audit: Some(
+                    "Path analysis confirms no registered sanitizers or validators (e.g., escapeHtml, Joi.string, express_validator_body) were invoked on this variable prior to the sink.".to_string(),
+                ),
                 route_path: None,
                 http_method: None,
                 auth_requirement: None,
@@ -1955,6 +1978,8 @@ def main(user_id):
         };
 
         let report = format_bugcrowd_report(&[finding]);
+        assert!(report.contains("**Upstream Validation Audit:**"));
+        assert!(report.contains("Path analysis confirms no registered sanitizers or validators"));
         assert!(report.contains("**Proof of Concept:**\n```text"));
         assert!(report.contains("pickle.loads(base64.b64decode"));
         assert!(!report.contains(
@@ -1985,6 +2010,9 @@ def main(user_id):
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/exec -d '{\"cmd\": \"id\"}'".to_string(),
                 ),
+                sanitizer_audit: Some(
+                    "Path analysis confirms no registered sanitizers or validators (e.g., escapeHtml, Joi.string, express_validator_body) were invoked on this variable prior to the sink.".to_string(),
+                ),
                 route_path: None,
                 http_method: None,
                 auth_requirement: None,
@@ -2007,6 +2035,10 @@ def main(user_id):
             "must have Working proof of concept header"
         );
         assert!(
+            report.contains("**Upstream Validation Audit**"),
+            "must have Upstream Validation Audit header"
+        );
+        assert!(
             report.contains("**Discoverability (how likely is this to be discovered)**"),
             "must have Discoverability header"
         );
@@ -2017,6 +2049,10 @@ def main(user_id):
         assert!(
             report.contains("curl -X POST"),
             "repro_cmd must be injected into PoC section"
+        );
+        assert!(
+            report.contains("Path analysis confirms no registered sanitizers or validators"),
+            "sanitizer_audit must be injected into the validation audit section"
         );
         assert!(
             report.contains("multiple interprocedural boundaries"),
