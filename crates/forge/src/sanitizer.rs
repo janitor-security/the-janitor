@@ -33,6 +33,30 @@ pub enum SanitizerRole {
     Validator,
 }
 
+/// Provenance of a registered sanitizer: where the guarantee originates and
+/// therefore whose φ-lattice the Tier D audit must cite when triagers push
+/// back with *"the framework already validates this"*.
+///
+/// The origin is a pure annotation — no behavior is conditioned on it beyond
+/// the audit-string composition in [`crate::negtaint`]. It is, however, the
+/// axis on which the Tier D non-bypassability argument hinges: a framework's
+/// implicit validator must be named out loud so the triager understands the
+/// engine evaluated it and the SMT solver still found a bypass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SanitizerOrigin {
+    /// Built-in language / standard library (escape, parseInt, ...).
+    Stdlib,
+    /// Widely-used imported package (express-validator, Joi, ...).
+    ThirdParty,
+    /// Implicit validator emitted by a web framework's request-binding layer
+    /// (Express `express.json()` body parser, Spring `@RequestBody` Jackson
+    /// coercion, Flask `request.get_json()`). Paired with
+    /// [`SanitizerSpec::framework_label`] to name the framework in reports.
+    FrameworkImplicit,
+    /// Registered at runtime by calling code (custom policy, test harness).
+    UserDefined,
+}
+
 /// Logical constraint that a sanitizer enforces on its return value, expressed
 /// as an SMT-LIB2 assertion body.
 ///
@@ -72,6 +96,12 @@ pub struct SanitizerSpec {
     /// SMT-LIB2 predicate — enables Tier C weakest-precondition falsification
     /// via [`crate::negtaint::NegTaintSolver::falsify_sanitizer_against_sink`].
     pub predicate: Option<SanitizerPredicate>,
+    /// Provenance tag for Tier D audit-string composition.
+    pub origin: SanitizerOrigin,
+    /// Human-readable framework name (`"Express.js"`, `"Spring"`, `"Flask"`).
+    /// Populated iff `origin == SanitizerOrigin::FrameworkImplicit`; elsewhere
+    /// left `None`. Audit strings only embed the label when this is `Some`.
+    pub framework_label: Option<&'static str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +196,14 @@ impl SanitizerRegistry {
             .find(|s| s.name == name)
             .and_then(|s| s.predicate)
     }
+
+    /// Returns the full [`SanitizerSpec`] for `name`, if registered.
+    ///
+    /// Tier D audit composition needs both the predicate and the origin /
+    /// framework label to decide whether to emit a framework-citation clause.
+    pub fn spec_for(&self, name: &str) -> Option<&SanitizerSpec> {
+        self.specs.iter().find(|s| s.name == name)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +232,17 @@ fn default_specs() -> Vec<SanitizerSpec> {
     let sql_quote_predicate = SanitizerPredicate {
         output_sort: "String",
         smt_assertion: r#"(not (str.contains output "'"))"#,
+    };
+    // Framework implicit validators (Express body parsers, Spring Jackson
+    // binding, Flask `request.get_json`) all share the same weak shape
+    // guarantee: the request body is a well-formed String (no stronger
+    // constraint on content). Encoded as the trivial tautology
+    // `(>= (str.len output) 0)` so Z3 resolves the conjunction without
+    // contradiction and the sink's `(not φ_required)` alone drives the
+    // entailment query — yielding the counterexample the triager needs.
+    let framework_binding_predicate = SanitizerPredicate {
+        output_sort: "String",
+        smt_assertion: r#"(>= (str.len output) 0)"#,
     };
 
     vec![
@@ -261,6 +310,35 @@ fn default_specs() -> Vec<SanitizerSpec> {
         sanitizer("hash", &[FileRead, UserInput, Unknown]),
         sanitizer("sha256", &[FileRead, UserInput, Unknown]),
         sanitizer("blake3", &[FileRead, UserInput, Unknown]),
+        // ── Framework-implicit validators (Tier D) ──────────────────────────
+        // Each binding parser coerces the request body into a typed object;
+        // the triager's "the framework already validates this" claim is
+        // answered by Z3 proving the framework's φ does NOT entail the
+        // sink-specific safety contract.
+        framework_implicit(
+            "express.json",
+            &[UserInput, Unknown],
+            framework_binding_predicate,
+            "Express.js",
+        ),
+        framework_implicit(
+            "express.urlencoded",
+            &[UserInput, Unknown],
+            framework_binding_predicate,
+            "Express.js",
+        ),
+        framework_implicit(
+            "springRequestBody",
+            &[UserInput, Unknown],
+            framework_binding_predicate,
+            "Spring",
+        ),
+        framework_implicit(
+            "request.get_json",
+            &[UserInput, Unknown],
+            framework_binding_predicate,
+            "Flask",
+        ),
     ]
 }
 
@@ -270,6 +348,8 @@ fn sanitizer(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
         kills: kills.to_vec(),
         role: SanitizerRole::Sanitizer,
         predicate: None,
+        origin: SanitizerOrigin::Stdlib,
+        framework_label: None,
     }
 }
 
@@ -283,6 +363,8 @@ fn sanitizer_with_predicate(
         kills: kills.to_vec(),
         role: SanitizerRole::Sanitizer,
         predicate: Some(predicate),
+        origin: SanitizerOrigin::Stdlib,
+        framework_label: None,
     }
 }
 
@@ -292,6 +374,24 @@ fn validator(name: &'static str, kills: &[TaintKind]) -> SanitizerSpec {
         kills: kills.to_vec(),
         role: SanitizerRole::Validator,
         predicate: None,
+        origin: SanitizerOrigin::Stdlib,
+        framework_label: None,
+    }
+}
+
+fn framework_implicit(
+    name: &'static str,
+    kills: &[TaintKind],
+    predicate: SanitizerPredicate,
+    framework: &'static str,
+) -> SanitizerSpec {
+    SanitizerSpec {
+        name,
+        kills: kills.to_vec(),
+        role: SanitizerRole::Sanitizer,
+        predicate: Some(predicate),
+        origin: SanitizerOrigin::FrameworkImplicit,
+        framework_label: Some(framework),
     }
 }
 
@@ -368,10 +468,42 @@ mod tests {
             kills: vec![TaintKind::UserInput],
             role: SanitizerRole::Sanitizer,
             predicate: None,
+            origin: SanitizerOrigin::UserDefined,
+            framework_label: None,
         });
         assert!(reg.is_sanitizer("my_domain_sanitizer"));
         assert!(reg.kills_taint("my_domain_sanitizer", TaintKind::UserInput));
         assert!(!reg.kills_taint("my_domain_sanitizer", TaintKind::FileRead));
+    }
+
+    #[test]
+    fn framework_implicit_express_json_carries_framework_label() {
+        let reg = SanitizerRegistry::with_defaults();
+        let spec = reg
+            .spec_for("express.json")
+            .expect("express.json must be registered");
+        assert_eq!(spec.origin, SanitizerOrigin::FrameworkImplicit);
+        assert_eq!(spec.framework_label, Some("Express.js"));
+        assert!(spec.predicate.is_some());
+    }
+
+    #[test]
+    fn framework_implicit_spring_flask_registered() {
+        let reg = SanitizerRegistry::with_defaults();
+        let spring = reg.spec_for("springRequestBody").expect("spring spec");
+        assert_eq!(spring.origin, SanitizerOrigin::FrameworkImplicit);
+        assert_eq!(spring.framework_label, Some("Spring"));
+        let flask = reg.spec_for("request.get_json").expect("flask spec");
+        assert_eq!(flask.origin, SanitizerOrigin::FrameworkImplicit);
+        assert_eq!(flask.framework_label, Some("Flask"));
+    }
+
+    #[test]
+    fn stdlib_sanitizer_has_stdlib_origin() {
+        let reg = SanitizerRegistry::with_defaults();
+        let spec = reg.spec_for("escape_html").expect("escape_html spec");
+        assert_eq!(spec.origin, SanitizerOrigin::Stdlib);
+        assert!(spec.framework_label.is_none());
     }
 
     #[test]

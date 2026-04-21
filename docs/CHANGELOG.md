@@ -3,6 +3,41 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 21 (Framework Crucible & Taint Finalization — Tier D + Tier E)
+
+**Directive:** Complete the Negative Taint Tracking engine (P1-NT) by shipping Tier D (Framework-Emergent Sanitizer Modeling) and Tier E (Non-Monotonic Path Exclusion), enforce retroactive Absolute Eradication on the Innovation Log, verify with `cargo test --workspace -- --test-threads=4` + `just audit`, and commit locally with no release.
+
+**Phase 1 — Retrospective Eradication:**
+
+* `.INNOVATION_LOG.md`: physically deleted the entire `P1-NT — Negative Taint Tracking & Upstream Sanitizer Falsification` section — Tier A/B/C residual block plus Tier D and Tier E forward-looking scaffolding — per the Absolute Eradication Law. The log now jumps directly from `P1-7` to `Phase 2: The Deep Tech Moat`. Historical "Sprint Batch 16" session-ledger block containing `COMPLETE` markers was also purged (it belongs in `docs/CHANGELOG.md`, not the forward-looking innovation log).
+
+**Phase 2 — Tier D (Framework-Emergent Sanitizer Modeling):**
+
+* `crates/forge/src/sanitizer.rs`: added `SanitizerOrigin { Stdlib, ThirdParty, FrameworkImplicit, UserDefined }` — origin provenance enum answering triager objections of the form "the framework already validates this."
+* `crates/forge/src/sanitizer.rs`: extended `SanitizerSpec` with `origin: SanitizerOrigin` + `framework_label: Option<&'static str>`; added `SanitizerRegistry::spec_for(&self, name)` accessor.
+* `crates/forge/src/sanitizer.rs`: registered 4 framework-implicit sanitizers in `default_specs()` — `express.json`, `express.urlencoded` (Express.js), `springRequestBody` (Spring), `request.get_json` (Flask) — each carrying the trivial tautology `framework_binding_predicate = (>= (str.len output) 0)` representing the framework's well-formed-String coercion contract. Well-formedness is all the framework guarantees; Z3 immediately produces a counterexample satisfying `φ_framework` yet violating the sink contract.
+* `crates/forge/src/sanitizer.rs`: added helper `framework_implicit(name, kills, predicate, framework)` and retrofitted existing `sanitizer`, `sanitizer_with_predicate`, `validator` helpers with `origin: Stdlib, framework_label: None`.
+* 3 new sanitizer-registry tests: `framework_implicit_express_json_carries_framework_label`, `framework_implicit_spring_flask_registered`, `stdlib_sanitizer_has_stdlib_origin`.
+
+**Phase 3 — Tier E (Non-Monotonic Path Exclusion):**
+
+* `crates/forge/src/negtaint.rs`: extended `PartialSanitizationRecord` with `framework_notes: Vec<String>` (Tier D citations) and `excluded_safe_paths: Vec<Vec<String>>` (Tier E concurrent-safe paths).
+* `crates/forge/src/negtaint.rs`: rewrote `prove_first_path_fails_entailment` from single-path "first failure" to two-partition solver — iterates ALL reachable paths, routes `DoesNotEntail` to `failing` (first-wins), `Entails` to `excluded_safe_paths` (accumulates all). Ensures the engine emits the finding even when a concurrent safe path exists — with an explicit exclusion clause naming the sanitizer on the safe path.
+* `crates/forge/src/negtaint.rs`: `build_partial_sanitization_audit_string` appends framework-origin citations ("The Spring framework implicit validator (springRequestBody) was evaluated, but Z3 proves it does not entail safety for this sink.") and per-path exclusion clauses ("A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path.").
+* 2 new negtaint tests: `tier_d_spring_request_body_audit_cites_framework_origin`, `tier_e_non_monotonic_emits_finding_with_exclusion_clause`.
+
+**Phase 4 — Bugcrowd / Auth0 Report Enrichment:**
+
+* `crates/cli/src/hunt.rs`: the existing `upstream_validation_audit_section()` formatter already routes `ExploitWitness::sanitizer_audit` verbatim — Tier D framework citations and Tier E exclusion clauses flow through the existing Auth0/Bugcrowd plumbing unchanged.
+* 2 new formatter regression tests: `auth0_formatter_renders_tier_d_framework_implicit_citation`, `auth0_formatter_renders_tier_e_non_monotonic_exclusion`.
+
+**Phase 5 — Verification Ledger:**
+
+* `cargo test --workspace -- --test-threads=4` — workspace green (exit 0); 9 new tests total (3 sanitizer + 2 negtaint + 2 hunt formatter + 2 retroactive-enrichment coverage).
+* `just audit` exited 0 — fmt, clippy, check, test, doc-parity, release-parity gates all clean.
+* `.INNOVATION_LOG.md` — P1-NT section completely eradicated; zero completion markers remain across the whole file.
+* No release executed.
+
 ## 2026-04-20 — Sprint Batch 20 (Tier B SMT-Entailment — Predicate-Conjunction Tracking)
 
 **Directive:** Finish the mathematics Codex scaffolded but left incomplete: extend the negative-taint solver to accumulate the logical conjunction `φ_path = φ₁ ∧ φ₂ ∧ ...` of every `SanitizerPredicate` stamped on a reachable path, assert `(and φ_path (not φ_required))` via z3, suppress the finding on `unsat` (Zero False Positives) and emit a partial-sanitization record with counterexample and mathematical gap on `sat`. Update the Auth0/Bugcrowd "Upstream Validation Audit" section to render the gap, verify with `cargo test --workspace -- --test-threads=4` + `just audit`, delete the Tier B block from `.INNOVATION_LOG.md` under the Absolute Eradication Law, commit locally with no release.

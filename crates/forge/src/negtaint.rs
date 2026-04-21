@@ -12,7 +12,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::Direction;
 
 use crate::ifds::FunctionModel;
-use crate::sanitizer::{SanitizerPredicate, SanitizerRegistry};
+use crate::sanitizer::{SanitizerOrigin, SanitizerPredicate, SanitizerRegistry};
 
 /// Negative-taint label at a sink.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +112,22 @@ pub struct PartialSanitizationRecord {
     /// Human-readable interpretation of the SMT gap, e.g.
     /// `"path is sanitized against XSS but fails to satisfy SSRF constraints"`.
     pub gap_summary: String,
+    /// Tier D framework-origin citations, one line per
+    /// [`SanitizerOrigin::FrameworkImplicit`] entry on the failing path.
+    /// Each string is fully-formed for verbatim embedding in the Auth0
+    /// "Upstream Validation Audit" section, e.g.
+    /// `"The Express.js framework implicit validator (express.json) was
+    /// evaluated, but Z3 proves it does not entail safety for this sink."`
+    /// Empty when no framework-implicit sanitizer contributed to the failing
+    /// path.
+    pub framework_notes: Vec<String>,
+    /// Tier E non-monotonic exclusion witnesses: for every *other* reachable
+    /// path whose predicate conjunction DID entail the sink's safety
+    /// contract, the ordered list of that path's sanitizers.  Presence of
+    /// any entry proves the triager's "this is validated" claim was
+    /// analyzed and a concurrent bypass path was still found.  Empty when no
+    /// concurrent path entailed — the Tier B-only case.
+    pub excluded_safe_paths: Vec<Vec<String>>,
 }
 
 /// Deterministic negative-taint audit verdict for one source-to-sink pair.
@@ -306,16 +322,26 @@ impl<'a> NegTaintSolver<'a> {
         }
     }
 
-    /// Tier B SMT entailment prover.  Iterate reachable paths in observed
-    /// order; for each path with at least one registered
-    /// [`SanitizerPredicate`], assert `(and φ_path (not φ_required))` and ask
-    /// z3 for a counterexample.  Return the first [`sat`] verdict as a
-    /// [`PartialSanitizationRecord`] — any `unsat` path entails the sink and
-    /// is silently suppressed; any `unknown` path is skipped
-    /// conservatively.
+    /// Tier B + D + E path-level SMT entailment prover.
     ///
+    /// Iterate every reachable path in observed order.  For each path whose
+    /// validators include at least one registered [`SanitizerPredicate`],
+    /// assert `(and φ_path (not φ_required))` and ask z3 for a counterexample.
+    /// The verdict is partitioned into two buckets:
+    ///
+    /// - **`DoesNotEntail`** — bypass path; the first such path becomes the
+    ///   failing record.  Framework-implicit origins on that path are
+    ///   captured as [`PartialSanitizationRecord::framework_notes`] (Tier D).
+    /// - **`Entails`** — safe path; its sanitizer list is accumulated into
+    ///   [`PartialSanitizationRecord::excluded_safe_paths`] (Tier E
+    ///   non-monotonic exclusion), proving we analyzed the path the
+    ///   triager would cite and still found a bypass elsewhere.
+    ///
+    /// Paths whose validators have no registered predicate are treated
+    /// conservatively (skipped) — Tier B never fabricates constraints.
     /// Returns `None` when z3 is unavailable, no path carries predicated
-    /// sanitizers, or every predicated path entails the sink.
+    /// sanitizers, or every predicated path entails the sink (Tier A
+    /// `Validated` stands).
     fn prove_first_path_fails_entailment(
         &self,
         per_path_validations: &[Vec<String>],
@@ -324,43 +350,71 @@ impl<'a> NegTaintSolver<'a> {
         if !z3_is_available() {
             return None;
         }
+        let mut failing: Option<(Vec<String>, String, Vec<String>)> = None;
+        let mut excluded_safe_paths: Vec<Vec<String>> = Vec::new();
+
         for path in per_path_validations {
             if path.is_empty() {
                 continue;
             }
-            let predicates: Vec<(String, SanitizerPredicate)> = path
+            let enriched: Vec<(String, SanitizerPredicate, Option<&'static str>)> = path
                 .iter()
                 .filter_map(|name| {
-                    self.registry
-                        .predicate_for(name)
-                        .map(|pred| (name.clone(), pred))
+                    let spec = self.registry.spec_for(name)?;
+                    let pred = spec.predicate?;
+                    let fw = match spec.origin {
+                        SanitizerOrigin::FrameworkImplicit => spec.framework_label,
+                        _ => None,
+                    };
+                    Some((name.clone(), pred, fw))
                 })
                 .collect();
-            if predicates.is_empty() {
+            if enriched.is_empty() {
                 continue;
             }
-            if predicates
+            if enriched
                 .iter()
-                .any(|(_, pred)| pred.output_sort != sink_predicate.sort)
+                .any(|(_, pred, _)| pred.output_sort != sink_predicate.sort)
             {
                 continue;
             }
-            let predicated_names: Vec<String> = predicates.iter().map(|(n, _)| n.clone()).collect();
+            let predicated_names: Vec<String> =
+                enriched.iter().map(|(n, _, _)| n.clone()).collect();
             let predicate_list: Vec<SanitizerPredicate> =
-                predicates.into_iter().map(|(_, p)| p).collect();
+                enriched.iter().map(|(_, p, _)| *p).collect();
             match prove_path_entailment(&predicate_list, sink_predicate) {
                 PathEntailmentVerdict::DoesNotEntail { counterexample, .. } => {
-                    let gap_summary = summarize_entailment_gap(&predicated_names, sink_predicate);
-                    return Some(PartialSanitizationRecord {
-                        path_sanitizers: predicated_names,
-                        counterexample,
-                        gap_summary,
-                    });
+                    if failing.is_none() {
+                        let framework_notes: Vec<String> = enriched
+                            .iter()
+                            .filter_map(|(name, _, fw)| {
+                                fw.map(|framework| {
+                                    format!(
+                                        "The {framework} framework implicit validator ({name}) was evaluated, but Z3 proves it does not entail safety for this sink."
+                                    )
+                                })
+                            })
+                            .collect();
+                        failing = Some((predicated_names, counterexample, framework_notes));
+                    }
                 }
-                PathEntailmentVerdict::Entails | PathEntailmentVerdict::UnknownOrUnavailable => {}
+                PathEntailmentVerdict::Entails => {
+                    excluded_safe_paths.push(predicated_names);
+                }
+                PathEntailmentVerdict::UnknownOrUnavailable => {}
             }
         }
-        None
+
+        failing.map(|(path_sanitizers, counterexample, framework_notes)| {
+            let gap_summary = summarize_entailment_gap(&path_sanitizers, sink_predicate);
+            PartialSanitizationRecord {
+                path_sanitizers,
+                counterexample,
+                gap_summary,
+                framework_notes,
+                excluded_safe_paths,
+            }
+        })
     }
 
     fn build_audit_string(
@@ -549,15 +603,28 @@ pub fn build_falsification_audit_string(record: &FalsifiedSanitizerRecord) -> St
 ///
 /// Contractually fixed format; consumed verbatim by Auth0 "Upstream Validation
 /// Audit" section and Bugcrowd report renderers.  The string names every
-/// stamped sanitizer, the concrete counterexample payload, and a
-/// domain-mapped gap summary.
+/// stamped sanitizer, the concrete counterexample payload, a domain-mapped
+/// gap summary, one citation per [`SanitizerOrigin::FrameworkImplicit`]
+/// contributor (Tier D), and one exclusion sentence per concurrently-safe
+/// path (Tier E).
 pub fn build_partial_sanitization_audit_string(record: &PartialSanitizationRecord) -> String {
-    format!(
+    let mut out = format!(
         "Path sanitizers [{}] do not mathematically entail the sink's safety contract. Counterexample: output = {}. Gap: {}.",
         record.path_sanitizers.join(", "),
         record.counterexample,
         record.gap_summary
-    )
+    );
+    for note in &record.framework_notes {
+        out.push(' ');
+        out.push_str(note);
+    }
+    for safe_path in &record.excluded_safe_paths {
+        out.push_str(&format!(
+            " A concurrent path correctly sanitized by [{}] was analyzed, but the vulnerability remains exploitable via this bypass path.",
+            safe_path.join(", ")
+        ));
+    }
+    out
 }
 
 /// Summarize the mathematical gap between a path's sanitizer conjunction and
@@ -1109,6 +1176,8 @@ mod tests {
                 output_sort: "String",
                 smt_assertion: r#"(= output "safe")"#,
             }),
+            origin: crate::sanitizer::SanitizerOrigin::UserDefined,
+            framework_label: None,
         });
         let solver = NegTaintSolver::new(&graph, &node_by_name, &models, &registry);
 
@@ -1171,5 +1240,171 @@ mod tests {
         let raw = "((n 42))";
         let value = parse_first_get_value(raw).expect("parse must succeed");
         assert_eq!(value, "42");
+    }
+
+    #[test]
+    fn tier_d_spring_request_body_audit_cites_framework_origin() {
+        use super::z3_is_available;
+
+        if !z3_is_available() {
+            eprintln!("skipping: z3 binary not present");
+            return;
+        }
+
+        // Controller receives a `@RequestBody`-bound value (Jackson coercion
+        // modeled as `springRequestBody`), which then flows into an SSRF
+        // sink. Spring's implicit φ does not entail SSRF safety; Z3 finds a
+        // counterexample and the audit must cite Spring by name.
+        let mut graph = DiGraph::<String, ()>::new();
+        let source = graph.add_node("UserController.createUser".to_string());
+        let sanitizer_node = graph.add_node("springRequestBody".to_string());
+        let sink = graph.add_node("InternalFetch.ssrf_fetch".to_string());
+        graph.add_edge(source, sanitizer_node, ());
+        graph.add_edge(sanitizer_node, sink, ());
+
+        let node_by_name = graph
+            .node_indices()
+            .map(|idx| (graph[idx].clone(), idx))
+            .collect::<HashMap<_, _>>();
+        let mut models = HashMap::new();
+        models.insert(
+            "springRequestBody".to_string(),
+            FunctionModel {
+                validation_nodes: SmallVec::from_vec(vec!["springRequestBody".to_string()]),
+                ..FunctionModel::default()
+            },
+        );
+        let registry = SanitizerRegistry::with_defaults();
+        let solver = NegTaintSolver::new(&graph, &node_by_name, &models, &registry);
+
+        let sink_predicate = super::sink_predicate_for_label("ssrf_fetch")
+            .expect("SSRF sink label must map to a concrete predicate");
+        let report = solver.analyze_with_sink_predicate(
+            "UserController.createUser",
+            "InternalFetch.ssrf_fetch",
+            Some(&sink_predicate),
+        );
+
+        assert_eq!(
+            report.label,
+            NegTaintLabel::FalsifiedSanitizer,
+            "Spring implicit validator must not entail SSRF safety"
+        );
+        let record = report
+            .partial_sanitization
+            .expect("partial sanitization record must be populated");
+        assert_eq!(
+            record.path_sanitizers,
+            vec!["springRequestBody".to_string()]
+        );
+        assert_eq!(
+            record.framework_notes.len(),
+            1,
+            "Tier D must emit one framework citation for Spring"
+        );
+        assert!(record.framework_notes[0]
+            .contains("The Spring framework implicit validator (springRequestBody) was evaluated"));
+        assert!(record.framework_notes[0].contains("does not entail safety for this sink"));
+        let audit = report
+            .sanitizer_audit
+            .expect("partial sanitization audit must be populated");
+        assert!(audit.contains("Path sanitizers [springRequestBody]"));
+        assert!(audit.contains("The Spring framework implicit validator"));
+    }
+
+    #[test]
+    fn tier_e_non_monotonic_emits_finding_with_exclusion_clause() {
+        use super::z3_is_available;
+
+        if !z3_is_available() {
+            eprintln!("skipping: z3 binary not present");
+            return;
+        }
+
+        // Two concurrent paths into the SSRF sink:
+        //   Path 1: source → validateSsrfUrl (entails SSRF safety) → sink
+        //   Path 2: source → escapeHtml      (does NOT entail SSRF) → sink
+        // Tier E must emit the finding on Path 2 and cite Path 1's
+        // sanitizer in the exclusion clause.
+        let mut graph = DiGraph::<String, ()>::new();
+        let source = graph.add_node("Controller.handle".to_string());
+        let safe_node = graph.add_node("validateSsrfUrl".to_string());
+        let bypass_node = graph.add_node("escapeHtml".to_string());
+        let sink = graph.add_node("Http.ssrf_fetch".to_string());
+        graph.add_edge(source, safe_node, ());
+        graph.add_edge(safe_node, sink, ());
+        graph.add_edge(source, bypass_node, ());
+        graph.add_edge(bypass_node, sink, ());
+
+        let node_by_name = graph
+            .node_indices()
+            .map(|idx| (graph[idx].clone(), idx))
+            .collect::<HashMap<_, _>>();
+        let mut models = HashMap::new();
+        models.insert(
+            "validateSsrfUrl".to_string(),
+            FunctionModel {
+                validation_nodes: SmallVec::from_vec(vec!["validateSsrfUrl".to_string()]),
+                ..FunctionModel::default()
+            },
+        );
+        models.insert(
+            "escapeHtml".to_string(),
+            FunctionModel {
+                validation_nodes: SmallVec::from_vec(vec!["escapeHtml".to_string()]),
+                ..FunctionModel::default()
+            },
+        );
+
+        // Custom registry: defaults (escapeHtml is already there) plus a
+        // bespoke `validateSsrfUrl` whose φ matches the SSRF sink's
+        // required predicate, so Z3 returns `unsat` → entails.
+        let mut registry = SanitizerRegistry::with_defaults();
+        registry.push(crate::sanitizer::SanitizerSpec {
+            name: "validateSsrfUrl",
+            kills: vec![common::taint::TaintKind::UserInput],
+            role: crate::sanitizer::SanitizerRole::Sanitizer,
+            predicate: Some(crate::sanitizer::SanitizerPredicate {
+                output_sort: "String",
+                smt_assertion: r#"(not (str.prefixof "http://internal" output))"#,
+            }),
+            origin: crate::sanitizer::SanitizerOrigin::UserDefined,
+            framework_label: None,
+        });
+        let solver = NegTaintSolver::new(&graph, &node_by_name, &models, &registry);
+
+        let sink_predicate = super::sink_predicate_for_label("ssrf_fetch")
+            .expect("SSRF sink label must map to a concrete predicate");
+        let report = solver.analyze_with_sink_predicate(
+            "Controller.handle",
+            "Http.ssrf_fetch",
+            Some(&sink_predicate),
+        );
+
+        assert_eq!(
+            report.label,
+            NegTaintLabel::FalsifiedSanitizer,
+            "finding must fire when any path fails entailment"
+        );
+        let record = report
+            .partial_sanitization
+            .expect("partial sanitization record required");
+        assert_eq!(record.path_sanitizers, vec!["escapeHtml".to_string()]);
+        assert_eq!(
+            record.excluded_safe_paths.len(),
+            1,
+            "Tier E must record the concurrent safe path"
+        );
+        assert_eq!(
+            record.excluded_safe_paths[0],
+            vec!["validateSsrfUrl".to_string()]
+        );
+        let audit = report
+            .sanitizer_audit
+            .expect("audit string must be populated");
+        assert!(audit.contains("Path sanitizers [escapeHtml]"));
+        assert!(audit.contains(
+            "A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path."
+        ));
     }
 }

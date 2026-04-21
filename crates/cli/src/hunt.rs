@@ -2166,6 +2166,97 @@ def main(user_id):
     }
 
     #[test]
+    fn auth0_formatter_renders_tier_d_framework_implicit_citation() {
+        let finding = StructuredFinding {
+            id: "security:ssrf".to_string(),
+            file: Some("api/UserController.java".to_string()),
+            line: Some(42),
+            fingerprint: "tierdspring001".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "UserController.createUser".to_string(),
+                source_label: "param:body".to_string(),
+                sink_function: "InternalFetch.ssrf_fetch".to_string(),
+                sink_label: "sink:ssrf_fetch".to_string(),
+                call_chain: vec![
+                    "UserController.createUser".to_string(),
+                    "springRequestBody".to_string(),
+                    "InternalFetch.ssrf_fetch".to_string(),
+                ],
+                repro_cmd: Some(
+                    "curl -X POST https://target.com/api/users -d '{\"url\": \"http://internal.admin\"}'"
+                        .to_string(),
+                ),
+                sanitizer_audit: Some(
+                    "Path sanitizers [springRequestBody] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against generic input validation but fails to satisfy SSRF constraints. The Spring framework implicit validator (springRequestBody) was evaluated, but Z3 proves it does not entail safety for this sink."
+                        .to_string(),
+                ),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains("**Upstream Validation Audit**"),
+            "Tier D finding must render the Upstream Validation Audit section"
+        );
+        assert!(
+            report.contains(
+                "The Spring framework implicit validator (springRequestBody) was evaluated, but Z3 proves it does not entail safety for this sink."
+            ),
+            "Tier D audit must cite the Spring framework verbatim"
+        );
+    }
+
+    #[test]
+    fn auth0_formatter_renders_tier_e_non_monotonic_exclusion() {
+        let finding = StructuredFinding {
+            id: "security:ssrf".to_string(),
+            file: Some("api/fetch.js".to_string()),
+            line: Some(31),
+            fingerprint: "tiere001".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "Controller.handle".to_string(),
+                source_label: "param:url".to_string(),
+                sink_function: "Http.ssrf_fetch".to_string(),
+                sink_label: "sink:ssrf_fetch".to_string(),
+                call_chain: vec![
+                    "Controller.handle".to_string(),
+                    "escapeHtml".to_string(),
+                    "Http.ssrf_fetch".to_string(),
+                ],
+                repro_cmd: None,
+                sanitizer_audit: Some(
+                    "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against XSS but fails to satisfy SSRF constraints. A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path."
+                        .to_string(),
+                ),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains(
+                "A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path."
+            ),
+            "Tier E exclusion clause must be rendered verbatim in the audit section"
+        );
+    }
+
+    #[test]
     fn bugcrowd_filter_can_reduce_findings_before_rendering() {
         let findings = vec![
             StructuredFinding {
