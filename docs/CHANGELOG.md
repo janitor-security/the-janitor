@@ -3,6 +3,29 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-21 — Sprint Batch 24 (Enterprise Report Enrichment & Java SBOM Expansion)
+
+**Directive:** Phase 1 — professionalize fallback report text in both formatters; replace "Automated reproduction command not yet synthesized" and "No automated reproduction command generated" with precise technical disclosure. Phase 2 — expand SBOM extraction to cover Maven `pom.xml` groupId and Gradle `build.gradle` / `build.gradle.kts`. Phase 3 — seed `.INNOVATION_LOG.md` P3-1 Phase C with identity-protocol AEG priority (JWT `alg:none`, SAML XXE). Phase 4 — verify, commit.
+
+**Phase 1 — Report Professionalization:**
+
+- `crates/cli/src/hunt.rs` — `format_auth0_report` PoC fallback: "Automated reproduction command not yet synthesized..." → "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending. Interprocedural analysis confirms unbroken data-flow from the identified source to the vulnerable sink. Manual dynamic verification is advised."
+- `crates/cli/src/hunt.rs` — `proof_of_concept_section` fallback (used by Bugcrowd formatter): updated to same precise technical disclosure string.
+- `crates/cli/src/hunt.rs` — Two tests updated to assert against new fallback text.
+
+**Phase 2 — Java SBOM Expansion:**
+
+- `crates/cli/src/hunt.rs` — `parse_pom_xml_name_version`: return type expanded to `Option<(String, String, String)>` (groupId, artifactId, version); caller in `detect_component_info_inner` now formats as `groupId:artifactId` when groupId is non-empty.
+- `crates/cli/src/hunt.rs` — `detect_component_info_inner`: added `build.gradle` and `build.gradle.kts` detection after `pom.xml` check; iterates both filenames, reads and parses group + version via new `parse_gradle_name_version`.
+- `crates/cli/src/hunt.rs` — `parse_gradle_name_version` (new): line-scan for `group = '...'` / `group = "..."` and `version = '...'` / `version = "..."` patterns.
+- `crates/cli/src/hunt.rs` — `extract_gradle_quoted_value` (new): handles single- and double-quoted Gradle assignment syntax.
+- `crates/cli/src/hunt.rs` — `pom_xml_component_includes_group_id` (new test): asserts `com.auth0:java-jwt` format with version.
+- `crates/cli/src/hunt.rs` — `gradle_component_extracted_from_build_gradle` (new test): asserts `com.example`, `2.1.0`, and `build.gradle` in output.
+
+**Phase 3 — Innovation Log Seeding:**
+
+- `.INNOVATION_LOG.md` — P3-1 Phase C expanded to prioritize identity-protocol payload synthesis: forged JWTs (`alg: none`, HMAC key-confusion) and SAML XXE XML payloads directly into `ExploitWitness::repro_cmd` when identity-protocol bypass sinks are detected.
+
 ## 2026-04-20 — Sprint Batch 23 (Formatter Reality Check & Live Tenant Harness)
 
 **Directive:** Phase 1 — add `.filter_entry` walkdir exclusions for `.git`, `node_modules`, `target` in `scan_directory`. Phase 2 — fix `format_auth0_report` description to include file + line numbers; fix hardcoded "High" exploitability to be conditional on `repro_cmd.is_some()`. Phase 3 — implement P1-8 Live Tenant Reproducer (`--live-tenant` flag, `ExploitWitness::live_proof` field, `apply_live_tenant_replay`, `replace_host_in_curl`, `live_tenant_section`). Phase 4 — verify, commit, eradicate P1-8 from `.INNOVATION_LOG.md`.
