@@ -1159,6 +1159,33 @@ fn find_yaml_slop(eng: &QueryEngine, source: &[u8]) -> Vec<SlopFinding> {
 
     let mut findings = Vec::new();
     detect_k8s_wildcard_hosts(tree.root_node(), source, &mut findings);
+    detect_crd_exposure_drift(tree.root_node(), source, &mut findings);
+    findings
+}
+
+/// Semantically evaluate Kubernetes routing CRDs for cloud-provider exposure
+/// drift.
+pub fn check_crd_exposure(source: &[u8]) -> Vec<SlopFinding> {
+    let Some(eng) = engine() else {
+        return Vec::new();
+    };
+    let has_k8s_kind = K8S_ROUTING_KINDS
+        .iter()
+        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()));
+    if !has_k8s_kind {
+        return Vec::new();
+    }
+
+    let mut parser = tree_sitter::Parser::new();
+    if parser.set_language(&eng.yaml_lang).is_err() {
+        return Vec::new();
+    }
+    let Some(tree) = parse_with_timeout(&mut parser, source) else {
+        return vec![parser_exhaustion_finding("yaml")];
+    };
+
+    let mut findings = Vec::new();
+    detect_crd_exposure_drift(tree.root_node(), source, &mut findings);
     findings
 }
 
@@ -1239,6 +1266,71 @@ fn walk_yaml_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<Slop
             }
         }
     }
+}
+
+fn detect_crd_exposure_drift(root: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    let mut doc_cursor = root.walk();
+    for child in root.children(&mut doc_cursor) {
+        walk_crd_document(child, source, findings);
+    }
+}
+
+fn walk_crd_document(doc_node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+    let Some(mapping) = find_first_block_mapping(doc_node) else {
+        return;
+    };
+    let Some(kind) = extract_mapping_scalar(mapping, source, "kind") else {
+        return;
+    };
+    if !matches!(kind.as_str(), "Ingress" | "Gateway" | "VirtualService") {
+        return;
+    }
+
+    let doc_start = doc_node.start_byte().min(source.len());
+    let doc_end = doc_node.end_byte().min(source.len());
+    let doc_text = std::str::from_utf8(&source[doc_start..doc_end]).unwrap_or("");
+    if !looks_private_microservice(doc_text) || has_internal_isolation_annotation(doc_text) {
+        return;
+    }
+
+    findings.push(SlopFinding {
+        start_byte: mapping.start_byte(),
+        end_byte: mapping.end_byte().min(source.len()),
+        description: format!(
+            "security:crd_exposure_drift — private `{kind}` routing resource lacks AKS/EKS internal isolation annotation; add kubernetes.io/ingress.class: internal, service.beta.kubernetes.io/aws-load-balancer-internal: \"true\", or the provider-equivalent internal scheme annotation"
+        ),
+        domain: DOMAIN_ALL,
+        severity: Severity::Critical,
+    });
+}
+
+fn looks_private_microservice(doc_text: &str) -> bool {
+    let lower = doc_text.to_ascii_lowercase();
+    lower.contains("private")
+        || lower.contains("internal")
+        || lower.contains("cluster-local")
+        || lower.contains("namespace: prod-internal")
+        || lower.contains("visibility: private")
+        || lower.contains("exposure: private")
+        || lower.contains("service.beta.kubernetes.io/aws-load-balancer-scheme: \"internal\"")
+}
+
+fn has_internal_isolation_annotation(doc_text: &str) -> bool {
+    let lower = doc_text.to_ascii_lowercase();
+    lower.contains("kubernetes.io/ingress.class: internal")
+        || lower.contains("ingressclassname: internal")
+        || lower.contains("alb.ingress.kubernetes.io/scheme: internal")
+        || lower.contains("service.beta.kubernetes.io/aws-load-balancer-internal: \"true\"")
+        || lower.contains("service.beta.kubernetes.io/aws-load-balancer-internal: 'true'")
+        || lower.contains("service.beta.kubernetes.io/aws-load-balancer-internal: true")
+        || lower.contains("service.beta.kubernetes.io/aws-load-balancer-scheme: internal")
+        || lower.contains("service.beta.kubernetes.io/azure-load-balancer-internal: \"true\"")
+        || lower.contains("service.beta.kubernetes.io/azure-load-balancer-internal: 'true'")
+        || lower.contains("service.beta.kubernetes.io/azure-load-balancer-internal: true")
+        || lower.contains("kubernetes.azure.com/internal-load-balancer: \"true\"")
+        || lower.contains("kubernetes.azure.com/internal-load-balancer: 'true'")
+        || lower.contains("kubernetes.azure.com/internal-load-balancer: true")
+        || lower.contains("gatewayclassname: internal")
 }
 
 /// Return the scalar text of the value for a given `key` in a `block_mapping` node.
@@ -6086,6 +6178,56 @@ spec:
         assert!(
             findings.is_empty(),
             "VirtualService with explicit host must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_yaml_aks_private_ingress_missing_internal_annotation_detected() {
+        let src = b"\
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: private-users
+  labels:
+    visibility: private
+spec:
+  rules:
+  - host: users.internal.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.description.contains("security:crd_exposure_drift")),
+            "private AKS ingress missing an internal annotation must be detected"
+        );
+    }
+
+    #[test]
+    fn test_yaml_private_ingress_with_internal_annotation_is_safe() {
+        let src = b"\
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: private-users
+  labels:
+    visibility: private
+  annotations:
+    kubernetes.io/ingress.class: internal
+spec:
+  rules:
+  - host: users.internal.example.com
+";
+        let findings = find_slop("yaml", src);
+        assert!(
+            findings
+                .iter()
+                .all(|finding| !finding.description.contains("security:crd_exposure_drift")),
+            "internal annotation must suppress CRD exposure drift"
         );
     }
 

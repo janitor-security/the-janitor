@@ -798,12 +798,59 @@ impl BounceLogEntry {
     }
 
     fn export_cef_severity(&self) -> u8 {
-        match self.export_threat_class() {
-            "Critical" => 10,
-            "Necrotic" => 7,
-            "StructuralSlop" => 5,
+        match self.export_severity_label() {
+            "KevCritical" => 10,
+            "Critical" => 8,
+            "Warning" => 5,
             _ => 1,
         }
+    }
+
+    fn export_severity_label(&self) -> &'static str {
+        let detail = self
+            .antipatterns
+            .first()
+            .map(|value| value.to_ascii_lowercase())
+            .unwrap_or_default();
+        if detail.contains("kevcritical") || detail.contains("cisa kev") {
+            "KevCritical"
+        } else if is_critical_threat(self) {
+            "Critical"
+        } else if self.slop_score > 0
+            || self.necrotic_flag.is_some()
+            || !self.zombie_deps.is_empty()
+        {
+            "Warning"
+        } else {
+            "Informational"
+        }
+    }
+
+    fn export_rule_id(&self) -> String {
+        self.antipatterns
+            .first()
+            .map(|detail| {
+                detail
+                    .split(" — ")
+                    .next()
+                    .unwrap_or(detail)
+                    .trim()
+                    .to_string()
+            })
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| self.export_threat_class().to_string())
+    }
+
+    fn export_remediation(&self) -> String {
+        self.antipatterns
+            .first()
+            .and_then(|detail| {
+                detail
+                    .split_once(" — ")
+                    .map(|(_, rhs)| rhs.trim().to_string())
+            })
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| self.export_detail_message())
     }
 
     fn export_detail_message(&self) -> String {
@@ -828,19 +875,22 @@ impl BounceLogEntry {
     fn cef_escape(value: &str) -> String {
         value
             .replace('\\', "\\\\")
+            .replace('|', "\\|")
             .replace('=', "\\=")
             .replace(['\n', '\r'], " ")
     }
 
     pub fn to_cef_string(&self) -> String {
         format!(
-            "CEF:0|JanitorSecurity|Governor|1.0|{}|{}|{}|cs1={} cs2={} msg={}",
+            "CEF:0|JanitorSecurity|TheJanitor|10.2|{}|{}|{}|msg={} cs1={} cs2={}",
+            Self::cef_escape(&self.export_rule_id()),
             Self::cef_escape(self.export_threat_class()),
-            self.slop_score,
             self.export_cef_severity(),
+            Self::cef_escape(&self.export_remediation()),
             Self::cef_escape(&self.repo_slug),
-            Self::cef_escape(&self.commit_sha),
-            Self::cef_escape(&self.export_detail_message()),
+            self.pr_number
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| "0".to_string()),
         )
     }
 
@@ -860,15 +910,15 @@ impl BounceLogEntry {
             "class_uid": 2001,
             "activity_name": "Create",
             "activity_id": 1,
-            "severity": self.export_threat_class(),
+            "severity": self.export_severity_label(),
             "severity_id": self.export_cef_severity(),
             "status": if self.slop_score > 0 { "Open" } else { "Closed" },
             "status_id": if self.slop_score > 0 { 1 } else { 2 },
             "time": self.timestamp,
             "message": self.export_detail_message(),
             "finding_info": {
-                "title": format!("Janitor {}", self.export_threat_class()),
-                "desc": self.export_detail_message(),
+                "title": format!("Janitor {}", self.export_rule_id()),
+                "desc": self.export_remediation(),
                 "uid": format!(
                     "{}:{}:{}",
                     self.repo_slug,
@@ -3635,10 +3685,23 @@ mod tests {
         entry.slop_score = 150;
         entry.antipatterns = vec!["security:compiled_payload_anomaly".to_string()];
         let cef = entry.to_cef_string();
-        assert!(cef.starts_with("CEF:0|JanitorSecurity|Governor|1.0|Critical|150|10|"));
-        assert!(cef.contains("cs1=owner/repo"));
-        assert!(cef.contains("cs2=abc123"));
+        assert!(cef.starts_with(
+            "CEF:0|JanitorSecurity|TheJanitor|10.2|security:compiled_payload_anomaly|Critical|8|"
+        ));
         assert!(cef.contains("msg=security:compiled_payload_anomaly"));
+        assert!(cef.contains("cs1=owner/repo"));
+        assert!(cef.contains("cs2=42"));
+    }
+
+    #[test]
+    fn test_bounce_log_entry_to_cef_string_escapes_pipe_and_equals() {
+        let mut entry = make_clean_entry();
+        entry.slop_score = 150;
+        entry.antipatterns =
+            vec!["security:kev_pipe|eq — rotate key=value | isolate tenant".to_string()];
+        let cef = entry.to_cef_string();
+        assert!(cef.contains("security:kev_pipe\\|eq"));
+        assert!(cef.contains("msg=rotate key\\=value \\| isolate tenant"));
     }
 
     #[test]
@@ -3652,6 +3715,7 @@ mod tests {
         assert_eq!(ocsf["resources"][0]["name"], "owner/repo");
         assert_eq!(ocsf["resources"][0]["uid"], "abc123");
         assert_eq!(ocsf["finding_info"]["uid"], "owner/repo:99:abc123");
+        assert_eq!(ocsf["metadata"]["version"], "1.1.0");
     }
 
     #[test]

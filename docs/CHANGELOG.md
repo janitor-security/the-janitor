@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-21 — Sprint Batch 25 (Omni-Format Enterprise Strike)
+
+**Directive:** Implement native SIEM telemetry exports, IDOR ownership tracing, and cloud-native CRD exposure detection. Do not release.
+
+**Changes:**
+
+- `crates/cli/src/report.rs` — normalized `BounceLogEntry::to_cef_string()` to the mandated CEF 0.1 envelope (`JanitorSecurity|TheJanitor|10.2`) with `KevCritical`/`Critical`/`Warning` severity mapping and CEF escaping for `|` and `=`.
+- `crates/cli/src/report.rs` / `crates/cli/src/export.rs` — retained `janitor export --format cef|ocsf`; OCSF output now reports Security Finding severity from the same deterministic mapping.
+- `crates/forge/src/idor.rs` — added public `find_missing_ownership_checks(endpoints, taint_catalog)` entrypoint over endpoint surfaces and cataloged sink summaries; existing AST-backed scanner continues to prove path-parameter-to-DB flow and suppress on principal equality guards.
+- `crates/forge/src/slop_hunter.rs` / `crates/anatomist/src/manifest.rs` — added `check_crd_exposure()` for `Ingress`, `Gateway`, and `VirtualService` AKS/EKS exposure drift when private resources lack internal isolation annotations.
+- `.INNOVATION_LOG.md` — physically removed completed P1-3/P1-6 forward-looking blocks; no P0-1 block remained to delete.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-21 — Sprint Batch 24 (Enterprise Report Enrichment & Java SBOM Expansion)
 
 **Directive:** Phase 1 — professionalize fallback report text in both formatters; replace "Automated reproduction command not yet synthesized" and "No automated reproduction command generated" with precise technical disclosure. Phase 2 — expand SBOM extraction to cover Maven `pom.xml` groupId and Gradle `build.gradle` / `build.gradle.kts`. Phase 3 — seed `.INNOVATION_LOG.md` P3-1 Phase C with identity-protocol AEG priority (JWT `alg:none`, SAML XXE). Phase 4 — verify, commit.

@@ -89,6 +89,11 @@ pub fn check_kev_deps(lockfile: &[u8], wisdom_db: &Path) -> Vec<SlopFinding> {
     findings
 }
 
+/// Evaluate Kubernetes routing CRDs for AKS/EKS internal-exposure drift.
+pub fn check_crd_exposure(source: &[u8]) -> Vec<SlopFinding> {
+    forge::slop_hunter::check_crd_exposure(source)
+}
+
 /// Resolve the verified KEV database from `janitor_dir` and apply
 /// [`check_kev_deps`] against it.
 ///

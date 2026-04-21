@@ -7,7 +7,10 @@
 use common::slop::StructuredFinding;
 use tree_sitter::Tree;
 
-use crate::authz::{self, EndpointSurfaceMatch};
+use crate::authz::{self, EndpointSurface, EndpointSurfaceMatch};
+
+/// Taint catalog authority used by the endpoint-only IDOR entrypoint.
+pub type TaintCatalog = crate::taint_catalog::CatalogView;
 
 const PRINCIPAL_TOKENS: &[&str] = &[
     "current_user.id",
@@ -85,6 +88,67 @@ pub fn scan_source(lang: &str, source: &[u8], file: &str) -> Vec<StructuredFindi
         return Vec::new();
     }
     scan_tree(&tree, lang, source, file)
+}
+
+/// Find route-bound database lookups that lack an ownership predicate.
+///
+/// This public entrypoint consumes the framework-neutral endpoint surface and
+/// the persisted taint catalog. Source-backed callers should prefer
+/// [`scan_tree`] or [`scan_source`], which verify the ownership predicate in the
+/// handler body. Endpoint-only callers still get deterministic coverage when a
+/// controller symbol is cataloged as reaching a sink.
+pub fn find_missing_ownership_checks(
+    endpoints: &[EndpointSurface],
+    taint_catalog: &TaintCatalog,
+) -> Vec<StructuredFinding> {
+    if endpoints.is_empty() || taint_catalog.is_empty() {
+        return Vec::new();
+    }
+
+    let mut findings = Vec::new();
+    for endpoint in endpoints {
+        let params = extract_path_params(&endpoint.route_path);
+        if params.is_empty() {
+            continue;
+        }
+
+        let controller = endpoint
+            .controller
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let Some(controller) = controller else {
+            continue;
+        };
+        if !taint_catalog.has_sink(controller) {
+            continue;
+        }
+
+        let line = endpoint.line.unwrap_or_default();
+        let fingerprint_material = format!(
+            "{}:{}:{}:{}:{}",
+            endpoint.file, line, endpoint.http_method, endpoint.route_path, controller
+        );
+        findings.push(StructuredFinding {
+            id: "security:missing_ownership_check".to_string(),
+            file: Some(endpoint.file.clone()),
+            line: endpoint.line,
+            fingerprint: blake3::hash(fingerprint_material.as_bytes())
+                .to_hex()
+                .to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some(format!(
+                "Endpoint {} {} routes path parameter(s) {} into cataloged database sink `{controller}` without endpoint-surface evidence of a principal ownership predicate. Constrain the lookup by current_user.id, session.userId, or an equivalent tenant principal in the same query.",
+                endpoint.http_method,
+                endpoint.route_path,
+                params.join(", ")
+            )),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        });
+    }
+    findings
 }
 
 fn scan_surfaces(
