@@ -60,6 +60,9 @@ pub struct HuntArgs<'a> {
     pub filter_expr: Option<&'a str>,
     pub format: &'a str,
     pub corpus_path: Option<&'a Path>,
+    /// When set, replay every synthesized `repro_cmd` against this base URL
+    /// and embed the captured response as `ExploitWitness::live_proof`.
+    pub live_tenant: Option<&'a str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +91,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         filter_expr,
         format,
         corpus_path,
+        live_tenant,
     } = args;
 
     match format {
@@ -171,6 +175,12 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         findings
     };
 
+    let findings = if let Some(tenant_url) = live_tenant {
+        apply_live_tenant_replay(findings, tenant_url)
+    } else {
+        findings
+    };
+
     if format == "bugcrowd" {
         println!("{}", format_bugcrowd_report(&findings));
         return Ok(());
@@ -241,6 +251,7 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
         let mitigation = suggested_mitigation(&sorted_group);
         let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
         let proof_of_concept = proof_of_concept_section(&sorted_group);
+        let live_section = live_tenant_section(&sorted_group);
 
         reports.push(format!(
             "**Summary Title:** Multiple instances of {rule_id} in target\n\
@@ -254,6 +265,7 @@ During a static analysis of the target artifacts, the following critical securit
 {upstream_validation_audit}\n\
 **Proof of Concept:**\n\
 {proof_of_concept}\n\
+{live_section}\
 **Suggested Mitigation:** {mitigation}",
             vrt_category(rule_id)
         ));
@@ -320,22 +332,23 @@ pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
             left_key.cmp(&right_key)
         });
 
-        // Description: synthesize from rule_id + affected files.
-        let file_list = sorted_group
+        // Description: synthesize from rule_id + file:line locations.
+        let locations: Vec<String> = sorted_group
             .iter()
-            .filter_map(|f| f.file.as_deref())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .map(|path| format!("`{path}`"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let file_clause = if file_list.is_empty() {
+            .filter_map(|f| {
+                f.file.as_deref().map(|file| match f.line {
+                    Some(line) => format!("`{file}` at line `{line}`"),
+                    None => format!("`{file}`"),
+                })
+            })
+            .collect();
+        let location_clause = if locations.is_empty() {
             "the target artifact".to_string()
         } else {
-            file_list
+            locations.join(", ")
         };
         let description = format!(
-            "A `{rule_id}` vulnerability was identified in {file_clause}. \
+            "A `{rule_id}` vulnerability was identified in {location_clause}. \
 Static analysis confirmed a reachable sink with no mitigating control between the \
 externally-influenced input and the dangerous API call."
         );
@@ -382,16 +395,30 @@ targeted fuzzing or manual review of the affected entry points."
                 .to_string()
         };
 
-        // Exploitability: static statement.
-        let exploitability = "High. A deterministic proof-of-concept payload has been \
-successfully synthesized and is provided above.";
+        // Exploitability: tied to whether a repro_cmd was synthesized.
+        let has_repro = sorted_group
+            .iter()
+            .filter_map(|f| f.exploit_witness.as_ref())
+            .any(|w| w.repro_cmd.is_some());
+        let exploitability = if has_repro {
+            "High. A deterministic proof-of-concept payload has been successfully \
+synthesized and is provided above."
+                .to_string()
+        } else {
+            "Medium. Static analysis confirmed the vulnerability, but a dynamic \
+proof-of-concept payload was not autonomously synthesized. Manual verification is required."
+                .to_string()
+        };
+
+        // Live tenant verification section (populated by --live-tenant replay).
+        let live_section = live_tenant_section(&sorted_group);
 
         reports.push(format!(
             "**Description**\n{description}\n\n\
 **Affected Package / Component**\n{component_info}\n\n\
 **Business Impact (how does this affect Auth0?)**\n{business_impact}\n\n\
 **Upstream Validation Audit**\n{upstream_validation_audit}\n\n\
-**Working proof of concept**\n{poc}\n\n\
+**Working proof of concept**\n{poc}\n{live_section}\n\
 **Discoverability (how likely is this to be discovered)**\n{discoverability}\n\n\
 **Exploitability (how likely is this to be exploited)**\n{exploitability}"
         ));
@@ -473,6 +500,93 @@ fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String 
         .find(|audit| !audit.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| "No upstream validation audit generated.".to_string())
+}
+
+/// Render a `**Live Tenant Verification:**` section if any finding in the
+/// group carries a populated `live_proof` capture from `--live-tenant` replay.
+/// Returns an empty string when no live proof is present.
+fn live_tenant_section(findings: &[&StructuredFinding]) -> String {
+    let proof = findings
+        .iter()
+        .filter_map(|f| f.exploit_witness.as_ref())
+        .filter_map(|w| w.live_proof.as_deref())
+        .find(|p| !p.is_empty());
+    match proof {
+        Some(p) => format!(
+            "\n**Live Tenant Verification:**\n\
+The synthesized payload was executed against a live test tenant. Target response captured:\n\
+```http\n{p}\n```\n\n"
+        ),
+        None => String::new(),
+    }
+}
+
+/// Substitute the scheme+host in a `curl` command URL with `live_tenant`.
+///
+/// Example: `"curl -X POST http://0.0.0.0/api/v1/users -d '...'"` +
+/// `"http://localhost:3000"` → `"curl -X POST http://localhost:3000/api/v1/users -d '...'"`
+fn replace_host_in_curl(repro_cmd: &str, live_tenant: &str) -> String {
+    let start = repro_cmd
+        .find("http://")
+        .or_else(|| repro_cmd.find("https://"));
+    let Some(start) = start else {
+        return repro_cmd.to_string();
+    };
+    let url_tail = &repro_cmd[start..];
+    let url_len = url_tail.find(' ').unwrap_or(url_tail.len());
+    let full_url = &url_tail[..url_len];
+    let scheme_len = if full_url.starts_with("https://") {
+        8
+    } else {
+        7
+    };
+    let host_part = &full_url[scheme_len..];
+    let path = host_part.find('/').map(|p| &host_part[p..]).unwrap_or("/");
+    let new_url = format!("{}{}", live_tenant.trim_end_matches('/'), path);
+    repro_cmd.replacen(full_url, &new_url, 1)
+}
+
+/// Execute `repro_cmd` against `live_tenant` for every finding that carries a
+/// synthesized curl command. Populates `ExploitWitness::live_proof` with the
+/// captured stdout+stderr of the shell invocation.
+fn apply_live_tenant_replay(
+    mut findings: Vec<StructuredFinding>,
+    live_tenant: &str,
+) -> Vec<StructuredFinding> {
+    for finding in &mut findings {
+        let Some(witness) = finding.exploit_witness.as_mut() else {
+            continue;
+        };
+        let Some(repro_cmd) = witness.repro_cmd.as_deref() else {
+            continue;
+        };
+        let cmd = replace_host_in_curl(repro_cmd, live_tenant);
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .output();
+        witness.live_proof = match output {
+            Ok(out) => {
+                let mut combined = String::new();
+                if !out.stdout.is_empty() {
+                    combined.push_str(&String::from_utf8_lossy(&out.stdout));
+                }
+                if !out.stderr.is_empty() {
+                    if !combined.is_empty() {
+                        combined.push('\n');
+                    }
+                    combined.push_str(&String::from_utf8_lossy(&out.stderr));
+                }
+                if combined.is_empty() {
+                    Some("(no output captured)".to_string())
+                } else {
+                    Some(combined)
+                }
+            }
+            Err(e) => Some(format!("live-tenant execution failed: {e}")),
+        };
+    }
+    findings
 }
 
 /// Detect the affected package name and version by scanning for manifest files
@@ -1523,6 +1637,10 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     for entry in WalkDir::new(dir)
         .follow_links(false)
         .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
+        })
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
@@ -1556,6 +1674,10 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     for entry in WalkDir::new(dir)
         .follow_links(false)
         .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
+        })
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
@@ -2126,6 +2248,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: false,
+                live_proof: None,
             }),
             upstream_validation_absent: false,
         };
@@ -2170,6 +2293,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: false,
+                live_proof: None,
             }),
             upstream_validation_absent: false,
         };
@@ -2240,6 +2364,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: true,
+                live_proof: None,
             }),
             upstream_validation_absent: true,
         };
@@ -2293,6 +2418,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: true,
+                live_proof: None,
             }),
             upstream_validation_absent: true,
         };
@@ -2350,6 +2476,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: true,
+                live_proof: None,
             }),
             upstream_validation_absent: true,
         };
@@ -2396,6 +2523,7 @@ def main(user_id):
                 http_method: None,
                 auth_requirement: None,
                 upstream_validation_absent: true,
+                live_proof: None,
             }),
             upstream_validation_absent: true,
         };
@@ -2491,6 +2619,103 @@ def main(user_id):
         assert!(
             auth0.contains("**Affected Package / Component**"),
             "auth0 report must contain SBOM linkage header"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Formatter coherence — no contradiction when repro_cmd absent
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn auth0_exploitability_is_medium_when_no_repro_cmd() {
+        let finding = StructuredFinding {
+            id: "security:command_injection".to_string(),
+            file: Some("src/runner.py".to_string()),
+            line: Some(88),
+            fingerprint: "fp001".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        };
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains("Medium. Static analysis confirmed the vulnerability"),
+            "exploitability must be Medium when no repro_cmd is present"
+        );
+        assert!(
+            !report.contains(
+                "High. A deterministic proof-of-concept payload has been successfully synthesized"
+            ),
+            "report must not claim a PoC was synthesized when repro_cmd is absent"
+        );
+        assert!(
+            report.contains("at line `88`"),
+            "description must include the line number"
+        );
+    }
+
+    #[test]
+    fn auth0_exploitability_is_high_when_repro_cmd_present() {
+        let finding = StructuredFinding {
+            id: "security:command_injection".to_string(),
+            file: Some("src/runner.py".to_string()),
+            line: Some(88),
+            fingerprint: "fp002".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                repro_cmd: Some("curl -X POST http://0.0.0.0/run -d '{}'".to_string()),
+                ..Default::default()
+            }),
+            upstream_validation_absent: false,
+        };
+        let report = format_auth0_report(&[finding]);
+        assert!(
+            report.contains(
+                "High. A deterministic proof-of-concept payload has been successfully synthesized"
+            ),
+            "exploitability must be High when repro_cmd is present"
+        );
+        assert!(
+            !report.contains("Medium. Static analysis confirmed the vulnerability"),
+            "report must not claim medium exploitability when repro_cmd is present"
+        );
+    }
+
+    #[test]
+    fn scan_directory_skips_git_and_node_modules() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let git_dir = dir.path().join(".git");
+        std::fs::create_dir(&git_dir).unwrap();
+        std::fs::write(
+            git_dir.join("config.js"),
+            b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
+        )
+        .unwrap();
+        let node_dir = dir.path().join("node_modules");
+        std::fs::create_dir(&node_dir).unwrap();
+        std::fs::write(
+            node_dir.join("evil.js"),
+            b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
+        )
+        .unwrap();
+        let findings = scan_directory(dir.path()).unwrap();
+        assert!(
+            findings.is_empty(),
+            "findings inside .git and node_modules must be excluded"
+        );
+    }
+
+    #[test]
+    fn replace_host_in_curl_substitutes_correctly() {
+        let cmd = "curl -X POST http://0.0.0.0/api/v1/users -d '{\"x\":\"y\"}'";
+        let result = replace_host_in_curl(cmd, "http://localhost:3000");
+        assert_eq!(
+            result,
+            "curl -X POST http://localhost:3000/api/v1/users -d '{\"x\":\"y\"}'"
         );
     }
 

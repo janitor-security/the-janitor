@@ -44,6 +44,11 @@ pub struct ExploitWitness {
     /// source-to-sink path bypasses all registered sanitizers or validators.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upstream_validation_absent: bool,
+    /// Captured HTTP response from executing `repro_cmd` against a live test
+    /// tenant via `--live-tenant`. `None` when the flag was not supplied or
+    /// the command was not executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_proof: Option<String>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.

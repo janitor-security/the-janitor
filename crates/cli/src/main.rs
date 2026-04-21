@@ -1059,6 +1059,11 @@ enum Commands {
         /// When omitted the compiled-in corpus is used.
         #[arg(long)]
         corpus_path: Option<PathBuf>,
+        /// Base URL of a locally running test tenant, e.g. `http://localhost:3000`.
+        /// When supplied, the engine replays every synthesized `repro_cmd` against
+        /// this URL and embeds the captured HTTP response as live reproduction evidence.
+        #[arg(long)]
+        live_tenant: Option<String>,
     },
 }
 
@@ -1532,6 +1537,7 @@ async fn main() -> anyhow::Result<()> {
             filter,
             format,
             corpus_path,
+            live_tenant,
         } => {
             hunt::cmd_hunt(hunt::HuntArgs {
                 scan_root: path.as_deref(),
@@ -1547,6 +1553,7 @@ async fn main() -> anyhow::Result<()> {
                 filter_expr: filter.as_deref(),
                 format: format.as_str(),
                 corpus_path: corpus_path.as_deref(),
+                live_tenant: live_tenant.as_deref(),
             })?;
         }
     }

@@ -379,6 +379,7 @@ impl IfdsSolver {
                     http_method: None,
                     auth_requirement: None,
                     upstream_validation_absent: false,
+                    live_proof: None,
                 });
             }
         }
@@ -434,6 +435,7 @@ impl IfdsSolver {
                         http_method: witness.http_method.clone(),
                         auth_requirement: witness.auth_requirement.clone(),
                         upstream_validation_absent: witness.upstream_validation_absent,
+                        live_proof: None,
                     });
                 }
             }

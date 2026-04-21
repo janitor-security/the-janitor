@@ -3,6 +3,39 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-20 — Sprint Batch 23 (Formatter Reality Check & Live Tenant Harness)
+
+**Directive:** Phase 1 — add `.filter_entry` walkdir exclusions for `.git`, `node_modules`, `target` in `scan_directory`. Phase 2 — fix `format_auth0_report` description to include file + line numbers; fix hardcoded "High" exploitability to be conditional on `repro_cmd.is_some()`. Phase 3 — implement P1-8 Live Tenant Reproducer (`--live-tenant` flag, `ExploitWitness::live_proof` field, `apply_live_tenant_replay`, `replace_host_in_curl`, `live_tenant_section`). Phase 4 — verify, commit, eradicate P1-8 from `.INNOVATION_LOG.md`.
+
+**Phase 1 — Walkdir Exclusion:**
+
+* `crates/cli/src/hunt.rs`: both `WalkDir::new(dir)` iterators in `scan_directory` now call `.filter_entry(|e| !matches!(e.file_name().to_string_lossy().as_ref(), ".git" | "node_modules" | "target"))` — prevents `.git` hook scripts, vendored `node_modules` JS, and compiled `target/` Rust output from being fed to detectors.
+* `crates/cli/src/hunt.rs`: added test `scan_directory_skips_git_and_node_modules` — creates a tempdir with a `.git/COMMIT_EDITMSG`, `node_modules/lodash/index.js`, and a real `target.js`; asserts no finding refers to a path inside `.git` or `node_modules`.
+
+**Phase 2 — Formatter Truth & Coherence:**
+
+* `crates/cli/src/hunt.rs`: `format_auth0_report` description block replaced `BTreeSet<&str>` file dedup with `Vec<String>` of `` `file` at line `N` `` strings — triagers now see exact source location in the description instead of bare filenames.
+* `crates/cli/src/hunt.rs`: `format_auth0_report` exploitability string replaced with a `has_repro` conditional — emits "High. A deterministic proof-of-concept payload has been successfully synthesized..." only when `repro_cmd.is_some()`; falls back to "Medium. Static analysis confirmed..." otherwise. Eradicates the prior contradiction where reports claimed PoC was synthesized but the **Working proof of concept** section said "not yet synthesized."
+* `crates/cli/src/hunt.rs`: added tests `auth0_exploitability_is_medium_when_no_repro_cmd` and `auth0_exploitability_is_high_when_repro_cmd_present`.
+
+**Phase 3 — P1-8 Live Tenant Reproducer:**
+
+* `crates/common/src/slop.rs`: `ExploitWitness` gains `pub live_proof: Option<String>` — carries the captured HTTP response from `--live-tenant` replay; `#[serde(default, skip_serializing_if = "Option::is_none")]`. All 11 explicit struct literals across `hunt.rs`, `exploitability.rs`, and `ifds.rs` updated with `live_proof: None`.
+* `crates/cli/src/hunt.rs`: added `live_tenant_section(findings: &[&StructuredFinding]) -> String` — renders `**Live Tenant Verification:**` block with status, headers, and body excerpt when `live_proof` is present; returns empty string otherwise.
+* `crates/cli/src/hunt.rs`: added `replace_host_in_curl(repro_cmd: &str, live_tenant: &str) -> String` — finds `http://` or `https://` in a synthesized `curl` command, extracts the path component, substitutes the live tenant base URL. Added test `replace_host_in_curl_substitutes_correctly`.
+* `crates/cli/src/hunt.rs`: added `apply_live_tenant_replay(findings: Vec<StructuredFinding>, live_tenant: &str) -> Vec<StructuredFinding>` — iterates findings with a `repro_cmd`, replaces host via `replace_host_in_curl`, executes via `sh -c`, captures stdout+stderr (truncated at 2 KiB), stores in `exploit_witness.live_proof`.
+* `crates/cli/src/hunt.rs`: `cmd_hunt` applies `apply_live_tenant_replay` post-filter when `live_tenant` is `Some`; both `format_auth0_report` and `format_bugcrowd_report` include `live_tenant_section` output in their per-group blocks.
+* `crates/cli/src/main.rs`: `Commands::Hunt` variant gains `#[arg(long)] live_tenant: Option<String>` — passed as `live_tenant: live_tenant.as_deref()` to `HuntArgs`.
+
+**Phase 4 — Eradication & Verification:**
+
+* `.INNOVATION_LOG.md`: `P1-8 — Live Tenant Reproducer Harness` block physically deleted (Absolute Eradication Law).
+* `crates/include_deflator/tests/integration.rs`: (carry-forward from Sprint Batch 22) timing gate already at 2000ms.
+* `cargo test --workspace -- --test-threads=4` → all tests passed.
+* `just audit` → ✅ System Clean.
+
+---
+
 ## 2026-04-20 — Sprint Batch 22 (Triage Accelerator & Blueprint Sync)
 
 **Directive:** Add `P1-8: Live Tenant Reproducer Harness` to the innovation log, implement SBOM linkage (Affected Package / Component header) in `format_bugcrowd_report` and `format_auth0_report`, verify with `cargo test --workspace -- --test-threads=4` + `just audit`, commit locally with no release.
