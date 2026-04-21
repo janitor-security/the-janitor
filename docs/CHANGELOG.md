@@ -3,6 +3,27 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-21 — Sprint Batch 27 (Great Schism & Service-Boundary Schema Graph)
+
+**Directive:** Purge redundant agent configurations, enforce P-tier next-action governance, add the P2-3 Service-Boundary Schema Graph foundation, verify, commit. Do not release.
+
+**Changes:**
+
+- `.agent/`, `.agents/`, `.claude/` — physically purged redundant agent configuration directories and removed the residual zero-byte `.agents` placeholder.
+- `.agent_governance/rules/response-format.md` — now explicitly mandates that `[NEXT RECOMMENDED ACTION]` must be a P-tier item drawn directly from `.INNOVATION_LOG.md`.
+- `.INNOVATION_LOG.md` — marked P2-1, P2-2, and P2-3 as `[PHASE A COMPLETE]`.
+- `Cargo.toml` / `crates/forge/Cargo.toml` — added schema graph dependencies: `prost-reflect`, `protobuf-parse`, `openapiv3`, and YAML decoding support; `petgraph` was already wired and retained.
+- `crates/forge/src/schema_graph.rs` — added `TrustBoundaryGraph` with deterministic OpenAPI v3 and protobuf schema ingestion, public-boundary edges, and ingress node extraction for REST routes and gRPC RPC methods.
+- `crates/forge/src/lib.rs` — exported `schema_graph`.
+
+**Verification:**
+
+- `cargo test -p forge schema_graph -- --test-threads=4` — passed.
+- `cargo test -p anatomist parser::tests::test_cpp_entity_extraction -- --test-threads=4` — passed after an initial transient timeout in a full workspace run.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-21 — Sprint Batch 26 (Deep Tech Foundation & Governance Lobotomy)
 
 **Directive:** Rewrite stale governance references, add Solidity/Web3 detector scaffolding, add bounded symbolic execution bridge, verify, commit. Do not release.

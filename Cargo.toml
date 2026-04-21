@@ -70,6 +70,10 @@ tree-sitter-kotlin-ng = "1.1.0"
 tree-sitter-zig = "1.1.2"
 tree-sitter-solidity = "1.2.13"
 alloy-primitives = "1.5.7"
+prost-reflect = "0.16.3"
+protobuf-parse = "3.7.2"
+openapiv3 = "2.2.0"
+serde_yaml = "0.9.34"
 
 # File System & Path Utilities
 memmap2 = "0.9"
