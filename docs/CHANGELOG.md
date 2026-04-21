@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-21 — Sprint Batch 26 (Deep Tech Foundation & Governance Lobotomy)
+
+**Directive:** Rewrite stale governance references, add Solidity/Web3 detector scaffolding, add bounded symbolic execution bridge, verify, commit. Do not release.
+
+**Changes:**
+
+- `.agent_governance` / `.cursorrules` — rewrote old implementation and innovation log references to `docs/CHANGELOG.md` and `.INNOVATION_LOG.md`; deleted ignored `docs/IMPLEMENTATION_BACKLOG.md` if present.
+- `.INNOVATION_LOG.md` — verified no `P0-1` references remain.
+- `Cargo.toml` / `crates/forge/Cargo.toml` — added `tree-sitter-solidity` and `alloy-primitives`; retained existing `rsmt2` Z3 bridge dependency.
+- `crates/forge/src/solidity_taint.rs` — added Solidity parser initialization and foundational detectors for `security:reentrancy` and `security:unprotected_selfdestruct`.
+- `crates/forge/src/symbex.rs` — added `SymbolicExecutor` skeleton over `ExploitWitness` plus basic SMT translation for `==`, `!=`, `<`, and `>` predicates through `rsmt2`.
+- `crates/experimental/advanced_threats/src/unicode_gate.rs` — restored deterministic ASCII fast path after `just audit` exposed a debug-build latency regression.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `cargo test -p advanced_threats --test unicode_lotl_isolation -- --test-threads=4` — passed after the Unicode fast-path fix.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-21 — Sprint Batch 25 (Omni-Format Enterprise Strike)
 
 **Directive:** Implement native SIEM telemetry exports, IDOR ownership tracing, and cloud-native CRD exposure detection. Do not release.

@@ -152,6 +152,10 @@ pub fn scan(data: &[u8], filename: &str) -> Option<ThreatReport> {
         return None;
     }
 
+    if data.is_ascii() {
+        return None;
+    }
+
     let ac = automaton();
     // find_iter allocates no heap — it yields Match structs by value.
     if let Some(m) = ac.find_iter(data).next() {

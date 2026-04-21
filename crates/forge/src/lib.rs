@@ -41,6 +41,8 @@ pub mod sanitizer;
 pub mod shadow_git;
 pub mod slop_filter;
 pub mod slop_hunter;
+pub mod solidity_taint;
+pub mod symbex;
 pub mod taint_catalog;
 pub mod taint_propagate;
 pub mod wasm_host;
