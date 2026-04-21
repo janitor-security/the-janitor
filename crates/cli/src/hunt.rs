@@ -1815,6 +1815,10 @@ fn scan_buffer(
     label: &str,
     frontend_routes: &[forge::authz::FrontendRoute],
 ) -> Vec<StructuredFinding> {
+    if is_compiled_artifact_extension(ext) {
+        return forge::binary_recovery::analyze_binary(source, label);
+    }
+
     let unit = ParsedUnit::unparsed(source);
     let mut findings = find_slop(ext, &unit)
         .into_iter()
@@ -1847,6 +1851,13 @@ fn scan_buffer(
         .collect::<Vec<_>>();
     findings.extend(forge::idor::scan_source(ext, source, label));
     findings
+}
+
+fn is_compiled_artifact_extension(ext: &str) -> bool {
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "so" | "dll" | "exe" | "dylib" | "macho" | "bin"
+    )
 }
 
 fn extract_rule_id(description: &str) -> String {

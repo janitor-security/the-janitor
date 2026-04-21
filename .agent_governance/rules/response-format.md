@@ -10,6 +10,14 @@ tests, or patching), agents MAY use natural, concise status updates such as
 `Running tests...`, `Failed on line 12. Patching...`, or `Release push in
 progress.`  These interim updates must stay brief and operational.
 
+Long-running command discipline is mandatory. After starting a known long
+command (`just audit`, `cargo test --workspace`, `/release`, `/strike`, or any
+build/test expected to exceed 60 seconds), agents MUST NOT repeatedly poll at
+short intervals and stream incremental command output. Use long waits of at
+least 60 seconds between status reads, emit at most one concise human status
+update per wait cycle, and summarize the final result only after the process
+exits. Constant polling is token waste and is a governance violation.
+
 The five-section structure below is reserved strictly for the **final summary**
 after the directive is complete and any requested `/release` has been triggered.
 Do **not** use it for intermediate execution updates.

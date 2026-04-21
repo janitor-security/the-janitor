@@ -43,6 +43,7 @@ openapiv3.workspace = true
 serde_yaml.workspace = true
 arc-swap.workspace = true
 git2.workspace = true
+goblin = "0.9"
 rkyv.workspace = true
 bytecheck.workspace = true
 memmap2.workspace = true

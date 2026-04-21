@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-21 — Sprint Batch 28 (Binary & Bytecode Recovery Lane)
+
+**Directive:** Add goblin-backed ELF / PE / Mach-O import triage for compiled artifacts, route compiled extensions through binary recovery, update P2-4 status, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/Cargo.toml` — added `goblin = "0.9"`.
+- `crates/forge/src/binary_recovery.rs` — added native import extraction for ELF, PE, and Mach-O objects plus Critical `security:dangerous_native_import` findings for `system`, `execve`, `popen`, `strcpy`, `gets`, `LoadLibraryA`, and `WinExec`.
+- `crates/forge/src/lib.rs` — exported `binary_recovery`.
+- `crates/cli/src/hunt.rs` — routed `.so`, `.dll`, `.exe`, `.dylib`, `.macho`, and `.bin` files through binary recovery before tree-sitter parsing.
+- `.INNOVATION_LOG.md` — marked P2-4 Tier 1 / Phase A binary triage as `[COMPLETED]`.
+
+**Verification:**
+
+- `cargo test -p forge binary_recovery -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-21 — Sprint Batch 27 (Great Schism & Service-Boundary Schema Graph)
 
 **Directive:** Purge redundant agent configurations, enforce P-tier next-action governance, add the P2-3 Service-Boundary Schema Graph foundation, verify, commit. Do not release.

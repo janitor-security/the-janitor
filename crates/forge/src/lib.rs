@@ -23,6 +23,7 @@
 
 pub mod agnostic_shield;
 pub mod authz;
+pub mod binary_recovery;
 pub mod brain;
 pub mod callgraph;
 pub mod cst_diff;
