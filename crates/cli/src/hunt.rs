@@ -191,6 +191,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
 }
 
 fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
+    let component_info = detect_component_info(findings);
     let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
     for finding in findings {
         grouped
@@ -244,6 +245,7 @@ fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
         reports.push(format!(
             "**Summary Title:** Multiple instances of {rule_id} in target\n\
 **VRT Category:** {}\n\
+**Affected Package / Component:** {component_info}\n\
 **Vulnerability Details:**\n\
 During a static analysis of the target artifacts, the following critical security sinks were identified:\n\
 {details}\n\
@@ -258,9 +260,10 @@ During a static analysis of the target artifacts, the following critical securit
     }
 
     if reports.is_empty() {
-        return String::from(
+        return format!(
             "**Summary Title:** Multiple instances of no_findings in target\n\
 **VRT Category:** Informational\n\
+**Affected Package / Component:** {component_info}\n\
 **Vulnerability Details:**\n\
 During a static analysis of the target artifacts, no findings were identified.\n\
 **Business Impact:** No direct business impact was identified because the scan did not emit any findings.\n\
@@ -268,7 +271,7 @@ During a static analysis of the target artifacts, no findings were identified.\n
 No upstream validation audit generated.\n\
 **Proof of Concept:**\n\
 No automated reproduction command generated. See vulnerable source lines above.\n\
-**Suggested Mitigation:** No mitigation required.",
+**Suggested Mitigation:** No mitigation required."
         );
     }
 
@@ -281,6 +284,7 @@ No automated reproduction command generated. See vulnerable source lines above.\
 /// each group: Description, Business Impact, Upstream Validation Audit,
 /// Working proof of concept, Discoverability, and Exploitability.
 pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
+    let component_info = detect_component_info(findings);
     let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
     for finding in findings {
         grouped
@@ -290,13 +294,14 @@ pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
     }
 
     if grouped.is_empty() {
-        return String::from(
+        return format!(
             "**Description**\nNo security findings were identified in the target.\n\n\
+**Affected Package / Component**\n{component_info}\n\n\
 **Business Impact (how does this affect Auth0?)**\nNo business impact identified.\n\n\
 **Upstream Validation Audit**\nNo upstream validation audit generated.\n\n\
 **Working proof of concept**\nNo proof of concept available.\n\n\
 **Discoverability (how likely is this to be discovered)**\nNot applicable.\n\n\
-**Exploitability (how likely is this to be exploited)**\nNot applicable.",
+**Exploitability (how likely is this to be exploited)**\nNot applicable."
         );
     }
 
@@ -383,6 +388,7 @@ successfully synthesized and is provided above.";
 
         reports.push(format!(
             "**Description**\n{description}\n\n\
+**Affected Package / Component**\n{component_info}\n\n\
 **Business Impact (how does this affect Auth0?)**\n{business_impact}\n\n\
 **Upstream Validation Audit**\n{upstream_validation_audit}\n\n\
 **Working proof of concept**\n{poc}\n\n\
@@ -467,6 +473,153 @@ fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String 
         .find(|audit| !audit.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| "No upstream validation audit generated.".to_string())
+}
+
+/// Detect the affected package name and version by scanning for manifest files
+/// (`package.json`, `Cargo.toml`, `pom.xml`) walking upward from `cwd`.
+fn detect_component_info(findings: &[StructuredFinding]) -> String {
+    detect_component_info_inner(findings, None)
+}
+
+fn detect_component_info_inner(
+    findings: &[StructuredFinding],
+    override_root: Option<&std::path::Path>,
+) -> String {
+    const MAX_MANIFEST_BYTES: u64 = 1_048_576;
+
+    let mut search_roots: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(root) = override_root {
+        search_roots.push(root.to_path_buf());
+    } else if let Ok(cwd) = std::env::current_dir() {
+        search_roots.push(cwd.clone());
+    }
+    for finding in findings {
+        if let Some(file) = &finding.file {
+            let p = std::path::Path::new(file);
+            let candidate = if p.is_absolute() {
+                p.parent().map(|d| d.to_path_buf())
+            } else {
+                std::env::current_dir()
+                    .ok()
+                    .map(|cwd| cwd.join(p))
+                    .and_then(|abs| abs.parent().map(|d| d.to_path_buf()))
+            };
+            if let Some(c) = candidate {
+                search_roots.push(c);
+            }
+        }
+    }
+
+    for start in search_roots {
+        let mut dir: &std::path::Path = &start;
+        loop {
+            let pkg_json = dir.join("package.json");
+            if pkg_json
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&pkg_json) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                        let name = val
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown");
+                        let ver = val
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown");
+                        return format!("**{name}** v{ver} (`package.json`)");
+                    }
+                }
+            }
+            let cargo_toml = dir.join("Cargo.toml");
+            if cargo_toml
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&cargo_toml) {
+                    if let Some((name, ver)) = parse_cargo_toml_name_version(&text) {
+                        return format!("**{name}** v{ver} (`Cargo.toml`)");
+                    }
+                }
+            }
+            let pom_xml = dir.join("pom.xml");
+            if pom_xml
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&pom_xml) {
+                    if let Some((name, ver)) = parse_pom_xml_name_version(&text) {
+                        return format!("**{name}** v{ver} (`pom.xml`)");
+                    }
+                }
+            }
+            match dir.parent() {
+                Some(parent) if parent != dir => dir = parent,
+                _ => break,
+            }
+        }
+    }
+    "Unknown / Source Repository".to_string()
+}
+
+/// Extract `name` and `version` from a `Cargo.toml` `[package]` section.
+fn parse_cargo_toml_name_version(content: &str) -> Option<(String, String)> {
+    let mut in_package = false;
+    let mut name: Option<String> = None;
+    let mut version: Option<String> = None;
+    for line in content.lines() {
+        let t = line.trim();
+        if t == "[package]" {
+            in_package = true;
+            continue;
+        }
+        if t.starts_with('[') {
+            if in_package {
+                break;
+            }
+            continue;
+        }
+        if in_package {
+            if let Some(v) = extract_toml_quoted_value(t, "name") {
+                name = Some(v);
+            }
+            if let Some(v) = extract_toml_quoted_value(t, "version") {
+                version = Some(v);
+            }
+        }
+        if name.is_some() && version.is_some() {
+            break;
+        }
+    }
+    name.zip(version)
+}
+
+fn extract_toml_quoted_value(line: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key} = \"");
+    line.strip_prefix(&prefix)
+        .and_then(|rest| rest.find('"').map(|end| rest[..end].to_string()))
+}
+
+/// Extract `artifactId` and `version` from the project-level `pom.xml` text.
+fn parse_pom_xml_name_version(content: &str) -> Option<(String, String)> {
+    let artifact = extract_xml_tag_value(content, "artifactId");
+    let version = extract_xml_tag_value(content, "version");
+    artifact.zip(version)
+}
+
+fn extract_xml_tag_value(content: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    content.find(&open).and_then(|pos| {
+        let after = &content[pos + open.len()..];
+        after
+            .find(&close)
+            .map(|end| after[..end].trim().to_string())
+    })
 }
 
 fn vrt_category(rule_id: &str) -> &'static str {
@@ -2293,6 +2446,52 @@ def main(user_id):
 
         assert!(report.contains("security:dom_xss_innerHTML"));
         assert!(!report.contains("security:hardcoded_secret"));
+    }
+
+    // -----------------------------------------------------------------------
+    // SBOM linkage — Affected Package / Component header
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn sbom_linkage_section_appears_in_bugcrowd_and_auth0_reports() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{"name":"auth0-lock","version":"12.3.1"}"#,
+        )
+        .unwrap();
+
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("auth0-lock"),
+            "component info must contain package name"
+        );
+        assert!(
+            component.contains("12.3.1"),
+            "component info must contain version"
+        );
+
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: None,
+            line: None,
+            fingerprint: "abc123".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        };
+        let bugcrowd = format_bugcrowd_report(&[finding.clone()]);
+        assert!(
+            bugcrowd.contains("**Affected Package / Component:**"),
+            "bugcrowd report must contain SBOM linkage header"
+        );
+        let auth0 = format_auth0_report(&[finding]);
+        assert!(
+            auth0.contains("**Affected Package / Component**"),
+            "auth0 report must contain SBOM linkage header"
+        );
     }
 
     // -----------------------------------------------------------------------

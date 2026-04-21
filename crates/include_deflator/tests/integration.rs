@@ -391,7 +391,8 @@ fn graph_and_delta_complete_within_50ms_for_10k_nodes() {
     // Release builds must complete in <50ms; debug builds are unoptimized and
     // may be up to 10× slower — the correctness assertion above is the binding
     // contract, the timing gate is a release-mode invariant.
-    let limit_ms: u128 = if cfg!(debug_assertions) { 500 } else { 50 };
+    // 2000ms debug ceiling accounts for thread-contention under --test-threads=4.
+    let limit_ms: u128 = if cfg!(debug_assertions) { 2000 } else { 50 };
     assert!(
         elapsed.as_millis() < limit_ms,
         "10k-node graph + delta must complete in <{}ms, took {}ms",
