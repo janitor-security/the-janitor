@@ -503,6 +503,22 @@ fn extract_patch_path(patch: &str) -> String {
     String::new()
 }
 
+fn apply_structured_governance_findings(
+    score: &mut SlopScore,
+    findings: Vec<common::slop::StructuredFinding>,
+) {
+    for finding in findings {
+        score.antipatterns_found += 1;
+        score.antipattern_score += crate::slop_hunter::Severity::Critical.points();
+        score.antipattern_details.push(format!(
+            "{} (line={})",
+            finding.id,
+            finding.line.unwrap_or_default()
+        ));
+        score.structured_findings.push(finding);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Multi-file patch splitting
 // ---------------------------------------------------------------------------
@@ -716,7 +732,7 @@ impl PRBouncer for PatchBouncer {
             for section in sections {
                 // Errors are non-fatal: a parse failure in one file section does
                 // not invalidate the analysis of the remaining sections.
-                if let Ok(s) = self.bounce(section, registry) {
+                if let Ok(mut s) = self.bounce(section, registry) {
                     total.dead_symbols_added += s.dead_symbols_added;
                     total.logic_clones_found += s.logic_clones_found;
                     total.zombie_symbols_added += s.zombie_symbols_added;
@@ -724,6 +740,7 @@ impl PRBouncer for PatchBouncer {
                     total.antipattern_score += s.antipattern_score;
                     total.suppressed_by_domain += s.suppressed_by_domain;
                     total.antipattern_details.extend(s.antipattern_details);
+                    total.structured_findings.append(&mut s.structured_findings);
                 }
             }
             // ── API Migration Guard ───────────────────────────────────────────
@@ -838,6 +855,8 @@ impl PRBouncer for PatchBouncer {
             .map(|l| &l[1..])
             .collect::<Vec<_>>()
             .join("\n");
+        let governance_findings =
+            crate::governance::check_workflow_pinning_source(&file_path, raw_added.as_bytes());
 
         let pre_lang_payload_findings: Vec<String> = if raw_added.trim().is_empty() {
             vec![]
@@ -920,6 +939,7 @@ impl PRBouncer for PatchBouncer {
                         antipattern_details: details,
                         ..SlopScore::default()
                     };
+                    apply_structured_governance_findings(&mut score, governance_findings);
                     let patch_blobs = extract_patch_blobs(patch);
                     self.apply_kev_findings(&mut score, &patch_blobs);
                     return Ok(score);
@@ -1468,6 +1488,15 @@ impl PRBouncer for PatchBouncer {
             let line = finding.line.unwrap_or_default();
             let remediation = finding.remediation.as_deref().unwrap_or_default();
             antipattern_details.push(format!("{} — {} (line={line})", finding.id, remediation));
+            structured_findings.push(finding);
+        }
+        for finding in governance_findings {
+            antipattern_score += crate::slop_hunter::Severity::Critical.points();
+            antipattern_details.push(format!(
+                "{} (line={})",
+                finding.id,
+                finding.line.unwrap_or_default()
+            ));
             structured_findings.push(finding);
         }
         let antipatterns_found = structured_findings.len() as u32;
@@ -2254,6 +2283,33 @@ mod tests {
         let score = bouncer.bounce("", &empty_registry()).unwrap();
         assert!(score.is_clean());
         assert_eq!(score.score(), 0);
+    }
+
+    #[test]
+    fn workflow_mutable_action_tag_flows_through_patch_bouncer() {
+        let patch = make_patch(
+            ".github/workflows/ci.yml",
+            r#"
+name: ci
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+"#,
+        );
+
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+
+        assert_eq!(score.antipattern_score, 50);
+        let finding = score
+            .structured_findings
+            .iter()
+            .find(|finding| finding.id == "security:mutable_workflow_tag")
+            .expect("workflow tag governance finding must be structured");
+        assert_eq!(finding.severity.as_deref(), Some("Critical"));
     }
 
     #[test]

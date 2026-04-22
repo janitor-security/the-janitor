@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 31 (Node.js SBOM & OSSF Governance)
+
+**Directive:** Expand Node.js SBOM attribution, enforce immutable GitHub Actions workflow pins for P1-7, prove Jira fail-open behavior at the ticket-spawn boundary, verify with workspace tests and audit, commit locally. Do not release.
+
+**Changes:**
+
+- `crates/cli/src/hunt.rs` — `package.json` SBOM attribution now emits `name@version` in the affected component field for Node.js targets.
+- `crates/forge/src/governance.rs` — added tree-sitter YAML-backed GitHub Actions workflow scanning for mutable `uses:` references; remote action refs not pinned to a 40-character SHA emit `security:mutable_workflow_tag` at Critical severity.
+- `crates/forge/src/slop_filter.rs` / `crates/forge/src/lib.rs` — exported governance checks and wired workflow pinning into `PatchBouncer` for `.github/workflows/*.yml|*.yaml` CI configuration diffs.
+- `crates/cli/src/jira.rs` — Jira ticket creation now logs create failures and returns `Ok(())`, preserving fail-open CI behavior for HTTP 500, HTTP 401, and transport failures.
+- `.INNOVATION_LOG.md` — physically removed completed `P1-7 — OSSF Scorecard & SLSA L4 Full Compliance`.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 30 (TOCTOU Core & Beta 1 Milestone)
 
 **Directive:** Complete P2-6 with a Race Condition and TOCTOU detector, wire it into `PatchBouncer`, purge the completed innovation item, verify, bump the workspace to `10.2.0-beta.1`, and cut the Beta 1 release. This release aggregates the unreleased value accumulated across Sprint Batches 16 through 30.

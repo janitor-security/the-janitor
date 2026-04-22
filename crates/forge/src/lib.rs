@@ -32,6 +32,7 @@ pub mod exploitability;
 pub mod fold;
 pub mod gadgets;
 pub mod git_sig;
+pub mod governance;
 pub mod hashing;
 pub mod idor;
 pub mod ifds;

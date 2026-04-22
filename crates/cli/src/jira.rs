@@ -151,7 +151,10 @@ fn spawn_jira_ticket_with_sender(
     let url = format!("{}/rest/api/2/issue", config.url.trim_end_matches('/'));
     let body = serde_json::to_string(&payload)
         .map_err(|_| anyhow::anyhow!("jira payload serialization failed"))?;
-    sender.send(&url, &auth, &body)
+    if let Err(err) = sender.send(&url, &auth, &body) {
+        eprintln!("jira sync fail-open: issue creation failed: {err}");
+    }
+    Ok(())
 }
 
 pub fn sync_findings_to_jira(
@@ -308,57 +311,64 @@ mod tests {
     }
 
     #[test]
-    fn test_jira_fail_open_logs_and_continues_on_http_and_timeout_errors() {
+    fn spawn_jira_ticket_fails_open_on_http_500_and_401() {
         let _guard_user = std::env::set_var("JANITOR_JIRA_USER", "operator@example.com");
         let _guard_token = std::env::set_var("JANITOR_JIRA_TOKEN", "token");
 
         let config = JiraConfig {
             url: "https://corp.atlassian.net".to_string(),
             project_key: "SEC".to_string(),
-            dedup: false, // disable dedup so mock only needs send outcomes
+            dedup: false,
         };
-        let findings = vec![
-            StructuredFinding {
-                id: "finding-500".to_string(),
-                file: Some("package.json".to_string()),
-                line: Some(1),
-                fingerprint: "fp-500".to_string(),
-                severity: Some("KevCritical".to_string()),
-                remediation: Some("remove postinstall worm".to_string()),
-                docs_url: None,
-                exploit_witness: None,
-                upstream_validation_absent: false,
-            },
-            StructuredFinding {
-                id: "finding-401".to_string(),
-                file: Some("package.json".to_string()),
-                line: Some(2),
-                fingerprint: "fp-401".to_string(),
-                severity: Some("KevCritical".to_string()),
-                remediation: Some("rotate credentials".to_string()),
-                docs_url: None,
-                exploit_witness: None,
-                upstream_validation_absent: false,
-            },
-            StructuredFinding {
-                id: "finding-timeout".to_string(),
-                file: Some("package.json".to_string()),
-                line: Some(3),
-                fingerprint: "fp-timeout".to_string(),
-                severity: Some("KevCritical".to_string()),
-                remediation: Some("retry later".to_string()),
-                docs_url: None,
-                exploit_witness: None,
-                upstream_validation_absent: false,
-            },
-        ];
+        let finding = StructuredFinding {
+            id: "finding-jira".to_string(),
+            file: Some("package.json".to_string()),
+            line: Some(1),
+            fingerprint: "fp-jira".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some("remove postinstall worm".to_string()),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        };
         let sender = MockJiraSender::new(vec![
             Err(anyhow::anyhow!("jira issue create failed with HTTP 500")),
             Err(anyhow::anyhow!("jira issue create failed with HTTP 401")),
-            Err(anyhow::anyhow!(
-                "jira issue create transport failure: timeout"
-            )),
         ]);
+
+        let http_500 = spawn_jira_ticket_with_sender(&config, &finding, &sender);
+        let http_401 = spawn_jira_ticket_with_sender(&config, &finding, &sender);
+
+        assert!(http_500.is_ok(), "HTTP 500 must fail open");
+        assert!(http_401.is_ok(), "HTTP 401 must fail open");
+        let remaining = sender.outcomes.lock().expect("outcomes mutex").len();
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn sync_findings_to_jira_continues_when_spawn_fails_open() {
+        let _guard_user = std::env::set_var("JANITOR_JIRA_USER", "operator@example.com");
+        let _guard_token = std::env::set_var("JANITOR_JIRA_TOKEN", "token");
+
+        let config = JiraConfig {
+            url: "https://corp.atlassian.net".to_string(),
+            project_key: "SEC".to_string(),
+            dedup: false,
+        };
+        let findings = vec![StructuredFinding {
+            id: "finding-timeout".to_string(),
+            file: Some("package.json".to_string()),
+            line: Some(3),
+            fingerprint: "fp-timeout".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some("retry later".to_string()),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        }];
+        let sender = MockJiraSender::new(vec![Err(anyhow::anyhow!(
+            "jira issue create transport failure: timeout"
+        ))]);
         let janitor_tmp = tempdir().expect("tempdir");
         let janitor_dir = janitor_tmp.path().join(".janitor");
         std::fs::create_dir_all(&janitor_dir).expect("create .janitor");
@@ -375,24 +385,7 @@ mod tests {
 
         assert!(result.is_ok(), "Jira sync must fail open");
         let warnings = warnings.lock().expect("warnings mutex");
-        assert_eq!(warnings.len(), 3, "all Jira failures must emit warnings");
-        assert!(
-            warnings[0].contains("Failed to sync finding to Jira: finding-500"),
-            "HTTP 500 must surface as stderr warning text"
-        );
-        assert!(
-            warnings[1].contains("HTTP 401"),
-            "HTTP 401 must surface as stderr warning text"
-        );
-        assert!(
-            warnings[2].contains("timeout"),
-            "transport timeout must surface as stderr warning text"
-        );
-
-        let diag = std::fs::read_to_string(janitor_dir.join("diag.log")).expect("read diag log");
-        assert!(diag.contains("finding-500"));
-        assert!(diag.contains("HTTP 401"));
-        assert!(diag.contains("timeout"));
+        assert!(warnings.is_empty(), "spawn-level fail-open must not bubble");
     }
 
     #[test]

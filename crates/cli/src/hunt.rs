@@ -653,7 +653,7 @@ fn detect_component_info_inner(
                             .get("version")
                             .and_then(|v| v.as_str())
                             .unwrap_or("Unknown");
-                        return format!("**{name}** v{ver} (`package.json`)");
+                        return format!("**{name}@{ver}** (`package.json`)");
                     }
                 }
             }
@@ -2754,12 +2754,8 @@ def main(user_id):
 
         let component = detect_component_info_inner(&[], Some(tmp.path()));
         assert!(
-            component.contains("auth0-lock"),
-            "component info must contain package name"
-        );
-        assert!(
-            component.contains("12.3.1"),
-            "component info must contain version"
+            component.contains("auth0-lock@12.3.1"),
+            "package.json component info must use name@version"
         );
 
         let finding = StructuredFinding {
