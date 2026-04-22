@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 33 (Signal Isolation & DFG Severance)
+
+**Directive:** Execute dependency refresh, enforce hunt exclusion boundaries for generated/vendor artifacts, sever CodeQL cleartext-logging DFG false positives for aggregate counters, update the AEG roadmap, verify, commit. Do not release.
+
+**Changes:**
+
+- `cargo update` — executed in the workspace root; Cargo reported no lockfile mutation, with 9 unchanged dependencies still behind latest compatible versions.
+- `crates/cli/src/hunt.rs` — centralized hunt exclusion checks and expanded directory rejection to `build`, `dist`, `docs`, `tests`, `__tests__`, `examples`, `coverage`, and `vendor`, in addition to existing `.git`, `node_modules`, and `target` boundaries.
+- `crates/cli/src/hunt.rs` — added file-level exclusion for `.d.ts`, `.min.js`, `.min.esm.js`, and `.map`, with deterministic coverage in `scan_directory_applies_exclusion_lattice`.
+- `crates/cli/src/main.rs` / `crates/cli/src/report.rs` — added CodeQL suppression comments and wrapped aggregate numerical counters in `std::hint::black_box(...)` at CLI/report logging sites.
+- `.INNOVATION_LOG.md` — locally updated the gitignored innovation roadmap with `P1-9: Context-Aware Client-Side AEG` and `P1-10: SMT String Synthesis for Identity Protocols`.
+
+**Verification:**
+
+- `cargo test -p cli scan_directory_applies_exclusion_lattice -- --test-threads=4` — passed.
+- `cargo test -p cli policy_health -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 32 (Sovereign Ergonomics, OAuth Interception, SMT Lattice)
 
 **Directive:** Add global license fallback, implement OAuth excessive-scope interception, execute P2-1 Phase B canonical Swift/Scala/Kotlin AST adapters and SMT sanitizer transfers, run Auth0 hunts against high-value targets, verify, commit. Do not release.

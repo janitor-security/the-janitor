@@ -1751,16 +1751,16 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     for entry in WalkDir::new(dir)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
-        })
+        .filter_entry(|entry| !is_excluded_hunt_entry(entry))
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
             continue;
         }
         let file_path = entry.path();
+        if is_excluded_hunt_file(file_path) {
+            continue;
+        }
         if std::fs::metadata(file_path)
             .map(|m| m.len() > MAX_FILE_BYTES)
             .unwrap_or(false)
@@ -1788,16 +1788,16 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     for entry in WalkDir::new(dir)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
-        })
+        .filter_entry(|entry| !is_excluded_hunt_entry(entry))
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
             continue;
         }
         let file_path = entry.path();
+        if is_excluded_hunt_file(file_path) {
+            continue;
+        }
 
         if std::fs::metadata(file_path)
             .map(|m| m.len() > MAX_FILE_BYTES)
@@ -1835,10 +1835,7 @@ fn collect_gadget_manifest_blobs(dir: &Path) -> Vec<(String, Vec<u8>)> {
     for entry in WalkDir::new(dir)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
-        })
+        .filter_entry(|entry| !is_excluded_hunt_entry(entry))
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
@@ -1866,6 +1863,35 @@ fn collect_gadget_manifest_blobs(dir: &Path) -> Vec<(String, Vec<u8>)> {
         manifests.push((rel_path, bytes));
     }
     manifests
+}
+
+fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
+    if !entry.file_type().is_dir() {
+        return false;
+    }
+    let name = entry.file_name().to_string_lossy();
+    matches!(
+        name.as_ref(),
+        ".git"
+            | "node_modules"
+            | "target"
+            | "build"
+            | "dist"
+            | "docs"
+            | "tests"
+            | "__tests__"
+            | "examples"
+            | "coverage"
+            | "vendor"
+    )
+}
+
+fn is_excluded_hunt_file(path: &Path) -> bool {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    name.ends_with(".d.ts")
+        || name.ends_with(".min.js")
+        || name.ends_with(".min.esm.js")
+        || name.ends_with(".map")
 }
 
 // ---------------------------------------------------------------------------
@@ -2974,26 +3000,45 @@ def main(user_id):
     }
 
     #[test]
-    fn scan_directory_skips_git_and_node_modules() {
+    fn scan_directory_applies_exclusion_lattice() {
         let dir = tempfile::TempDir::new().unwrap();
-        let git_dir = dir.path().join(".git");
-        std::fs::create_dir(&git_dir).unwrap();
-        std::fs::write(
-            git_dir.join("config.js"),
-            b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
-        )
-        .unwrap();
-        let node_dir = dir.path().join("node_modules");
-        std::fs::create_dir(&node_dir).unwrap();
-        std::fs::write(
-            node_dir.join("evil.js"),
-            b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
-        )
-        .unwrap();
+        for excluded in [
+            ".git",
+            "node_modules",
+            "target",
+            "build",
+            "dist",
+            "docs",
+            "tests",
+            "__tests__",
+            "examples",
+            "coverage",
+            "vendor",
+        ] {
+            let excluded_dir = dir.path().join(excluded);
+            std::fs::create_dir(&excluded_dir).unwrap();
+            std::fs::write(
+                excluded_dir.join("config.js"),
+                b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
+            )
+            .unwrap();
+        }
+        for excluded_file in [
+            "types.d.ts",
+            "bundle.min.js",
+            "bundle.min.esm.js",
+            "bundle.js.map",
+        ] {
+            std::fs::write(
+                dir.path().join(excluded_file),
+                b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
+            )
+            .unwrap();
+        }
         let findings = scan_directory(dir.path()).unwrap();
         assert!(
             findings.is_empty(),
-            "findings inside .git and node_modules must be excluded"
+            "findings inside excluded directories or generated artifacts must be excluded"
         );
     }
 
