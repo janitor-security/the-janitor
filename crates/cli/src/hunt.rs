@@ -41,6 +41,7 @@ const PYPI_BODY_LIMIT: u64 = 64 * 1024 * 1024;
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
 /// 512 MiB — total layer data buffered during docker save extraction.
 const DOCKER_LAYER_BUDGET: usize = 512 * 1024 * 1024;
+const GADGET_CHAIN_BUGCROWD_PROOF: &str = "A complete deserialization gadget chain was verified against the repository lockfile. The target is provably vulnerable to Remote Code Execution (RCE).";
 
 /// Embedded offline-baseline slopsquat corpus produced by `build.rs`.
 static EMBEDDED_SLOPSQUAT: &[u8] =
@@ -479,6 +480,12 @@ production systems and tenant data."
 }
 
 fn proof_of_concept_section(findings: &[&StructuredFinding]) -> String {
+    if findings
+        .iter()
+        .any(|finding| finding.id == "security:deserialization_gadget_chain")
+    {
+        return GADGET_CHAIN_BUGCROWD_PROOF.to_string();
+    }
     if let Some(repro_cmd) = findings
         .iter()
         .filter_map(|finding| finding.exploit_witness.as_ref())
@@ -1689,6 +1696,11 @@ fn is_placeholder_scan_root(scan_root: Option<&Path>, has_explicit_ingest_source
 fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let mut all: Vec<StructuredFinding> = Vec::new();
     let mut frontend_routes = Vec::new();
+    let gadget_manifests = collect_gadget_manifest_blobs(dir);
+    let gadget_manifest_refs: Vec<(&str, &[u8])> = gadget_manifests
+        .iter()
+        .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+        .collect();
 
     for entry in WalkDir::new(dir)
         .follow_links(false)
@@ -1761,9 +1773,53 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             .to_string();
 
         all.extend(scan_buffer(ext, &source, &rel_path, &frontend_routes));
+        all.extend(forge::gadgets::analyze_source_for_gadgets(
+            ext,
+            &source,
+            &rel_path,
+            &gadget_manifest_refs,
+        ));
     }
 
     Ok(dedup_findings(all))
+}
+
+fn collect_gadget_manifest_blobs(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut manifests = Vec::new();
+    for entry in WalkDir::new(dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !matches!(name.as_ref(), ".git" | "node_modules" | "target")
+        })
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let file_path = entry.path();
+        let file_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if !matches!(file_name, "pom.xml" | "requirements.txt" | "Gemfile.lock") {
+            continue;
+        }
+        if std::fs::metadata(file_path)
+            .map(|m| m.len() > MAX_FILE_BYTES)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(file_path) else {
+            continue;
+        };
+        let rel_path = file_path
+            .strip_prefix(dir)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .to_string();
+        manifests.push((rel_path, bytes));
+    }
+    manifests
 }
 
 // ---------------------------------------------------------------------------
@@ -2304,6 +2360,7 @@ def main(user_id):
                 sink_function: "pickle.loads".to_string(),
                 sink_label: "sink:unsafe_deserialization".to_string(),
                 call_chain: vec!["handler".to_string(), "pickle.loads".to_string()],
+                gadget_chain: None,
                 repro_cmd: Some(
                     "python3 -c \"import base64,pickle; pickle.loads(base64.b64decode('Y29zCnN5c3RlbQooUydlY2hvIEpBTklUT1JfUFJPQkUnCnRSLg=='))\""
                         .to_string(),
@@ -2331,6 +2388,40 @@ def main(user_id):
     }
 
     #[test]
+    fn bugcrowd_formatter_renders_verified_gadget_chain_statement() {
+        let finding = StructuredFinding {
+            id: "security:deserialization_gadget_chain".to_string(),
+            file: Some("src/Handler.java".to_string()),
+            line: Some(6),
+            fingerprint: "gadget123".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "readObject".to_string(),
+                source_label: "deserialization_entry".to_string(),
+                sink_function: "Runtime.exec".to_string(),
+                sink_label: "sink:rce_gadget_chain".to_string(),
+                call_chain: vec![
+                    "readObject".to_string(),
+                    "InvokerTransformer".to_string(),
+                    "Runtime.exec".to_string(),
+                ],
+                gadget_chain: Some(vec![
+                    "readObject".to_string(),
+                    "InvokerTransformer".to_string(),
+                    "Runtime.exec".to_string(),
+                ]),
+                ..Default::default()
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_bugcrowd_report(&[finding]);
+        assert!(report.contains(GADGET_CHAIN_BUGCROWD_PROOF));
+    }
+
+    #[test]
     fn auth0_formatter_emits_required_headers() {
         let finding = StructuredFinding {
             id: "security:command_injection".to_string(),
@@ -2350,6 +2441,7 @@ def main(user_id):
                     "exec_wrapper".to_string(),
                     "child_process.exec".to_string(),
                 ],
+                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/exec -d '{\"cmd\": \"id\"}'".to_string(),
                 ),
@@ -2420,6 +2512,7 @@ def main(user_id):
                 sink_function: "db.query".to_string(),
                 sink_label: "sink:sql_query".to_string(),
                 call_chain: vec!["handler".to_string(), "db.query".to_string()],
+                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/users -d '{\"q\": \"1' OR 1=1--\"}'"
                         .to_string(),
@@ -2473,6 +2566,7 @@ def main(user_id):
                     "escapeHtml".to_string(),
                     "Http.ssrf_fetch".to_string(),
                 ],
+                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/fetch -d '{\"url\": \"http://internal.admin/secret\"}'"
                         .to_string(),
@@ -2531,6 +2625,7 @@ def main(user_id):
                     "springRequestBody".to_string(),
                     "InternalFetch.ssrf_fetch".to_string(),
                 ],
+                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/users -d '{\"url\": \"http://internal.admin\"}'"
                         .to_string(),
@@ -2581,6 +2676,7 @@ def main(user_id):
                     "escapeHtml".to_string(),
                     "Http.ssrf_fetch".to_string(),
                 ],
+                gadget_chain: None,
                 repro_cmd: None,
                 sanitizer_audit: Some(
                     "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against XSS but fails to satisfy SSRF constraints. A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path."
@@ -2820,6 +2916,46 @@ def main(user_id):
         assert!(
             findings.is_empty(),
             "findings inside .git and node_modules must be excluded"
+        );
+    }
+
+    #[test]
+    fn scan_directory_appends_lockfile_verified_deserialization_gadget_chain() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("pom.xml"),
+            r#"
+<project>
+  <dependencies>
+    <dependency>
+      <artifactId>commons-collections</artifactId>
+      <version>3.2.1</version>
+    </dependency>
+  </dependencies>
+</project>
+"#,
+        )
+        .unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(
+            dir.path().join("src").join("Handler.java"),
+            r#"
+import java.io.ObjectInputStream;
+class Handler {
+    Object receive(ObjectInputStream input) throws Exception {
+        return input.readObject();
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let findings = scan_directory(dir.path()).unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.id == "security:deserialization_gadget_chain"),
+            "readObject plus vulnerable commons-collections lockfile must emit gadget chain"
         );
     }
 

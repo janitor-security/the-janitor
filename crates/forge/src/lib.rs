@@ -30,6 +30,7 @@ pub mod cst_diff;
 pub mod deobfuscate;
 pub mod exploitability;
 pub mod fold;
+pub mod gadgets;
 pub mod git_sig;
 pub mod hashing;
 pub mod idor;

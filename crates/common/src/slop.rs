@@ -20,6 +20,10 @@ pub struct ExploitWitness {
     pub sink_label: String,
     /// Exact interprocedural call chain proving reachability.
     pub call_chain: Vec<String>,
+    /// Verified deserialization gadget path when the finding proves an RCE
+    /// chain against repository dependency evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gadget_chain: Option<Vec<String>>,
     /// Concrete reproduction command synthesised from a Z3 model after
     /// symbolic execution confirms the path is satisfiable. `None` when the
     /// Z3 refinement stage was not run, was inconclusive, or the witness was

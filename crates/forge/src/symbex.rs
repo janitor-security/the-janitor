@@ -190,6 +190,7 @@ mod tests {
             sink_function: "withdraw".to_string(),
             sink_label: "call.value".to_string(),
             call_chain: vec!["withdraw".to_string()],
+            gadget_chain: None,
             repro_cmd: None,
             sanitizer_audit: None,
             route_path: None,

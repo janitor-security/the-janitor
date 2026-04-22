@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 29 (Deserialization Gadget Atlas)
+
+**Directive:** Implement P2-5 by adding a hardcoded deserialization gadget atlas for Java, Python, and Ruby, validate constructible RCE chains against repository lockfiles, enrich Bugcrowd evidence, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/gadgets.rs` — added `build_gadget_atlas()` over `petgraph::DiGraph` with Java Commons Collections, Python Pickle, and Ruby Marshal RCE chains; added lockfile/version gates and `KevCritical` `security:deserialization_gadget_chain` findings.
+- `crates/forge/src/lib.rs` — exported the gadget atlas module.
+- `crates/common/src/slop.rs` — extended `ExploitWitness` with optional `gadget_chain` evidence.
+- `crates/cli/src/hunt.rs` — collects `pom.xml`, `requirements.txt`, and `Gemfile.lock` evidence once per scan, appends gadget-chain findings, and renders the required Bugcrowd RCE proof statement.
+- `.INNOVATION_LOG.md` — purged completed `P2-5 — Deserialization Gadget Atlas` roadmap block under the log hygiene / absolute eradication rule.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-21 — Sprint Batch 28 (Binary & Bytecode Recovery Lane)
 
 **Directive:** Add goblin-backed ELF / PE / Mach-O import triage for compiled artifacts, route compiled extensions through binary recovery, update P2-4 status, verify, commit. Do not release.
