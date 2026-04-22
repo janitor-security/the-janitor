@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 34 (UAP Enforcement & Protocol AEG)
+
+**Directive:** Harden UAP final-response governance, complete P3-1 Phase C SMT-backed protocol payload synthesis, implement context-aware client-side AEG delivery payloads, update roadmap hygiene, verify, commit. Do not release.
+
+**Changes:**
+
+- `.agent_governance/rules/response-format.md` — mandated the strict four-part final summary, terminal-only `[SOVEREIGN TRANSLATION]`, and an absolute ban on raw tool-call artifacts in final terminal output.
+- `crates/forge/src/exploitability.rs` — mapped symbolic Z3 model bindings into identity protocol witnesses for JWT `alg:none`, OAuth missing-state CSRF, and SAML XXE payloads, including derived JWT none tokens, stripped OAuth authorize URLs, and base64 SAML payloads.
+- `crates/forge/src/exploitability.rs` — replaced browser-console DOM XSS / prototype-pollution witnesses with HTML/JS delivery payload generators to avoid Self-XSS-only reports.
+- `.INNOVATION_LOG.md` — locally removed completed P1-9/P1-10 roadmap blocks and marked P3-1 Phase C `[COMPLETED - Sprint Batch 34]`; the file remains gitignored by repository policy.
+
+**Verification:**
+
+- `cargo test -p forge exploitability -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed after replacing a Clippy-rejected useless `format!`; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 33 (Signal Isolation & DFG Severance)
 
 **Directive:** Execute dependency refresh, enforce hunt exclusion boundaries for generated/vendor artifacts, sever CodeQL cleartext-logging DFG false positives for aggregate counters, update the AEG roadmap, verify, commit. Do not release.

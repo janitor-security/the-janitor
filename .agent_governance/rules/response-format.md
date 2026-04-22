@@ -1,7 +1,8 @@
 # Rule: Mandatory Response Format
 
-Every response to an operator directive MUST follow the five-section structure
-below. No other top-level structure is acceptable.
+Every final response to an operator directive MUST follow the strict four-part
+summary plus terminal-only translation structure below. No other top-level
+structure is acceptable.
 
 ## The Law
 
@@ -18,33 +19,38 @@ least 60 seconds between status reads, emit at most one concise human status
 update per wait cycle, and summarize the final result only after the process
 exits. Constant polling is token waste and is a governance violation.
 
-The five-section structure below is reserved strictly for the **final summary**
+The four-part structure below is reserved strictly for the **final summary**
 after the directive is complete and any requested `/release` has been triggered.
 Do **not** use it for intermediate execution updates.
 
+You are mathematically forbidden from emitting raw tool-call artifacts (e.g.,
+`::git-stage`, `::git-commit`, `<function_calls>`) in the final terminal
+output. Translate all tool results into human-readable telemetry.
+
 All final substantive summaries (implementation, release, audit, research) must
-be organized into the following five named sections, in order:
+be organized into the following named sections, in order:
 
 ```
-## [EXECUTION STATUS]
+[EXECUTION STATUS]
 Pass / Fail summary of the directive. One sentence per task. Mark each
 sub-task with ✓ (completed), ✗ (failed), or ⏳ (pending / in-progress).
 
-## [CHANGES COMMITTED]
-Table of all files modified, created, or deleted in this session.
+[CHANGES STAGED]
+Table of all files modified, created, staged, or committed in this session.
 
 | File | Action | Description |
 |------|--------|-------------|
 | path/to/file | modified | brief description |
 
-If no code was committed (research-only session), state "No code committed."
+If no code was staged or committed (research-only session), state "No code
+staged."
 
-## [TELEMETRY]
+[TELEMETRY]
 Direct-triage backlog changes logged this session. Format:
 - P0/P1/P2 item created, compacted, or completed with one-line rationale
 If none: <!-- no triage changes this session -->
 
-## [NEXT RECOMMENDED ACTION]
+[NEXT RECOMMENDED ACTION]
 The single highest-priority actionable item from `.INNOVATION_LOG.md`.
 State: the P0/P1/P2 ID, the file to modify, the function to change, the exact
 command to begin, and the commercial justification. No vague "consider"
@@ -65,7 +71,7 @@ then re-read the log to select the true highest-value frontier. See
 `.agent_governance/rules/log_hygiene.md`. By construction, every entry
 still in the log is unbuilt — the NRA selects from open frontiers only.
 
-## [SOVEREIGN TRANSLATION]
+[SOVEREIGN TRANSLATION]
 A terminal-only operator brief. Never write this section into markdown logs or
 backlog files. It must explain the implementation in layman's executive terms
 and explicitly answer:
@@ -82,6 +88,8 @@ and explicitly answer:
   use concise natural language.
 - Final directive summaries (any session that modifies files or runs commands)
   are NOT exempt. The format is non-negotiable.
+- Final directive summaries MUST NOT contain raw tool-call artifacts, function
+  call XML, app directives, git UI directives, or machine-control sentinels.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
   `.INNOVATION_LOG.md` and state the commercial justification — it is not
   a free-form opinion.
