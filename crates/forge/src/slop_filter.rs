@@ -1078,6 +1078,7 @@ impl PRBouncer for PatchBouncer {
             .collect::<Vec<_>>();
         let authz_consistency_findings = crate::authz::check_authz_consistency(&endpoint_surfaces);
         let idor_findings = crate::idor::scan_tree(&tree, ext, source, &file_path);
+        let toctou_findings = crate::toctou::detect_race_conditions(ext, source, &file_path);
 
         // Domain routing: classify this file's context so memory-safety rules are
         // not applied to vendored or test code.  Supply-chain rules (DOMAIN_ALL)
@@ -1388,7 +1389,10 @@ impl PRBouncer for PatchBouncer {
         }
         let mut antipattern_details = Vec::with_capacity(accepted.len());
         let mut structured_findings = Vec::with_capacity(
-            accepted.len() + authz_consistency_findings.len() + idor_findings.len(),
+            accepted.len()
+                + authz_consistency_findings.len()
+                + idor_findings.len()
+                + toctou_findings.len(),
         );
         for f in accepted {
             let line = byte_offset_to_line(source, f.start_byte);
@@ -1457,6 +1461,13 @@ impl PRBouncer for PatchBouncer {
                 finding.id,
                 finding.line.unwrap_or_default()
             ));
+            structured_findings.push(finding);
+        }
+        for finding in toctou_findings {
+            antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
+            let line = finding.line.unwrap_or_default();
+            let remediation = finding.remediation.as_deref().unwrap_or_default();
+            antipattern_details.push(format!("{} — {} (line={line})", finding.id, remediation));
             structured_findings.push(finding);
         }
         let antipatterns_found = structured_findings.len() as u32;
@@ -2243,6 +2254,37 @@ mod tests {
         let score = bouncer.bounce("", &empty_registry()).unwrap();
         assert!(score.is_clean());
         assert_eq!(score.score(), 0);
+    }
+
+    #[test]
+    fn test_toctou_filesystem_pattern_flows_through_patch_bouncer() {
+        let patch = make_patch(
+            "src/fs.c",
+            r#"
+int vulnerable(const char *path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        return open(path, O_WRONLY);
+    }
+    return -1;
+}
+"#,
+        );
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+        let finding = score
+            .structured_findings
+            .iter()
+            .find(|finding| finding.id == crate::toctou::TOCTOU_RULE_ID)
+            .expect("filesystem check-then-open race must reach structured findings");
+        assert_eq!(finding.severity.as_deref(), Some("KevCritical"));
+        let remediation = finding
+            .remediation
+            .as_deref()
+            .expect("TOCTOU finding must prove temporal gap");
+        assert!(remediation.contains("Check node line"));
+        assert!(remediation.contains("Act node line"));
     }
 
     #[test]

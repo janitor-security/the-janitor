@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 30 (TOCTOU Core & Beta 1 Milestone)
+
+**Directive:** Complete P2-6 with a Race Condition and TOCTOU detector, wire it into `PatchBouncer`, purge the completed innovation item, verify, bump the workspace to `10.2.0-beta.1`, and cut the Beta 1 release. This release aggregates the unreleased value accumulated across Sprint Batches 16 through 30.
+
+**Changes:**
+
+- `crates/forge/src/toctou.rs` — added `HappensBeforeGraph` over `petgraph::DiGraph`, sequential file/database operation tracking, filesystem `stat`/`access` to `open` race detection, database `SELECT ... WHERE` to `UPDATE`/`INSERT` race detection, and guard suppression for `O_NOFOLLOW`, `fstatat`, transactions, and `SELECT ... FOR UPDATE`.
+- `crates/forge/src/slop_filter.rs` — wired TOCTOU findings into `PatchBouncer` structured findings and KevCritical scoring; remediation now cites both Check and Act line numbers to prove the temporal gap.
+- `crates/forge/src/lib.rs` — exported the TOCTOU detector.
+- `Cargo.toml` — bumped workspace version to `10.2.0-beta.1` for the Beta 1 milestone.
+- `.INNOVATION_LOG.md` — purged completed `P2-6 — Race Condition and TOCTOU Detector`; no completed P2-6 item remains.
+
+**Verification:**
+
+- `cargo test -p forge toctou -- --test-threads=4` — passed after tightening `SELECT ... FOR UPDATE` suppression.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+
 ## 2026-04-22 — Sprint Batch 29 (Deserialization Gadget Atlas)
 
 **Directive:** Implement P2-5 by adding a hardcoded deserialization gadget atlas for Java, Python, and Ruby, validate constructible RCE chains against repository lockfiles, enrich Bugcrowd evidence, verify, commit. Do not release.

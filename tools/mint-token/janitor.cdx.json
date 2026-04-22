@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:2c055ca1-1e0e-43ad-bd8f-0660598872b5",
+  "serialNumber": "urn:uuid:8f87f78a-f7f3-4440-ae71-447e9e871c5b",
   "metadata": {
-    "timestamp": "2026-04-18T10:56:56.307570364Z",
+    "timestamp": "2026-04-22T03:13:54.100077588Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.6",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.1",
       "name": "mint-token",
-      "version": "10.2.0-alpha.6",
+      "version": "10.2.0-beta.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.2.0-alpha.6?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.2.0-beta.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.6 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.1 bin-target-0",
           "name": "mint-token",
-          "version": "10.2.0-alpha.6",
-          "purl": "pkg:cargo/mint-token@10.2.0-alpha.6?download_url=file://.#src/main.rs"
+          "version": "10.2.0-beta.1",
+          "purl": "pkg:cargo/mint-token@10.2.0-beta.1?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -1501,16 +1501,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#typenum@1.20.0",
       "author": "Paho Lurie-Gregg <paho@paholg.com>, Andre Bogus <bogusandre@gmail.com>",
       "name": "typenum",
-      "version": "1.19.0",
+      "version": "1.20.0",
       "description": "Typenum is a Rust library for type-level numbers evaluated at     compile time. It currently supports bits, unsigned integers, and signed     integers. It also provides a type-level array of type-level numbers, but its     implementation is incomplete.",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+          "content": "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
         }
       ],
       "licenses": [
@@ -1518,7 +1518,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/typenum@1.19.0",
+      "purl": "pkg:cargo/typenum@1.20.0",
       "externalReferences": [
         {
           "type": "documentation",
@@ -1711,7 +1711,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-alpha.6",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -1803,7 +1803,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.6",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
-        "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0"
+        "registry+https://github.com/rust-lang/crates.io-index#typenum@1.20.0"
       ]
     },
     {
@@ -1865,7 +1865,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0",
+        "registry+https://github.com/rust-lang/crates.io-index#typenum@1.20.0",
         "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
         "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.8.2"
       ]
@@ -2008,7 +2008,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#typenum@1.19.0"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#typenum@1.20.0"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24"

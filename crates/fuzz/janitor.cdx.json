@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:f5efd242-5fe2-48ef-9dd8-77d2443651ce",
+  "serialNumber": "urn:uuid:7997d600-5388-4c8b-92c0-d47bea93d651",
   "metadata": {
-    "timestamp": "2026-04-18T10:56:56.269326946Z",
+    "timestamp": "2026-04-22T03:13:53.963423986Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-alpha.6",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-beta.1",
       "name": "janitor-fuzz",
-      "version": "10.2.0-alpha.6",
+      "version": "10.2.0-beta.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/janitor-fuzz@10.2.0-alpha.6?download_url=file://.",
+      "purl": "pkg:cargo/janitor-fuzz@10.2.0-beta.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-alpha.6 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-beta.1 bin-target-0",
           "name": "janitor_fuzz",
-          "version": "10.2.0-alpha.6",
-          "purl": "pkg:cargo/janitor-fuzz@10.2.0-alpha.6?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.1",
+          "purl": "pkg:cargo/janitor-fuzz@10.2.0-beta.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.6",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
       "name": "polyglot",
-      "version": "10.2.0-alpha.6",
+      "version": "10.2.0-beta.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.2.0-alpha.6?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.2.0-beta.1?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1182,16 +1182,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.0",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
       "author": "Max Brunsfeld <maxbrunsfeld@gmail.com>",
       "name": "tree-sitter-scala",
-      "version": "0.25.0",
+      "version": "0.25.1",
       "description": "Scala grammar for tree-sitter",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "83079f50ea7d03e0faf6be6260ed97538e6df7349ec3cbcbf5771f7b38e3c8b7"
+          "content": "3394d6bc99bceae03c75482a93f1bcefff11e69d3a405f1410e864212b52739a"
         }
       ],
       "licenses": [
@@ -1199,7 +1199,7 @@
           "expression": "MIT"
         }
       ],
-      "purl": "pkg:cargo/tree-sitter-scala@0.25.0",
+      "purl": "pkg:cargo/tree-sitter-scala@0.25.1",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1387,10 +1387,10 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-alpha.6",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/fuzz#janitor-fuzz@10.2.0-beta.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#libfuzzer-sys@0.4.12",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.6",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-cpp@0.23.4",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-javascript@0.25.0",
@@ -1398,7 +1398,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-alpha.6",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -1419,7 +1419,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-python@0.25.0",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-ruby@0.23.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-rust@0.24.2",
-        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.0",
+        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-swift@0.7.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-typescript@0.23.2",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-yaml@0.7.2",
@@ -1652,7 +1652,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.0",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"
