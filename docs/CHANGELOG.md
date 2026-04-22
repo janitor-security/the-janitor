@@ -3,6 +3,37 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 32 (Sovereign Ergonomics, OAuth Interception, SMT Lattice)
+
+**Directive:** Add global license fallback, implement OAuth excessive-scope interception, execute P2-1 Phase B canonical Swift/Scala/Kotlin AST adapters and SMT sanitizer transfers, run Auth0 hunts against high-value targets, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/common/src/license.rs` — license verification now falls back from project-local `.janitor/janitor.lic` to `~/.config/janitor/janitor.lic` when `JANITOR_LICENSE` is not explicitly set; added deterministic candidate and fallback round-trip tests.
+- `crates/forge/src/slop_hunter.rs` / `crates/crucible/src/main.rs` — added language-agnostic `security:oauth_excessive_scope` detection for OAuth flows requesting `repo`, `admin:org`, `admin:enterprise`, or wildcard scopes; added unit and Crucible true-positive / true-negative coverage.
+- `crates/forge/src/ast_adapter.rs`, `adapter_swift.rs`, `adapter_scala.rs`, `adapter_kotlin.rs` — added exact P2-1 Swift, Scala, and Kotlin Tree-sitter node maps into canonical IFDS facts with snapshot-style fixture tests for entry, parameter, call, sanitizer, sink, and Kotlin lattice-transition handling.
+- `crates/forge/src/sanitizer_sym.rs` / `crates/forge/src/lib.rs` — exported a symbolic sanitizer transfer registry mapping `urlencode` to SSRF taint elimination and `html_escape` to XSS taint elimination with SMT-LIB constraints.
+- `crates/cli/src/hunt.rs` — fixed scoped npm tarball ingestion by consuming registry `dist.tarball` instead of constructing invalid scoped tarball filenames; preserved npm package/version attribution for Auth0 reports after temporary extraction directories are dropped.
+
+**Auth0 Hunt Ledger:**
+
+- `auth0-js@9.32.0` — generated `/tmp/auth0_js_report.md`; non-empty report with `dom_xss_innerHTML`, `oauth_excessive_scope`, `prototype_pollution`, and `unpinned_asset` groups.
+- `@auth0/auth0-spa-js@2.19.2` — generated `/tmp/auth0_spa_js_report.md`; non-empty report with `oauth_csrf_missing_state`, `oauth_excessive_scope`, `prototype_pollution_merge_sink`, and `unpinned_asset` groups.
+- `@auth0/nextjs-auth0@4.18.0` — generated `/tmp/auth0_nextjs_report.md`; non-empty report with `oauth_excessive_scope` and `unpinned_asset` groups.
+- Existing local reports `auth0_java_report.md` and `auth0_node_report.md` are empty-output reports; the referenced `/tmp/auth0-java` and `/tmp/node-auth0` target directories are absent in this session. No privilege downgrade or license gate suppressed report output.
+
+**Verification:**
+
+- `cargo test -p common license -- --test-threads=4` — passed.
+- `cargo test -p forge adapter -- --test-threads=4` — passed.
+- `cargo test -p forge sanitizer_sym -- --test-threads=4` — passed.
+- `cargo test -p forge oauth -- --test-threads=4` — passed.
+- `cargo test -p crucible -- --test-threads=4` — passed.
+- `cargo test -p cli npm -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 31 (Node.js SBOM & OSSF Governance)
 
 **Directive:** Expand Node.js SBOM attribution, enforce immutable GitHub Actions workflow pins for P1-7, prove Jira fail-open behavior at the ticket-spawn boundary, verify with workspace tests and audit, commit locally. Do not release.

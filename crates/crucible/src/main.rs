@@ -1484,6 +1484,24 @@ const std = @import(\"std\");\npub fn read_config(path: []const u8, alloc: std.m
         must_intercept: false,
         desc_fragment: None,
     },
+    Entry {
+        name: "OAuth/Vercel repo admin scope — INTERCEPT",
+        lang: "js",
+        source: b"\
+const authorizeUrl = \"https://vercel.com/oauth/authorize?response_type=code&client_id=abc&scope=read:user repo admin:org&state=csrf\";\n\
+window.location = authorizeUrl;\n",
+        must_intercept: true,
+        desc_fragment: Some("security:oauth_excessive_scope"),
+    },
+    Entry {
+        name: "OAuth/Vercel read-only identity scope — SAFE",
+        lang: "js",
+        source: b"\
+const authorizeUrl = \"https://vercel.com/oauth/authorize?response_type=code&client_id=abc&scope=read:user user:email&state=csrf\";\n\
+window.location = authorizeUrl;\n",
+        must_intercept: false,
+        desc_fragment: None,
+    },
 ];
 
 // ---------------------------------------------------------------------------

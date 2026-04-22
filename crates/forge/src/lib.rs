@@ -21,7 +21,11 @@
 //! // → same structural hash
 //! ```
 
+pub mod adapter_kotlin;
+pub mod adapter_scala;
+pub mod adapter_swift;
 pub mod agnostic_shield;
+pub mod ast_adapter;
 pub mod authz;
 pub mod binary_recovery;
 pub mod brain;
@@ -41,6 +45,7 @@ pub mod migration_guard;
 pub mod negtaint;
 pub mod pr_collider;
 pub mod sanitizer;
+pub mod sanitizer_sym;
 pub mod schema_graph;
 pub mod shadow_git;
 pub mod slop_filter;

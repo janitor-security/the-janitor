@@ -728,6 +728,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     // Language-agnostic: credential header scan runs on every source file
     // regardless of detected language.  Secrets can appear in any file type.
     findings.extend(find_credential_slop(source));
+    // Language-agnostic: OAuth privilege escalation can be assembled in config,
+    // JS/TS route handlers, Java/Python backends, or IaC-generated callback URLs.
+    findings.extend(find_oauth_excessive_scope(source));
     // Language-agnostic: supply-chain integrity scan runs on every source file.
     // Catches external script loading without SRI and GitHub Pages URL embedding.
     findings.extend(find_supply_chain_slop_with_context(language, parsed));
@@ -958,6 +961,83 @@ fn find_oauth_state_omission(source: &[u8]) -> Vec<SlopFinding> {
     }
 
     Vec::new()
+}
+
+fn find_oauth_excessive_scope(source: &[u8]) -> Vec<SlopFinding> {
+    const OAUTH_MARKERS: &[&[u8]] = &[
+        b"scope=",
+        b"scope:",
+        b"request_token",
+        b"oauth/authorize",
+        b"oauth2/authorize",
+        b"/authorize",
+    ];
+    const DIRECT_DANGEROUS_SCOPES: &[&[u8]] =
+        &[b"admin:org", b"admin:enterprise", b"scope=*", b"scope=%2a"];
+
+    let lower = ascii_lower(source);
+    if !contains_any_bytes(&lower, OAUTH_MARKERS) {
+        return Vec::new();
+    }
+
+    let mut search_start = 0;
+    while search_start < lower.len() {
+        let Some(rel_start) = first_match_pos(&lower[search_start..], OAUTH_MARKERS) else {
+            break;
+        };
+        let marker_start = search_start + rel_start;
+        let window_start = marker_start.saturating_sub(256);
+        let window_end = (marker_start + 512).min(lower.len());
+        let window = &lower[window_start..window_end];
+        let scope_context = contains_any_bytes(window, &[b"scope", b"request_token"]);
+        let has_excessive_scope = contains_any_bytes(window, DIRECT_DANGEROUS_SCOPES)
+            || contains_scope_repo_token(window)
+            || (scope_context && contains_scope_wildcard(window));
+
+        if has_excessive_scope {
+            return vec![SlopFinding {
+                start_byte: marker_start,
+                end_byte: window_end,
+                description: "security:oauth_excessive_scope — OAuth authorization flow requests repository, organization-admin, enterprise-admin, or wildcard scope; this converts account-linking consent into broad source-control or tenant administration authority."
+                    .to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::KevCritical,
+            }];
+        }
+        search_start = marker_start + 1;
+    }
+
+    Vec::new()
+}
+
+fn contains_scope_wildcard(window: &[u8]) -> bool {
+    window.contains(&b'*')
+}
+
+fn contains_scope_repo_token(window: &[u8]) -> bool {
+    let needle = b"repo";
+    let mut start = 0;
+    while let Some(rel) = window[start..]
+        .windows(needle.len())
+        .position(|candidate| candidate == needle)
+    {
+        let idx = start + rel;
+        let before = idx
+            .checked_sub(1)
+            .and_then(|i| window.get(i))
+            .copied()
+            .unwrap_or(b' ');
+        let after = window.get(idx + needle.len()).copied().unwrap_or(b' ');
+        if is_scope_boundary(before) && is_scope_boundary(after) {
+            return true;
+        }
+        start = idx + 1;
+    }
+    false
+}
+
+fn is_scope_boundary(byte: u8) -> bool {
+    !byte.is_ascii_alphanumeric() && !matches!(byte, b'_' | b'-')
 }
 
 fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
@@ -9682,6 +9762,37 @@ mod phase7_rd_tests {
                 .iter()
                 .any(|f| f.description.contains("oauth_csrf_missing_state")),
             "OAuth authorize URL without state/nonce must fire oauth_csrf_missing_state"
+        );
+    }
+
+    #[test]
+    fn test_oauth_excessive_repo_scope_fires() {
+        let src = br#"
+            const authorizeUrl = "https://vercel.com/oauth/authorize?client_id=abc&scope=read:user repo admin:org&state=csrf";
+            window.location = authorizeUrl;
+        "#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("oauth_excessive_scope")
+                    && f.severity == Severity::KevCritical),
+            "OAuth repo/admin scope escalation must fire at KevCritical"
+        );
+    }
+
+    #[test]
+    fn test_oauth_minimal_scope_clean() {
+        let src = br#"
+            const authorizeUrl = "https://vercel.com/oauth/authorize?client_id=abc&scope=read:user user:email&state=csrf&nonce=n";
+            window.location = authorizeUrl;
+        "#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("oauth_excessive_scope")),
+            "OAuth read-only identity scopes must not fire excessive-scope detector"
         );
     }
 }

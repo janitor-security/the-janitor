@@ -22,10 +22,16 @@ pub struct License {
     pub features: Vec<String>,
 }
 
-fn resolve_license_path(path: &Path) -> PathBuf {
-    std::env::var_os("JANITOR_LICENSE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| path.join(".janitor").join("janitor.lic"))
+fn license_candidate_paths(path: &Path) -> Vec<PathBuf> {
+    if let Some(explicit) = std::env::var_os("JANITOR_LICENSE").map(PathBuf::from) {
+        return vec![explicit];
+    }
+
+    let mut candidates = vec![path.join(".janitor").join("janitor.lic")];
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        candidates.push(home.join(".config").join("janitor").join("janitor.lic"));
+    }
+    candidates
 }
 
 fn current_unix_timestamp() -> Option<u64> {
@@ -93,14 +99,16 @@ pub fn encode_license_file(license: &License, signing_key: &SigningKey) -> anyho
 }
 
 pub fn verify_license(path: &Path) -> bool {
-    let resolved = resolve_license_path(path);
-    let contents = match std::fs::read_to_string(&resolved) {
-        Ok(contents) => contents,
-        Err(_) => return false,
-    };
-    let (payload, signature) = match decode_license_file(&contents) {
-        Some(decoded) => decoded,
-        None => return false,
+    verify_license_candidates(path, license_candidate_paths(path))
+}
+
+fn verify_license_candidates(path: &Path, candidates: Vec<PathBuf>) -> bool {
+    let Some((payload, signature)) = candidates
+        .into_iter()
+        .filter_map(|candidate| std::fs::read_to_string(candidate).ok())
+        .find_map(|contents| decode_license_file(&contents))
+    else {
+        return false;
     };
     let mut verifying_keys = Vec::with_capacity(2);
     if let Some(local_key) = local_license_verifying_key(path) {
@@ -131,8 +139,8 @@ pub fn verify_license(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        encode_license_file, resolve_license_signing_key, verify_license, License,
-        JANITOR_LICENSE_PUB_KEY,
+        encode_license_file, license_candidate_paths, resolve_license_signing_key, verify_license,
+        verify_license_candidates, License, JANITOR_LICENSE_PUB_KEY,
     };
     use ed25519_dalek::VerifyingKey;
     use tempfile::tempdir;
@@ -148,6 +156,22 @@ mod tests {
     fn missing_license_returns_false() {
         let dir = tempdir().expect("tempdir");
         assert!(!verify_license(dir.path()));
+    }
+
+    #[test]
+    fn default_candidates_include_project_then_global_license() {
+        let dir = tempdir().expect("tempdir");
+        let candidates = license_candidate_paths(dir.path());
+        assert_eq!(
+            candidates[0],
+            dir.path().join(".janitor").join("janitor.lic")
+        );
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path.ends_with(".config/janitor/janitor.lic")),
+            "global user config fallback must be present when HOME is set"
+        );
     }
 
     #[test]
@@ -167,5 +191,31 @@ mod tests {
         std::fs::write(janitor_dir.join("janitor.lic"), encoded).expect("write license file");
 
         assert!(verify_license(dir.path()));
+    }
+
+    #[test]
+    fn global_config_license_fallback_round_trips() {
+        let dir = tempdir().expect("tempdir");
+        let key_path = dir.path().join(".janitor_release.key");
+        std::fs::write(&key_path, vec![0x5a; 4128]).expect("write local seed material");
+        let signing_key = resolve_license_signing_key(dir.path()).expect("resolve signing key");
+        let license = License {
+            issued_to: "unit-test-global".to_string(),
+            expires_at: u64::MAX,
+            features: vec!["IFDS".to_string()],
+        };
+        let encoded = encode_license_file(&license, &signing_key).expect("encode license");
+        let global_dir = dir.path().join("home").join(".config").join("janitor");
+        std::fs::create_dir_all(&global_dir).expect("create global config dir");
+        let global_license = global_dir.join("janitor.lic");
+        std::fs::write(&global_license, encoded).expect("write global license file");
+
+        assert!(verify_license_candidates(
+            dir.path(),
+            vec![
+                dir.path().join(".janitor").join("janitor.lic"),
+                global_license
+            ],
+        ));
     }
 }

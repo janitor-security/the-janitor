@@ -139,10 +139,13 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         );
     }
 
+    let mut component_info_override: Option<String> = None;
     let findings = if let Some(url) = sourcemap_url {
         ingest_sourcemap(url)?
     } else if let Some(pkg) = npm_pkg {
-        ingest_npm(pkg)?
+        let (findings, component_info) = ingest_npm(pkg)?;
+        component_info_override = Some(component_info);
+        findings
     } else if let Some(path) = whl_path {
         ingest_whl(path, corpus_path)?
     } else if let Some(pkg) = pypi_pkg {
@@ -183,12 +186,22 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     };
 
     if format == "bugcrowd" {
-        println!("{}", format_bugcrowd_report(&findings));
+        let report = if let Some(component_info) = component_info_override.as_deref() {
+            format_bugcrowd_report_with_component(&findings, Some(component_info))
+        } else {
+            format_bugcrowd_report(&findings)
+        };
+        println!("{report}");
         return Ok(());
     }
 
     if format == "auth0" {
-        println!("{}", format_auth0_report(&findings));
+        let report = if let Some(component_info) = component_info_override.as_deref() {
+            format_auth0_report_with_component(&findings, Some(component_info))
+        } else {
+            format_auth0_report(&findings)
+        };
+        println!("{report}");
         return Ok(());
     }
 
@@ -202,7 +215,16 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
 }
 
 fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
-    let component_info = detect_component_info(findings);
+    format_bugcrowd_report_with_component(findings, None)
+}
+
+fn format_bugcrowd_report_with_component(
+    findings: &[StructuredFinding],
+    component_info_override: Option<&str>,
+) -> String {
+    let component_info = component_info_override
+        .map(str::to_owned)
+        .unwrap_or_else(|| detect_component_info(findings));
     let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
     for finding in findings {
         grouped
@@ -297,7 +319,16 @@ No automated reproduction command generated. See vulnerable source lines above.\
 /// each group: Description, Business Impact, Upstream Validation Audit,
 /// Working proof of concept, Discoverability, and Exploitability.
 pub fn format_auth0_report(findings: &[StructuredFinding]) -> String {
-    let component_info = detect_component_info(findings);
+    format_auth0_report_with_component(findings, None)
+}
+
+fn format_auth0_report_with_component(
+    findings: &[StructuredFinding],
+    component_info_override: Option<&str>,
+) -> String {
+    let component_info = component_info_override
+        .map(str::to_owned)
+        .unwrap_or_else(|| detect_component_info(findings));
     let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
     for finding in findings {
         grouped
@@ -942,21 +973,18 @@ fn ingest_sourcemap(url: &str) -> anyhow::Result<Vec<StructuredFinding>> {
 /// scan the extracted tree, and return findings.
 ///
 /// `pkg` may be `"lodash"` (resolves latest) or `"lodash@4.17.21"`.
-fn ingest_npm(pkg: &str) -> anyhow::Result<Vec<StructuredFinding>> {
+fn ingest_npm(pkg: &str) -> anyhow::Result<(Vec<StructuredFinding>, String)> {
     let (name, version) = parse_npm_spec(pkg);
-    let resolved_version = if version.is_empty() {
-        resolve_npm_latest(name)?
+    let resolved = if version.is_empty() {
+        resolve_npm_package(name, None)?
     } else {
-        version.to_owned()
+        resolve_npm_package(name, Some(version))?
     };
 
-    let tgz_url = format!("https://registry.npmjs.org/{name}/-/{name}-{resolved_version}.tgz");
-
     let agent = ureq::Agent::new_with_defaults();
-    let mut response = agent
-        .get(&tgz_url)
-        .call()
-        .map_err(|_| anyhow::anyhow!("npm registry fetch failed for {name}@{resolved_version}"))?;
+    let mut response = agent.get(&resolved.tarball_url).call().map_err(|_| {
+        anyhow::anyhow!("npm registry fetch failed for {name}@{}", resolved.version)
+    })?;
 
     // Stream through GzDecoder → tar::Archive → tempdir (RAII drop).
     let tmpdir = tempfile::TempDir::new().context("failed to create npm tmpdir")?;
@@ -973,7 +1001,9 @@ fn ingest_npm(pkg: &str) -> anyhow::Result<Vec<StructuredFinding>> {
             .context("failed to extract npm tarball")?;
     }
 
-    scan_directory(tmpdir.path())
+    let findings = scan_directory(tmpdir.path())?;
+    let component_info = format!("**{name}@{}** (`package.json`)", resolved.version);
+    Ok((findings, component_info))
     // tmpdir drops here — extracted package deleted
 }
 
@@ -990,10 +1020,14 @@ fn parse_npm_spec(pkg: &str) -> (&str, &str) {
     }
 }
 
-/// Resolve the latest published version for an npm package via the registry
-/// metadata endpoint (`https://registry.npmjs.org/<name>/latest`).
-fn resolve_npm_latest(name: &str) -> anyhow::Result<String> {
-    let url = format!("https://registry.npmjs.org/{name}/latest");
+struct NpmPackageMetadata {
+    version: String,
+    tarball_url: String,
+}
+
+fn resolve_npm_package(name: &str, version: Option<&str>) -> anyhow::Result<NpmPackageMetadata> {
+    let version_path = version.unwrap_or("latest");
+    let url = format!("https://registry.npmjs.org/{name}/{version_path}");
     let agent = ureq::Agent::new_with_defaults();
     let meta: serde_json::Value = agent
         .get(&url)
@@ -1005,10 +1039,22 @@ fn resolve_npm_latest(name: &str) -> anyhow::Result<String> {
         .read_json::<serde_json::Value>()
         .context("npm registry metadata is not valid JSON")?;
 
-    meta["version"]
+    let version = meta["version"]
         .as_str()
         .map(str::to_owned)
-        .ok_or_else(|| anyhow::anyhow!("npm registry response missing 'version' field"))
+        .ok_or_else(|| anyhow::anyhow!("npm registry response missing 'version' field"))?;
+    let tarball_url = npm_tarball_from_metadata(&meta)?;
+    Ok(NpmPackageMetadata {
+        version,
+        tarball_url,
+    })
+}
+
+fn npm_tarball_from_metadata(meta: &serde_json::Value) -> anyhow::Result<String> {
+    meta.pointer("/dist/tarball")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("npm registry response missing 'dist.tarball' field"))
 }
 
 // ---------------------------------------------------------------------------
@@ -2245,6 +2291,22 @@ mod tests {
         assert_eq!(ver, "");
     }
 
+    #[test]
+    fn npm_tarball_uses_registry_dist_url_for_scoped_packages() {
+        let meta = serde_json::json!({
+            "name": "@scope/pkg",
+            "version": "2.0.0",
+            "dist": {
+                "tarball": "https://registry.npmjs.org/@scope/pkg/-/pkg-2.0.0.tgz"
+            }
+        });
+        let tarball = npm_tarball_from_metadata(&meta).unwrap();
+        assert_eq!(
+            tarball,
+            "https://registry.npmjs.org/@scope/pkg/-/pkg-2.0.0.tgz"
+        );
+    }
+
     fn build_whl(metadata_name: &str, python_source: &[u8]) -> tempfile::TempDir {
         let tmp = tempfile::TempDir::new().unwrap();
         let whl_path = tmp.path().join("sample.whl");
@@ -2779,6 +2841,26 @@ def main(user_id):
             auth0.contains("**Affected Package / Component**"),
             "auth0 report must contain SBOM linkage header"
         );
+    }
+
+    #[test]
+    fn auth0_report_accepts_ephemeral_npm_component_override() {
+        let finding = StructuredFinding {
+            id: "security:oauth_excessive_scope".to_string(),
+            file: Some("package/src/index.ts".to_string()),
+            line: Some(7),
+            fingerprint: "scoped".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        };
+        let report = format_auth0_report_with_component(
+            &[finding],
+            Some("**@auth0/auth0-spa-js@2.19.2** (`package.json`)"),
+        );
+        assert!(report.contains("@auth0/auth0-spa-js@2.19.2"));
     }
 
     #[test]
