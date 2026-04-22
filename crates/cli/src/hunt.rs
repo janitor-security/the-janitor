@@ -1892,6 +1892,9 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         || name.ends_with(".min.js")
         || name.ends_with(".min.esm.js")
         || name.ends_with(".map")
+        || name.ends_with(".md")
+        || name.ends_with(".txt")
+        || (name.ends_with(".json") && !matches!(name, "package.json" | "manifest.json"))
 }
 
 // ---------------------------------------------------------------------------
@@ -3028,6 +3031,9 @@ def main(user_id):
             "bundle.min.js",
             "bundle.min.esm.js",
             "bundle.js.map",
+            "README.md",
+            "notes.txt",
+            "metadata.json",
         ] {
             std::fs::write(
                 dir.path().join(excluded_file),
@@ -3035,6 +3041,16 @@ def main(user_id):
             )
             .unwrap();
         }
+        std::fs::write(
+            dir.path().join("package.json"),
+            br#"{"name":"safe-package-manifest"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("manifest.json"),
+            br#"{"name":"safe-runtime-manifest"}"#,
+        )
+        .unwrap();
         let findings = scan_directory(dir.path()).unwrap();
         assert!(
             findings.is_empty(),

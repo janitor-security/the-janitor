@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 35 (Governance Anchoring & Documentation Annihilation)
+
+**Directive:** Anchor UAP governance in root agent context files, remove documentation artifacts from `janitor hunt` AST scanning, add P2-7 dynamic-configuration SMT roadmap item, verify, commit. Do not release.
+
+**Changes:**
+
+- `.cursorrules` / `CLAUDE.md` — locally added the critical UAP final-response override at the top of both gitignored root context files; repository policy keeps these files untracked.
+- `crates/cli/src/hunt.rs` — expanded hunt file exclusions to skip `.md`, `.txt`, and non-manifest `.json` files while retaining explicit `package.json` and `manifest.json` eligibility.
+- `crates/cli/src/hunt.rs` — extended `scan_directory_applies_exclusion_lattice` coverage for markdown, text, generic JSON, and the package/manifest JSON exceptions.
+- `.INNOVATION_LOG.md` — locally added `P2-7 — SMT Concolic Resolution for Dynamic Configuration`; the file remains gitignored by repository policy.
+
+**Verification:**
+
+- `cargo test -p cli scan_directory_applies_exclusion_lattice -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 34 (UAP Enforcement & Protocol AEG)
 
 **Directive:** Harden UAP final-response governance, complete P3-1 Phase C SMT-backed protocol payload synthesis, implement context-aware client-side AEG delivery payloads, update roadmap hygiene, verify, commit. Do not release.
