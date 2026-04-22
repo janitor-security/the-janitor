@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 37 (DeFi Offensive Pack & EVM Invariants)
+
+**Directive:** Advance P2-2 Web3 offensive detection by expanding Solidity reentrancy analysis, adding access-control drift checks for dangerous EVM authority sinks, updating roadmap hygiene, verifying, committing. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/solidity_taint.rs` — added cross-function reentrancy detection that correlates external value calls with separate functions mutating the same state variable without a shared `nonReentrant` lock, emitting `security:cross_function_reentrancy` at `KevCritical`.
+- `crates/forge/src/solidity_taint.rs` — added authority-transition detection for `selfdestruct`, `suicide`, `delegatecall`, `upgradeTo`, and `upgradeToAndCall`, requiring `onlyOwner`, `onlyRole`, or explicit `msg.sender` authority guards.
+- `crates/forge/src/solidity_taint.rs` — added deterministic coverage for unprotected `delegatecall`, guarded `delegatecall`, and cross-function shared-state reentrancy.
+- `.INNOVATION_LOG.md` — locally marked `P2-2 Phase B (Reentrancy & Access Control)` complete for Sprint Batch 37 while preserving `P2-8` as the next Web2 critical priority.
+
+**Verification:**
+
+- `cargo test -p forge solidity_taint -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 36 (Contextual Suppression, API Guardrails, & Symbolic Foundations)
 
 **Directive:** Suppress identity-provider OAuth scope false positives, harden unpinned asset and DOM XSS detectors against inert developer API contexts, start P2-1 Phase B JavaScript/TypeScript symbolic grammar adapters, update roadmap hygiene, verify, commit. Do not release.
