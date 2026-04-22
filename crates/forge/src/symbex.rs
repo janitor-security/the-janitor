@@ -20,6 +20,49 @@ pub enum PathFeasibility {
     Unknown,
 }
 
+/// Vulnerability families supported by the symbolic-execution transfer table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VulnerabilityFamily {
+    /// Unsafe object graph or byte-stream deserialization.
+    Deserialization,
+    /// Filesystem path traversal from attacker-controlled path segments.
+    PathTraversal,
+    /// Server-side request forgery through dynamic outbound URLs.
+    SSRF,
+    /// Authorization or authentication guard bypass.
+    AuthBypass,
+    /// Template rendering with attacker-controlled template source or context.
+    TemplateInjection,
+    /// OS command construction from attacker-controlled values.
+    CommandInjection,
+    /// Browser DOM XSS through HTML/script execution sinks.
+    DOMXSS,
+}
+
+/// Canonical IFDS fact class emitted by grammar adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanonicalFactKind {
+    /// Assignment transfer, e.g. `route = "/login"`.
+    Assignment,
+    /// Call transfer, e.g. `fetch(route)`.
+    Call,
+}
+
+/// Canonical IFDS fact emitted by the JavaScript/TypeScript adapters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalFact {
+    /// Fact class.
+    pub kind: CanonicalFactKind,
+    /// Assigned variable or called function.
+    pub symbol: String,
+    /// Literal value for assignments.
+    pub value: Option<String>,
+    /// Argument expressions for calls.
+    pub arguments: Vec<String>,
+    /// SMT-LIB assertion produced by the transfer function, when applicable.
+    pub smt_constraint: Option<String>,
+}
+
 /// Bounded symbolic executor seeded by an IFDS exploit witness and an AST node.
 pub struct SymbolicExecutor<'tree> {
     witness: ExploitWitness,
@@ -76,6 +119,48 @@ impl<'tree> SymbolicExecutor<'tree> {
             Err(_) => PathFeasibility::Unknown,
         }
     }
+
+    /// Extract JavaScript/TypeScript canonical IFDS facts from the executor AST.
+    ///
+    /// Assignments to string literals produce string-theory SMT bindings. For
+    /// example, `route = "/login"` emits `(= route "/login")`.
+    pub fn extract_js_ts_facts(&self, source: &[u8]) -> Vec<CanonicalFact> {
+        collect_js_ts_facts(self.node, source, self.max_assertions)
+    }
+
+    /// Evaluate JavaScript/TypeScript assignment transfer constraints.
+    pub fn evaluate_js_ts_fact_constraints(&self, source: &[u8]) -> PathFeasibility {
+        let facts = self.extract_js_ts_facts(source);
+        evaluate_canonical_fact_constraints(&facts)
+    }
+}
+
+/// Evaluate canonical SMT constraints emitted by grammar adapters.
+pub fn evaluate_canonical_fact_constraints(facts: &[CanonicalFact]) -> PathFeasibility {
+    let mut solver = match Solver::default_z3(()) {
+        Ok(solver) => solver,
+        Err(_) => return PathFeasibility::Unknown,
+    };
+    let mut declared = std::collections::BTreeSet::new();
+    for fact in facts {
+        let Some(assertion) = fact.smt_constraint.as_deref() else {
+            continue;
+        };
+        if declared.insert(fact.symbol.clone())
+            && solver.declare_const(&fact.symbol, "String").is_err()
+        {
+            return PathFeasibility::Unknown;
+        }
+        if solver.assert(assertion).is_err() {
+            return PathFeasibility::Unknown;
+        }
+    }
+
+    match solver.check_sat() {
+        Ok(true) => PathFeasibility::Satisfiable,
+        Ok(false) => PathFeasibility::Unsatisfiable,
+        Err(_) => PathFeasibility::Unknown,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +191,118 @@ fn collect_binary_assertions(root: Node<'_>, source: &[u8], limit: usize) -> Vec
         }
     }
     out
+}
+
+fn collect_js_ts_facts(root: Node<'_>, source: &[u8], limit: usize) -> Vec<CanonicalFact> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if out.len() >= limit {
+            break;
+        }
+        if let Some(fact) = assignment_fact(node, source).or_else(|| call_fact(node, source)) {
+            out.push(fact);
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            stack.push(child);
+        }
+    }
+    out.reverse();
+    out
+}
+
+fn assignment_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
+    let (left, right) = match node.kind() {
+        "variable_declarator" => (
+            node.child_by_field_name("name")?,
+            node.child_by_field_name("value")?,
+        ),
+        "assignment_expression" => (
+            node.child_by_field_name("left")?,
+            node.child_by_field_name("right")
+                .or_else(|| nth_named_child(node, 2))?,
+        ),
+        _ => return None,
+    };
+    let symbol = left_identifier(left, source)?;
+    let value = string_literal_value(right, source)?;
+    let smt_constraint = Some(format!(
+        "(= {} {})",
+        sanitize_identifier(&symbol)?,
+        smt_string_literal(&value)
+    ));
+    Some(CanonicalFact {
+        kind: CanonicalFactKind::Assignment,
+        symbol,
+        value: Some(value),
+        arguments: Vec::new(),
+        smt_constraint,
+    })
+}
+
+fn call_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
+    if node.kind() != "call_expression" {
+        return None;
+    }
+    let function = node.child_by_field_name("function")?;
+    let symbol = function.utf8_text(source).ok()?.trim().to_owned();
+    if symbol.is_empty() {
+        return None;
+    }
+    let arguments = node
+        .child_by_field_name("arguments")
+        .map(|args| {
+            let mut cursor = args.walk();
+            args.named_children(&mut cursor)
+                .filter_map(|arg| arg.utf8_text(source).ok())
+                .map(|arg| arg.trim().to_owned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Some(CanonicalFact {
+        kind: CanonicalFactKind::Call,
+        symbol,
+        value: None,
+        arguments,
+        smt_constraint: None,
+    })
+}
+
+fn left_identifier(node: Node<'_>, source: &[u8]) -> Option<String> {
+    match node.kind() {
+        "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+        _ => None,
+    }
+}
+
+fn string_literal_value(node: Node<'_>, source: &[u8]) -> Option<String> {
+    if !matches!(node.kind(), "string" | "template_string" | "string_literal") {
+        return None;
+    }
+    let text = node.utf8_text(source).ok()?.trim();
+    text.strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .or_else(|| {
+            text.strip_prefix('\'')
+                .and_then(|value| value.strip_suffix('\''))
+        })
+        .or_else(|| {
+            text.strip_prefix('`')
+                .and_then(|value| value.strip_suffix('`'))
+        })
+        .map(str::to_owned)
+}
+
+fn nth_named_child(node: Node<'_>, index: usize) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    let child = node.named_children(&mut cursor).nth(index);
+    child
+}
+
+fn smt_string_literal(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\"\"");
+    format!("\"{escaped}\"")
 }
 
 fn is_binary_node(node: Node<'_>) -> bool {
@@ -183,6 +380,15 @@ mod tests {
         parser.parse(source, None).expect("Solidity must parse")
     }
 
+    fn parse_js(source: &[u8]) -> tree_sitter::Tree {
+        let mut parser = tree_sitter::Parser::new();
+        let language = tree_sitter_javascript::LANGUAGE;
+        parser
+            .set_language(&language.into())
+            .expect("JavaScript grammar must load");
+        parser.parse(source, None).expect("JavaScript must parse")
+    }
+
     fn witness() -> ExploitWitness {
         ExploitWitness {
             source_function: "withdraw".to_string(),
@@ -231,5 +437,43 @@ contract Guard {
         let assertion = translate_binary_expression("amount > 0").expect("must translate");
         assert_eq!(assertion.smt, "(> amount 0)");
         assert_eq!(assertion.identifiers, vec!["amount"]);
+    }
+
+    #[test]
+    fn extracts_js_assignment_fact_as_string_smt_binding() {
+        let source = br#"
+const route = "/login";
+fetch(route);
+"#;
+        let tree = parse_js(source);
+        let executor = SymbolicExecutor::new(witness(), tree.root_node());
+        let facts = executor.extract_js_ts_facts(source);
+        let assignment = facts
+            .iter()
+            .find(|fact| fact.kind == CanonicalFactKind::Assignment && fact.symbol == "route")
+            .expect("route assignment must become a canonical fact");
+        assert_eq!(assignment.value.as_deref(), Some("/login"));
+        assert_eq!(
+            assignment.smt_constraint.as_deref(),
+            Some("(= route \"/login\")")
+        );
+        assert!(
+            facts
+                .iter()
+                .any(|fact| fact.kind == CanonicalFactKind::Call && fact.symbol == "fetch"),
+            "fetch(route) must become a canonical call fact"
+        );
+    }
+
+    #[test]
+    fn evaluates_js_assignment_constraints_without_panic() {
+        let source = br#"let route = "/login";"#;
+        let tree = parse_js(source);
+        let executor = SymbolicExecutor::new(witness(), tree.root_node());
+        let verdict = executor.evaluate_js_ts_fact_constraints(source);
+        assert!(matches!(
+            verdict,
+            PathFeasibility::Satisfiable | PathFeasibility::Unknown
+        ));
     }
 }

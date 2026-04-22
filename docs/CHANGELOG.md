@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 36 (Contextual Suppression, API Guardrails, & Symbolic Foundations)
+
+**Directive:** Suppress identity-provider OAuth scope false positives, harden unpinned asset and DOM XSS detectors against inert developer API contexts, start P2-1 Phase B JavaScript/TypeScript symbolic grammar adapters, update roadmap hygiene, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/slop_filter.rs` — added package-name context suppression for `security:oauth_excessive_scope` when `package.json` identifies Auth0, Okta, Keycloak, or Cognito SDK packages; added deterministic `auth0-js` coverage.
+- `crates/forge/src/slop_hunter.rs` — tightened `security:unpinned_asset` to ignore comment nodes and non-executed JavaScript string literals while preserving execution-sink contexts such as `fetch(...)` and `src` assignments.
+- `crates/forge/src/slop_hunter.rs` — added an AST structural guard for `innerHTML` assignments sourced from `options` / `config` parameters, reactivating the DOM XSS finding when Prototype Pollution appears in the same scan context.
+- `crates/forge/src/symbex.rs` — extended the symbolic executor with `VulnerabilityFamily`, canonical JavaScript/TypeScript Assignment and Call facts, and SMT string bindings such as `route == "/login"`.
+- `.INNOVATION_LOG.md` — marked `P2-1 Phase B (Canonical Grammar Adapters)` in progress and added `P2-8 — Cross-Vulnerability Exploit Chaining`.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 35 (Governance Anchoring & Documentation Annihilation)
 
 **Directive:** Anchor UAP governance in root agent context files, remove documentation artifacts from `janitor hunt` AST scanning, add P2-7 dynamic-configuration SMT roadmap item, verify, commit. Do not release.
