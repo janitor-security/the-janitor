@@ -170,6 +170,25 @@ pub struct IfdsResult {
     pub witnesses: Vec<ExploitWitness>,
 }
 
+/// Sink eligible for global prototype-pollution chaining.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalPrototypeSink {
+    /// Synthetic function name representing the sink context.
+    pub function: String,
+    /// Sink label reached by the polluted prototype source.
+    pub sink_label: String,
+}
+
+impl GlobalPrototypeSink {
+    /// Construct a sink context for global prototype-pollution chaining.
+    pub fn new(function: impl Into<String>, sink_label: impl Into<String>) -> Self {
+        Self {
+            function: function.into(),
+            sink_label: sink_label.into(),
+        }
+    }
+}
+
 /// Summary-caching IFDS solver over a function call graph.
 #[derive(Debug)]
 pub struct IfdsSolver {
@@ -451,6 +470,62 @@ impl IfdsSolver {
     }
 }
 
+/// Inject a polluted-prototype global source and solve reachability to DOM /
+/// execution sinks that were confirmed elsewhere in the scan state.
+pub fn solve_global_prototype_chains(
+    prototype_pollution_confirmed: bool,
+    sinks: &[GlobalPrototypeSink],
+) -> Vec<ExploitWitness> {
+    if !prototype_pollution_confirmed || sinks.is_empty() {
+        return Vec::new();
+    }
+
+    let source_name = "__global_polluted_prototype".to_string();
+    let source_label = TaintLabel::new("global:polluted_prototype");
+    let mut graph = DiGraph::<String, ()>::new();
+    let source = graph.add_node(source_name.clone());
+    let mut models = HashMap::new();
+    let mut calls = SmallVec::new();
+
+    for sink in sinks {
+        let sink_node = graph.add_node(sink.function.clone());
+        graph.add_edge(source, sink_node, ());
+        calls.push(CallSite {
+            callee: sink.function.clone(),
+            bindings: SmallVec::from_vec(vec![CallBinding {
+                caller_label: source_label.clone(),
+                callee_label: source_label.clone(),
+            }]),
+        });
+        models.insert(
+            sink.function.clone(),
+            FunctionModel {
+                sinks: SmallVec::from_vec(vec![SinkBinding {
+                    label: source_label.clone(),
+                    sink_label: sink.sink_label.clone(),
+                }]),
+                ..FunctionModel::default()
+            },
+        );
+    }
+
+    models.insert(
+        source_name.clone(),
+        FunctionModel {
+            calls,
+            ..FunctionModel::default()
+        },
+    );
+
+    let mut solver = IfdsSolver::new(graph, models);
+    solver
+        .solve(&[InputFact {
+            function: source_name,
+            label: source_label,
+        }])
+        .witnesses
+}
+
 fn dedup_outputs(outputs: &mut SmallVec<[OutputFact; 4]>) {
     let mut seen = HashMap::<(String, String), ()>::new();
     outputs.retain(|output| {
@@ -503,7 +578,8 @@ mod tests {
     use smallvec::SmallVec;
 
     use super::{
-        CallBinding, CallSite, FunctionModel, IfdsSolver, InputFact, SinkBinding, TaintLabel,
+        solve_global_prototype_chains, CallBinding, CallSite, FunctionModel, GlobalPrototypeSink,
+        IfdsSolver, InputFact, SinkBinding, TaintLabel,
     };
 
     #[test]
@@ -640,5 +716,27 @@ mod tests {
 
         assert_eq!(result.witnesses.len(), 1);
         assert!(result.witnesses[0].upstream_validation_absent);
+    }
+
+    #[test]
+    fn prototype_pollution_global_source_reaches_dom_xss_sink() {
+        let witnesses = solve_global_prototype_chains(
+            true,
+            &[GlobalPrototypeSink::new(
+                "scan.js:innerHTML",
+                "sink:dom_xss_innerHTML",
+            )],
+        );
+
+        assert_eq!(witnesses.len(), 1);
+        assert_eq!(witnesses[0].source_label, "global:polluted_prototype");
+        assert_eq!(witnesses[0].sink_label, "sink:dom_xss_innerHTML");
+        assert_eq!(
+            witnesses[0].call_chain,
+            vec![
+                "__global_polluted_prototype".to_string(),
+                "scan.js:innerHTML".to_string(),
+            ]
+        );
     }
 }

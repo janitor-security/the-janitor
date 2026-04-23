@@ -1478,6 +1478,13 @@ impl PRBouncer for PatchBouncer {
             }
             structured_findings.push(finding);
         }
+        apply_cross_vulnerability_chain_findings(
+            &file_path,
+            source,
+            &mut antipattern_details,
+            &mut antipattern_score,
+            &mut structured_findings,
+        );
         for finding in authz_consistency_findings {
             antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
             antipattern_details.push(format!(
@@ -2244,6 +2251,69 @@ fn is_identity_provider_package(package_name: &str) -> bool {
         .any(|needle| lower.contains(needle))
 }
 
+fn apply_cross_vulnerability_chain_findings(
+    file_path: &str,
+    source: &[u8],
+    antipattern_details: &mut Vec<String>,
+    antipattern_score: &mut u32,
+    structured_findings: &mut Vec<common::slop::StructuredFinding>,
+) {
+    let prototype_pollution_confirmed = structured_findings.iter().any(|finding| {
+        extract_rule_id(&finding.id).contains("prototype_pollution")
+            && !finding.id.contains("chained_prototype")
+    });
+    if !prototype_pollution_confirmed {
+        return;
+    }
+
+    let dom_sinks = structured_findings
+        .iter()
+        .filter_map(|finding| {
+            let rule_id = extract_rule_id(&finding.id);
+            let sink_label = match rule_id {
+                "security:dom_xss_innerHTML" => Some("sink:dom_xss_innerHTML"),
+                "security:react_xss_dangerous_html" => Some("sink:react_xss_dangerous_html"),
+                _ => None,
+            }?;
+            let line = finding.line.unwrap_or_default();
+            Some((
+                line,
+                crate::ifds::GlobalPrototypeSink::new(format!("{file_path}:{line}"), sink_label),
+            ))
+        })
+        .collect::<Vec<_>>();
+    if dom_sinks.is_empty() {
+        return;
+    }
+
+    let sinks = dom_sinks
+        .iter()
+        .map(|(_, sink)| sink.clone())
+        .collect::<Vec<_>>();
+    let witnesses = crate::ifds::solve_global_prototype_chains(true, &sinks);
+    for ((line, _), witness) in dom_sinks.into_iter().zip(witnesses) {
+        let rule_id = "security:chained_prototype_to_dom_xss";
+        let mut finding = common::slop::StructuredFinding {
+            id: rule_id.to_string(),
+            file: Some(file_path.to_string()),
+            line: Some(line),
+            fingerprint: finding_fingerprint(rule_id, file_path, source),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some(
+                "Prototype Pollution is chained into a DOM execution sink; block prototype mutation and sanitize DOM writes before assignment."
+                    .to_string(),
+            ),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: true,
+        };
+        finding = crate::exploitability::attach_exploit_witness(finding, witness);
+        *antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
+        antipattern_details.push(format!("{rule_id} (line={line})"));
+        structured_findings.push(finding);
+    }
+}
+
 fn package_context_for_patch(
     file_path: &str,
     raw_added: &str,
@@ -2400,6 +2470,38 @@ jobs:
             "Identity Provider SDK packages must be allowed to handle arbitrary OAuth scopes"
         );
         assert!(score.structured_findings.is_empty());
+    }
+
+    #[test]
+    fn prototype_pollution_triggers_chained_dom_xss_finding() {
+        let patch = make_patch(
+            "src/app.js",
+            r#"
+function render(element, options, payload) {
+  payload.__proto__.template = "<img src=x onerror=alert(1)>";
+  element.innerHTML = options.templates["login"];
+}
+"#,
+        );
+        let score = PatchBouncer::default()
+            .bounce(&patch, &empty_registry())
+            .unwrap();
+        let finding = score
+            .structured_findings
+            .iter()
+            .find(|finding| finding.id == "security:chained_prototype_to_dom_xss")
+            .expect("prototype pollution must chain into DOM XSS via IFDS global source");
+
+        assert_eq!(finding.severity.as_deref(), Some("KevCritical"));
+        assert!(finding.exploit_witness.is_some());
+        assert!(score
+            .structured_findings
+            .iter()
+            .any(|finding| extract_rule_id(&finding.id) == "security:prototype_pollution"));
+        assert!(score
+            .structured_findings
+            .iter()
+            .any(|finding| extract_rule_id(&finding.id) == "security:dom_xss_innerHTML"));
     }
 
     #[test]

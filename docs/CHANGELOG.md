@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 38 (Cross-Vulnerability Chaining & Labyrinth Foundation)
+
+**Directive:** Execute P2-8 exploit chaining for Prototype Pollution into DOM XSS, expand the Labyrinth roadmap for Mythos-class autonomous AI defense, add LotL API C2 interception, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/ifds.rs` — added a global polluted-prototype IFDS source and sink bridge that solves reachability into confirmed DOM / execution sinks and emits deterministic exploit witnesses.
+- `crates/forge/src/slop_filter.rs` — chained confirmed `security:prototype_pollution` with DOM HTML sinks into `security:chained_prototype_to_dom_xss` at `KevCritical`, including structured finding and exploit witness attachment.
+- `crates/forge/src/slop_filter.rs` / `crates/forge/src/ifds.rs` — added deterministic regression coverage for the IFDS global source and PatchBouncer chain emission.
+- `.INNOVATION_LOG.md` — locally marked `P2-8` complete for Sprint Batch 38, added `P2-9: LotL API C2 Interception`, and expanded `P3-6: The Labyrinth` for Mythos-class autonomous-agent tarpitting.
+
+**Verification:**
+
+- `cargo test -p forge prototype_pollution_global_source_reaches_dom_xss_sink -- --test-threads=4` — passed.
+- `cargo test -p forge prototype_pollution_triggers_chained_dom_xss_finding -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 37 (DeFi Offensive Pack & EVM Invariants)
 
 **Directive:** Advance P2-2 Web3 offensive detection by expanding Solidity reentrancy analysis, adding access-control drift checks for dangerous EVM authority sinks, updating roadmap hygiene, verifying, committing. Do not release.
