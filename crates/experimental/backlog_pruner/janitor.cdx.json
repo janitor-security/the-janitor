@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:2276b816-d1f5-41e7-b37c-3202f045eaf4",
+  "serialNumber": "urn:uuid:43feaca3-9f1e-41c6-9f7d-81291eb4b6e3",
   "metadata": {
-    "timestamp": "2026-04-22T03:13:53.576590680Z",
+    "timestamp": "2026-04-23T20:05:09.669511073Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
       "name": "backlog_pruner",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.1?download_url=file://.",
+      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2 bin-target-0",
           "name": "backlog_pruner",
-          "version": "10.2.0-beta.1",
-          "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.1?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.2",
+          "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.2?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -1746,7 +1746,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",

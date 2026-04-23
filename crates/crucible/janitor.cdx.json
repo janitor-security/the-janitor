@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:e326403a-70a4-4b24-91f3-3871b4ffb3e1",
+  "serialNumber": "urn:uuid:33edefe9-3560-4aa7-bb70-bf633ebbf4e3",
   "metadata": {
-    "timestamp": "2026-04-22T03:13:53.914149720Z",
+    "timestamp": "2026-04-23T20:05:09.775079688Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,9 +14,9 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.2",
       "name": "crucible",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "description": "Threat Gallery regression harness — deterministic intercept validation for every active detector",
       "scope": "required",
       "licenses": [
@@ -24,14 +24,14 @@
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/crucible@10.2.0-beta.1?download_url=file://.",
+      "purl": "pkg:cargo/crucible@10.2.0-beta.2?download_url=file://.",
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.2 bin-target-0",
           "name": "crucible",
-          "version": "10.2.0-beta.1",
-          "purl": "pkg:cargo/crucible@10.2.0-beta.1?download_url=file://.#src/main.rs"
+          "version": "10.2.0-beta.2",
+          "purl": "pkg:cargo/crucible@10.2.0-beta.2?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -45,16 +45,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
       "name": "common",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.2.0-beta.1?download_url=file://../common",
+      "purl": "pkg:cargo/common@10.2.0-beta.2?download_url=file://../common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -64,16 +64,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.2",
       "name": "advanced_threats",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/advanced_threats@10.2.0-beta.1?download_url=file://../experimental/advanced_threats",
+      "purl": "pkg:cargo/advanced_threats@10.2.0-beta.2?download_url=file://../experimental/advanced_threats",
       "externalReferences": [
         {
           "type": "vcs",
@@ -83,16 +83,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
       "name": "backlog_pruner",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.1?download_url=file://../experimental/backlog_pruner",
+      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.2?download_url=file://../experimental/backlog_pruner",
       "externalReferences": [
         {
           "type": "vcs",
@@ -102,16 +102,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.2",
       "name": "forge",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/forge@10.2.0-beta.1?download_url=file://../forge",
+      "purl": "pkg:cargo/forge@10.2.0-beta.2?download_url=file://../forge",
       "externalReferences": [
         {
           "type": "vcs",
@@ -121,16 +121,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.2",
       "name": "polyglot",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.2.0-beta.1?download_url=file://../polyglot",
+      "purl": "pkg:cargo/polyglot@10.2.0-beta.2?download_url=file://../polyglot",
       "externalReferences": [
         {
           "type": "vcs",
@@ -4595,6 +4595,36 @@
         }
       ],
       "purl": "pkg:cargo/futures-io@0.3.32",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://rust-lang.github.io/futures-rs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/futures-rs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#futures-macro@0.3.32",
+      "name": "futures-macro",
+      "version": "0.3.32",
+      "description": "The futures-rs procedural macro implementations. ",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/futures-macro@0.3.32",
       "externalReferences": [
         {
           "type": "website",
@@ -13555,7 +13585,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -13580,14 +13610,14 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/crucible#10.2.0-beta.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.1"
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.2"
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -13599,7 +13629,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
@@ -13609,18 +13639,18 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/forge#10.2.0-beta.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.2",
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#alloy-primitives@1.5.7",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#arc-swap@1.9.1",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
         "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
         "registry+https://github.com/rust-lang/crates.io-index#bytecheck@0.8.2",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
         "registry+https://github.com/rust-lang/crates.io-index#ena@0.14.4",
         "registry+https://github.com/rust-lang/crates.io-index#fixedbitset@0.5.7",
         "registry+https://github.com/rust-lang/crates.io-index#git2@0.20.4",
@@ -13628,7 +13658,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.10",
         "registry+https://github.com/rust-lang/crates.io-index#openapiv3@2.2.0",
         "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
-        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.2",
         "registry+https://github.com/rust-lang/crates.io-index#prost-reflect@0.16.3",
         "registry+https://github.com/rust-lang/crates.io-index#protobuf-parse@3.7.2",
         "registry+https://github.com/rust-lang/crates.io-index#rkyv@0.8.15",
@@ -13667,7 +13697,7 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -14655,6 +14685,14 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#futures-io@0.3.32"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#futures-macro@0.3.32",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
+        "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
+        "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117"
+      ]
+    },
+    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#futures-sink@0.3.32"
     },
     {
@@ -14666,6 +14704,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#futures-channel@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#futures-core@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#futures-io@0.3.32",
+        "registry+https://github.com/rust-lang/crates.io-index#futures-macro@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#futures-sink@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#futures-task@0.3.32",
         "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.0",

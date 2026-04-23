@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:e55f58e3-a7f4-4276-8c01-708f5f76c5b3",
+  "serialNumber": "urn:uuid:7072170b-8377-4e17-ae24-0ec377ca0767",
   "metadata": {
-    "timestamp": "2026-04-22T03:13:53.830797428Z",
+    "timestamp": "2026-04-23T20:05:09.753296888Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.1",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.2",
       "name": "reaper",
-      "version": "10.2.0-beta.1",
+      "version": "10.2.0-beta.2",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/reaper@10.2.0-beta.1?download_url=file://.",
+      "purl": "pkg:cargo/reaper@10.2.0-beta.2?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.1 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.2 bin-target-0",
           "name": "reaper",
-          "version": "10.2.0-beta.1",
-          "purl": "pkg:cargo/reaper@10.2.0-beta.1?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.2",
+          "purl": "pkg:cargo/reaper@10.2.0-beta.2?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -3249,7 +3249,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.1",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/reaper#10.2.0-beta.2",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
