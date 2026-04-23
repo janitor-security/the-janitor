@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 44 (OpenFGA Invariants, Test Exclusion & Go SBOM)
+
+**Directive:** Target Auth0 OpenFGA scans by adding Go module attribution, pruning test/mock false positives, parsing OpenFGA relationship models, and implementing an agentic code execution graph. Do not release.
+
+**Changes:**
+
+- `crates/cli/src/hunt.rs` — added `go.mod` component attribution from the `module` directive and optional `go` version; expanded scan exclusions for `_test.go`, `_test.js`, `_test.py`, `_test.ts`, `testutils`, `testfixtures`, `mocks`, and `internal/mocks`.
+- `crates/forge/src/schema_graph.rs` — added OpenFGA `.fga` DSL parsing, relation graph ingress nodes, and `security:openfga_unbounded_delegation` at `KevCritical` for direct wildcard grants without local boundary constraints.
+- `crates/forge/src/agentic_graph.rs` / `crates/forge/src/lib.rs` — added LangChain, AutoGen, and CrewAI call-graph extraction for Python/TypeScript and `security:agentic_privilege_escalation` at `KevCritical` when prompt input reaches subprocess or filesystem-write tools without a sandbox boundary.
+- `.INNOVATION_LOG.md` — locally retired shipped `P6-4` active-frontier text and added `P2-12: Google Zanzibar / OpenFGA Provable Security`.
+
+**Verification:**
+
+- `cargo test -p forge openfga -- --test-threads=4` — passed.
+- `cargo test -p forge agentic -- --test-threads=4` — passed.
+- `cargo test -p cli detect_component_info_parses_go_mod_module -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; documentation parity verified for `v10.2.0-beta.1`.
+- No release executed.
+
 ## 2026-04-23 — Sprint Batch 43 (Web3 DeFi Expansion, Decadal Zenith & Hallucination Purge)
 
 **Directive:** Purge retired backlog filename references, expand Solidity/Web3 offensive detectors, add the P10-P12 Decadal Zenith roadmap section, sync feature documentation, verify, commit. Do not release.

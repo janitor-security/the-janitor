@@ -778,7 +778,7 @@ fn apply_live_tenant_replay(
 }
 
 /// Detect the affected package name and version by scanning for manifest files
-/// (`package.json`, `Cargo.toml`, `pom.xml`) walking upward from `cwd`.
+/// (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`) walking upward from `cwd`.
 fn detect_component_info(findings: &[StructuredFinding]) -> String {
     detect_component_info_inner(findings, None)
 }
@@ -844,6 +844,21 @@ fn detect_component_info_inner(
                 if let Ok(text) = std::fs::read_to_string(&cargo_toml) {
                     if let Some((name, ver)) = parse_cargo_toml_name_version(&text) {
                         return format!("**{name}** v{ver} (`Cargo.toml`)");
+                    }
+                }
+            }
+            let go_mod = dir.join("go.mod");
+            if go_mod
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&go_mod) {
+                    if let Some((module_name, go_version)) = parse_go_mod_component(&text) {
+                        if let Some(go_version) = go_version {
+                            return format!("**{module_name}** go{go_version} (`go.mod`)");
+                        }
+                        return format!("**{module_name}** (`go.mod`)");
                     }
                 }
             }
@@ -915,6 +930,40 @@ fn parse_cargo_toml_name_version(content: &str) -> Option<(String, String)> {
         }
     }
     name.zip(version)
+}
+
+/// Extract module path and optional Go language version from a `go.mod`.
+fn parse_go_mod_component(content: &str) -> Option<(String, Option<String>)> {
+    let mut module_name: Option<String> = None;
+    let mut go_version: Option<String> = None;
+
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with("//") {
+            continue;
+        }
+        if module_name.is_none() {
+            if let Some(rest) = t.strip_prefix("module ") {
+                let value = rest.split_whitespace().next().unwrap_or("").trim();
+                if !value.is_empty() {
+                    module_name = Some(value.to_string());
+                }
+            }
+        }
+        if go_version.is_none() {
+            if let Some(rest) = t.strip_prefix("go ") {
+                let value = rest.split_whitespace().next().unwrap_or("").trim();
+                if !value.is_empty() {
+                    go_version = Some(value.to_string());
+                }
+            }
+        }
+        if module_name.is_some() && go_version.is_some() {
+            break;
+        }
+    }
+
+    module_name.map(|name| (name, go_version))
 }
 
 fn extract_toml_quoted_value(line: &str, key: &str) -> Option<String> {
@@ -2030,7 +2079,21 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | "examples"
             | "coverage"
             | "vendor"
-    )
+            | "testutils"
+            | "testfixtures"
+            | "mocks"
+    ) || is_internal_mocks_dir(entry.path())
+}
+
+fn is_internal_mocks_dir(path: &Path) -> bool {
+    let mut components = path.components().rev();
+    let Some(std::path::Component::Normal(last)) = components.next() else {
+        return false;
+    };
+    let Some(std::path::Component::Normal(parent)) = components.next() else {
+        return false;
+    };
+    last.to_str() == Some("mocks") && parent.to_str() == Some("internal")
 }
 
 fn is_excluded_hunt_file(path: &Path) -> bool {
@@ -2041,6 +2104,10 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         || name.ends_with(".map")
         || name.ends_with(".md")
         || name.ends_with(".txt")
+        || name.ends_with("_test.go")
+        || name.ends_with("_test.js")
+        || name.ends_with("_test.py")
+        || name.ends_with("_test.ts")
         || (name.ends_with(".json") && !matches!(name, "package.json" | "manifest.json"))
 }
 
@@ -2127,6 +2194,14 @@ fn scan_buffer(
             structured
         })
         .collect::<Vec<_>>();
+    if ext == "fga" {
+        findings.extend(forge::schema_graph::find_openfga_invariant_findings(
+            source, label,
+        ));
+    }
+    findings.extend(forge::agentic_graph::find_agentic_privilege_escalations(
+        ext, source, label,
+    ));
     findings.extend(forge::idor::scan_source(ext, source, label));
     findings
 }
@@ -3251,6 +3326,9 @@ def main(user_id):
             "examples",
             "coverage",
             "vendor",
+            "testutils",
+            "testfixtures",
+            "mocks",
         ] {
             let excluded_dir = dir.path().join(excluded);
             std::fs::create_dir(&excluded_dir).unwrap();
@@ -3268,6 +3346,10 @@ def main(user_id):
             "README.md",
             "notes.txt",
             "metadata.json",
+            "handler_test.go",
+            "handler_test.js",
+            "handler_test.py",
+            "handler_test.ts",
         ] {
             std::fs::write(
                 dir.path().join(excluded_file),
@@ -3285,10 +3367,33 @@ def main(user_id):
             br#"{"name":"safe-runtime-manifest"}"#,
         )
         .unwrap();
+        std::fs::create_dir_all(dir.path().join("internal").join("mocks")).unwrap();
+        std::fs::write(
+            dir.path().join("internal").join("mocks").join("config.js"),
+            b"const secret = 'AKIAIOSFODNN7EXAMPLEKEY1234567890';",
+        )
+        .unwrap();
         let findings = scan_directory(dir.path()).unwrap();
         assert!(
             findings.is_empty(),
             "findings inside excluded directories or generated artifacts must be excluded"
+        );
+    }
+
+    #[test]
+    fn detect_component_info_parses_go_mod_module() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("go.mod"),
+            b"module github.com/openfga/openfga\n\ngo 1.22\n",
+        )
+        .unwrap();
+
+        let component = detect_component_info_inner(&[], Some(dir.path()));
+
+        assert_eq!(
+            component,
+            "**github.com/openfga/openfga** go1.22 (`go.mod`)"
         );
     }
 

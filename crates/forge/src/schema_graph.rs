@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use common::slop::StructuredFinding;
 use openapiv3::OpenAPI;
 use petgraph::algo::has_path_connecting;
 use petgraph::graph::{Graph, NodeIndex};
@@ -25,6 +26,8 @@ pub enum ApiProtocol {
     Graphql,
     /// Internal asynchronous channel boundary.
     Async,
+    /// OpenFGA / Google Zanzibar relationship model.
+    OpenFga,
 }
 
 /// A normalized ingress endpoint discovered from a schema file.
@@ -59,6 +62,33 @@ pub enum TrustBoundaryNode {
 pub struct TrustBoundaryEdge {
     /// Machine-readable edge kind.
     pub kind: String,
+}
+
+/// Parsed OpenFGA relationship model.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OpenFgaModel {
+    /// Type definitions in source order.
+    pub types: Vec<OpenFgaType>,
+}
+
+/// Parsed OpenFGA `type` block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenFgaType {
+    /// Type name.
+    pub name: String,
+    /// Relation definitions declared under the type.
+    pub relations: Vec<OpenFgaRelation>,
+}
+
+/// Parsed OpenFGA `define` relation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenFgaRelation {
+    /// Relation name.
+    pub name: String,
+    /// Raw relation expression after the `:`.
+    pub expression: String,
+    /// 1-indexed source line.
+    pub line: u32,
 }
 
 /// Deterministic property graph for cross-service schema ingress.
@@ -112,6 +142,7 @@ impl TrustBoundaryGraph {
             Some("json") => self.ingest_openapi(root, path, SchemaEncoding::Json),
             Some("yaml") | Some("yml") => self.ingest_yaml_schema(root, path),
             Some("graphql") | Some("gql") => self.ingest_graphql(root, path),
+            Some("fga") => self.ingest_openfga(root, path),
             _ => Ok(()),
         }
     }
@@ -327,6 +358,33 @@ impl TrustBoundaryGraph {
         Ok(())
     }
 
+    fn ingest_openfga(&mut self, root: &Path, path: &Path) -> Result<()> {
+        let schema = fs::read_to_string(path)
+            .with_context(|| format!("failed to read OpenFGA model {}", path.display()))?;
+        let source_path = relative_path(root, path);
+        let model = parse_openfga_model(&schema);
+        let mut endpoints = Vec::new();
+
+        for type_def in model.types {
+            for relation in type_def.relations {
+                endpoints.push(ApiIngress {
+                    id: format!("OpenFGA.{}.{}", type_def.name, relation.name),
+                    protocol: ApiProtocol::OpenFga,
+                    method: Some("RELATION".to_string()),
+                    route: relation.name,
+                    namespace: Some(type_def.name.clone()),
+                    source_path: source_path.clone(),
+                });
+            }
+        }
+
+        endpoints.sort();
+        for endpoint in endpoints {
+            self.add_ingress(endpoint);
+        }
+        Ok(())
+    }
+
     fn add_ingress(&mut self, ingress: ApiIngress) {
         if self.ingress.contains_key(&ingress.id) {
             return;
@@ -430,7 +488,7 @@ fn collect_schema_files_inner(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()
 fn is_schema_file(path: &Path) -> bool {
     matches!(
         normalized_extension(path).as_deref(),
-        Some("json" | "proto" | "yaml" | "yml" | "graphql" | "gql")
+        Some("json" | "proto" | "yaml" | "yml" | "graphql" | "gql" | "fga")
     )
 }
 
@@ -459,6 +517,127 @@ fn empty_to_none(value: String) -> Option<String> {
     } else {
         Some(value)
     }
+}
+
+/// Parse a lightweight OpenFGA DSL model into type and relation declarations.
+pub fn parse_openfga_model(source: &str) -> OpenFgaModel {
+    let mut model = OpenFgaModel::default();
+    let mut current: Option<OpenFgaType> = None;
+    let mut in_relations = false;
+
+    for (idx, raw_line) in source.lines().enumerate() {
+        let trimmed = raw_line.split('#').next().unwrap_or("").trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("type ") {
+            if let Some(type_def) = current.take() {
+                model.types.push(type_def);
+            }
+            let name = rest
+                .split(|ch: char| ch.is_whitespace() || ch == '{')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            current = (!name.is_empty()).then_some(OpenFgaType {
+                name,
+                relations: Vec::new(),
+            });
+            in_relations = false;
+            continue;
+        }
+
+        if trimmed == "relations" || trimmed == "relations {" {
+            in_relations = true;
+            continue;
+        }
+
+        if trimmed.starts_with('}') {
+            in_relations = false;
+            continue;
+        }
+
+        let Some(type_def) = current.as_mut() else {
+            continue;
+        };
+        if !in_relations && !trimmed.starts_with("define ") {
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("define ") else {
+            continue;
+        };
+        let Some((name, expression)) = rest.split_once(':') else {
+            continue;
+        };
+        let name = name.trim();
+        let expression = expression.trim();
+        if name.is_empty() || expression.is_empty() {
+            continue;
+        }
+        type_def.relations.push(OpenFgaRelation {
+            name: name.to_string(),
+            expression: expression.to_string(),
+            line: idx as u32 + 1,
+        });
+    }
+
+    if let Some(type_def) = current {
+        model.types.push(type_def);
+    }
+    model
+}
+
+/// Emit OpenFGA relationship-model invariant findings.
+pub fn find_openfga_invariant_findings(source: &[u8], label: &str) -> Vec<StructuredFinding> {
+    let text = String::from_utf8_lossy(source);
+    let model = parse_openfga_model(&text);
+    let mut findings = Vec::new();
+
+    for type_def in model.types {
+        for relation in type_def.relations {
+            if !has_unbounded_wildcard_grant(&relation.expression) {
+                continue;
+            }
+            let material = format!(
+                "security:openfga_unbounded_delegation:{label}:{}:{}:{}",
+                type_def.name, relation.name, relation.expression
+            );
+            findings.push(StructuredFinding {
+                id: "security:openfga_unbounded_delegation".to_string(),
+                file: Some(label.to_string()),
+                line: Some(relation.line),
+                fingerprint: short_fingerprint(material.as_bytes()),
+                severity: Some("KevCritical".to_string()),
+                remediation: Some(
+                    "Replace direct wildcard grants with tenant- or parent-scoped relations and contextual constraints."
+                        .to_string(),
+                ),
+                docs_url: None,
+                exploit_witness: None,
+                upstream_validation_absent: false,
+            });
+        }
+    }
+
+    findings
+}
+
+fn has_unbounded_wildcard_grant(expression: &str) -> bool {
+    let lower = expression.to_ascii_lowercase();
+    let has_wildcard = lower.contains(":*]");
+    let has_local_boundary =
+        lower.contains(" from ") || lower.contains(" but not ") || lower.contains(" with ");
+    has_wildcard && !has_local_boundary
+}
+
+fn short_fingerprint(bytes: &[u8]) -> String {
+    let digest = blake3::hash(bytes);
+    digest.as_bytes()[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 #[cfg(test)]
@@ -597,5 +776,54 @@ channels:
             graph.can_reach("Query.order", "PUBLISH orders.created"),
             "public GraphQL edge must connect to internal async boundaries"
         );
+    }
+
+    #[test]
+    fn openfga_relations_register_as_schema_nodes() {
+        let temp = tempfile::tempdir().expect("tempdir must be created");
+        let fga_path = temp.path().join("model.fga");
+        fs::write(
+            &fga_path,
+            r#"
+model
+  schema 1.1
+
+type user
+
+type document
+  relations
+    define viewer: [user] or editor
+    define editor: [user]
+"#,
+        )
+        .expect("fga fixture must be written");
+
+        let graph = TrustBoundaryGraph::from_repository(temp.path()).expect("fga must parse");
+
+        assert!(graph.contains_ingress("OpenFGA.document.viewer"));
+        assert!(graph.contains_ingress("OpenFGA.document.editor"));
+        let ingress = graph.ingress_nodes();
+        assert_eq!(ingress[0].protocol, ApiProtocol::OpenFga);
+        assert_eq!(ingress[0].namespace.as_deref(), Some("document"));
+    }
+
+    #[test]
+    fn openfga_unbounded_wildcard_grant_is_kevcritical() {
+        let source = br#"
+model
+  schema 1.1
+
+type organization
+
+type document
+  relations
+    define viewer: [organization:*]
+"#;
+
+        let findings = find_openfga_invariant_findings(source, "model.fga");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "security:openfga_unbounded_delegation");
+        assert_eq!(findings[0].severity.as_deref(), Some("KevCritical"));
     }
 }
