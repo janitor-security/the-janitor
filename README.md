@@ -1,9 +1,9 @@
 # The Janitor: Structural Firewall for AI-Generated Code
-**v10.2.0-beta.1 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
+**v10.2.0-beta.2 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.2.0-beta.1: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
+*Attested by The Janitor v10.2.0-beta.2: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
 
 ---
 

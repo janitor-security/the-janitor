@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 45 (Bounded Symbolic Counterexamples & The Omni-Protocol Release)
+
+**Directive:** Finalize P2-1 with minimal SMT counterexamples, fix local manifest attribution for scan roots, add configuration-flaw exploit witness handling, prepare `10.2.0-beta.2`, verify, commit, and execute the formal release pipeline.
+
+**Changes:**
+
+- `crates/cli/src/hunt.rs` — local path hunts now carry scan-root manifest attribution into report rendering, and nested scan roots correctly walk upward to `go.mod`, `package.json`, `Cargo.toml`, `pom.xml`, and Gradle manifests.
+- `crates/forge/src/exploitability.rs` — added `IngressKind::ConfigurationFlaw`, mapped `security:tls_verification_bypass` to a static Active MitM reproduction brief, and extended `Z3Solver::refine` to enforce family-specific minimal counterexample payload objectives.
+- `crates/forge/src/symbex.rs` — added bounded minimal counterexample objectives for `PathTraversal`, `SSRF`, and `CommandInjection`, plus `SymbolicExecutor::build_minimal_counterexample_constraint`.
+- `crates/mcp/src/lib.rs` — synchronized MCP refinement requests with the expanded `PathConstraint` shape.
+- `Cargo.toml` / `docs/architecture.md` / `docs/index.md` — bumped the engine version surface to `10.2.0-beta.2`.
+- `.INNOVATION_LOG.md` — locally compacted shipped `P2-1` out of the active frontier to preserve absolute eradication hygiene.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed after correcting `README.md` version parity to `v10.2.0-beta.2`; audit fingerprint saved.
+- Release executed below via `just fast-release 10.2.0-beta.2`.
+
 ## 2026-04-23 — Sprint Batch 44 (OpenFGA Invariants, Test Exclusion & Go SBOM)
 
 **Directive:** Target Auth0 OpenFGA scans by adding Go module attribution, pruning test/mock false positives, parsing OpenFGA relationship models, and implementing an agentic code execution graph. Do not release.

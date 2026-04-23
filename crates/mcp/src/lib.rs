@@ -1129,6 +1129,7 @@ fn run_z3_refine(args: &serde_json::Value) -> Result<serde_json::Value> {
     }
 
     let constraint = forge::exploitability::PathConstraint {
+        family: None,
         variables,
         assertions,
         witnesses_of_interest: witnesses,

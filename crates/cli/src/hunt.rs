@@ -146,6 +146,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     }
 
     let mut component_info_override: Option<String> = None;
+    let local_scan_component_info =
+        scan_root.map(|root| detect_component_info_inner(&[], Some(root)));
     let findings = if let Some(url) = sourcemap_url {
         ingest_sourcemap(url)?
     } else if let Some(pkg) = npm_pkg {
@@ -202,7 +204,10 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     };
 
     if format == "bugcrowd" {
-        let report = if let Some(component_info) = component_info_override.as_deref() {
+        let report = if let Some(component_info) = component_info_override
+            .as_deref()
+            .or(local_scan_component_info.as_deref())
+        {
             format_bugcrowd_report_with_component(&findings, Some(component_info))
         } else {
             format_bugcrowd_report(&findings)
@@ -212,7 +217,10 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     }
 
     if format == "auth0" {
-        let report = if let Some(component_info) = component_info_override.as_deref() {
+        let report = if let Some(component_info) = component_info_override
+            .as_deref()
+            .or(local_scan_component_info.as_deref())
+        {
             format_auth0_report_with_component(&findings, Some(component_info))
         } else {
             format_auth0_report(&findings)
@@ -3390,6 +3398,25 @@ def main(user_id):
         .unwrap();
 
         let component = detect_component_info_inner(&[], Some(dir.path()));
+
+        assert_eq!(
+            component,
+            "**github.com/openfga/openfga** go1.22 (`go.mod`)"
+        );
+    }
+
+    #[test]
+    fn detect_component_info_walks_up_from_nested_scan_root_to_go_mod() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let nested = dir.path().join("cmd").join("server");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(
+            dir.path().join("go.mod"),
+            b"module github.com/openfga/openfga\n\ngo 1.22\n",
+        )
+        .unwrap();
+
+        let component = detect_component_info_inner(&[], Some(&nested));
 
         assert_eq!(
             component,

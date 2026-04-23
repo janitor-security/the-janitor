@@ -142,6 +142,54 @@ impl<'tree> SymbolicExecutor<'tree> {
         let facts = self.extract_js_ts_facts(source);
         evaluate_canonical_fact_constraints(&facts)
     }
+
+    /// Build a minimal counterexample constraint for a high-value vulnerability
+    /// family. The returned payload objective is deterministic and injects a
+    /// concrete witness string into the exploitability pipeline.
+    pub fn build_minimal_counterexample_constraint(
+        &self,
+        family: VulnerabilityFamily,
+        witness_symbol: &str,
+    ) -> crate::exploitability::PathConstraint {
+        let symbol = sanitize_identifier(witness_symbol).unwrap_or_else(|| {
+            sanitize_identifier(&self.witness.source_label)
+                .unwrap_or_else(|| "user_input".to_string())
+        });
+        crate::exploitability::PathConstraint {
+            family: Some(family),
+            variables: vec![(symbol.clone(), crate::exploitability::SmtSort::String)],
+            assertions: minimal_counterexample_assertions(family, &symbol),
+            witnesses_of_interest: vec![symbol],
+        }
+    }
+}
+
+/// Family-specific payload objective used to force a concrete SMT witness.
+pub fn minimal_counterexample_assertions(
+    family: VulnerabilityFamily,
+    witness_symbol: &str,
+) -> Vec<String> {
+    let Some(symbol) = sanitize_identifier(witness_symbol) else {
+        return Vec::new();
+    };
+    match family {
+        VulnerabilityFamily::PathTraversal => vec![
+            format!("(str.contains {symbol} \"../\")"),
+            format!("(str.suffixof \"/etc/passwd\" {symbol})"),
+            format!("(= {symbol} \"../etc/passwd\")"),
+        ],
+        VulnerabilityFamily::SSRF => vec![
+            format!("(str.prefixof \"http://\" {symbol})"),
+            format!("(str.contains {symbol} \"169.254.169.254\")"),
+            format!("(= {symbol} \"http://169.254.169.254/latest/meta-data/\")"),
+        ],
+        VulnerabilityFamily::CommandInjection => vec![
+            format!("(str.contains {symbol} \";\")"),
+            format!("(str.contains {symbol} \" id\")"),
+            format!("(= {symbol} \"; id\")"),
+        ],
+        _ => Vec::new(),
+    }
 }
 
 /// Evaluate canonical SMT constraints emitted by grammar adapters.
@@ -529,5 +577,44 @@ renderTemplate("{% if user %}{{ payload }}{% endif %}");
             }),
             "render calls carrying Liquid markers must retain Liquid context"
         );
+    }
+
+    #[test]
+    fn build_minimal_path_traversal_constraint_carries_concrete_payload_goal() {
+        let source = br#"const path = user_input;"#;
+        let tree = parse_js(source);
+        let executor = SymbolicExecutor::new(witness(), tree.root_node());
+        let constraint = executor.build_minimal_counterexample_constraint(
+            VulnerabilityFamily::PathTraversal,
+            "path_input",
+        );
+
+        assert_eq!(constraint.family, Some(VulnerabilityFamily::PathTraversal));
+        assert_eq!(
+            constraint.variables,
+            vec![(
+                "path_input".to_string(),
+                crate::exploitability::SmtSort::String
+            )]
+        );
+        assert!(
+            constraint
+                .assertions
+                .iter()
+                .any(|assertion| assertion.contains("../etc/passwd")),
+            "path traversal objective must force a concrete traversal payload"
+        );
+    }
+
+    #[test]
+    fn command_injection_minimal_counterexample_anchors_shell_metacharacters() {
+        let assertions =
+            minimal_counterexample_assertions(VulnerabilityFamily::CommandInjection, "cmd");
+        assert!(assertions
+            .iter()
+            .any(|assertion| assertion.contains("; id")));
+        assert!(assertions
+            .iter()
+            .any(|assertion| assertion.contains("str.contains cmd \";\"")));
     }
 }

@@ -477,7 +477,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-v10.2.0-beta.1
+v10.2.0-beta.2
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.
