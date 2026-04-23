@@ -1066,6 +1066,14 @@ enum Commands {
         /// this URL and embeds the captured HTTP response as live reproduction evidence.
         #[arg(long)]
         live_tenant: Option<String>,
+        /// Explicit Auth0 tenant domain injected into BrowserDOM harnesses without
+        /// replaying any network requests.
+        #[arg(long)]
+        live_tenant_domain: Option<String>,
+        /// Explicit Auth0 client ID injected into BrowserDOM harnesses without
+        /// replaying any network requests.
+        #[arg(long)]
+        live_tenant_client_id: Option<String>,
     },
 }
 
@@ -1541,6 +1549,8 @@ async fn main() -> anyhow::Result<()> {
             format,
             corpus_path,
             live_tenant,
+            live_tenant_domain,
+            live_tenant_client_id,
         } => {
             hunt::cmd_hunt(hunt::HuntArgs {
                 scan_root: path.as_deref(),
@@ -1557,6 +1567,8 @@ async fn main() -> anyhow::Result<()> {
                 format: format.as_str(),
                 corpus_path: corpus_path.as_deref(),
                 live_tenant: live_tenant.as_deref(),
+                live_tenant_domain: live_tenant_domain.as_deref(),
+                live_tenant_client_id: live_tenant_client_id.as_deref(),
             })?;
         }
     }

@@ -64,6 +64,10 @@ pub struct HuntArgs<'a> {
     /// When set, replay every synthesized `repro_cmd` against this base URL
     /// and embed the captured response as `ExploitWitness::live_proof`.
     pub live_tenant: Option<&'a str>,
+    /// Explicit BrowserDOM tenant domain override for harness synthesis.
+    pub live_tenant_domain: Option<&'a str>,
+    /// Explicit BrowserDOM client ID override for harness synthesis.
+    pub live_tenant_client_id: Option<&'a str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +97,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         format,
         corpus_path,
         live_tenant,
+        live_tenant_domain,
+        live_tenant_client_id,
     } = args;
 
     match format {
@@ -179,14 +185,19 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         findings
     };
 
-    let findings = if let Some(tenant_url) = live_tenant {
-        let findings = apply_live_tenant_browser_context(findings, tenant_url);
-        if is_live_tenant_replay_origin(tenant_url) {
-            apply_live_tenant_replay(findings, tenant_url)
+    let findings = {
+        let mut findings = if let Some(browser_context) =
+            synthesize_browser_tenant_spec(live_tenant, live_tenant_domain, live_tenant_client_id)
+        {
+            apply_live_tenant_browser_context(findings, &browser_context)
         } else {
             findings
+        };
+        if let Some(tenant_url) = live_tenant.filter(|value| is_live_tenant_replay_origin(value)) {
+            findings = apply_live_tenant_replay(findings, tenant_url);
         }
-    } else {
+        let output_dir = std::env::current_dir().context("resolve current output directory")?;
+        emit_browser_dom_harnesses(&mut findings, &output_dir)?;
         findings
     };
 
@@ -217,6 +228,29 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         .context("failed to serialise findings as JSON")?;
     println!("{json}");
     Ok(())
+}
+
+fn synthesize_browser_tenant_spec(
+    live_tenant: Option<&str>,
+    live_tenant_domain: Option<&str>,
+    live_tenant_client_id: Option<&str>,
+) -> Option<String> {
+    let explicit_spec = live_tenant.filter(|value| !is_live_tenant_replay_origin(value));
+    if let Some(spec) = explicit_spec {
+        return Some(spec.to_string());
+    }
+    if live_tenant_domain.is_none() && live_tenant_client_id.is_none() {
+        return None;
+    }
+
+    let mut tokens = Vec::new();
+    if let Some(domain) = live_tenant_domain {
+        tokens.push(format!("domain={domain}"));
+    }
+    if let Some(client_id) = live_tenant_client_id {
+        tokens.push(format!("client_id={client_id}"));
+    }
+    Some(tokens.join(";"))
 }
 
 fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
@@ -602,6 +636,69 @@ fn apply_live_tenant_browser_context(
         }
     }
     findings
+}
+
+fn emit_browser_dom_harnesses(
+    findings: &mut [StructuredFinding],
+    output_dir: &Path,
+) -> anyhow::Result<()> {
+    let mut emitted = BTreeMap::<String, usize>::new();
+    for finding in findings {
+        let Some(witness) = finding.exploit_witness.as_mut() else {
+            continue;
+        };
+        let Some(repro_cmd) = witness.repro_cmd.as_deref() else {
+            continue;
+        };
+        let Some(html) = extract_browser_dom_payload(repro_cmd) else {
+            continue;
+        };
+        let stem = sanitize_filename_component(&finding.id);
+        let slot = emitted.entry(stem.clone()).or_default();
+        *slot += 1;
+        let suffix = if *slot == 1 {
+            String::new()
+        } else {
+            format!("_{}", *slot)
+        };
+        let filename = format!("janitor_poc_{}{}.html", stem, suffix);
+        let path = output_dir.join(&filename);
+        std::fs::write(&path, html)
+            .with_context(|| format!("failed to write BrowserDOM harness {}", path.display()))?;
+        let note = format!(
+            "BrowserDOM harness written to {}. No network request was executed by Janitor; manual operator action is still required.",
+            path.display()
+        );
+        witness.live_proof = Some(match witness.live_proof.take() {
+            Some(existing) if !existing.is_empty() => format!("{existing}\n{note}"),
+            _ => note,
+        });
+    }
+    Ok(())
+}
+
+fn extract_browser_dom_payload(repro_cmd: &str) -> Option<&str> {
+    let start = repro_cmd.find("<<'HTML'\n")?;
+    let body = &repro_cmd[start + "<<'HTML'\n".len()..];
+    let end = body.find("\nHTML\n")?;
+    Some(&body[..end])
+}
+
+fn sanitize_filename_component(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    let out = out.trim_matches('_').to_string();
+    if out.is_empty() {
+        "finding".to_string()
+    } else {
+        out
+    }
 }
 
 fn is_live_tenant_replay_origin(live_tenant: &str) -> bool {
@@ -3251,6 +3348,64 @@ class Handler {
         assert!(!is_live_tenant_replay_origin(
             "domain=tenant.example.auth0.com;client_id=test-client-123"
         ));
+    }
+
+    #[test]
+    fn browser_dom_harness_is_emitted_to_output_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut findings = vec![StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("src/auth0-widget.js".to_string()),
+            line: Some(44),
+            fingerprint: "domxss-live-tenant".to_string(),
+            severity: Some("High".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                repro_cmd: Some(
+                    "cat > janitor-auth0-dom-xss-poc.html <<'HTML'\n<!doctype html>\n<title>Harness</title>\n<script>console.log('ready')</script>\nHTML\npython3 -m http.server 8765"
+                        .to_string(),
+                ),
+                live_proof: Some("Live tenant context injected.".to_string()),
+                ..Default::default()
+            }),
+            upstream_validation_absent: false,
+        }];
+
+        emit_browser_dom_harnesses(&mut findings, temp.path()).unwrap();
+
+        let emitted = temp
+            .path()
+            .join("janitor_poc_security_dom_xss_innerhtml.html");
+        let written = std::fs::read_to_string(&emitted).unwrap();
+        assert!(written.contains("<!doctype html>"));
+        assert!(written.contains("console.log('ready')"));
+        assert!(
+            findings[0]
+                .exploit_witness
+                .as_ref()
+                .and_then(|w| w.live_proof.as_deref())
+                .is_some_and(|proof| proof.contains("BrowserDOM harness written to")),
+            "live proof must mention the emitted harness path"
+        );
+    }
+
+    #[test]
+    fn explicit_live_tenant_flags_build_browser_context_spec() {
+        let spec = synthesize_browser_tenant_spec(
+            Some("https://tenant.example.com"),
+            Some("tenant.example.auth0.com"),
+            Some("client-123"),
+        )
+        .unwrap();
+        assert!(
+            spec.contains("domain=tenant.example.auth0.com"),
+            "explicit tenant domain must be injected into browser context synthesis"
+        );
+        assert!(
+            spec.contains("client_id=client-123"),
+            "explicit client id must be injected into browser context synthesis"
+        );
     }
 
     // -----------------------------------------------------------------------

@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 42 (Schema Graph Expansion & AEG Harness Emission)
+
+**Directive:** Emit physical BrowserDOM PoC harness files, expand service-boundary schema graph ingestion for GraphQL and AsyncAPI, enforce absolute roadmap hygiene, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/cli/src/main.rs` / `crates/cli/src/hunt.rs` — added `--live-tenant-domain` and `--live-tenant-client-id` flags and bound them into BrowserDOM tenant context synthesis.
+- `crates/cli/src/hunt.rs` — writes standalone `janitor_poc_<finding_id>.html` files for BrowserDOM `ExploitWitness` payloads in the current output directory without initiating tenant network requests.
+- `crates/forge/src/schema_graph.rs` — added GraphQL SDL ingestion for `type Query` and `type Mutation` public ingress nodes, AsyncAPI YAML ingestion for `publish` / `subscribe` channel boundaries, and reachability edges from public schema ingress to asynchronous internal queues.
+- `.INNOVATION_LOG.md` — locally removed shipped `P1-8`, compacted completed GraphQL/AsyncAPI schema graph work out of the open frontier, and purged stale completion markers for absolute eradication hygiene.
+
+**Verification:**
+
+- `cargo test -p forge graphql_query_fields_register_public_ingress_nodes -- --test-threads=4` — passed.
+- `cargo test -p cli browser_dom_harness_is_emitted_to_output_directory -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-23 — Sprint Batch 41 (LotL API C2 Interception & SSTI Foundations)
 
 **Directive:** Implement LotL API C2 interception for trusted SaaS exfiltration, scaffold Liquid SSTI symbolic facts, update roadmap hygiene, verify, commit. Do not release.

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use openapiv3::OpenAPI;
+use petgraph::algo::has_path_connecting;
 use petgraph::graph::{Graph, NodeIndex};
 use protobuf_parse::Parser;
 
@@ -20,6 +21,10 @@ pub enum ApiProtocol {
     Rest,
     /// gRPC/protobuf service method.
     Grpc,
+    /// GraphQL `Query` / `Mutation` field reachable from a public edge.
+    Graphql,
+    /// Internal asynchronous channel boundary.
+    Async,
 }
 
 /// A normalized ingress endpoint discovered from a schema file.
@@ -62,6 +67,7 @@ pub struct TrustBoundaryGraph {
     graph: Graph<TrustBoundaryNode, TrustBoundaryEdge>,
     internet: NodeIndex,
     ingress: BTreeMap<String, NodeIndex>,
+    async_boundaries: Vec<NodeIndex>,
 }
 
 impl Default for TrustBoundaryGraph {
@@ -82,6 +88,7 @@ impl TrustBoundaryGraph {
             graph,
             internet,
             ingress: BTreeMap::new(),
+            async_boundaries: Vec::new(),
         }
     }
 
@@ -103,7 +110,8 @@ impl TrustBoundaryGraph {
         match normalized_extension(path).as_deref() {
             Some("proto") => self.ingest_proto(root, path),
             Some("json") => self.ingest_openapi(root, path, SchemaEncoding::Json),
-            Some("yaml") | Some("yml") => self.ingest_openapi(root, path, SchemaEncoding::Yaml),
+            Some("yaml") | Some("yml") => self.ingest_yaml_schema(root, path),
+            Some("graphql") | Some("gql") => self.ingest_graphql(root, path),
             _ => Ok(()),
         }
     }
@@ -132,6 +140,29 @@ impl TrustBoundaryGraph {
     /// Borrow the backing `petgraph` graph.
     pub fn graph(&self) -> &Graph<TrustBoundaryNode, TrustBoundaryEdge> {
         &self.graph
+    }
+
+    /// Return true when a path exists between two registered schema nodes.
+    pub fn can_reach(&self, source_id: &str, target_id: &str) -> bool {
+        let Some(&source) = self.ingress.get(source_id) else {
+            return false;
+        };
+        let Some(&target) = self.ingress.get(target_id) else {
+            return false;
+        };
+        has_path_connecting(&self.graph, source, target, None)
+    }
+
+    fn ingest_yaml_schema(&mut self, root: &Path, path: &Path) -> Result<()> {
+        let bytes = fs::read(path)
+            .with_context(|| format!("failed to read YAML schema {}", path.display()))?;
+        let yaml: serde_yaml::Value = serde_yaml::from_slice(&bytes)
+            .with_context(|| format!("failed to parse YAML schema {}", path.display()))?;
+        if yaml.get("asyncapi").is_some() || yaml.get("channels").is_some() {
+            self.ingest_asyncapi(root, path, yaml)
+        } else {
+            self.ingest_openapi(root, path, SchemaEncoding::Yaml)
+        }
     }
 
     fn ingest_openapi(&mut self, root: &Path, path: &Path, encoding: SchemaEncoding) -> Result<()> {
@@ -205,6 +236,97 @@ impl TrustBoundaryGraph {
         Ok(())
     }
 
+    fn ingest_graphql(&mut self, root: &Path, path: &Path) -> Result<()> {
+        let schema = fs::read_to_string(path)
+            .with_context(|| format!("failed to read GraphQL schema {}", path.display()))?;
+        let source_path = relative_path(root, path);
+        let mut endpoints = Vec::new();
+        let mut current_type: Option<&str> = None;
+
+        for line in schema.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(rest) = trimmed.strip_prefix("type ") {
+                let type_name = rest
+                    .split(|ch: char| ch.is_whitespace() || ch == '{')
+                    .next()
+                    .unwrap_or("");
+                current_type = matches!(type_name, "Query" | "Mutation").then_some(type_name);
+                continue;
+            }
+            if trimmed.starts_with('}') {
+                current_type = None;
+                continue;
+            }
+            let Some(type_name) = current_type else {
+                continue;
+            };
+            let Some((field_name, _)) = trimmed.split_once(':') else {
+                continue;
+            };
+            let field_name = field_name
+                .split('(')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if field_name.is_empty() {
+                continue;
+            }
+            endpoints.push(ApiIngress {
+                id: format!("{type_name}.{field_name}"),
+                protocol: ApiProtocol::Graphql,
+                method: Some(type_name.to_ascii_uppercase()),
+                route: field_name,
+                namespace: Some(type_name.to_string()),
+                source_path: source_path.clone(),
+            });
+        }
+
+        endpoints.sort();
+        for endpoint in endpoints {
+            self.add_ingress(endpoint);
+        }
+        Ok(())
+    }
+
+    fn ingest_asyncapi(&mut self, root: &Path, path: &Path, yaml: serde_yaml::Value) -> Result<()> {
+        let source_path = relative_path(root, path);
+        let mut endpoints = Vec::new();
+        let Some(channels) = yaml.get("channels").and_then(|value| value.as_mapping()) else {
+            return Ok(());
+        };
+        for (channel, config) in channels {
+            let Some(channel_name) = channel.as_str() else {
+                continue;
+            };
+            let Some(config) = config.as_mapping() else {
+                continue;
+            };
+            for operation in ["publish", "subscribe"] {
+                let key = serde_yaml::Value::String(operation.to_string());
+                if config.contains_key(&key) {
+                    endpoints.push(ApiIngress {
+                        id: format!("{} {}", operation.to_ascii_uppercase(), channel_name),
+                        protocol: ApiProtocol::Async,
+                        method: Some(operation.to_ascii_uppercase()),
+                        route: channel_name.to_string(),
+                        namespace: Some("AsyncAPI".to_string()),
+                        source_path: source_path.clone(),
+                    });
+                }
+            }
+        }
+
+        endpoints.sort();
+        for endpoint in endpoints {
+            self.add_async_boundary(endpoint);
+        }
+        Ok(())
+    }
+
     fn add_ingress(&mut self, ingress: ApiIngress) {
         if self.ingress.contains_key(&ingress.id) {
             return;
@@ -219,6 +341,50 @@ impl TrustBoundaryGraph {
                 kind: "public_ingress".to_owned(),
             },
         );
+        for async_node in &self.async_boundaries {
+            self.graph.add_edge(
+                node,
+                *async_node,
+                TrustBoundaryEdge {
+                    kind: "async_boundary_transition".to_owned(),
+                },
+            );
+        }
+        self.ingress.insert(id, node);
+    }
+
+    fn add_async_boundary(&mut self, ingress: ApiIngress) {
+        if self.ingress.contains_key(&ingress.id) {
+            return;
+        }
+
+        let id = ingress.id.clone();
+        let node = self.graph.add_node(TrustBoundaryNode::Ingress(ingress));
+        let upstream_nodes = self
+            .ingress
+            .values()
+            .copied()
+            .filter(|ingress_node| {
+                matches!(
+                    self.graph.node_weight(*ingress_node),
+                    Some(TrustBoundaryNode::Ingress(ApiIngress {
+                        protocol,
+                        ..
+                    })) if *protocol != ApiProtocol::Async
+                )
+            })
+            .collect::<Vec<_>>();
+
+        for ingress_node in upstream_nodes {
+            self.graph.add_edge(
+                ingress_node,
+                node,
+                TrustBoundaryEdge {
+                    kind: "async_boundary_transition".to_owned(),
+                },
+            );
+        }
+        self.async_boundaries.push(node);
         self.ingress.insert(id, node);
     }
 }
@@ -264,7 +430,7 @@ fn collect_schema_files_inner(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()
 fn is_schema_file(path: &Path) -> bool {
     matches!(
         normalized_extension(path).as_deref(),
-        Some("json" | "proto" | "yaml" | "yml")
+        Some("json" | "proto" | "yaml" | "yml" | "graphql" | "gql")
     )
 }
 
@@ -366,5 +532,70 @@ paths:
         assert_eq!(ingress[0].route, "/api/v1/users");
         assert_eq!(ingress[0].method.as_deref(), Some("POST"));
         assert_eq!(ingress[0].namespace.as_deref(), Some("createUser"));
+    }
+
+    #[test]
+    fn graphql_query_fields_register_public_ingress_nodes() {
+        let temp = tempfile::tempdir().expect("tempdir must be created");
+        let graphql_path = temp.path().join("schema.graphql");
+        fs::write(
+            &graphql_path,
+            r#"
+type Query {
+  user(id: ID!): User
+}
+
+type Mutation {
+  createUser(email: String!): User
+}
+"#,
+        )
+        .expect("graphql fixture must be written");
+
+        let graph = TrustBoundaryGraph::from_repository(temp.path()).expect("graphql must parse");
+        let ingress = graph.ingress_nodes();
+
+        assert!(graph.contains_ingress("Mutation.createUser"));
+        assert!(graph.contains_ingress("Query.user"));
+        assert_eq!(ingress[0].protocol, ApiProtocol::Graphql);
+        assert_eq!(ingress[0].namespace.as_deref(), Some("Mutation"));
+    }
+
+    #[test]
+    fn graphql_edges_reach_asyncapi_internal_boundaries() {
+        let temp = tempfile::tempdir().expect("tempdir must be created");
+        fs::write(
+            temp.path().join("schema.gql"),
+            r#"
+type Query {
+  order(id: ID!): Order
+}
+"#,
+        )
+        .expect("graphql fixture must be written");
+        fs::write(
+            temp.path().join("asyncapi.yaml"),
+            r#"
+asyncapi: 2.6.0
+info:
+  title: Orders
+  version: 1.0.0
+channels:
+  orders.created:
+    publish:
+      message:
+        name: OrderCreated
+"#,
+        )
+        .expect("asyncapi fixture must be written");
+
+        let graph = TrustBoundaryGraph::from_repository(temp.path()).expect("schemas must parse");
+
+        assert!(graph.contains_ingress("PUBLISH orders.created"));
+        assert!(graph.contains_ingress("Query.order"));
+        assert!(
+            graph.can_reach("Query.order", "PUBLISH orders.created"),
+            "public GraphQL edge must connect to internal async boundaries"
+        );
     }
 }
