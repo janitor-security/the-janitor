@@ -180,7 +180,12 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     };
 
     let findings = if let Some(tenant_url) = live_tenant {
-        apply_live_tenant_replay(findings, tenant_url)
+        let findings = apply_live_tenant_browser_context(findings, tenant_url);
+        if is_live_tenant_replay_origin(tenant_url) {
+            apply_live_tenant_replay(findings, tenant_url)
+        } else {
+            findings
+        }
     } else {
         findings
     };
@@ -554,12 +559,44 @@ fn live_tenant_section(findings: &[&StructuredFinding]) -> String {
         .find(|p| !p.is_empty());
     match proof {
         Some(p) => format!(
-            "\n**Live Tenant Verification:**\n\
-The synthesized payload was executed against a live test tenant. Target response captured:\n\
+            "\n**Live Tenant Context:**\n\
+The synthesized witness was bound to an approved test tenant context. Captured verification context:\n\
 ```http\n{p}\n```\n\n"
         ),
         None => String::new(),
     }
+}
+
+/// Bind browser-side PoCs to a live test tenant without executing them.
+fn apply_live_tenant_browser_context(
+    mut findings: Vec<StructuredFinding>,
+    live_tenant: &str,
+) -> Vec<StructuredFinding> {
+    let Some(context) = forge::exploitability::BrowserTenantContext::from_spec(live_tenant) else {
+        return findings;
+    };
+    for finding in &mut findings {
+        let Some(witness) = finding.exploit_witness.as_mut() else {
+            continue;
+        };
+        if let Some(repro) = forge::exploitability::synthesize_live_tenant_browser_repro(
+            &finding.id,
+            witness,
+            &context,
+        ) {
+            witness.repro_cmd = Some(repro);
+            witness.live_proof = Some(
+                "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; the harness requires manual operator action."
+                    .to_string(),
+            );
+        }
+    }
+    findings
+}
+
+fn is_live_tenant_replay_origin(live_tenant: &str) -> bool {
+    let trimmed = live_tenant.trim_start();
+    trimmed.starts_with("http://") || trimmed.starts_with("https://")
 }
 
 /// Substitute the scheme+host in a `curl` command URL with `live_tenant`.
@@ -601,6 +638,9 @@ fn apply_live_tenant_replay(
         let Some(repro_cmd) = witness.repro_cmd.as_deref() else {
             continue;
         };
+        if !repro_cmd.trim_start().starts_with("curl ") {
+            continue;
+        }
         let cmd = replace_host_in_curl(repro_cmd, live_tenant);
         let output = std::process::Command::new("sh")
             .arg("-c")
@@ -2513,6 +2553,61 @@ def main(user_id):
     }
 
     #[test]
+    fn bugcrowd_formatter_preserves_live_tenant_html_harness_in_poc() {
+        let html_harness = r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Janitor Auth0 DOM XSS Witness</title>
+  <script src="https://cdn.auth0.com/js/auth0/9.28/auth0.min.js"></script>
+</head>
+<body>
+  <script>
+    const webAuth = new auth0.WebAuth({
+      domain: "tenant.example.auth0.com",
+      clientID: "test-client-123",
+      redirectUri: "http://localhost:8765/callback"
+    });
+  </script>
+</body>
+</html>"#;
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("src/auth0-widget.js".to_string()),
+            line: Some(44),
+            fingerprint: "domxss-live-tenant".to_string(),
+            severity: Some("High".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "render".to_string(),
+                source_label: "param:state".to_string(),
+                sink_function: "Element.innerHTML".to_string(),
+                sink_label: "sink:dom_xss".to_string(),
+                call_chain: vec!["render".to_string(), "Element.innerHTML".to_string()],
+                repro_cmd: Some(html_harness.to_string()),
+                live_proof: Some(
+                    "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; the harness requires manual operator action."
+                        .to_string(),
+                ),
+                ..Default::default()
+            }),
+            upstream_validation_absent: true,
+        };
+
+        let report = format_bugcrowd_report(&[finding]);
+
+        assert!(report.contains("**Proof of Concept:**\n```text"));
+        assert!(report.contains(
+            "<script src=\"https://cdn.auth0.com/js/auth0/9.28/auth0.min.js\"></script>"
+        ));
+        assert!(report.contains("new auth0.WebAuth({"));
+        assert!(report.contains("clientID: \"test-client-123\""));
+        assert!(report.contains("**Live Tenant Context:**"));
+        assert!(report.contains("No network request was executed by Janitor"));
+    }
+
+    #[test]
     fn auth0_formatter_emits_required_headers() {
         let finding = StructuredFinding {
             id: "security:command_injection".to_string(),
@@ -3106,6 +3201,14 @@ class Handler {
             result,
             "curl -X POST http://localhost:3000/api/v1/users -d '{\"x\":\"y\"}'"
         );
+    }
+
+    #[test]
+    fn live_tenant_replay_origin_rejects_key_value_context() {
+        assert!(is_live_tenant_replay_origin("https://tenant.example.com"));
+        assert!(!is_live_tenant_replay_origin(
+            "domain=tenant.example.auth0.com;client_id=test-client-123"
+        ));
     }
 
     // -----------------------------------------------------------------------

@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 39 (Threat-Led Attack Graphs & Live-Tenant AEG)
+
+**Directive:** Implement ToS-safe live-tenant HTML PoC synthesis for client-side exploit witnesses, fix innovation-log numbering, expand threat-led attack graph planning, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/exploitability.rs` — added `BrowserTenantContext` parsing for explicit live-tenant specs and local environment fallbacks, then synthesized standalone Auth0 WebAuth HTML witnesses with SDK script tags and operator-gated execution.
+- `crates/cli/src/hunt.rs` — bound `--live-tenant` context into browser exploit witnesses without executing network requests, preserved generated HTML in Bugcrowd PoC output, and restricted curl replay to explicit HTTP(S) origins so key-value tenant specs cannot trigger shell replay.
+- `crates/cli/src/hunt.rs` / `crates/forge/src/exploitability.rs` — added deterministic coverage for complete Auth0 HTML harness synthesis and Bugcrowd formatter preservation of the full PoC block.
+- `.INNOVATION_LOG.md` — locally renumbered QEMU evasion to `P2-10`, added `P1-8: Live Tenant Reproducer Harness`, and expanded `P3-2` with `petgraph` procedural Threat-Led Defense paths.
+
+**Verification:**
+
+- `cargo test -p forge live_tenant_context_synthesizes_complete_auth0_html_harness -- --test-threads=4` — passed.
+- `cargo test -p cli bugcrowd_formatter_preserves_live_tenant_html_harness_in_poc -- --test-threads=4` — passed.
+- `cargo test -p cli live_tenant_replay_origin_rejects_key_value_context -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 38 (Cross-Vulnerability Chaining & Labyrinth Foundation)
 
 **Directive:** Execute P2-8 exploit chaining for Prototype Pollution into DOM XSS, expand the Labyrinth roadmap for Mythos-class autonomous AI defense, add LotL API C2 interception, verify, commit. Do not release.
