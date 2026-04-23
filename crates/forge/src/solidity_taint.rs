@@ -22,6 +22,8 @@ pub fn find_solidity_slop(source: &[u8]) -> Vec<StructuredFinding> {
     find_reentrancy(source, &tree, &mut findings);
     find_cross_function_reentrancy(source, &tree, &mut findings);
     find_unprotected_authority_transitions(source, &tree, &mut findings);
+    detect_signature_replay(source, &tree, &mut findings);
+    detect_unsafe_delegatecall(source, &tree, &mut findings);
     findings
 }
 
@@ -89,6 +91,10 @@ impl SolidityFunction {
 
     fn has_authority_guard(&self) -> bool {
         has_authority_guard(&self.lower)
+    }
+
+    fn has_signature_replay_guard(&self) -> bool {
+        has_nonce_control(&self.lower) && validates_chain_id(&self.lower)
     }
 
     fn reads_state_var(&self, var: &str) -> bool {
@@ -194,6 +200,64 @@ fn find_unprotected_authority_transitions(
     }
 
     let _ = first_named_descendant(tree.root_node());
+}
+
+fn detect_signature_replay(source: &[u8], tree: &Tree, findings: &mut Vec<StructuredFinding>) {
+    for function in collect_functions(source, tree) {
+        let Some(ecrecover_offset) = function.lower.find("ecrecover(") else {
+            continue;
+        };
+        if function.has_signature_replay_guard() {
+            continue;
+        }
+
+        let start = function.start + ecrecover_offset;
+        findings.push(StructuredFinding {
+            id: "security:signature_replay".to_string(),
+            file: None,
+            line: Some(byte_to_line(source, start)),
+            fingerprint: fingerprint("security:signature_replay", source, start),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some(
+                "ecrecover verification is missing nonce consumption or block.chainid domain separation; bind the signed digest to both before accepting the signer.".to_string(),
+            ),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        });
+    }
+}
+
+fn detect_unsafe_delegatecall(source: &[u8], tree: &Tree, findings: &mut Vec<StructuredFinding>) {
+    for function in collect_functions(source, tree) {
+        if function.has_authority_guard() {
+            continue;
+        }
+        let user_params = user_supplied_address_params(&function.lower);
+        let mut search_start = 0usize;
+        while let Some(rel) = find_delegatecall_from(&function.lower, search_start) {
+            let offset = search_start + rel;
+            let receiver = delegatecall_receiver(&function.lower, offset);
+            if is_user_supplied_delegatecall_target(receiver, &user_params) {
+                let start = function.start + offset;
+                findings.push(StructuredFinding {
+                    id: "security:unsafe_delegatecall".to_string(),
+                    file: None,
+                    line: Some(byte_to_line(source, start)),
+                    fingerprint: fingerprint("security:unsafe_delegatecall", source, start),
+                    severity: Some("KevCritical".to_string()),
+                    remediation: Some(
+                        "delegatecall target is derived from caller-controlled input without an authorization guard; restrict targets to an allowlist or require owner/role authorization.".to_string(),
+                    ),
+                    docs_url: None,
+                    exploit_witness: None,
+                    upstream_validation_absent: false,
+                });
+                break;
+            }
+            search_start = offset.saturating_add(".delegatecall".len());
+        }
+    }
 }
 
 fn find_value_call(lower: &str) -> Option<usize> {
@@ -435,6 +499,86 @@ fn dangerous_evm_sink_offsets(lower: &str) -> Vec<(usize, &'static str)> {
     out
 }
 
+fn has_nonce_control(lower_function: &str) -> bool {
+    if !lower_function.contains("nonce") {
+        return false;
+    }
+    lower_function.contains("nonces[")
+        || lower_function.contains("usednonce")
+        || lower_function.contains("used_nonce")
+        || lower_function.contains("nonce++")
+        || lower_function.contains("nonce += ")
+        || lower_function.contains("nonce = ")
+        || lower_function.contains("require(")
+}
+
+fn validates_chain_id(lower_function: &str) -> bool {
+    lower_function.contains("block.chainid")
+}
+
+fn find_delegatecall_from(lower: &str, search_start: usize) -> Option<usize> {
+    let tail = lower.get(search_start..)?;
+    let paren = tail.find(".delegatecall(");
+    let braced = tail.find(".delegatecall{");
+    match (paren, braced) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
+fn user_supplied_address_params(lower_function: &str) -> Vec<String> {
+    let Some(header_end) = lower_function.find('{') else {
+        return Vec::new();
+    };
+    let header = &lower_function[..header_end];
+    let Some(open) = header.find('(') else {
+        return Vec::new();
+    };
+    let Some(close_rel) = header[open + 1..].find(')') else {
+        return Vec::new();
+    };
+    let params = &header[open + 1..open + 1 + close_rel];
+    params
+        .split(',')
+        .filter(|param| param.contains("address"))
+        .filter_map(parameter_name)
+        .collect()
+}
+
+fn parameter_name(param: &str) -> Option<String> {
+    param
+        .split_whitespace()
+        .rev()
+        .find(|token| {
+            !matches!(
+                *token,
+                "memory" | "calldata" | "storage" | "payable" | "address"
+            )
+        })
+        .map(|token| token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_'))
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+}
+
+fn delegatecall_receiver(lower_function: &str, delegatecall_offset: usize) -> &str {
+    let prefix = &lower_function[..delegatecall_offset];
+    let start = prefix
+        .rfind(|ch: char| {
+            ch.is_ascii_whitespace() || matches!(ch, '=' | ',' | ';' | '(' | ')' | '{' | '}')
+        })
+        .map_or(0, |idx| idx + 1);
+    prefix[start..].trim()
+}
+
+fn is_user_supplied_delegatecall_target(receiver: &str, user_params: &[String]) -> bool {
+    receiver.contains("msg.sender")
+        || user_params
+            .iter()
+            .any(|param| contains_identifier(receiver, param))
+}
+
 fn has_authority_guard(lower_function: &str) -> bool {
     lower_function.contains("onlyowner")
         || lower_function.contains("onlyrole")
@@ -615,5 +759,77 @@ contract Proxy {
         assert!(findings
             .iter()
             .all(|f| f.id != "security:unprotected_authority_transition"));
+    }
+
+    #[test]
+    fn detects_ecrecover_without_nonce_or_chainid() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract Permit {
+    function claim(bytes32 digest, uint8 v, bytes32 r, bytes32 s) external {
+        address signer = ecrecover(digest, v, r, s);
+        require(signer != address(0));
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(findings.iter().any(|f| f.id == "security:signature_replay"));
+    }
+
+    #[test]
+    fn guarded_ecrecover_with_nonce_and_chainid_is_not_replay() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract Permit {
+    mapping(address => uint256) public nonces;
+
+    function claim(address user, bytes32 digest, uint8 v, bytes32 r, bytes32 s) external {
+        require(digest == keccak256(abi.encode(user, nonces[user], block.chainid)));
+        address signer = ecrecover(digest, v, r, s);
+        require(signer == user);
+        nonces[user]++;
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(findings.iter().all(|f| f.id != "security:signature_replay"));
+    }
+
+    #[test]
+    fn detects_delegatecall_to_user_supplied_target() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract Proxy {
+    function execute(address target, bytes calldata data) external {
+        (bool ok,) = target.delegatecall(data);
+        require(ok);
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(findings
+            .iter()
+            .any(|f| f.id == "security:unsafe_delegatecall"));
+    }
+
+    #[test]
+    fn guarded_user_supplied_delegatecall_is_not_unsafe_delegatecall() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract Proxy {
+    modifier onlyOwner() {
+        _;
+    }
+
+    function execute(address target, bytes calldata data) external onlyOwner {
+        (bool ok,) = target.delegatecall(data);
+        require(ok);
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(findings
+            .iter()
+            .all(|f| f.id != "security:unsafe_delegatecall"));
     }
 }

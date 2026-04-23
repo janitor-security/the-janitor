@@ -12,6 +12,8 @@
 //! - Uses `rkyv` for zero-copy serialization to Oracle's Datalog engine.
 //! - All public types derive `Archive, Deserialize, Serialize, CheckBytes` for cross-process IPC.
 
+extern crate forge;
+
 pub mod bridge;
 pub mod graph;
 pub mod heuristics;

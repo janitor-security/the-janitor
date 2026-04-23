@@ -42,6 +42,10 @@ Phase 7 completed full grammar coverage: Rust (unsafe transmute + raw ptr deref)
 (dangerous extension byte scan), HCL/Terraform (data external + local-exec provisioner
 AST walk), and TSX/JSX (dangerouslySetInnerHTML attribute walk).
 
+**Active offensive expansion lanes**: Live-Tenant AEG HTML Harness Generation,
+GraphQL/AsyncAPI Trust Boundary Extraction, and Web3 EVM Invariant Checking are
+first-class enforcement surfaces, not roadmap placeholders.
+
 Grammar library: `tree-sitter 0.26` (workspace pinned).
 
 ### Foundational Crates & Mathematical Models
@@ -187,6 +191,8 @@ All threats detected by `PatchBouncer::bounce()` in `crates/forge/src/slop_filte
 | ID | Detector | Condition | Points |
 |---|---|---|---|
 | `security:compiled_payload_anomaly` | `binary_hunter` | ELF magic `\x7fELF`, WASM `\x00asm\x01\x00\x00\x00`, PE `MZ\x90\x00\x03`, `/bin/sh\x00`, `cmd.exe\x00`, `stratum+tcp://`, `stratum2+tcp://` | +50 per match |
+| `security:signature_replay` | `solidity_taint` | Solidity `ecrecover` flow lacks nonce consumption or `block.chainid` domain separation | +50 per match |
+| `security:unsafe_delegatecall` | `solidity_taint` | Solidity `delegatecall` target is derived from caller-controlled input without an owner/role guard | +50 per match |
 | Swarm Collision | `LshIndex` | `collided_pr_numbers` non-empty | Categorical → $150 billing |
 
 ### Tier 2 — Architectural Antipatterns (AST-derived)
@@ -471,7 +477,7 @@ Located at `crates/experimental/`. All four are workspace members but only `adva
 ## IX. FINAL VERSION
 
 ```
-9.7.0
+v10.2.0-beta.1
 ```
 
 Extracted from `[workspace.package].version` in root `Cargo.toml`.

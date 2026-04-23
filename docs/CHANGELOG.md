@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 43 (Web3 DeFi Expansion, Decadal Zenith & Hallucination Purge)
+
+**Directive:** Purge retired backlog filename references, expand Solidity/Web3 offensive detectors, add the P10-P12 Decadal Zenith roadmap section, sync feature documentation, verify, commit. Do not release.
+
+**Changes:**
+
+- `.agent_governance/skills/evolution-tracker/SKILL.md` / `docs/CHANGELOG.md` — purged retired backlog filename references and redirected session ledger workflow language to `docs/CHANGELOG.md`.
+- `crates/forge/src/solidity_taint.rs` — added `security:signature_replay` for `ecrecover` flows missing nonce consumption or `block.chainid` domain separation; added `security:unsafe_delegatecall` for caller-controlled delegatecall targets without an authorization guard.
+- `crates/anatomist/src/lib.rs` — made the `forge` dependency explicit for rustdoc so full-workspace doctests resolve the manifest scanner's forge-backed types.
+- `.INNOVATION_LOG.md` — appended `Phase 10: The Sovereign Endpoint (10+ Years)` with P10 ZK-AST, P11 FHE taint tracking, and P12 non-computable deception plane proposals.
+- `docs/architecture.md` / `docs/index.md` — promoted Live-Tenant AEG HTML Harness Generation, GraphQL/AsyncAPI Trust Boundary Extraction, and Web3 EVM Invariant Checking; synchronized the architecture version statement to `v10.2.0-beta.1`.
+
+**Verification:**
+
+- `cargo test -p forge solidity -- --test-threads=4` — passed.
+- `cargo test -p anatomist --doc -- --test-threads=4` — passed after the explicit rustdoc dependency import.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-23 — Sprint Batch 42 (Schema Graph Expansion & AEG Harness Emission)
 
 **Directive:** Emit physical BrowserDOM PoC harness files, expand service-boundary schema graph ingestion for GraphQL and AsyncAPI, enforce absolute roadmap hygiene, verify, commit. Do not release.
@@ -325,7 +345,7 @@ implemented as a result.
 
 **Changes:**
 
-- `.agent_governance` / `.cursorrules` — rewrote old implementation and innovation log references to `docs/CHANGELOG.md` and `.INNOVATION_LOG.md`; deleted ignored `docs/IMPLEMENTATION_BACKLOG.md` if present.
+- `.agent_governance` / `.cursorrules` — rewrote old implementation and innovation log references to `docs/CHANGELOG.md` and `.INNOVATION_LOG.md`; deleted ignored retired local ledger if present.
 - `.INNOVATION_LOG.md` — verified no `P0-1` references remain.
 - `Cargo.toml` / `crates/forge/Cargo.toml` — added `tree-sitter-solidity` and `alloy-primitives`; retained existing `rsmt2` Z3 bridge dependency.
 - `crates/forge/src/solidity_taint.rs` — added Solidity parser initialization and foundational detectors for `security:reentrancy` and `security:unprotected_selfdestruct`.
@@ -705,12 +725,12 @@ implemented as a result.
 
 ## 2026-04-19 — Sprint Batch 12 (Governance Purge \& Auth0 Validation Strike)
 
-**Directive:** Purge obsolete governance references to `docs/IMPLEMENTATION\_BACKLOG.md`, delete the dead backlog file, validate the Bugcrowd report generator against the Auth0 `auth0.min.js.map` sourcemap using the exact operator command shape, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.
+**Directive:** Purge obsolete governance references to `docs/CHANGELOG.md`, delete the dead backlog file, validate the Bugcrowd report generator against the Auth0 `auth0.min.js.map` sourcemap using the exact operator command shape, update the innovation ledger, verify with `cargo test --workspace -- --test-threads=4` plus `just audit`, and stop after a local commit with no release.
 
 **Phase 1 — Governance Purge:**
 
-* `.agent\_governance/rules/log\_hygiene.md`: replaced the stale historical-file exemption for `docs/IMPLEMENTATION\_BACKLOG.md` with `docs/CHANGELOG.md`.
-* `docs/IMPLEMENTATION\_BACKLOG.md`: deleted from disk under the purge directive.
+* `.agent\_governance/rules/log\_hygiene.md`: replaced the stale historical-file exemption for the retired local ledger with `docs/CHANGELOG.md`.
+* Retired local ledger: deleted from disk under the purge directive.
 
 **Phase 2 — Bugcrowd Live-Fire Validation:**
 
@@ -748,7 +768,7 @@ implemented as a result.
 **Phase 3 — Active-Ledger Hygiene:**
 
 * `.INNOVATION\_LOG.md`: preserved P3-1 as active and explicitly recorded Phase B as in-progress rather than complete.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(new)*: created the mandatory backlog ledger and appended the Sprint Batch 11 dated entry.
+* `docs/CHANGELOG.md`: appended the Sprint Batch 11 dated entry.
 
 **Verification Ledger:**
 
@@ -940,7 +960,7 @@ copy-pasteable terminal command.
 deterministic, none require the z3 binary, asserting exact curl string
 equality so format regressions are impossible.
 
-**Phase 3 — Backlog Management:**
+**Phase 3 — Active-Ledger Management:**
 
 * `.INNOVATION\_LOG.md`: P1-1 marked `\[COMPLETED v10.2.0-alpha.6]` with a
 shipped-state summary documenting the new `CallEdge` shape, the generic
@@ -966,7 +986,7 @@ release cadence, integrate a Z3 SMT solver (via `rsmt2`) into the
 exploitability pipeline so false-positive taint paths are suppressed
 mathematically and true-positive paths emit a concrete repro command.
 
-**Phase 1 — Backlog Commit \& Governance Automation:**
+**Phase 1 — Changelog Commit \& Governance Automation:**
 
 * `git add . \&\& git commit -m "chore(sprint): finalize batches 1-4 ..."` —
 34 files, +802/-236, commit `22bf8bd`.
@@ -1123,7 +1143,7 @@ deploy via the idempotency-guarded pipeline.
 
 **Phase 1 — Workspace Hygiene \& Governance Repair:**
 
-* Deleted `bug\_hunt\_strikes/`, `tools/bug\_hunt\_strikes/`, and the obsolete `docs/IMPLEMENTATION\_BACKLOG.md` workspace backlog.
+* Deleted `bug\_hunt\_strikes/`, `tools/bug\_hunt\_strikes/`, and the obsolete workspace implementation ledger.
 * `.agent\_governance/rules/response-format.md`: corrected the innovation ledger reference from `docs/INNOVATION\_LOG.md` to the root-local `.INNOVATION\_LOG.md`.
 * `.cursorrules` *(local governance index)*: rewired shared-ledger guidance so completed directives append only to `docs/CHANGELOG.md`, while forward-looking roadmap items remain exclusive to `.INNOVATION\_LOG.md`.
 
@@ -1302,7 +1322,7 @@ deploy via the idempotency-guarded pipeline.
 **Phase 5 — Governance / Ledger Notes:**
 
 * `Cargo.toml`: workspace version `10.1.11` → `10.1.12`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` does not exist in this repository; session ledger recorded in this authoritative changelog instead of inventing a conflicting backlog file.
+* The retired implementation ledger does not exist in this repository; session ledger recorded in this authoritative changelog instead of inventing a conflicting file.
 
 ## 2026-04-15 — Mobile/Desktop Recon \& Native Query Engine (v10.1.11)
 
@@ -1325,17 +1345,17 @@ deploy via the idempotency-guarded pipeline.
 
 ## 2026-04-15 — Agent Brain Surgery \& Offensive Ingestion Pipeline (v10.1.10)
 
-**Directive:** Purge AI scaffolding from the public git index; fix all governance file references from `docs/IMPLEMENTATION\_BACKLOG.md` → `docs/CHANGELOG.md` and `docs/INNOVATION\_LOG.md` → `.INNOVATION\_LOG.md`; add npm tarball ingestion to `janitor hunt`; release v10.1.10.
+**Directive:** Purge AI scaffolding from the public git index; fix all governance ledger references to `docs/CHANGELOG.md` and `docs/INNOVATION\_LOG.md` → `.INNOVATION\_LOG.md`; add npm tarball ingestion to `janitor hunt`; release v10.1.10.
 
 **Phase 1 — Agent Brain Surgery:**
 
-* `.agent\_governance/skills/evolution-tracker/SKILL.md`: all `docs/IMPLEMENTATION\_BACKLOG.md` refs → `docs/CHANGELOG.md`; all `docs/INNOVATION\_LOG.md` refs → `.INNOVATION\_LOG.md`.
+* `.agent\_governance/skills/evolution-tracker/SKILL.md`: all session-ledger refs → `docs/CHANGELOG.md`; all `docs/INNOVATION\_LOG.md` refs → `.INNOVATION\_LOG.md`.
 * `.agent\_governance/commands/release.md`: same replacements.
 * `.agent\_governance/commands/ciso-pulse.md`: `docs/INNOVATION\_LOG.md` → `.INNOVATION\_LOG.md`.
 * `.agent\_governance/README.md`: both replacements.
 * `docs/INNOVATION\_LOG.md` migrated to `.INNOVATION\_LOG.md` (project root, gitignored).
-* `docs/IMPLEMENTATION\_BACKLOG.md` deleted (redundant with `docs/CHANGELOG.md`).
-* `.gitignore`: added `.INNOVATION\_LOG.md` and `docs/IMPLEMENTATION\_BACKLOG.md` guards.
+* Retired implementation ledger deleted (redundant with `docs/CHANGELOG.md`).
+* `.gitignore`: added `.INNOVATION\_LOG.md` and retired-ledger guards.
 
 **Phase 2 — Git Index Purge:**
 
@@ -1586,7 +1606,7 @@ deploy via the idempotency-guarded pipeline.
 
 **Phase 1 — State eradication:**
 
-* Removed the obsolete tracked backlog file: `docs/IMPLEMENTATION\_BACKLOG.md`.
+* Removed the obsolete tracked implementation ledger.
 * Removed the lingering tracked stale patch: `gauntlet/godot/slop\_pr.patch`.
 * Verified `mkdocs.yml` does not reference the deleted backlog surface; nav remains pinned to `CHANGELOG.md` only.
 
@@ -1705,7 +1725,7 @@ deploy via the idempotency-guarded pipeline.
 **Phase 1 — OpSec \& Navigation Overhaul:**
 
 * Removed `INNOVATION\_LOG.md` from mkdocs.yml navigation entirely.
-* Renamed `docs/IMPLEMENTATION\_BACKLOG.md` to `docs/CHANGELOG.md`; updated mkdocs.yml nav entry to "Release Changelog".
+* Renamed the retired implementation ledger to `docs/CHANGELOG.md`; updated mkdocs.yml nav entry to "Release Changelog".
 * Moved `docs/INNOVATION\_LOG.md` to hidden `.INNOVATION\_LOG.md` at repo root; added to `.gitignore`.
 
 **Phase 2 — Dependabot Annihilation:**
@@ -1730,7 +1750,7 @@ deploy via the idempotency-guarded pipeline.
 
 * `mkdocs.yml` *(modified)* — nav restructured, site description updated
 * `.gitignore` *(modified)* — `.INNOVATION\_LOG.md` added
-* `docs/CHANGELOG.md` *(renamed from IMPLEMENTATION\_BACKLOG.md)* — header updated, session ledger
+* `docs/CHANGELOG.md` *(renamed from retired implementation ledger)* — header updated, session ledger
 * `README.md` *(rewritten)* — v10.0.0 GA enterprise documentation
 * `docs/index.md` *(rewritten)* — v10.0.0 GA landing page
 * `docs/architecture.md` *(modified)* — CycloneDX v1.6, Dual-PQC
@@ -1770,7 +1790,7 @@ deploy via the idempotency-guarded pipeline.
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.22` to `10.1.0-alpha.23`.
 * `README.md`, `docs/index.md` *(modified via `just sync-versions`)* — version parity updated to `v10.1.0-alpha.23`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — open P2-2 / P3-1 backlog sections purged; both items moved into completed status.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger.
 
 **Verification:**
 
@@ -1851,7 +1871,7 @@ deploy via the idempotency-guarded pipeline.
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.20` → `10.1.0-alpha.21`.
 * `README.md`, `docs/index.md` *(modified)* — version parity synced to `v10.1.0-alpha.21`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — purged the now-landed P1-1 / P1-2 immutable-audit backlog items.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger.
 
 **Verification:**
 
@@ -1904,7 +1924,7 @@ P0 (FIPS cryptographic migrations), P1 (CEF/Syslog audit emission, write-once au
 P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `Cargo.toml` — workspace version `10.1.0-alpha.16` → `10.1.0-alpha.17`.
 * `README.md`, `docs/index.md` — version parity sync.
-* `docs/IMPLEMENTATION\_BACKLOG.md` — this entry.
+* `docs/CHANGELOG.md` — this entry.
 
 **Verification:**
 
@@ -1926,7 +1946,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.15` → `10.1.0-alpha.16`; `hex` promoted into `\[workspace.dependencies]`.
 * `README.md` *(modified)* — release parity string updated to `v10.1.0-alpha.16`.
 * `docs/index.md` *(modified)* — documentation landing page version updated to `v10.1.0-alpha.16`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 * `docs/INNOVATION\_LOG.md` *(modified)* — `P1-0` purged after Governor marketplace provisioning landed.
 
 **Verification:**
@@ -1952,7 +1972,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/crucible/src/main.rs` *(modified)* — 2 `WasmHost::new` call sites updated with `None` third argument.
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.14` → `10.1.0-alpha.15`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — P2-6 marked COMPLETED.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry.
+* `docs/CHANGELOG.md` *(modified)* — this entry.
 
 \---
 
@@ -1968,7 +1988,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/common/src/policy.rs` *(modified)* — `ForgeConfig.corpus\_stale\_days: u32` (default 7) added; `#\[derive(Default)]` replaced with manual `impl Default`; two test struct literals updated; serde default function `default\_corpus\_stale\_days()` added.
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.13` → `10.1.0-alpha.14`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — P1-2 marked COMPLETED.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry.
+* `docs/CHANGELOG.md` *(modified)* — this entry.
 
 **Key invariants:**
 
@@ -1991,7 +2011,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/common/src/slop.rs` *(modified)* — `StructuredFinding` now carries optional severity metadata for downstream enterprise routing.
 * `crates/forge/src/slop\_filter.rs` / `crates/mcp/src/lib.rs` / `crates/cli/src/report.rs` *(modified)* — propagated structured finding severity through the pipeline and updated test fixtures.
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.11` → `10.1.0-alpha.12`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — appended this session ledger.
+* `docs/CHANGELOG.md` *(modified)* — appended this session ledger.
 
 **Verification:**
 
@@ -2027,7 +2047,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/cli/src/main.rs` *(modified)* — both patch mode and git-native mode now scan `pr\_body` for hidden prompt-injection payloads before gate evaluation.
 * `crates/crucible/src/main.rs` *(modified)* — added CamoLeak true-positive and benign-comment true-negative fixtures to the bounce gallery.
 * `Cargo.toml` *(modified)* — workspace version `10.1.0-alpha.9` → `10.1.0-alpha.10`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — appended this session ledger.
+* `docs/CHANGELOG.md` *(modified)* — appended this session ledger.
 
 **Verification:**
 
@@ -2099,7 +2119,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/crucible/src/main.rs` *(modified)* — true-positive `package.json` bounce fixture added to the Blast Radius gallery and dedicated regression test added.
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.5` to `10.1.0-alpha.6`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — resolved `P1-4` and `P2-1` purged; new `P1-5` taint-spine expansion entry for Zig/Nim added.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 ## 2026-04-11 — OSV.dev Synchronization \& Slopsquat Expansion (v10.1.0-alpha.7)
 
@@ -2114,7 +2134,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/crucible/src/main.rs` *(modified)* — slopsquat regression fixtures now emit both `wisdom.rkyv` and `slopsquat\_corpus.rkyv`, keeping Crucible aligned with the new runtime path.
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.6` to `10.1.0-alpha.7`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — resolved `P2-2` removed from the active innovation queue.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2145,7 +2165,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/forge/src/taint\_catalog.rs` *(modified)* — `scan\_cross\_file\_sinks` dispatch extended with 8 new arms; `scan\_ruby`, `scan\_php`, `scan\_csharp`, `scan\_kotlin`, `scan\_cpp`, `scan\_rust`, `scan\_swift`, `scan\_scala` implemented with depth guards; 16+ true-positive/true-negative unit tests added.
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.1.0-alpha.3` to `10.1.0-alpha.4`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — P1-2 and P1-3 purged as resolved.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 ## 2026-04-10 — Absolute Taint Severance (v10.0.1)
 
@@ -2156,7 +2176,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — `detect\_secret\_entropy` return type changed from `Vec<String>` to `usize`; detector now counts qualifying high-entropy runs without allocating or returning strings; deterministic tests updated to assert counts.
 * `crates/forge/src/slop\_filter.rs` *(modified)* — secret entropy aggregation rewritten to consume the primitive count and emit only static `"security:credential\_exposure — \[REDACTED]"` details into `SlopScore`.
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.0.0` to `10.0.1`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 ## 2026-04-10 — GA Release Prep (v10.0.0)
 
@@ -2166,7 +2186,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 
 * `Cargo.toml` *(modified)* — workspace version bumped from `10.0.0-rc.19` to `10.0.0`.
 * `docs/INNOVATION\_LOG.md` *(modified)* — resolved P2 HTML comment residue purged; active backlog headings left empty for GA.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Security posture note:**
 
@@ -2211,7 +2231,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/cli/Cargo.toml` *(modified)* — added `tempfile = "3"` under `\[dev-dependencies]` for the new test fixtures.
 * `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.17`.
 * `README.md` / `docs/index.md` *(modified via `just sync-versions`)* — version strings updated.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger prepended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger prepended.
 * `docs/INNOVATION\_LOG.md` *(modified)* — P1-3 and P1-2 purged as completed.
 
 **Phase 3 audit result:** CISA KEV URL confirmed correct at `https://www.cisa.gov/sites/default/files/feeds/known\_exploited\_vulnerabilities.json`. No code changes needed.
@@ -2238,7 +2258,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/common/src/scm.rs` *(modified)* — `ScmContext` struct gains four new fields: `api\_base\_url`, `api\_token`, `project\_id`, `repo\_id`; `from\_pairs` wires `CI\_API\_V4\_URL` / `GITLAB\_TOKEN` / `CI\_PROJECT\_ID` for GitLab and `SYSTEM\_TEAMFOUNDATIONCOLLECTIONURI` / `SYSTEM\_ACCESSTOKEN` / `SYSTEM\_TEAMPROJECTID` / `BUILD\_REPOSITORY\_ID` for Azure DevOps; `GitLabStatusPublisher::publish\_verdict` overrides the default to POST `state/name/description` to the GitLab Commit Statuses API, falling back to stderr annotation when credentials are absent; `AzureDevOpsStatusPublisher::publish\_verdict` overrides to POST `state/description/context/targetUrl` to the Azure DevOps Git Statuses API (api-version 7.1-preview.1), falling back to `##vso` annotation; 4 new deterministic unit tests added.
 * `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.16`.
 * `README.md` / `docs/index.md` *(modified via `just sync-versions`)* — version strings updated to `v10.0.0-rc.16`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2262,7 +2282,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `README.md` *(modified)* — version string updated to `v10.0.0-rc.15`.
 * `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.15`.
 * `docs/INNOVATION\_LOG.md` *(modified, gitignored)* — completed `P0-4` block purged from the active innovation queue.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2296,7 +2316,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `README.md` *(modified)* — version string updated to `v10.0.0-rc.14`.
 * `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.14`.
 * `docs/INNOVATION\_LOG.md` *(modified, gitignored)* — completed `P0-3` block purged from the active queue.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2324,7 +2344,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.13`.
 * `README.md` *(modified)* — version string updated to `v10.0.0-rc.13`.
 * `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.13`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2348,7 +2368,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `Cargo.toml` *(modified)* — workspace version bumped to `10.0.0-rc.12`.
 * `README.md` *(modified)* — version string updated to `v10.0.0-rc.12`.
 * `docs/index.md` *(modified)* — version string updated to `v10.0.0-rc.12`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this session ledger appended.
+* `docs/CHANGELOG.md` *(modified)* — this session ledger appended.
 
 **Verification:**
 
@@ -2369,7 +2389,7 @@ P2 (real JWT issuance, mTLS), P3 (SBOM for binary, reproducible builds).
 * `crates/common/src/pqc.rs` *(modified)* — Phase 3: `use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing}` added. `PqcPrivateKeyBundle` gains `#\[derive(Zeroize, ZeroizeOnDrop)]` — key material wiped from RAM on drop. Both `sign\_cbom\_dual\_from\_file` and `sign\_asset\_hash\_from\_file` now wrap `std::fs::read(path)` return in `Zeroizing::new(...)` so the raw key bytes are zeroed when the function returns. One new unit test: `pqc\_private\_key\_bundle\_zeroizes\_on\_drop`.
 * `crates/forge/src/wasm\_host.rs` *(modified)* — Phase 5: `config.wasm\_memory64(false)` added to `WasmHost::new()`. Explicitly disables the memory64 proposal — rejects wasm64/wasip2 modules at engine level, pinning BYOP rule modules to `wasm32-wasip1` classic 32-bit memory addressing. Insulates engine from Rust `wasm32-wasi` → `wasip1/wasip2` target rename.
 * `README.md` *(modified)* — Version string updated to `v10.0.0-rc.11` via `just sync-versions`.
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(this file)* — Session ledger appended.
+* `docs/CHANGELOG.md` *(this file)* — Session ledger appended.
 
 **Phases confirmed already complete (no code change required):**
 
@@ -2689,7 +2709,7 @@ bind sealed Wasm policy provenance
 assert both findings and provenance receipt emission
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P1-1` and `P1-2`;
 seeded `P1-1` Air-Gap Intel Transfer Capsules
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.16`
 
@@ -2722,7 +2742,7 @@ filenames into the detector engine
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed filename-aware
 routing debt, compacted active P2 numbering, and seeded `P1-2`
 Threshold-Signed Intel Mirror Quorum
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.15`
 
@@ -2766,7 +2786,7 @@ under governed audit load
 `audit → fast-release` execution graph and bans `git add .` / `git commit -a`
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P1-1` / `P2-3`,
 compacted active numbering, and seeded `P1-1` Wasm Policy Module Provenance
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.14`
 
@@ -2796,7 +2816,7 @@ release `v9.9.13`.
 * `crates/fuzz/fuzz\_targets/ast\_bomb.rs` *(new)* — added the first AST-bomb fuzz target
 * `crates/crucible/fixtures/exhaustion/.gitkeep` *(new)* — created the governed exhaustion-fixture corpus root
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P1-1` / `P2-2`; seeded `P1-1` Replayable Decision Capsules and `P2-5` Exhaustion Corpus Promotion Pipeline
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.13`
 
@@ -2823,7 +2843,7 @@ next roadmap item, and release `v9.9.12`.
 * `crates/forge/src/slop\_filter.rs` *(modified)* — `PatchBouncer` now resolves semantic subtrees and runs structural hashing / slop hunting over those slices instead of whole added diff text
 * `crates/crucible/src/main.rs` *(modified)* — added whitespace-padded semantic-diff interception proof
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P1-1` and `P2-1`; seeded new `P1-1` Governor-Sealed Decision Receipts
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.12`
 
@@ -2844,7 +2864,7 @@ roadmap item, and release `v9.9.11`.
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — routed sink arguments through `fold\_string\_concat` before deobfuscation
 * `crates/crucible/src/main.rs` *(modified)* — added fragmented base64 concat true-positive fixture
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-10` and `P2-5`; seeded `P1-1` Governor-Signed Threat Intel Receipts
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.11`
 
@@ -2867,7 +2887,7 @@ prove the new intercept in Crucible, and release `v9.9.10`.
 * `crates/cli/src/main.rs` *(modified)* — converted `update-wisdom --ci-mode` from fail-open bootstrap to fail-closed archive validation
 * `crates/crucible/src/main.rs` *(modified)* — added `eval(atob(...))` true-positive fixture
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-9` and `P1-3`; seeded `P0-10` Sink-Context Constant Folding Core
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.10`
 
@@ -2883,7 +2903,7 @@ autonomously seed the next structural breakthrough, and release `v9.9.9`.
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — added dead-branch AST walk, constant-false branch recognition, dense-literal anomaly scoring, and `security:phantom\_payload\_evasion` at `Severity::KevCritical`
 * `crates/crucible/src/main.rs` *(modified)* — added true-positive and true-negative fixtures for dead-branch payload smuggling
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-8`; seeded `P0-9` Deterministic Deobfuscation Spine
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.9`
 
@@ -2906,7 +2926,7 @@ embed those proofs into exported CBOM metadata, surface anchoring in
 * `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for transparency-log schema parity
 * `crates/cli/src/git\_drive.rs` *(modified)* — git-native bounce-log constructors updated for transparency-log schema parity
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-7`; seeded `P0-8` Phantom Payload Interception
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.8`
 
@@ -2957,7 +2977,7 @@ innovation log, and release `v9.9.5`.
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — added Python, JS/TS, and Rust AST import interceptors that emit `security:slopsquat\_injection`
 * `crates/crucible/src/main.rs` *(modified)* — added deterministic TP/TN fixtures for seeded slopsquat namespaces across Python, JavaScript, and Rust
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-4`; appended `P2-5` signed wisdom provenance follow-up
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.5`
 
@@ -2982,7 +3002,7 @@ dual-signature custody into the bounce log and CycloneDX CBOM envelope, extend
 * `crates/cli/src/daemon.rs` *(modified)* — auxiliary bounce-log constructor updated for the new schema
 * `crates/cli/src/git\_drive.rs` *(modified)* — git-native bounce-log constructors updated for the new schema
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed `P0-6`; added new active `P0-7` transparency-log proposal
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.7`
 
@@ -3023,7 +3043,7 @@ architecture breakthroughs, and release `v9.9.3`.
 * `crates/cli/src/cbom.rs` *(modified)* — CycloneDX CBOM now emits `janitor:pqc\_key\_source` properties for deterministic attestation provenance
 * `justfile` *(modified)* — `fast-release` now delegates docs publication to `just deploy-docs`; `deploy-docs` retries `mkdocs gh-deploy --force` up to 3 times with 2-second backoff
 * `docs/INNOVATION\_LOG.md` *(modified)* — `P1-4` removed as completed; seeded `P0-4`, `P0-5`, and `P0-6`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.3`
 
@@ -3048,7 +3068,7 @@ strengthen the autonomous innovation protocol, and release `v9.9.2`.
 * `crates/cli/src/report.rs` *(modified)* — PQC attestation documentation updated to reflect source-based semantics
 * `.agent\_governance/skills/evolution-tracker/SKILL.md` *(modified)* — every session must now append at least one new high-value proposal to the innovation log
 * `docs/INNOVATION\_LOG.md` *(modified)* — `P1-1` removed as completed; added `P1-4` for attestation key provenance
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.2`
 
@@ -3069,7 +3089,7 @@ in `/ciso-pulse`; verify Crucible; release v9.9.0.
 * `crates/forge/Cargo.toml` *(modified)* — `tempfile = "3"` dev-dependency added
 * `crates/crucible/src/main.rs` *(modified)* — TP fixture (`cross\_file\_taint\_python\_intercepted`) + TN fixture (`cross\_file\_taint\_python\_safe`) added
 * `docs/INNOVATION\_LOG.md` *(modified)* — P0-1 and P2-5 marked `\[COMPLETED — v9.9.0]`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3090,7 +3110,7 @@ cut `v9.8.0`.
 * `crates/common/src/wisdom.rs` *(modified)* — exposed archive loader and added verified KEV database resolution that rejects manifest-only state
 * `crates/anatomist/src/manifest.rs` *(modified)* — added fail-closed `check\_kev\_deps\_required()` for callers that must not silently degrade
 * `crates/mcp/src/lib.rs` *(modified)* — `janitor\_dep\_check` now fails closed in CI when the KEV database is missing, corrupt, or reduced to `wisdom\_manifest.json` alone; regression test added
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `docs/INNOVATION\_LOG.md` *(modified)* — P0-2 marked completed under operator override; former ParsedUnit migration debt moved to P0-3; CT-010 appended
 
 **Commit:** `pending release commit`
@@ -3113,7 +3133,7 @@ wire into `PatchBouncer` for Go files; cut `v9.7.1`.
 * `crates/forge/src/taint\_propagate.rs` *(created)* — `TaintFlow`, `track\_taint\_go\_sqli`; 5 unit tests (3 TP, 2 TN)
 * `crates/forge/src/lib.rs` *(modified)* — `pub mod taint\_propagate` added
 * `crates/forge/src/slop\_filter.rs` *(modified)* — Go taint confirmation wired into bounce pipeline; each confirmed flow emits `security:sqli\_taint\_confirmed` at KevCritical
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3137,7 +3157,7 @@ migration verification, and cut `v9.7.0`.
 * `docs/architecture.md` *(modified)* — FINAL VERSION block updated; version qualifiers stripped from table and section headers
 * `RUNBOOK.md` *(modified)* — example release command updated; inline version qualifiers removed
 * `SOVEREIGN\_BRIEFING.md` *(modified)* — version qualifiers stripped from table, section headers, and FINAL VERSION block
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3155,7 +3175,7 @@ verify with crucible + `just audit`, and cut `v9.6.4`.
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.6.4`
 * `justfile` *(modified)* — `fast-release` `git add` now includes `.agent\_governance/`
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — `find\_java\_slop`, `find\_csharp\_slop`, `find\_jsx\_dangerous\_html\_slop` migrated to `ParsedUnit`/`ensure\_tree`; all Phase 4–7 detectors share cached CST
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `docs/INNOVATION\_LOG.md` *(modified)* — P0-1 parse-forest phase marked complete; CT-010 filed for residual Phase 4–7 single-language detectors
 
 **Commit:** `pending release commit`
@@ -3176,7 +3196,7 @@ the Python CST instead of reparsing it, verify with `just audit` plus
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — `ParsedUnit` upgraded to a cache-bearing parse carrier; `find\_slop` now accepts `\&ParsedUnit`; Python AST walk reuses or lazily populates the cached tree instead of reparsing raw bytes
 * `crates/forge/src/slop\_filter.rs` *(modified)* — patch analysis now instantiates one `ParsedUnit` per file and passes it into the slop dispatch chain
 * `crates/crucible/src/main.rs` *(modified)* — Crucible now routes fixtures through `ParsedUnit` so the gallery exercises the production API shape
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `docs/INNOVATION\_LOG.md` *(modified)* — autonomous telemetry entry `CT-009` appended for the tracked CDN artefact gap
 
 **Commit:** `pending release commit`
@@ -3195,7 +3215,7 @@ bootstrap/network faults, publish a bootstrap `docs/v1/wisdom.rkyv`, and cut
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.6.1`
 * `crates/cli/src/main.rs` *(modified)* — `update-wisdom` now fetches from `https://thejanitor.app/v1/wisdom.rkyv`, supports URL overrides for controlled verification, degrades to an empty `wisdom\_manifest.json` in `--ci-mode` on Wisdom/KEV fetch failures, and adds regression coverage for the fallback path
 * `docs/v1/wisdom.rkyv` *(created)* — bootstrap empty `WisdomSet` archive committed for CDN hosting at `/v1/wisdom.rkyv`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `docs/INNOVATION\_LOG.md` *(modified)* — CT-008 telemetry recorded for the DNS/CDN pivot
 
 **Commit:** `pending release commit`
@@ -3213,7 +3233,7 @@ and cut a real signed release from the audited code.
 
 * `justfile` *(modified)* — fast-release now stages the governed release set and commits unconditionally; empty-release attempts fail closed under `set -euo pipefail`
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.5.2`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `docs/INNOVATION\_LOG.md` *(modified)* — release-surface debt updated to include staged-only ghost-tag failure and the need for a tag-target regression test
 
 **Rescue commit:** `e095fae` — `feat: autonomous expansion for executable gaps (v9.5.1)`
@@ -3236,7 +3256,7 @@ new architecture debt discovered during implementation.
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — new detectors added for Dockerfile remote `ADD`, XML XXE, protobuf `google.protobuf.Any`, Bazel/Starlark `http\_archive` without `sha256`, CMake `execute\_process(COMMAND ${VAR})`, and dynamic `system()` in C/C++; unit tests added
 * `crates/crucible/src/main.rs` *(modified)* — true-positive and true-negative fixtures added for all six new executable-surface detectors
 * `docs/INNOVATION\_LOG.md` *(modified)* — implemented `P0-1` removed; new `P2-5` added for filename-aware surface routing
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `e095fae`
 
@@ -3257,7 +3277,7 @@ tests, retire `P0-1` from the Innovation Log, and cut `v9.5.0`.
 * `crates/cli/src/main.rs` *(modified)* — `janitor bounce` now accepts `--governor-url` (with `--report-url` compatibility alias), resolves base URL through policy, and routes timeout/report traffic through the custom Governor
 * `crates/cli/src/report.rs` *(modified)* — Governor URL resolution centralized; `/v1/report` and `/health` endpoints derived from the configured base URL; routing tests updated
 * `docs/INNOVATION\_LOG.md` *(modified)* — `P0-1` removed as implemented; remaining P0 items re-indexed
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3274,7 +3294,7 @@ into clean P0/P1/P2 numbering, and cut `v9.4.1`.
 * `.agent\_governance/skills/evolution-tracker/SKILL.md` *(modified)* — CISO Pulse rewritten to enforce hard compaction: delete completed work, delete telemetry, drop legacy IDs, and re-index active items into `P0-1`, `P1-1`, `P2-1`, etc.
 * `docs/INNOVATION\_LOG.md` *(rewritten)* — completed grammar-depth work, legacy telemetry, and stale IDs purged; active debt compacted into clean P0/P1/P2 numbering
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.4.1`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3298,7 +3318,7 @@ dedicated innovation synthesis pass over MCP and slop-hunter.
 * `crates/forge/src/slop\_filter.rs` *(modified)* — patch and git-native size budgets raised to 32 MiB under deep-scan; parser timeouts retry at 30 s before emitting `Severity::Exhaustion`
 * `crates/forge/src/metadata.rs` *(modified)* — stale test warning removed
 * `docs/INNOVATION\_LOG.md` *(modified)* — `IDEA-003` and `IDEA-004` rewritten from the mandatory MCP/slop-hunter synthesis pass
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3326,7 +3346,7 @@ lockfile/bounce/MCP paths, add Crucible regression coverage, and cut `v9.3.0`.
 * `crates/crucible/Cargo.toml` *(modified)* — test dependencies added for synthetic wisdom archive fixtures
 * `crates/crucible/src/main.rs` *(modified)* — synthetic `Cargo.lock` KEV fixture added; 150-point intercept enforced
 * `docs/INNOVATION\_LOG.md` *(modified)* — `IDEA-002` removed as implemented
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3359,7 +3379,7 @@ innovation log; harden CLAUDE.md with Continuous Evolution law.
 **Files modified:**
 
 * `docs/R\_AND\_D\_ROADMAP.md` *(deleted)* — superseded by dynamic logs
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(created)* — this file
+* `docs/CHANGELOG.md` *(created)* — this file
 * `docs/INNOVATION\_LOG.md` *(created)* — autonomous architectural insight log
 * `.claude/skills/evolution-tracker/SKILL.md` *(created)* — skill governing
 backlog and innovation log maintenance
@@ -3445,7 +3465,7 @@ resynchronize to the mandatory response format law, and cut `v9.2.2`.
 * `.gitignore` *(modified)* — explicit ignore rules added for `.agents/`, `.codex/`, `AGENTS.md`, and other local tool-state directories
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.2.2`
 * `docs/INNOVATION\_LOG.md` *(modified)* — CT-006 logged for the release hygiene regression; session telemetry section appended
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3461,7 +3481,7 @@ resynchronize to the mandatory response format law, and cut `v9.2.2`.
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.2.1`
 * `docs/architecture.md` *(modified)* — stale `just release` pipeline description corrected to the linear `audit` → `fast-release` flow
 * `docs/INNOVATION\_LOG.md` *(modified)* — `Legacy Governance Gaps (P2)` section appended with governance-drift proposals; session telemetry recorded
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** `pending release commit`
 
@@ -3483,7 +3503,7 @@ to `just fast-release`
 Mandate added (no completed work in Innovation Log); Architectural Radar
 Mandate added (4 scanning categories for future R\&D proposals)
 * `docs/INNOVATION\_LOG.md` *(modified)* — CT-003 purged (completed work,
-belongs in Backlog); CT-004 and CT-005 filed as forward-looking proposals
+belongs in changelog); CT-004 and CT-005 filed as forward-looking proposals
 * `Cargo.toml` *(modified)* — version bumped to `9.0.2`
 
 **Commit:** `ff42274`
@@ -3510,7 +3530,7 @@ auto-opens PR with updated snapshot + AST gate checklist
 * `docs/INNOVATION\_LOG.md` *(rewritten)* — CISO Pulse Audit: full P0/P1/P2
 re-tiering; 12 new grammar depth rules; IDEA-004 (HSM/KMS) added; CT-007
 (update-wisdom --ci-mode gap) and CT-008 (C/C++ AST zero-coverage) filed
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.1.1`
 
 **Purged sections:** CT-005 (`\[COMPLETED — v9.1.0]`) merged into the CISO
@@ -3548,7 +3568,7 @@ to `janitor update-wisdom --ci-mode`; workflow downloads janitor binary from
 GH releases before running
 * `docs/INNOVATION\_LOG.md` *(modified)* — Java-1/2/3 grammar depth section
 marked `\[COMPLETED — v9.1.2]`; CT epoch reset to Epoch 2 (CT-001, CT-002)
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.1.2`
 
 **Commit:** `da591d6`
@@ -3577,7 +3597,7 @@ select highest commercial TEI or critical compliance upgrade; recency is not
 a selection criterion
 * `RUNBOOK.md` *(modified)* — Section 3 RELEASE: `JANITOR\_GPG\_PASSPHRASE`
 export documented with key fingerprint, keygrip, and fallback to `gpg-unlock`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.1.3`
 
 **Commit:** `b6da4e0`
@@ -3603,7 +3623,7 @@ resolved via `command -v` + `find` fallback across Debian/Fedora/Arch/macOS;
 no-op if binary not found anywhere (falls back to `gpg-unlock` cache)
 * `docs/INNOVATION\_LOG.md` *(modified)* — Go-3 marked `\[COMPLETED — v9.1.4]`;
 CT-003 section purged (auto-purge: all findings completed)
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.1.4`
 
 **Commit:** `fc9c11f`
@@ -3640,7 +3660,7 @@ timeout entry gains `cognition\_surrender\_index: 0.0`; test helper updated
 * `crates/cli/src/daemon.rs` *(modified)* — `cognition\_surrender\_index: 0.0`
 * `crates/cli/src/git\_drive.rs` *(modified)* — `cognition\_surrender\_index: 0.0` (×2)
 * `crates/cli/src/cbom.rs` *(modified)* — `cognition\_surrender\_index: 0.0`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.2.0`
 
 **Commit:** `89d742f`
@@ -3677,7 +3697,7 @@ timeout entry gains `cognition\_surrender\_index: 0.0`; test helper updated
 * `crates/common/src/lib.rs` *(modified)* — `pub mod taint` registered
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — `ParsedUnit<'src>` struct exported: holds `source: \&\[u8]`, `tree: Option<Tree>`, `language: Option<Language>`; `new()` and `unparsed()` constructors; no `find\_slop` refactor yet (foundational type only)
 * `docs/INNOVATION\_LOG.md` *(modified)* — CT-009 appended
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.6.2`
 
 **Status:** P0-1 foundation COMPLETE. `just audit` ✅.
@@ -3717,7 +3737,7 @@ sections, and migrate the remaining single-language AST detectors to the shared
 * `docs/INNOVATION\_LOG.md` *(modified)* — all completed sections purged; `P0-3` removed after ParsedUnit universalization; only active P1/P2 debt remains
 * `crates/forge/src/slop\_hunter.rs` *(modified)* — Go, Ruby, Bash, PHP, Kotlin, Scala, Swift, Lua, Nix, GDScript, ObjC, and Rust detectors now consume `ParsedUnit`
 * `Cargo.toml` *(modified)* — workspace version bumped to `9.9.1`
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Commit:** pending `just fast-release 9.9.1`
 
@@ -3747,7 +3767,7 @@ with `ScmContext::from\_env()` for repo slug, commit SHA, and PR number
 resolution
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed `CT-010`, moved the Wisdom
 manifest gap into `P1-3`, and marked `P1-2` completed
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 * `Cargo.toml` *(modified)* — version bumped to `9.8.1`
 
 **Commit:** pending `just fast-release 9.8.1`
@@ -3768,7 +3788,7 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * `README.md` *(modified)* — version string synced to `v10.1.0-alpha.2`
 * `docs/index.md` *(modified)* — version string synced to `v10.1.0-alpha.2`
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed resolved P0-2 / P0-3 items; P1-1 now explicitly tracks C# / Ruby / PHP / Swift taint-spine expansion
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Verification**: `cargo test --workspace -- --test-threads=1` | `just audit`
 **Release**: `just fast-release 10.1.0-alpha.2`
@@ -3790,7 +3810,7 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * `README.md` *(modified)* — version string synced to `v10.1.0-alpha.3`
 * `docs/index.md` *(modified)* — version string synced to `v10.1.0-alpha.3`
 * `docs/INNOVATION\_LOG.md` *(modified)* — removed completed P0-4 and P1-1 roadmap items
-* `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this entry
+* `docs/CHANGELOG.md` *(modified)* — this entry
 
 **Verification**: `cargo test --workspace -- --test-threads=1` | `just audit`
 **Release**: blocked — `just fast-release 10.1.0-alpha.3` halted because the local GPG signing key is locked (`gpg-unlock` / `JANITOR\_GPG\_PASSPHRASE` required)
@@ -3843,7 +3863,7 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * `crates/common/src/pqc.rs` *(modified)* — `sign\_asset\_hash\_from\_file` and `verify\_asset\_ml\_dsa\_signature` now operate on `\&\[u8; 48]`, moving the release-signature boundary onto a NIST-approved pre-hash without touching the performance BLAKE3 paths used elsewhere.
 * `crates/cli/Cargo.toml` *(modified)* — added `hex.workspace = true` for SHA-384 hex sidecar encoding; `crates/common/Cargo.toml` *(modified)* — added `sha2.workspace = true` to make the boundary dependency explicit.
 * `action.yml` *(modified)* — release downloads now fetch `janitor.sha384`, verify the sidecar with `sha384sum -c`, and then invoke the bootstrap verifier for ML-DSA-65 signature validation. `justfile` *(modified)* — `fast-release` now ships `target/release/janitor.sha384` instead of `janitor.b3`.
-* `Cargo.toml` *(modified)* — workspace version bumped to `10.1.0-alpha.18`. `docs/INNOVATION\_LOG.md` *(modified)* — removed implemented `P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384` from the active FedRAMP queue. `docs/IMPLEMENTATION\_BACKLOG.md` *(modified)* — this ledger entry.
+* `Cargo.toml` *(modified)* — workspace version bumped to `10.1.0-alpha.18`. `docs/INNOVATION\_LOG.md` *(modified)* — removed implemented `P0-1: Release-Asset Digest Migration — BLAKE3 → SHA-384` from the active FedRAMP queue. `docs/CHANGELOG.md` *(modified)* — this ledger entry.
 
 **Live-fire Jira re-engagement**:
 

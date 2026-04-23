@@ -36,7 +36,13 @@ The Janitor is not a linter. It is not a SAST scanner. It is a **structural enfo
 
 The Janitor detects what the others cannot: structural patterns that have no CVE record, coordinated multi-author clone injection, and the entropy signatures of AI-generated boilerplate — deterministically, on your hardware, in sustained 6.7 seconds per Pull Request.
 
-Three capabilities your current toolchain cannot replicate:
+Six capabilities your current toolchain cannot replicate:
+
+### Offensive Harness & Trust-Boundary Extraction
+
+- **Live-Tenant AEG HTML Harness Generation** — exploit witnesses can be rendered as operator-ready browser harnesses for tenant-specific reproduction paths.
+- **GraphQL/AsyncAPI Trust Boundary Extraction** — schema ingress is normalized into service-boundary graphs so cross-service exposure is visible before merge.
+- **Web3 EVM Invariant Checking** — Solidity diffs are screened for reentrancy, authority-transition, signature-replay, and unsafe `delegatecall` patterns.
 
 ### Zero-Copy Execution
 
@@ -305,6 +311,9 @@ No account required. No time limit. No LOC cap.
 | `janitor clean` — shadow simulation + physical removal | ✓ |
 | `janitor dedup` — structural clone detection | ✓ |
 | `janitor bounce` — PR slop gate (JSON output for CI) | ✓ |
+| Live-Tenant AEG HTML Harness Generation | ✓ |
+| GraphQL/AsyncAPI Trust Boundary Extraction | ✓ |
+| Web3 EVM Invariant Checking | ✓ |
 | `janitor dashboard` — Ratatui TUI | ✓ |
 | **Dual-PQC Signed Audit Logs** | — |
 | **CI/CD Compliance Attestation** | — |

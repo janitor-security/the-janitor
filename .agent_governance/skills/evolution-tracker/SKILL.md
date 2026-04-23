@@ -5,7 +5,7 @@ significant code audit.
 
 ---
 
-## Logic 1 — The Backlog
+## Logic 1 — Session Changelog
 
 At the conclusion of every session or major directive, append a dated entry to
 `docs/CHANGELOG.md` with the following structure:
@@ -75,7 +75,7 @@ in `.INNOVATION_LOG.md`.** Completed work belongs exclusively in
 `docs/CHANGELOG.md`.
 
 If a finding is resolved in the same session it is identified, record it in
-the Backlog entry for that session — not in the Innovation Log. The Innovation
+the `docs/CHANGELOG.md` entry for that session — not in the Innovation Log. The Innovation
 Log is a forward-looking proposal registry. An entry that describes something
 already done is noise, not signal.
 
@@ -151,17 +151,17 @@ Summary` table are exempt from purging.
 1. Count the total named findings under the parent section.
 2. Count the findings marked `[COMPLETED — ...]`.
 3. If count matches: delete the section from `.INNOVATION_LOG.md`.
-4. Record the deletion in the current session's Backlog entry under a
+4. Record the deletion in the current session's `docs/CHANGELOG.md` entry under a
    `**Purged sections:**` sub-item.
 
 **Example:** If a section contains only completed items, delete the entire
-parent block rather than leaving dead backlog weight behind.
+parent block rather than leaving dead ledger weight behind.
 
 ---
 
 ## Enforcement
 
 Both logs must be current before any `/release` is executed.
-A release with a stale backlog (missing the current session's directive) is
+A release with a stale changelog (missing the current session's directive) is
 a documentation compliance breach under Law IV of
 `.claude/rules/deployment-coupling.md`.
