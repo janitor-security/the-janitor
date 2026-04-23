@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 41 (LotL API C2 Interception & SSTI Foundations)
+
+**Directive:** Implement LotL API C2 interception for trusted SaaS exfiltration, scaffold Liquid SSTI symbolic facts, update roadmap hygiene, verify, commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/slop_hunter.rs` — added trusted SaaS API registry coverage for Microsoft Graph, Slack API, Discord webhooks, and Telegram; flagged outbound HTTP sinks when payload provenance resolves to environment dumps, child-process execution, or high-entropy token blobs.
+- `crates/forge/src/slop_hunter.rs` — added deterministic regression coverage for `process.env` exfiltration into `graph.microsoft.com` and a clean trusted-API post with inert payload data.
+- `crates/forge/src/symbex.rs` — introduced Liquid template engine metadata on canonical assignment/call facts so `{{ ... }}` and `{% ... %}` markers survive into render-call tracking and SMT scaffolding.
+- `.INNOVATION_LOG.md` — locally retired the shipped `P2-9` frontier after completion, preserving only open roadmap items.
+
+**Verification:**
+
+- `cargo test -p forge test_js_lotl_api_c2_process_env_to_graph_detected -- --test-threads=4` — passed.
+- `cargo test -p forge extracts_liquid_template_assignment_and_render_context -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 40 (Sovereign MCP & Causality Lattice)
 
 **Directive:** Add OTLP profiling hooks, implement causality-driven Proven Invariant evidence, expand Sovereign MCP tools for SMT refinement and AST sink queries, update roadmap hygiene, verify, commit. Do not release.

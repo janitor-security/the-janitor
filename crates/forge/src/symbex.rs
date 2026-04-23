@@ -39,6 +39,13 @@ pub enum VulnerabilityFamily {
     DOMXSS,
 }
 
+/// Template engine metadata carried by template-injection facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateEngine {
+    /// Shopify Liquid / LiquidJS-style template markers.
+    Liquid,
+}
+
 /// Canonical IFDS fact class emitted by grammar adapters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CanonicalFactKind {
@@ -61,6 +68,8 @@ pub struct CanonicalFact {
     pub arguments: Vec<String>,
     /// SMT-LIB assertion produced by the transfer function, when applicable.
     pub smt_constraint: Option<String>,
+    /// Template engine inferred from the fact payload or render call context.
+    pub template_engine: Option<TemplateEngine>,
 }
 
 /// Bounded symbolic executor seeded by an IFDS exploit witness and an AST node.
@@ -227,6 +236,7 @@ fn assignment_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
     };
     let symbol = left_identifier(left, source)?;
     let value = string_literal_value(right, source)?;
+    let template_engine = liquid_marker_in_text(&value).then_some(TemplateEngine::Liquid);
     let smt_constraint = Some(format!(
         "(= {} {})",
         sanitize_identifier(&symbol)?,
@@ -238,6 +248,7 @@ fn assignment_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
         value: Some(value),
         arguments: Vec::new(),
         smt_constraint,
+        template_engine,
     })
 }
 
@@ -260,12 +271,23 @@ fn call_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    let template_engine = symbol
+        .to_ascii_lowercase()
+        .contains("render")
+        .then(|| {
+            arguments
+                .iter()
+                .any(|arg| liquid_marker_in_text(arg))
+                .then_some(TemplateEngine::Liquid)
+        })
+        .flatten();
     Some(CanonicalFact {
         kind: CanonicalFactKind::Call,
         symbol,
         value: None,
         arguments,
         smt_constraint: None,
+        template_engine,
     })
 }
 
@@ -303,6 +325,10 @@ fn nth_named_child(node: Node<'_>, index: usize) -> Option<Node<'_>> {
 fn smt_string_literal(value: &str) -> String {
     let escaped = value.replace('\\', "\\\\").replace('"', "\"\"");
     format!("\"{escaped}\"")
+}
+
+fn liquid_marker_in_text(text: &str) -> bool {
+    text.contains("{{") || text.contains("{%")
 }
 
 fn is_binary_node(node: Node<'_>) -> bool {
@@ -457,6 +483,7 @@ fetch(route);
             assignment.smt_constraint.as_deref(),
             Some("(= route \"/login\")")
         );
+        assert_eq!(assignment.template_engine, None);
         assert!(
             facts
                 .iter()
@@ -475,5 +502,32 @@ fetch(route);
             verdict,
             PathFeasibility::Satisfiable | PathFeasibility::Unknown
         ));
+    }
+
+    #[test]
+    fn extracts_liquid_template_assignment_and_render_context() {
+        let source = br#"
+const template = "{{ payload }}";
+renderTemplate(template);
+renderTemplate("{% if user %}{{ payload }}{% endif %}");
+"#;
+        let tree = parse_js(source);
+        let executor = SymbolicExecutor::new(witness(), tree.root_node());
+        let facts = executor.extract_js_ts_facts(source);
+
+        let assignment = facts
+            .iter()
+            .find(|fact| fact.kind == CanonicalFactKind::Assignment && fact.symbol == "template")
+            .expect("template assignment must become a canonical fact");
+        assert_eq!(assignment.template_engine, Some(TemplateEngine::Liquid));
+
+        assert!(
+            facts.iter().any(|fact| {
+                fact.kind == CanonicalFactKind::Call
+                    && fact.symbol == "renderTemplate"
+                    && fact.template_engine == Some(TemplateEngine::Liquid)
+            }),
+            "render calls carrying Liquid markers must retain Liquid context"
+        );
     }
 }
