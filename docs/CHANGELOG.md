@@ -3,6 +3,28 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-22 — Sprint Batch 40 (Sovereign MCP & Causality Lattice)
+
+**Directive:** Add OTLP profiling hooks, implement causality-driven Proven Invariant evidence, expand Sovereign MCP tools for SMT refinement and AST sink queries, update roadmap hygiene, verify, commit. Do not release.
+
+**Changes:**
+
+- `Cargo.toml` / `crates/cli/Cargo.toml` — added workspace `opentelemetry` and `opentelemetry-otlp` dependencies for runtime profiling integration.
+- `crates/cli/src/main.rs` — added execution-time and peak-memory telemetry hooks, with optional JSON profile emission when `JANITOR_OTLP_PROFILE_LOG` is configured.
+- `crates/forge/src/rcal.rs` / `crates/forge/src/lib.rs` — introduced the Root Cause Abstraction Lattice causality vector, PSM-style Proven Invariant promotion, and deterministic sanitizer-cohort evidence extraction.
+- `crates/cli/src/hunt.rs` — injected Proven Invariant defensive evidence into Bugcrowd/Auth0 report output when sanitizer cohorts prove clean-rate invariants.
+- `crates/mcp/src/lib.rs` / `crates/mcp/Cargo.toml` — registered `janitor_z3_refine` and `janitor_ast_query`, exposing SMT refinement and bounded structured AST sink subtrees to external MCP agents.
+- `.INNOVATION_LOG.md` — locally added `P4-6: OTLP-Backed ESG Actuarial Ledger` and `P2-11: Sovereign MCP Toolset for Autonomous Agents`.
+
+**Verification:**
+
+- `cargo test -p forge causality_vector -- --test-threads=4` — passed.
+- `cargo test -p cli bugcrowd_formatter_cites_proven_invariant_defensive_evidence -- --test-threads=4` — passed.
+- `cargo test -p mcp test_ast_query_returns_sink_subtree -- --test-threads=4` — passed after Clippy clamp fix.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-22 — Sprint Batch 39 (Threat-Led Attack Graphs & Live-Tenant AEG)
 
 **Directive:** Implement ToS-safe live-tenant HTML PoC synthesis for client-side exploit witnesses, fix innovation-log numbering, expand threat-led attack graph planning, verify, commit. Do not release.

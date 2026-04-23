@@ -3,10 +3,12 @@ use clap::{Parser, Subcommand};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use hmac::KeyInit as _;
 use hmac::Mac as _;
+use opentelemetry::KeyValue;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 mod cbom;
 mod daemon;
@@ -1103,6 +1105,7 @@ async fn main() -> anyhow::Result<()> {
 
     let _root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let cli = Cli::parse();
+    let engine_started = Instant::now();
     let execution_tier = resolve_execution_tier(&_root);
 
     // Initialise the global Rayon thread pool after CLI parse so --concurrency
@@ -1558,7 +1561,62 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    emit_otlp_profile(engine_started.elapsed(), read_memory_peak_kb());
     Ok(())
+}
+
+fn emit_otlp_profile(engine_execution_time: Duration, memory_peak_kb: u64) {
+    let _attrs = [
+        KeyValue::new("janitor.metric", "8gb_law_profile"),
+        KeyValue::new(
+            "engine_execution_time_ms",
+            engine_execution_time.as_millis() as i64,
+        ),
+        KeyValue::new("memory_peak_kb", memory_peak_kb as i64),
+    ];
+    let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok();
+
+    if endpoint.is_some() || env::var_os("JANITOR_OTLP_PROFILE_LOG").is_some() {
+        let payload = serde_json::json!({
+            "schema": "janitor.otlp.profile.v1",
+            "metrics": {
+                "engine_execution_time": engine_execution_time.as_secs_f64(),
+                "memory_peak_kb": memory_peak_kb
+            },
+            "otlp_endpoint_configured": endpoint.is_some(),
+            "attributes": [
+                "janitor.metric",
+                "engine_execution_time_ms",
+                "memory_peak_kb"
+            ]
+        });
+        if let Some(path) = env::var_os("JANITOR_OTLP_PROFILE_LOG") {
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    writeln!(file, "{payload}")
+                });
+        }
+    }
+}
+
+fn read_memory_peak_kb() -> u64 {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return 0;
+    };
+    status
+        .lines()
+        .find_map(|line| {
+            let value = line.strip_prefix("VmHWM:")?.trim();
+            value
+                .split_whitespace()
+                .next()
+                .and_then(|raw| raw.parse::<u64>().ok())
+        })
+        .unwrap_or(0)
 }
 
 fn resolve_execution_tier(project_root: &Path) -> String {

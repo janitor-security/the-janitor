@@ -278,6 +278,7 @@ fn format_bugcrowd_report_with_component(
         let business_impact = business_impact_statement(rule_id, highest_severity);
         let mitigation = suggested_mitigation(&sorted_group);
         let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
+        let defensive_evidence = defensive_evidence_section(&sorted_group);
         let proof_of_concept = proof_of_concept_section(&sorted_group);
         let live_section = live_tenant_section(&sorted_group);
 
@@ -291,6 +292,7 @@ During a static analysis of the target artifacts, the following critical securit
 **Business Impact:** {business_impact}\n\
 **Upstream Validation Audit:**\n\
 {upstream_validation_audit}\n\
+{defensive_evidence}\
 **Proof of Concept:**\n\
 {proof_of_concept}\n\
 {live_section}\
@@ -397,6 +399,7 @@ externally-influenced input and the dangerous API call."
             .max_by_key(|s| severity_rank(s));
         let business_impact = auth0_business_impact(rule_id, highest_severity);
         let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
+        let defensive_evidence = defensive_evidence_section(&sorted_group);
 
         // Working PoC: first available repro_cmd, else fallback.
         let poc = sorted_group
@@ -455,6 +458,7 @@ proof-of-concept payload was not autonomously synthesized. Manual verification i
 **Affected Package / Component**\n{component_info}\n\n\
 **Business Impact (how does this affect Auth0?)**\n{business_impact}\n\n\
 **Upstream Validation Audit**\n{upstream_validation_audit}\n\n\
+{defensive_evidence}\
 **Working proof of concept**\n{poc}\n{live_section}\n\
 **Discoverability (how likely is this to be discovered)**\n{discoverability}\n\n\
 **Exploitability (how likely is this to be exploited)**\n{exploitability}"
@@ -546,6 +550,12 @@ fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String 
         .find(|audit| !audit.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| "No upstream validation audit generated.".to_string())
+}
+
+fn defensive_evidence_section(findings: &[&StructuredFinding]) -> String {
+    forge::rcal::defensive_evidence_for_findings(findings)
+        .map(|evidence| format!("**Defensive Evidence:**\n{evidence}\n\n"))
+        .unwrap_or_default()
 }
 
 /// Render a `**Live Tenant Verification:**` section if any finding in the
@@ -2605,6 +2615,38 @@ def main(user_id):
         assert!(report.contains("clientID: \"test-client-123\""));
         assert!(report.contains("**Live Tenant Context:**"));
         assert!(report.contains("No network request was executed by Janitor"));
+    }
+
+    #[test]
+    fn bugcrowd_formatter_cites_proven_invariant_defensive_evidence() {
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("src/auth0-widget.js".to_string()),
+            line: Some(44),
+            fingerprint: "domxss-psm".to_string(),
+            severity: Some("High".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "render".to_string(),
+                source_label: "param:state".to_string(),
+                sink_function: "Element.innerHTML".to_string(),
+                sink_label: "sink:dom_xss".to_string(),
+                sanitizer_audit: Some(
+                    "Path sanitizers [escapeHtml] matched PSM cohort 19/20 clean repos."
+                        .to_string(),
+                ),
+                ..Default::default()
+            }),
+            upstream_validation_absent: false,
+        };
+
+        let report = format_bugcrowd_report(&[finding]);
+
+        assert!(report.contains("**Defensive Evidence:**"));
+        assert!(report.contains("Proven Invariant"));
+        assert!(report.contains("escapeHtml"));
+        assert!(report.contains("19/20"));
     }
 
     #[test]

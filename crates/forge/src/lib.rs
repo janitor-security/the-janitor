@@ -44,6 +44,7 @@ pub mod metadata;
 pub mod migration_guard;
 pub mod negtaint;
 pub mod pr_collider;
+pub mod rcal;
 pub mod sanitizer;
 pub mod sanitizer_sym;
 pub mod schema_graph;

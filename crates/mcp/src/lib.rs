@@ -1,6 +1,6 @@
 //! MCP (Model Context Protocol) Stdio Transport server for the Janitor.
 //!
-//! Exposes ten tools over the MCP stdio JSON-RPC protocol:
+//! Exposes twelve tools over the MCP stdio JSON-RPC protocol:
 //! - `janitor_scan`              — Run the 6-stage dead-symbol pipeline on a project path.
 //! - `janitor_dedup`             — Detect structurally-cloned symbols in a project.
 //! - `janitor_clean`             — Report dead symbols eligible for removal (dry-run).
@@ -11,6 +11,8 @@
 //! - `janitor_wopr_snapshot`     — ASCII health snapshot of the repository derived from the bounce log.
 //! - `janitor_visualize_ledger`  — Mermaid pie chart + TEI markdown table from the actuarial ledger.
 //! - `janitor_lint_file`         — Real-time single-file antipattern scan for IDE integration.
+//! - `janitor_z3_refine`         — SMT path-feasibility refinement for external agents.
+//! - `janitor_ast_query`         — Structured AST subtree extraction around sink nodes.
 //!
 //! Wire protocol: newline-delimited JSON-RPC 2.0 on stdin/stdout.
 //! Each request line → one response line.
@@ -55,7 +57,9 @@ pub fn tool_capability(tool: &str) -> CapabilityMatrix {
         | "janitor_provenance"
         | "janitor_wopr_snapshot"
         | "janitor_visualize_ledger"
-        | "janitor_lint_file" => CapabilityMatrix::ReadOnly,
+        | "janitor_lint_file"
+        | "janitor_z3_refine"
+        | "janitor_ast_query" => CapabilityMatrix::ReadOnly,
         // Token-gated clean (writes deletion candidates — requires Admin)
         "janitor_clean" => CapabilityMatrix::Admin,
         // Anything unknown is treated as requiring Write to fail-closed
@@ -322,6 +326,62 @@ fn tool_list() -> serde_json::Value {
                         }
                     },
                     "required": ["path", "contents"]
+                }
+            },
+            {
+                "name": "janitor_z3_refine",
+                "description": "Run the Z3 SMT path-feasibility refinement bridge over explicit variables, assertions, and witness names. Returns satisfiable, unsatisfiable, unknown, or unavailable when z3 is not installed.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "variables": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string" },
+                                    "sort": { "type": "string", "enum": ["Int", "Bool", "String"] }
+                                },
+                                "required": ["name", "sort"]
+                            }
+                        },
+                        "assertions": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "witnesses": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "template": {
+                            "type": "string",
+                            "description": "Optional repro template populated from the Z3 model."
+                        }
+                    },
+                    "required": ["variables", "assertions"]
+                }
+            },
+            {
+                "name": "janitor_ast_query",
+                "description": "Return a bounded structured tree-sitter subtree for sink analysis. Locates the first node whose kind or source text contains `sink`.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute path to a source file."
+                        },
+                        "sink": {
+                            "type": "string",
+                            "description": "Sink token to locate, e.g. innerHTML, delegatecall, fetch."
+                        },
+                        "max_nodes": {
+                            "type": "integer",
+                            "description": "Maximum nodes to include in the returned subtree.",
+                            "default": 64
+                        }
+                    },
+                    "required": ["path", "sink"]
                 }
             }
         ]
@@ -1014,6 +1074,186 @@ fn run_lint_file(file_path: &str, contents: &str) -> Result<serde_json::Value> {
     }))
 }
 
+fn run_z3_refine(args: &serde_json::Value) -> Result<serde_json::Value> {
+    let variables_value = args
+        .get("variables")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow::anyhow!("missing `variables` array"))?;
+    let assertions = args
+        .get("assertions")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow::anyhow!("missing `assertions` array"))?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| anyhow::anyhow!("assertions must be strings"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let witnesses = args
+        .get("witnesses")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(str::to_owned)
+                        .ok_or_else(|| anyhow::anyhow!("witnesses must be strings"))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+
+    let mut variables = Vec::with_capacity(variables_value.len());
+    for variable in variables_value {
+        let name = variable
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("variable missing `name`"))?;
+        let sort = variable
+            .get("sort")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("variable missing `sort`"))?;
+        variables.push((name.to_string(), parse_smt_sort(sort)?));
+    }
+
+    if !forge::exploitability::Z3Solver::is_available() {
+        return Ok(serde_json::json!({
+            "status": "unavailable",
+            "message": "z3 binary not found on PATH"
+        }));
+    }
+
+    let constraint = forge::exploitability::PathConstraint {
+        variables,
+        assertions,
+        witnesses_of_interest: witnesses,
+    };
+    let template = args
+        .get("template")
+        .and_then(|v| v.as_str())
+        .map(|template| forge::exploitability::ReproTemplate {
+            template: template.to_string(),
+        });
+    let solver = forge::exploitability::Z3Solver::new()?;
+    let witness = common::slop::ExploitWitness::default();
+    let refinement = solver.refine(witness, &constraint, template.as_ref())?;
+
+    let status = match refinement {
+        forge::exploitability::Refinement::Satisfiable(witness) => serde_json::json!({
+            "status": "satisfiable",
+            "repro_cmd": witness.repro_cmd
+        }),
+        forge::exploitability::Refinement::Unsatisfiable => serde_json::json!({
+            "status": "unsatisfiable"
+        }),
+        forge::exploitability::Refinement::Unknown(witness) => serde_json::json!({
+            "status": "unknown",
+            "repro_cmd": witness.repro_cmd
+        }),
+    };
+    Ok(status)
+}
+
+fn parse_smt_sort(raw: &str) -> Result<forge::exploitability::SmtSort> {
+    match raw {
+        "Int" => Ok(forge::exploitability::SmtSort::Int),
+        "Bool" => Ok(forge::exploitability::SmtSort::Bool),
+        "String" => Ok(forge::exploitability::SmtSort::String),
+        other => anyhow::bail!("unsupported SMT sort: {other}"),
+    }
+}
+
+fn run_ast_query(path: &str, sink: &str, max_nodes: usize) -> Result<serde_json::Value> {
+    anyhow::ensure!(!sink.trim().is_empty(), "`sink` must not be empty");
+    let source_path = Path::new(path);
+    anyhow::ensure!(source_path.is_absolute(), "`path` must be absolute");
+    anyhow::ensure!(source_path.is_file(), "path is not a file: {path}");
+    let ext = source_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("");
+    let language = polyglot::LazyGrammarRegistry::get(ext)
+        .ok_or_else(|| anyhow::anyhow!("unsupported source extension: {ext}"))?;
+    let source =
+        std::fs::read(source_path).with_context(|| format!("failed to read source file {path}"))?;
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(language)
+        .map_err(|err| anyhow::anyhow!("failed to set tree-sitter language: {err}"))?;
+    let tree = parser
+        .parse(&source, None)
+        .ok_or_else(|| anyhow::anyhow!("tree-sitter parse failed"))?;
+    let root = tree.root_node();
+    let target = find_sink_node(root, &source, sink).unwrap_or(root);
+    let mut budget = max_nodes.clamp(1, 256);
+    let subtree = ast_node_json(target, &source, &mut budget);
+    Ok(serde_json::json!({
+        "path": path,
+        "sink": sink,
+        "language": ext,
+        "subtree": subtree
+    }))
+}
+
+fn find_sink_node<'tree>(
+    node: tree_sitter::Node<'tree>,
+    source: &[u8],
+    sink: &str,
+) -> Option<tree_sitter::Node<'tree>> {
+    let text_matches = node
+        .utf8_text(source)
+        .map(|text| text.contains(sink))
+        .unwrap_or(false);
+    if node.kind().contains(sink) || text_matches && node.child_count() == 0 {
+        return Some(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = find_sink_node(child, source, sink) {
+            return Some(found);
+        }
+    }
+    if text_matches {
+        return Some(node);
+    }
+    None
+}
+
+fn ast_node_json(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    budget: &mut usize,
+) -> serde_json::Value {
+    if *budget == 0 {
+        return serde_json::json!({"truncated": true});
+    }
+    *budget -= 1;
+    let mut cursor = node.walk();
+    let children = node
+        .children(&mut cursor)
+        .map(|child| ast_node_json(child, source, budget))
+        .collect::<Vec<_>>();
+    let text = node
+        .utf8_text(source)
+        .ok()
+        .map(|text| text.chars().take(160).collect::<String>())
+        .unwrap_or_default();
+    serde_json::json!({
+        "kind": node.kind(),
+        "start_byte": node.start_byte(),
+        "end_byte": node.end_byte(),
+        "start_line": node.start_position().row + 1,
+        "end_line": node.end_position().row + 1,
+        "text": text,
+        "children": children
+    })
+}
+
 /// Map a file extension to the language tag accepted by `slop_hunter::find_slop`.
 fn ext_to_lang_tag(ext: &str) -> &'static str {
     match ext {
@@ -1305,6 +1545,28 @@ fn dispatch(req: Request) -> Response {
                     }
                 }
 
+                "janitor_z3_refine" => match run_z3_refine(&args) {
+                    Ok(v) => Response::tool_ok(req.id, v),
+                    Err(e) => Response::err(req.id, -32603, e.to_string()),
+                },
+
+                "janitor_ast_query" => {
+                    let path = match args.get("path").and_then(|v| v.as_str()) {
+                        Some(p) => p.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `path` argument"),
+                    };
+                    let sink = match args.get("sink").and_then(|v| v.as_str()) {
+                        Some(s) => s.to_owned(),
+                        None => return Response::err(req.id, -32602, "missing `sink` argument"),
+                    };
+                    let max_nodes =
+                        args.get("max_nodes").and_then(|v| v.as_u64()).unwrap_or(64) as usize;
+                    match run_ast_query(&path, &sink, max_nodes) {
+                        Ok(v) => Response::tool_ok(req.id, v),
+                        Err(e) => Response::err(req.id, -32603, e.to_string()),
+                    }
+                }
+
                 _ => Response::err(req.id, -32601, format!("unknown tool: {tool}")),
             }
         }
@@ -1334,10 +1596,10 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_list_contains_ten_tools() {
+    fn test_tools_list_contains_twelve_tools() {
         let list = tool_list();
         let tools = list["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 10);
+        assert_eq!(tools.len(), 12);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"janitor_scan"));
         assert!(names.contains(&"janitor_dedup"));
@@ -1349,6 +1611,8 @@ mod tests {
         assert!(names.contains(&"janitor_wopr_snapshot"));
         assert!(names.contains(&"janitor_visualize_ledger"));
         assert!(names.contains(&"janitor_lint_file"));
+        assert!(names.contains(&"janitor_z3_refine"));
+        assert!(names.contains(&"janitor_ast_query"));
     }
 
     #[test]
@@ -1753,6 +2017,46 @@ mod tests {
     }
 
     #[test]
+    fn test_z3_refine_unavailable_or_satisfiable_response_shape() {
+        let result = run_z3_refine(&serde_json::json!({
+            "variables": [{"name": "route", "sort": "String"}],
+            "assertions": ["(= route \"/login\")"],
+            "witnesses": ["route"],
+            "template": "route={{route}}"
+        }))
+        .unwrap();
+
+        let status = result["status"].as_str().unwrap();
+        assert!(
+            matches!(
+                status,
+                "unavailable" | "satisfiable" | "unsatisfiable" | "unknown"
+            ),
+            "unexpected status: {status}"
+        );
+    }
+
+    #[test]
+    fn test_ast_query_returns_sink_subtree() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("sink.js");
+        std::fs::write(
+            &file,
+            "function render(x) { document.body.innerHTML = x; }\n",
+        )
+        .unwrap();
+
+        let result = run_ast_query(file.to_str().unwrap(), "innerHTML", 24).unwrap();
+
+        assert_eq!(result["sink"], "innerHTML");
+        let subtree = &result["subtree"];
+        assert!(
+            subtree.to_string().contains("innerHTML"),
+            "subtree must include the requested sink"
+        );
+    }
+
+    #[test]
     fn test_byte_offset_to_line_first_line() {
         let src = b"line1\nline2\nline3\n";
         assert_eq!(byte_offset_to_line(src, 0), 1, "offset 0 is line 1");
@@ -1842,6 +2146,8 @@ mod tests {
             "janitor_wopr_snapshot",
             "janitor_visualize_ledger",
             "janitor_lint_file",
+            "janitor_z3_refine",
+            "janitor_ast_query",
         ];
         for tool in &read_only {
             assert_eq!(

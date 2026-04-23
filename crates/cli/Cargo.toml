@@ -56,6 +56,8 @@ jaq-core = "1"
 jaq-parse = "1"
 jaq-std = "1"
 jaq-interpret = "1"
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
 
 [build-dependencies]
 common = { path = "../common" }
