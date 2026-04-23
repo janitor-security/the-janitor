@@ -3371,7 +3371,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "hex",
- "rand 0.8.6",
+ "rand 0.9.4",
 ]
 
 [[package]]
