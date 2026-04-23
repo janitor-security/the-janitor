@@ -2022,6 +2022,9 @@ derive from code, not prior documentation. Supersedes all predecessor files.</p>
 Phase 7 completed full grammar coverage: Rust (unsafe transmute + raw ptr deref), GLSL
 (dangerous extension byte scan), HCL/Terraform (data external + local-exec provisioner
 AST walk), and TSX/JSX (dangerouslySetInnerHTML attribute walk).</p>
+<p><strong>Active offensive expansion lanes</strong>: Live-Tenant AEG HTML Harness Generation,
+GraphQL/AsyncAPI Trust Boundary Extraction, and Web3 EVM Invariant Checking are
+first-class enforcement surfaces, not roadmap placeholders.</p>
 <p>Grammar library: <code>tree-sitter 0.26</code> (workspace pinned).</p>
 <h3 id="foundational-crates-mathematical-models">Foundational Crates &amp; Mathematical Models</h3>
 <table>
@@ -2247,6 +2250,18 @@ version-controlled, reviewable configuration. Loaded by <code>JanitorPolicy::loa
 <td><code>security:compiled_payload_anomaly</code></td>
 <td><code>binary_hunter</code></td>
 <td>ELF magic <code>\x7fELF</code>, WASM <code>\x00asm\x01\x00\x00\x00</code>, PE <code>MZ\x90\x00\x03</code>, <code>/bin/sh\x00</code>, <code>cmd.exe\x00</code>, <code>stratum+tcp://</code>, <code>stratum2+tcp://</code></td>
+<td>+50 per match</td>
+</tr>
+<tr>
+<td><code>security:signature_replay</code></td>
+<td><code>solidity_taint</code></td>
+<td>Solidity <code>ecrecover</code> flow lacks nonce consumption or <code>block.chainid</code> domain separation</td>
+<td>+50 per match</td>
+</tr>
+<tr>
+<td><code>security:unsafe_delegatecall</code></td>
+<td><code>solidity_taint</code></td>
+<td>Solidity <code>delegatecall</code> target is derived from caller-controlled input without an owner/role guard</td>
 <td>+50 per match</td>
 </tr>
 <tr>
@@ -2716,7 +2731,7 @@ Build <code>gauntlet-runner</code> + <code>cli</code> (<code>cargo build --relea
 </table>
 <hr />
 <h2 id="ix-final-version">IX. FINAL VERSION</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>9.7.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>v10.2.0-beta.2
 </code></pre></div>
 <p>Extracted from <code>[workspace.package].version</code> in root <code>Cargo.toml</code>.</p>
 <p>Release profile: <code>opt-level = "z"</code>, <code>lto = true</code>, <code>codegen-units = 1</code>, <code>strip = true</code>, <code>panic = "abort"</code>.
