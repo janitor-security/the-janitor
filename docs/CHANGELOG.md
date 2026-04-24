@@ -3,6 +3,27 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 48 (Contextual Guardrails & Provable IAM Invariants)
+
+**Directive:** Add AST-contextual Go false-positive shields for TLS and SQL, enforce standardized SAST suppression comments, implement Z3-backed OpenFGA privilege-escalation proofs, compact shipped `P2-12`, verify, and commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/slop_hunter.rs` — added Go TLS sibling-field suppression when `VerifyPeerCertificate` is present beside `InsecureSkipVerify: true`; hardened Go SQLi detection to inspect the correct query-string argument for `Query`, `QueryRow`, `Exec`, and `*Context` variants; added standardized `//nolint:gosec`, `//nosec`, and `// janitor:ignore` line suppression filtering across findings.
+- `crates/forge/src/schema_graph.rs` — expanded OpenFGA invariant analysis with Z3-backed boolean constraint proving for wildcard-driven `owner` escalation paths; emits `security:openfga_privilege_escalation_proven` at `KevCritical` when satisfiable.
+- `crates/crucible/src/main.rs` — synchronized the Go-3 threat-gallery expectation with the normalized `security:sqli_concatenation` detector identifier.
+- `.INNOVATION_LOG.md` — hard-deleted shipped `P2-12` from the active frontier under the Absolute Eradication Law.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `cargo test -p forge test_go_insecure_skip_verify_custom_verifier_safe -- --test-threads=4` — passed.
+- `cargo test -p forge openfga_z3_proves_owner_escalation_via_wildcard_delegation -- --test-threads=4` — passed.
+- `cargo test -p crucible threat_gallery_all_intercepted -- --test-threads=4` — passed after normalizing the Go-3 detector identifier.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; documentation parity verified for `v10.2.0-beta.2`, audit fingerprint saved.
+- No release executed.
+
 ## 2026-04-23 — Sprint Batch 47 (The Deception Plane & Asymmetric Visibility)
 
 **Directive:** Implement P3-6 Labyrinth Generator for adversarial AI agent tarpitting, add friendly-agent immunity shielding, and codify Labyrinth Blindness as a governance law.

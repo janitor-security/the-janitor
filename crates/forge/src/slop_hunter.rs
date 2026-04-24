@@ -60,7 +60,7 @@
 //! ```
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -695,8 +695,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f
         }
         "go" => {
-            let mut f = find_go_sqli_slop(source);
-            f.extend(find_go_ssrf_slop(source));
+            let mut f = find_go_ssrf_slop(source);
             // Phase 4 R&D: exec.Command shell injection + TLS bypass AST walk
             f.extend(find_go_slop(eng, parsed));
             f.extend(find_jwt_validation_bypass(source));
@@ -736,7 +735,114 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     // Language-agnostic: supply-chain integrity scan runs on every source file.
     // Catches external script loading without SRI and GitHub Pages URL embedding.
     findings.extend(find_supply_chain_slop_with_context(language, parsed));
+    filter_standard_sast_suppressions(source, findings)
+}
+
+fn filter_standard_sast_suppressions(
+    source: &[u8],
+    findings: Vec<SlopFinding>,
+) -> Vec<SlopFinding> {
+    let suppressed_lines = collect_standard_sast_suppressed_lines(source);
+    if suppressed_lines.is_empty() {
+        return findings;
+    }
+
     findings
+        .into_iter()
+        .filter(|finding| {
+            let line = byte_offset_to_line(source, finding.start_byte);
+            !suppressed_lines.contains(&line)
+        })
+        .collect()
+}
+
+fn collect_standard_sast_suppressed_lines(source: &[u8]) -> BTreeSet<u32> {
+    let text = String::from_utf8_lossy(source);
+    let lines: Vec<&str> = text.lines().collect();
+    let mut suppressed = BTreeSet::new();
+    let mut idx = 0;
+
+    while idx < lines.len() {
+        let line = lines[idx];
+        let trimmed = line.trim_start();
+        let lower = line.to_ascii_lowercase();
+
+        if let Some(start) = line.find("/*") {
+            let mut end = idx;
+            let mut block = line[start..].to_string();
+            while !lines[end].contains("*/") && end + 1 < lines.len() {
+                end += 1;
+                block.push('\n');
+                block.push_str(lines[end]);
+            }
+            if contains_standard_sast_suppression(&block.to_ascii_lowercase()) {
+                if !line[..start].trim().is_empty() {
+                    suppressed.insert(idx as u32 + 1);
+                } else {
+                    for line_no in idx..=end {
+                        suppressed.insert(line_no as u32 + 1);
+                    }
+                    if let Some(next_code) = next_suppressed_code_line(&lines, end + 1) {
+                        suppressed.insert(next_code as u32 + 1);
+                    }
+                }
+            }
+            idx = end + 1;
+            continue;
+        }
+
+        if contains_standard_sast_suppression(&lower) {
+            if trimmed.starts_with("//") {
+                suppressed.insert(idx as u32 + 1);
+                if let Some(next_code) = next_suppressed_code_line(&lines, idx + 1) {
+                    suppressed.insert(next_code as u32 + 1);
+                }
+            } else if let Some((prefix, _)) = line.split_once("//") {
+                if !prefix.trim().is_empty() {
+                    suppressed.insert(idx as u32 + 1);
+                }
+            }
+        }
+
+        idx += 1;
+    }
+
+    suppressed
+}
+
+fn contains_standard_sast_suppression(lower: &str) -> bool {
+    lower.contains("//nolint:gosec")
+        || lower.contains("//nosec")
+        || lower.contains("// janitor:ignore")
+        || lower.contains("/*nolint:gosec")
+        || lower.contains("/* nosec")
+        || lower.contains("/*nosec")
+        || lower.contains("janitor:ignore")
+}
+
+fn next_suppressed_code_line(lines: &[&str], start: usize) -> Option<usize> {
+    for (idx, line) in lines.iter().enumerate().skip(start) {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with("//")
+            || trimmed.starts_with("/*")
+            || trimmed.starts_with('*')
+            || trimmed.starts_with("*/")
+        {
+            continue;
+        }
+        return Some(idx);
+    }
+    None
+}
+
+fn byte_offset_to_line(source: &[u8], offset: usize) -> u32 {
+    let bounded = offset.min(source.len());
+    source[..bounded]
+        .iter()
+        .filter(|byte| **byte == b'\n')
+        .count() as u32
+        + 1
 }
 
 fn ascii_lower(source: &[u8]) -> Vec<u8> {
@@ -4711,55 +4817,6 @@ fn find_java_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
 }
 
 /// SQL injection — Go: `database/sql` method + SQL keyword + concat pattern.
-fn find_go_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
-    const GO_DB: &[&[u8]] = &[
-        b"db.Query(",
-        b"db.QueryRow(",
-        b"db.Exec(",
-        b"tx.Query(",
-        b"tx.Exec(",
-    ];
-    if !SQL_KEYWORDS_STR
-        .iter()
-        .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()))
-    {
-        return Vec::new();
-    }
-    if !source.windows(3).any(|w| w == b"\" +") {
-        return Vec::new();
-    }
-    // Find the byte offset of the first matching DB call so line numbers are precise.
-    let start_byte = GO_DB
-        .iter()
-        .filter_map(|p| {
-            source
-                .windows(p.len())
-                .enumerate()
-                .find(|(_, w)| w == p)
-                .map(|(i, _)| i)
-        })
-        .min()
-        .unwrap_or(0);
-    if start_byte == 0
-        && !GO_DB
-            .iter()
-            .any(|p| source.windows(p.len()).any(|w| w == *p))
-    {
-        return Vec::new();
-    }
-    vec![SlopFinding {
-        start_byte,
-        end_byte: start_byte + 9, // covers at minimum "db.Query("
-        description: "security:sqli_concatenation — SQL query assembled via string \
-                      concatenation in a Go database/sql call; use `$1/$2` \
-                      placeholders with `db.Query(sql, args...)` to prevent SQL \
-                      injection — CISA KEV class"
-            .to_string(),
-        domain: DOMAIN_FIRST_PARTY,
-        severity: Severity::KevCritical,
-    }]
-}
-
 /// SSRF — Go: `net/http` call where the URL argument does not begin with a
 /// string literal (next byte after `(` is not `"` or `` ` ``).
 fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
@@ -5225,53 +5282,37 @@ fn find_go_danger_nodes(
                     // Fires when the first argument to a DB query method is a binary_expression
                     // using `+`.  Suppressed only when BOTH operands are string literals
                     // (constant concatenation — safe).
-                    const GO_SQL_METHODS: &[&str] =
-                        &["Query", "Exec", "QueryRow", "QueryContext", "ExecContext"];
+                    const GO_SQL_METHODS: &[&str] = &[
+                        "Query",
+                        "Exec",
+                        "QueryRow",
+                        "QueryContext",
+                        "ExecContext",
+                        "QueryRowContext",
+                    ];
                     if GO_SQL_METHODS.contains(&field_text) {
                         if let Some(args) = node.child_by_field_name("arguments") {
-                            if let Some(first_arg) = args.named_children(&mut args.walk()).next() {
-                                if first_arg.kind() == "binary_expression" {
-                                    // Operator is an unnamed token — find `+` among children.
-                                    let has_plus =
-                                        first_arg.children(&mut first_arg.walk()).any(|c| {
-                                            !c.is_named()
-                                                && c.utf8_text(source)
-                                                    .map(|t| t == "+")
-                                                    .unwrap_or(false)
-                                        });
-                                    if has_plus {
-                                        let left_kind = first_arg
-                                            .child_by_field_name("left")
-                                            .map(|n| n.kind())
-                                            .unwrap_or("");
-                                        let right_kind = first_arg
-                                            .child_by_field_name("right")
-                                            .map(|n| n.kind())
-                                            .unwrap_or("");
-                                        let all_literal = matches!(
-                                            left_kind,
-                                            "interpreted_string_literal" | "raw_string_literal"
-                                        ) && matches!(
-                                            right_kind,
-                                            "interpreted_string_literal" | "raw_string_literal"
-                                        );
-                                        if !all_literal {
-                                            findings.push(SlopFinding {
-                                                start_byte: node.start_byte(),
-                                                end_byte: node.end_byte(),
-                                                description:
-                                                    "security:sql_injection_concatenation \
-                                                              — SQL query assembled via string \
-                                                              concatenation in a Go database/sql \
-                                                              call; use `$1/$2` placeholders with \
-                                                              `db.Query(sql, args...)` to prevent \
-                                                              SQL injection — CISA KEV class"
-                                                        .to_string(),
-                                                domain: DOMAIN_FIRST_PARTY,
-                                                severity: Severity::KevCritical,
-                                            });
-                                        }
-                                    }
+                            let arg_nodes: Vec<Node<'_>> =
+                                args.named_children(&mut args.walk()).collect();
+                            let query_arg_index = go_sql_query_arg_index(field_text);
+                            if let Some(query_arg) = arg_nodes.get(query_arg_index).copied() {
+                                let parameterized = arg_nodes.len() > query_arg_index + 1;
+                                if go_query_arg_is_unsafe_binary_concat(query_arg, source) {
+                                    findings.push(SlopFinding {
+                                        start_byte: node.start_byte(),
+                                        end_byte: node.end_byte(),
+                                        description: "security:sqli_concatenation \
+                                                      — SQL query assembled via string \
+                                                      concatenation in a Go database/sql \
+                                                      call; use `$1/$2` placeholders with \
+                                                      `db.Query(sql, args...)` to prevent \
+                                                      SQL injection — CISA KEV class"
+                                            .to_string(),
+                                        domain: DOMAIN_FIRST_PARTY,
+                                        severity: Severity::KevCritical,
+                                    });
+                                } else if parameterized {
+                                    // Suppressed: query text is parameterized via trailing args.
                                 }
                             }
                         }
@@ -5279,14 +5320,18 @@ fn find_go_danger_nodes(
                 }
             }
         }
-        // Gate Go-2: InsecureSkipVerify: true — no suppression
+        // Gate Go-2: InsecureSkipVerify: true — suppressed when a sibling
+        // VerifyPeerCertificate callback performs custom certificate validation.
         "keyed_element" => {
             let mut cursor = node.walk();
             let children: Vec<Node<'_>> = node.named_children(&mut cursor).collect();
             if children.len() >= 2 {
                 let key_text = children[0].utf8_text(source).unwrap_or("");
                 let val_text = children[1].utf8_text(source).unwrap_or("");
-                if key_text == "InsecureSkipVerify" && val_text == "true" {
+                if key_text == "InsecureSkipVerify"
+                    && val_text == "true"
+                    && !go_tls_config_has_custom_peer_verifier(node, source)
+                {
                     findings.push(SlopFinding {
                         start_byte: node.start_byte(),
                         end_byte: node.end_byte(),
@@ -5309,6 +5354,84 @@ fn find_go_danger_nodes(
     for child in node.children(&mut cursor) {
         find_go_danger_nodes(child, source, in_test, findings);
     }
+}
+
+fn go_sql_query_arg_index(method: &str) -> usize {
+    if matches!(method, "QueryContext" | "ExecContext" | "QueryRowContext") {
+        1
+    } else {
+        0
+    }
+}
+
+fn go_query_arg_is_unsafe_binary_concat(query_arg: Node<'_>, source: &[u8]) -> bool {
+    if query_arg.kind() != "binary_expression" {
+        return false;
+    }
+
+    let has_plus = query_arg.children(&mut query_arg.walk()).any(|child| {
+        !child.is_named()
+            && child
+                .utf8_text(source)
+                .map(|text| text == "+")
+                .unwrap_or(false)
+    });
+    has_plus && !go_binary_expression_all_literal(query_arg)
+}
+
+fn go_binary_expression_all_literal(expr: Node<'_>) -> bool {
+    let left_kind = expr
+        .child_by_field_name("left")
+        .map(|node| node.kind())
+        .unwrap_or("");
+    let right_kind = expr
+        .child_by_field_name("right")
+        .map(|node| node.kind())
+        .unwrap_or("");
+    matches!(
+        left_kind,
+        "interpreted_string_literal" | "raw_string_literal"
+    ) && matches!(
+        right_kind,
+        "interpreted_string_literal" | "raw_string_literal"
+    )
+}
+
+fn go_tls_config_has_custom_peer_verifier(node: Node<'_>, source: &[u8]) -> bool {
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if parent.kind() == "composite_literal" {
+            return go_composite_literal_has_field(parent, source, "VerifyPeerCertificate");
+        }
+        current = parent.parent();
+    }
+    false
+}
+
+fn go_composite_literal_has_field(
+    composite_literal: Node<'_>,
+    source: &[u8],
+    field_name: &str,
+) -> bool {
+    let Some(body) = composite_literal.child_by_field_name("body") else {
+        return false;
+    };
+    let mut cursor = body.walk();
+    for child in body.named_children(&mut cursor) {
+        if child.kind() != "keyed_element" {
+            continue;
+        }
+        let mut keyed_cursor = child.walk();
+        let keyed_children: Vec<Node<'_>> = child.named_children(&mut keyed_cursor).collect();
+        if keyed_children
+            .first()
+            .and_then(|node| node.utf8_text(source).ok())
+            .is_some_and(|key| key == field_name)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -8979,6 +9102,18 @@ mod phase4_rd_tests {
         );
     }
 
+    #[test]
+    fn test_go_insecure_skip_verify_custom_verifier_safe() {
+        let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{\n        InsecureSkipVerify: true,\n        VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error { return nil },\n    },\n}\n";
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("tls_verification_bypass")),
+            "custom VerifyPeerCertificate must suppress tls_verification_bypass"
+        );
+    }
+
     // ── Go-3: SQL injection concatenation ────────────────────────────────────
 
     #[test]
@@ -8988,8 +9123,8 @@ mod phase4_rd_tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.description.contains("sql_injection_concatenation")),
-            "db.Query with dynamic concat must fire sql_injection_concatenation"
+                .any(|f| f.description.contains("sqli_concatenation")),
+            "db.Query with dynamic concat must fire sqli_concatenation"
         );
     }
 
@@ -9000,8 +9135,8 @@ mod phase4_rd_tests {
         assert!(
             findings
                 .iter()
-                .all(|f| !f.description.contains("sql_injection_concatenation")),
-            "db.Query with literal-only concat must not fire sql_injection_concatenation"
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "db.Query with literal-only concat must not fire sqli_concatenation"
         );
     }
 
@@ -9012,8 +9147,46 @@ mod phase4_rd_tests {
         assert!(
             findings
                 .iter()
-                .all(|f| !f.description.contains("sql_injection_concatenation")),
-            "parameterized db.Query must not fire sql_injection_concatenation"
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "parameterized db.Query must not fire sqli_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_go_sqli_query_context_parameterized_safe() {
+        let src =
+            b"row := db.QueryRowContext(ctx, \"SELECT * FROM users WHERE id = $1\", userID)\n";
+        let findings = find_go_slop(eng(), &ParsedUnit::unparsed(src));
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "QueryRowContext with trailing args must not fire sqli_concatenation"
+        );
+    }
+
+    #[test]
+    fn test_standard_sast_comment_suppresses_go_tls_bypass() {
+        let src = b"tr := &http.Transport{\n    TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec\n}\n";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("tls_verification_bypass")),
+            "inline //nolint:gosec must suppress same-line Go TLS finding"
+        );
+    }
+
+    #[test]
+    fn test_standard_sast_comment_suppresses_following_go_sqli() {
+        let src =
+            b"// janitor:ignore\nrows, _ := db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("sqli_concatenation")),
+            "preceding janitor:ignore comment must suppress following Go SQLi finding"
         );
     }
 

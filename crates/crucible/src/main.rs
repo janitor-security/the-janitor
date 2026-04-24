@@ -930,7 +930,7 @@ resource \"aws_s3_bucket_acl\" \"private\" {
         lang: "go",
         source: b"rows, _ := db.Query(\"SELECT * FROM users WHERE id = \" + userID)\n",
         must_intercept: true,
-        desc_fragment: Some("security:sql_injection_concatenation"),
+        desc_fragment: Some("security:sqli_concatenation"),
     },
     Entry {
         name: "Go/db.Query parameterized — SAFE (Go-3 TN)",

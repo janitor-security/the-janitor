@@ -4,16 +4,18 @@
 //! deterministic trust-boundary graph. Phase A records ingress nodes only; later
 //! phases can attach handlers, outbound clients, queues, and datastore sinks.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use common::slop::StructuredFinding;
+use common::slop::{ExploitWitness, StructuredFinding};
 use openapiv3::OpenAPI;
 use petgraph::algo::has_path_connecting;
 use petgraph::graph::{Graph, NodeIndex};
 use protobuf_parse::Parser;
+
+use crate::exploitability::{PathConstraint, Refinement, SmtSort, Z3Solver};
 
 /// Protocol family for an ingress schema declaration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -595,8 +597,8 @@ pub fn find_openfga_invariant_findings(source: &[u8], label: &str) -> Vec<Struct
     let model = parse_openfga_model(&text);
     let mut findings = Vec::new();
 
-    for type_def in model.types {
-        for relation in type_def.relations {
+    for type_def in &model.types {
+        for relation in &type_def.relations {
             if !has_unbounded_wildcard_grant(&relation.expression) {
                 continue;
             }
@@ -621,6 +623,7 @@ pub fn find_openfga_invariant_findings(source: &[u8], label: &str) -> Vec<Struct
         }
     }
 
+    findings.extend(find_openfga_privilege_escalation_proofs(&model, label));
     findings
 }
 
@@ -630,6 +633,269 @@ fn has_unbounded_wildcard_grant(expression: &str) -> bool {
     let has_local_boundary =
         lower.contains(" from ") || lower.contains(" but not ") || lower.contains(" with ");
     has_wildcard && !has_local_boundary
+}
+
+fn find_openfga_privilege_escalation_proofs(
+    model: &OpenFgaModel,
+    label: &str,
+) -> Vec<StructuredFinding> {
+    if !Z3Solver::is_available() {
+        return Vec::new();
+    }
+    let Ok(solver) = Z3Solver::new() else {
+        return Vec::new();
+    };
+
+    let mut findings = Vec::new();
+    for type_def in &model.types {
+        let relations: BTreeMap<&str, &OpenFgaRelation> = type_def
+            .relations
+            .iter()
+            .map(|relation| (relation.name.as_str(), relation))
+            .collect();
+        let Some(owner_relation) = relations.get("owner").copied() else {
+            continue;
+        };
+        let Some(constraint) =
+            build_openfga_privilege_escalation_constraint(type_def, &relations, owner_relation)
+        else {
+            continue;
+        };
+        let witness = ExploitWitness {
+            source_function: format!("OpenFGA::{}", type_def.name),
+            source_label: "principal:non_owner".to_string(),
+            sink_function: format!("OpenFGA::{}.owner", type_def.name),
+            sink_label: "relation:owner".to_string(),
+            call_chain: vec![format!("OpenFGA::{}.owner", type_def.name)],
+            ..ExploitWitness::default()
+        };
+
+        if matches!(
+            solver.refine(witness, &constraint, None),
+            Ok(Refinement::Satisfiable(_))
+        ) {
+            let material = format!(
+                "security:openfga_privilege_escalation_proven:{label}:{}:{}",
+                type_def.name, owner_relation.expression
+            );
+            findings.push(StructuredFinding {
+                id: "security:openfga_privilege_escalation_proven".to_string(),
+                file: Some(label.to_string()),
+                line: Some(owner_relation.line),
+                fingerprint: short_fingerprint(material.as_bytes()),
+                severity: Some("KevCritical".to_string()),
+                remediation: Some(
+                    "Eliminate wildcard-derived ownership paths or constrain them with tenant- or parent-scoped checks before ownership is satisfied."
+                        .to_string(),
+                ),
+                docs_url: None,
+                exploit_witness: None,
+                upstream_validation_absent: false,
+            });
+        }
+    }
+
+    findings
+}
+
+fn build_openfga_privilege_escalation_constraint(
+    type_def: &OpenFgaType,
+    relations: &BTreeMap<&str, &OpenFgaRelation>,
+    owner_relation: &OpenFgaRelation,
+) -> Option<PathConstraint> {
+    let closure = relation_dependency_closure(owner_relation.name.as_str(), relations);
+    let wildcard_relations: Vec<&str> = closure
+        .iter()
+        .map(String::as_str)
+        .filter(|name| {
+            relations
+                .get(name)
+                .is_some_and(|relation| expression_has_wildcard_subject(&relation.expression))
+        })
+        .collect();
+    if wildcard_relations.is_empty() {
+        return None;
+    }
+
+    let type_name = sanitize_smt_ident(&type_def.name);
+    let mut variables = BTreeMap::new();
+    let mut assertions = Vec::new();
+    let mut direct_vars = Vec::new();
+    let mut wildcard_vars = Vec::new();
+
+    for relation_name in &closure {
+        let relation = relations.get(relation_name.as_str())?;
+        let relation_sym = format!("rel_{}_{}", type_name, sanitize_smt_ident(relation_name));
+        variables.insert(relation_sym.clone(), SmtSort::Bool);
+
+        let mut contributors = Vec::new();
+        if expression_has_direct_subject(&relation.expression) {
+            let direct_sym = format!("direct_{}_{}", type_name, sanitize_smt_ident(relation_name));
+            variables.insert(direct_sym.clone(), SmtSort::Bool);
+            direct_vars.push(direct_sym.clone());
+            contributors.push(direct_sym);
+        }
+        if expression_has_wildcard_subject(&relation.expression) {
+            let wildcard_sym = format!("wild_{}_{}", type_name, sanitize_smt_ident(relation_name));
+            variables.insert(wildcard_sym.clone(), SmtSort::Bool);
+            wildcard_vars.push(wildcard_sym.clone());
+            contributors.push(wildcard_sym);
+        }
+        for dependency in relation_references(&relation.expression) {
+            if closure.contains(&dependency) {
+                contributors.push(format!(
+                    "rel_{}_{}",
+                    type_name,
+                    sanitize_smt_ident(&dependency)
+                ));
+            }
+        }
+
+        let body = match contributors.len() {
+            0 => "false".to_string(),
+            1 => contributors[0].clone(),
+            _ => format!("(or {})", contributors.join(" ")),
+        };
+        assertions.push(format!("(= {relation_sym} {body})"));
+    }
+
+    let owner_relation_sym = format!(
+        "rel_{}_{}",
+        type_name,
+        sanitize_smt_ident(&owner_relation.name)
+    );
+    assertions.push(owner_relation_sym.clone());
+
+    let owner_direct_sym = format!(
+        "direct_{}_{}",
+        type_name,
+        sanitize_smt_ident(&owner_relation.name)
+    );
+    if direct_vars.iter().any(|var| var == &owner_direct_sym) {
+        assertions.push(format!("(not {owner_direct_sym})"));
+    }
+
+    for direct_var in direct_vars {
+        if direct_var != owner_direct_sym {
+            assertions.push(format!("(not {direct_var})"));
+        }
+    }
+
+    let wildcard_proof_terms: Vec<String> = wildcard_relations
+        .iter()
+        .map(|relation_name| format!("wild_{}_{}", type_name, sanitize_smt_ident(relation_name)))
+        .collect();
+    assertions.push(format!("(or {})", wildcard_proof_terms.join(" ")));
+
+    Some(PathConstraint {
+        family: None,
+        variables: variables.into_iter().collect(),
+        assertions,
+        witnesses_of_interest: vec![owner_relation_sym],
+    })
+}
+
+fn relation_dependency_closure(
+    root: &str,
+    relations: &BTreeMap<&str, &OpenFgaRelation>,
+) -> BTreeSet<String> {
+    let mut pending = vec![root.to_string()];
+    let mut closure = BTreeSet::new();
+
+    while let Some(next) = pending.pop() {
+        if !closure.insert(next.clone()) {
+            continue;
+        }
+        let Some(relation) = relations.get(next.as_str()) else {
+            continue;
+        };
+        for dependency in relation_references(&relation.expression) {
+            if relations.contains_key(dependency.as_str()) {
+                pending.push(dependency);
+            }
+        }
+    }
+
+    closure
+}
+
+fn relation_references(expression: &str) -> BTreeSet<String> {
+    let mut stripped = String::with_capacity(expression.len());
+    let mut bracket_depth = 0usize;
+    for ch in expression.chars() {
+        match ch {
+            '[' => {
+                bracket_depth += 1;
+                stripped.push(' ');
+            }
+            ']' => {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                stripped.push(' ');
+            }
+            _ if bracket_depth > 0 => stripped.push(' '),
+            _ => stripped.push(ch),
+        }
+    }
+
+    stripped
+        .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .filter(|token| {
+            !token.is_empty()
+                && !matches!(
+                    *token,
+                    "or" | "and" | "but" | "not" | "from" | "with" | "self" | "this"
+                )
+        })
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn expression_has_direct_subject(expression: &str) -> bool {
+    relation_subject_terms(expression)
+        .into_iter()
+        .any(|term| !term.contains(":*"))
+}
+
+fn expression_has_wildcard_subject(expression: &str) -> bool {
+    relation_subject_terms(expression)
+        .into_iter()
+        .any(|term| term.contains(":*"))
+}
+
+fn relation_subject_terms(expression: &str) -> Vec<String> {
+    let mut subjects = Vec::new();
+    let mut rest = expression;
+    while let Some(start) = rest.find('[') {
+        let after = &rest[start + 1..];
+        let Some(end) = after.find(']') else {
+            break;
+        };
+        subjects.extend(
+            after[..end]
+                .split(',')
+                .map(str::trim)
+                .filter(|term| !term.is_empty())
+                .map(ToOwned::to_owned),
+        );
+        rest = &after[end + 1..];
+    }
+    subjects
+}
+
+fn sanitize_smt_ident(raw: &str) -> String {
+    let mut ident = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            ident.push(ch.to_ascii_lowercase());
+        } else {
+            ident.push('_');
+        }
+    }
+    if ident.is_empty() {
+        "rel".to_string()
+    } else {
+        ident
+    }
 }
 
 fn short_fingerprint(bytes: &[u8]) -> String {
@@ -825,5 +1091,33 @@ type document
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "security:openfga_unbounded_delegation");
         assert_eq!(findings[0].severity.as_deref(), Some("KevCritical"));
+    }
+
+    #[test]
+    fn openfga_z3_proves_owner_escalation_via_wildcard_delegation() {
+        if !Z3Solver::is_available() {
+            return;
+        }
+
+        let source = br#"
+model
+  schema 1.1
+
+type user
+
+type document
+  relations
+    define viewer: [user:*]
+    define owner: [user] or viewer
+"#;
+
+        let findings = find_openfga_invariant_findings(source, "model.fga");
+
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.id == "security:openfga_privilege_escalation_proven"),
+            "wildcard viewer delegation must prove owner escalation via Z3"
+        );
     }
 }
