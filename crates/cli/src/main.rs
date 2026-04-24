@@ -1075,6 +1075,37 @@ enum Commands {
         #[arg(long)]
         live_tenant_client_id: Option<String>,
     },
+
+    /// Deploy a Labyrinth deception forest to exhaust adversarial AI agent context windows.
+    ///
+    /// Generates syntactically valid, semantically dead Python AST mazes seeded with canary
+    /// tokens and guarded dead sinks. The output directory is automatically shielded with
+    /// `.claudeignore`, `.cursorignore`, and `.aiderignore` files (each containing `*`) so
+    /// friendly AI tools skip it in O(1) directory-walk time.
+    ///
+    /// # Examples
+    /// ```text
+    /// # Deploy a 5-level maze with canary sinks to ./honeypot/
+    /// janitor deploy-labyrinth ./honeypot
+    ///
+    /// # Adjust depth and disable fake sinks
+    /// janitor deploy-labyrinth --depth 3 --no-fake-sinks ./honeypot
+    /// ```
+    DeployLabyrinth {
+        /// Output directory where the deception forest is written.
+        output_dir: PathBuf,
+        /// Cyclomatic depth of the generated AST maze (default: 5).
+        /// Values above 8 produce files > 1 MiB and trigger the scanner's own circuit breaker.
+        #[arg(long, default_value = "5")]
+        depth: u32,
+        /// Embed canary sinks (dead `subprocess.Popen` / `eval` calls guarded by impossible
+        /// conditions) for attribution telemetry when adversary agents touch them.
+        #[arg(long, default_value = "true")]
+        fake_sinks: bool,
+        /// Number of distinct maze files to generate (default: 8).
+        #[arg(long, default_value = "8")]
+        count: u32,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1571,9 +1602,66 @@ async fn main() -> anyhow::Result<()> {
                 live_tenant_client_id: live_tenant_client_id.as_deref(),
             })?;
         }
+        Commands::DeployLabyrinth {
+            output_dir,
+            depth,
+            fake_sinks,
+            count,
+        } => {
+            cmd_deploy_labyrinth(output_dir, *depth, *fake_sinks, *count)?;
+        }
     }
 
     emit_otlp_profile(engine_started.elapsed(), read_memory_peak_kb());
+    Ok(())
+}
+
+/// Deploy the Labyrinth deception forest to `output_dir`.
+///
+/// Writes `count` distinct Python maze files, then creates `.claudeignore`,
+/// `.cursorignore`, and `.aiderignore` shielding files inside the directory
+/// so friendly AI tools bypass the traps in O(1) time.
+fn cmd_deploy_labyrinth(
+    output_dir: &PathBuf,
+    depth: u32,
+    fake_sinks: bool,
+    count: u32,
+) -> anyhow::Result<()> {
+    use std::io::Write as _;
+
+    std::fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
+
+    // Generate maze files with distinct seeds derived from file index.
+    for i in 0..count.max(1) {
+        let seed: u64 = 0x4c61_6279_7269_6e74u64
+            .wrapping_add(i as u64)
+            .wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let source = forge::labyrinth::generate_ast_maze(depth, fake_sinks, seed);
+        let filename = format!("maze_{i:04}.py");
+        let path = output_dir.join(&filename);
+        std::fs::write(&path, source.as_bytes())
+            .with_context(|| format!("failed to write maze file: {}", path.display()))?;
+    }
+
+    // Friendly agent immunity: each file contains `*` which directs the agent
+    // to ignore every file in the directory.
+    for shield in [".claudeignore", ".cursorignore", ".aiderignore"] {
+        let path = output_dir.join(shield);
+        let mut f = std::fs::File::create(&path)
+            .with_context(|| format!("failed to create shield file: {}", path.display()))?;
+        writeln!(f, "*")?;
+    }
+
+    eprintln!(
+        "Labyrinth deployed: {} maze files + 3 agent-shield files in {}",
+        count,
+        output_dir.display()
+    );
     Ok(())
 }
 
@@ -8042,6 +8130,65 @@ version = "1.38.0"
         assert!(
             packages.is_empty(),
             "empty directory must yield empty snapshot"
+        );
+    }
+}
+
+#[cfg(test)]
+mod deploy_labyrinth_tests {
+    use super::*;
+
+    #[test]
+    fn deploy_labyrinth_creates_claudeignore() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output = dir.path().to_path_buf();
+        cmd_deploy_labyrinth(&output, 2, false, 3).expect("deploy must succeed");
+        let claudeignore = output.join(".claudeignore");
+        assert!(claudeignore.exists(), ".claudeignore must be created");
+        let contents = std::fs::read_to_string(&claudeignore).expect("read .claudeignore");
+        assert_eq!(contents.trim(), "*", ".claudeignore must contain only '*'");
+    }
+
+    #[test]
+    fn deploy_labyrinth_creates_all_shield_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output = dir.path().to_path_buf();
+        cmd_deploy_labyrinth(&output, 2, false, 1).expect("deploy must succeed");
+        for shield in [".claudeignore", ".cursorignore", ".aiderignore"] {
+            let path = output.join(shield);
+            assert!(path.exists(), "{shield} must be created");
+            let contents = std::fs::read_to_string(&path).expect("read shield");
+            assert_eq!(contents.trim(), "*", "{shield} must contain '*'");
+        }
+    }
+
+    #[test]
+    fn deploy_labyrinth_writes_expected_maze_file_count() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output = dir.path().to_path_buf();
+        cmd_deploy_labyrinth(&output, 2, false, 4).expect("deploy must succeed");
+        let maze_count = std::fs::read_dir(&output)
+            .expect("read dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("maze_"))
+            .count();
+        assert_eq!(maze_count, 4, "must write exactly 4 maze files");
+    }
+
+    #[test]
+    fn deploy_labyrinth_maze_files_contain_dead_sinks_when_requested() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output = dir.path().to_path_buf();
+        cmd_deploy_labyrinth(&output, 3, true, 2).expect("deploy must succeed");
+        let maze_path = output.join("maze_0000.py");
+        let source = std::fs::read_to_string(&maze_path).expect("read maze");
+        assert!(
+            source.contains("0 == 1"),
+            "fake_sinks maze must contain dead guard"
+        );
+        assert!(
+            source.contains("subprocess.Popen"),
+            "fake_sinks maze must contain canary sink"
         );
     }
 }

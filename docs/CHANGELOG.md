@@ -3,6 +3,20 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 47 (The Deception Plane & Asymmetric Visibility)
+
+**Directive:** Implement P3-6 Labyrinth Generator for adversarial AI agent tarpitting, add friendly-agent immunity shielding, and codify Labyrinth Blindness as a governance law.
+
+**Changes:**
+
+- `crates/forge/src/labyrinth.rs` *(created)* — `generate_ast_maze(depth, fake_sinks, seed) -> String`: deterministically generates syntactically valid Python AST mazes with exponential cyclomatic complexity; when `fake_sinks=true`, embeds `subprocess.Popen` and `eval()` canary sinks guarded by mathematically dead conditions (`0 == 1`, `sys.maxsize < 0`); 5 deterministic unit tests.
+- `crates/forge/src/lib.rs` — exported `pub mod labyrinth`.
+- `crates/cli/src/main.rs` — added `DeployLabyrinth { output_dir, depth, fake_sinks, count }` subcommand; `cmd_deploy_labyrinth` writes `count` maze files with seed-permuted identifiers and creates `.claudeignore`, `.cursorignore`, `.aiderignore` (each containing `*`) for friendly-agent immunity.
+- `crates/cli/src/hunt.rs` — added `.labyrinth`, `janitor_decoys`, `ast_maze` to `is_excluded_hunt_entry` rejection list; scanner skips deception directories in O(1) WalkDir entry-filter time.
+- `.agent_governance/rules/evolution.md` — added **Labyrinth Blindness Law**: mathematically forbids the agent from reading or analyzing any file in `.labyrinth`, `janitor_decoys`, or `ast_maze` directories; cites scanner enforcement and anti-injection mandate.
+- `.INNOVATION_LOG.md` — P3-6 block hard-deleted (Absolute Eradication Law: shipped this session).
+- `docs/CHANGELOG.md` — this entry.
+
 ## 2026-04-23 — Sprint Batch 46 (Steganographic Shield, Web3 Oracles, & Formatter Supremacy)
 
 **Directive:** Harden manifest ingestion against repojacking, expand Web3 invariant checking with oracle manipulation and flash loan callback detectors, and finalize Bugcrowd/Auth0 report output logic to eliminate placeholder text.

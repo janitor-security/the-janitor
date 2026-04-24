@@ -6715,7 +6715,11 @@ fn maybe_push_deobfuscated_sink_finding(
 
     // Steganographic Binary Shield: binary executable smuggled inside an encoded string.
     if crate::deobfuscate::is_binary_magic(&decoded) {
-        let magic = if decoded.starts_with(b"MZ") { "MZ (Windows PE)" } else { "ELF" };
+        let magic = if decoded.starts_with(b"MZ") {
+            "MZ (Windows PE)"
+        } else {
+            "ELF"
+        };
         findings.push(SlopFinding {
             start_byte: node.start_byte(),
             end_byte: node.end_byte(),
@@ -6840,7 +6844,7 @@ fn detect_npm_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
         let context_end = text.len().min(offset + 80);
         let snippet = &text[offset..context_end];
         let end_byte = snippet
-            .find(|c: char| matches!(c, '"' | '\''))
+            .find(['"', '\''])
             .map(|end| offset + end)
             .unwrap_or(context_end);
         findings.push(SlopFinding {
@@ -6894,10 +6898,7 @@ fn detect_go_mod_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
         if trimmed.starts_with("require ")
             && (trimmed.contains("git+https://") || trimmed.contains("git://"))
         {
-            let offset = byte_cursor
-                + line
-                    .find(|c: char| !c.is_ascii_whitespace())
-                    .unwrap_or(0);
+            let offset = byte_cursor + line.find(|c: char| !c.is_ascii_whitespace()).unwrap_or(0);
             findings.push(SlopFinding {
                 start_byte: offset,
                 end_byte: offset + trimmed.len(),
@@ -10767,7 +10768,8 @@ mod phase7_rd_tests {
 
     #[test]
     fn npm_git_plus_https_url_is_flagged_as_repojacking() {
-        let src = br#"{"dependencies":{"evil-pkg":"git+https://github.com/attacker/evil-pkg.git"}}"#;
+        let src =
+            br#"{"dependencies":{"evil-pkg":"git+https://github.com/attacker/evil-pkg.git"}}"#;
         let findings = detect_unpinned_git_deps("package.json", src);
         assert!(
             !findings.is_empty(),

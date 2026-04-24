@@ -2173,6 +2173,10 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | "testutils"
             | "testfixtures"
             | "mocks"
+            // Labyrinth deception directories: skip in O(1) to prevent friendly fire.
+            | ".labyrinth"
+            | "janitor_decoys"
+            | "ast_maze"
     ) || is_internal_mocks_dir(entry.path())
 }
 
