@@ -3767,6 +3767,7 @@ fn cmd_bounce(
                 deep_scan,
                 policy.execution_tier.clone(),
             )
+            .with_require_pinned_dependencies(policy.forge.require_pinned_dependencies)
             .bounce(&patch, &registry)?;
             let merkle_root = blake3::hash(patch.as_bytes()).to_hex().to_string();
             let sig = forge::pr_collider::PrDeltaSignature::from_bytes(patch.as_bytes());

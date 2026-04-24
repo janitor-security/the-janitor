@@ -3,6 +3,29 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 49 (Full-Spectrum Supply Chain Provenance)
+
+**Directive:** Finalize `P2-13` by expanding unpinned Git dependency detection into Python and Java manifests, correlate manifest hits with sibling lockfiles for provenance, wire the hard-fail policy into the Governor path, compact the shipped frontier item, verify, and commit. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/slop_hunter.rs` — expanded `detect_unpinned_git_deps` to cover `pyproject.toml` and `pom.xml`; added `detect_unpinned_git_deps_with_provenance` to correlate `Cargo.toml` / `go.mod` findings with sibling `Cargo.lock` / `go.sum` and emit `supply_chain:unverified_provenance` at `KevCritical` when provenance material is absent.
+- `crates/forge/src/slop_filter.rs` — threaded manifest provenance findings through `PatchBouncer`, added `require_pinned_dependencies` enforcement that hard-fails any patch carrying `security:unpinned_git_dependency` or `supply_chain:unverified_provenance`, and added deterministic regression coverage for the gate.
+- `crates/common/src/policy.rs` — added `[forge].require_pinned_dependencies` with default `false` and TOML round-trip coverage.
+- `crates/cli/src/hunt.rs` — expanded manifest scanning to `pyproject.toml` and `pom.xml` and switched hunt-time manifest checks to the provenance-aware detector.
+- `crates/forge/Cargo.toml` — added the workspace `toml` dependency for manifest parsing.
+- `.INNOVATION_LOG.md` — hard-deleted shipped `P2-13` from the active frontier under the Absolute Eradication Law.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `cargo test -p common forge_automation_accounts_roundtrip_toml -- --test-threads=4` — passed.
+- `cargo test -p forge pyproject_poetry_git_dep_is_flagged_as_repojacking -- --test-threads=4` — passed.
+- `cargo test -p forge require_pinned_dependencies_hard_fails_unverified_git_manifest -- --test-threads=4` — passed.
+- `cargo test --workspace -- --test-threads=4` — passed.
+- `just audit` — passed; release/doc parity verified for `v10.2.0-beta.2`.
+- No release executed.
+
 ## 2026-04-24 — Sprint Batch 48 (Contextual Guardrails & Provable IAM Invariants)
 
 **Directive:** Add AST-contextual Go false-positive shields for TLS and SQL, enforce standardized SAST suppression comments, implement Z3-backed OpenFGA privilege-escalation proofs, compact shipped `P2-12`, verify, and commit. Do not release.

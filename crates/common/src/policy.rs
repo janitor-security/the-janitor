@@ -281,6 +281,9 @@ pub struct ForgeConfig {
     /// Raises bounce analysis budgets from the default 1 MiB / 500 ms path to
     /// the deep-scan 32 MiB / 30 s path for AST-evasion-resistant analysis.
     pub deep_scan: bool,
+    /// Hard-fails patches that introduce raw Git dependencies or lockfile
+    /// provenance gaps detected by the supply-chain shield.
+    pub require_pinned_dependencies: bool,
     /// Number of days before the on-disk threat corpus is considered stale
     /// after a network-partition event.  When the corpus exceeds this age
     /// and no fresh download succeeded, the CLI warns and exits gracefully.
@@ -299,6 +302,7 @@ impl Default for ForgeConfig {
             mtls_cert: None,
             mtls_key: None,
             deep_scan: false,
+            require_pinned_dependencies: false,
             corpus_stale_days: Self::default_corpus_stale_days(),
         }
     }
@@ -1260,6 +1264,7 @@ mod tests {
                 mtls_cert: None,
                 mtls_key: None,
                 deep_scan: false,
+                require_pinned_dependencies: false,
                 corpus_stale_days: 7,
             },
             ..Default::default()
@@ -1272,7 +1277,7 @@ mod tests {
 
     #[test]
     fn forge_automation_accounts_roundtrip_toml() {
-        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ngovernor_url = \"http://127.0.0.1:3000\"\nmtls_cert = \"/tmp/client.pem\"\nmtls_key = \"/tmp/client.key\"\ndeep_scan = true\n";
+        let raw = "[forge]\nautomation_accounts = [\"r-ryantm\", \"app/nixpkgs-ci\"]\ngovernor_url = \"http://127.0.0.1:3000\"\nmtls_cert = \"/tmp/client.pem\"\nmtls_key = \"/tmp/client.key\"\ndeep_scan = true\nrequire_pinned_dependencies = true\n";
         let p: JanitorPolicy = toml::from_str(raw).unwrap();
         assert_eq!(p.forge.automation_accounts, ["r-ryantm", "app/nixpkgs-ci"]);
         assert_eq!(
@@ -1282,6 +1287,7 @@ mod tests {
         assert_eq!(p.forge.mtls_cert.as_deref(), Some("/tmp/client.pem"));
         assert_eq!(p.forge.mtls_key.as_deref(), Some("/tmp/client.key"));
         assert!(p.forge.deep_scan);
+        assert!(p.forge.require_pinned_dependencies);
         assert!(p.is_automation_account("r-ryantm"));
         assert!(p.is_automation_account("app/nixpkgs-ci"));
         assert!(!p.is_automation_account("human-author"));
@@ -1297,6 +1303,7 @@ mod tests {
                 mtls_cert: None,
                 mtls_key: None,
                 deep_scan: false,
+                require_pinned_dependencies: false,
                 corpus_stale_days: 7,
             },
             ..Default::default()

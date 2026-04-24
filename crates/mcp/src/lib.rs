@@ -583,6 +583,7 @@ fn run_bounce(patch: Option<String>, repo_path: Option<String>) -> Result<serde_
         false,
         policy.execution_tier,
     )
+    .with_require_pinned_dependencies(policy.forge.require_pinned_dependencies)
     .bounce(&patch_text, &registry)
     .context("PatchBouncer::bounce failed")?;
 

@@ -6930,23 +6930,128 @@ fn suspicious_normalized_payload_reason(decoded: &[u8]) -> Option<String> {
 /// `Critical` severity for each match.
 ///
 /// Supported manifests: `package.json` (npm `git+https://` / VCS shortcuts),
-/// `Cargo.toml` (`git = "https://..."` blocks), and `go.mod` (raw `git+https://`
-/// references in require directives).
+/// `Cargo.toml` (`git = "https://..."` blocks), `go.mod` (raw `git+https://`
+/// references in require directives), `pyproject.toml` (PEP 517 / Poetry
+/// Git dependencies), and `pom.xml` (`<connection>scm:git:...`).
 pub fn detect_unpinned_git_deps(filename: &str, source: &[u8]) -> Vec<SlopFinding> {
     let Ok(text) = std::str::from_utf8(source) else {
         return Vec::new();
     };
-    let mut findings = Vec::new();
-    match filename {
-        "package.json" => detect_npm_git_deps(text, &mut findings),
-        "Cargo.toml" => detect_cargo_git_deps(text, &mut findings),
-        "go.mod" => detect_go_mod_git_deps(text, &mut findings),
-        _ => {}
+    parse_git_dependency_hits(filename, text)
+        .into_iter()
+        .map(|hit| unpinned_git_dependency_finding(&hit))
+        .collect()
+}
+
+/// Scan a manifest file and correlate raw Git dependencies with sibling
+/// lockfiles, escalating to `supply_chain:unverified_provenance` when the
+/// dependency lacks deterministic provenance material.
+pub fn detect_unpinned_git_deps_with_provenance(
+    file_path: &Path,
+    source: &[u8],
+    repo_root: Option<&Path>,
+) -> Vec<SlopFinding> {
+    let Ok(text) = std::str::from_utf8(source) else {
+        return Vec::new();
+    };
+    let filename = file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    let hits = parse_git_dependency_hits(filename, text);
+    let mut findings = hits
+        .iter()
+        .map(unpinned_git_dependency_finding)
+        .collect::<Vec<_>>();
+
+    if let Some((lockfile_name, lock_text)) = read_sibling_lockfile(file_path, repo_root) {
+        for hit in &hits {
+            let verified = match filename {
+                "Cargo.toml" => cargo_lock_verifies_dependency(&lock_text, hit),
+                "go.mod" => go_sum_verifies_dependency(&lock_text, hit),
+                _ => true,
+            };
+            if !verified {
+                findings.push(SlopFinding {
+                    start_byte: hit.start_byte,
+                    end_byte: hit.end_byte,
+                    description: format!(
+                        "supply_chain:unverified_provenance — `{}` uses a raw Git dependency but \
+                         sibling `{}` does not bind it to cryptographic provenance for `{}`",
+                        hit.file_label, lockfile_name, hit.name
+                    ),
+                    domain: DOMAIN_FIRST_PARTY,
+                    severity: Severity::KevCritical,
+                });
+            }
+        }
     }
+
     findings
 }
 
-fn detect_npm_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
+#[derive(Debug, Clone)]
+struct GitDependencyHit {
+    name: String,
+    url: String,
+    start_byte: usize,
+    end_byte: usize,
+    file_label: &'static str,
+}
+
+fn parse_git_dependency_hits(filename: &str, text: &str) -> Vec<GitDependencyHit> {
+    match filename {
+        "package.json" => detect_npm_git_deps(text),
+        "Cargo.toml" => detect_cargo_git_deps(text),
+        "go.mod" => detect_go_mod_git_deps(text),
+        "pyproject.toml" => detect_pyproject_git_deps(text),
+        "pom.xml" => detect_pom_git_deps(text),
+        _ => Vec::new(),
+    }
+}
+
+fn unpinned_git_dependency_finding(hit: &GitDependencyHit) -> SlopFinding {
+    let description = match hit.file_label {
+        "package.json" => format!(
+            "security:unpinned_git_dependency — package.json dependency `{}` resolves to a raw \
+             Git VCS URL (`{}`); pin to a locked registry version to prevent repojacking",
+            hit.name, hit.url
+        ),
+        "Cargo.toml" => format!(
+            "security:unpinned_git_dependency — Cargo.toml dependency `{}` uses a raw git URL \
+             (`{}`); add `rev` or migrate to the registry to prevent repojacking",
+            hit.name, hit.url
+        ),
+        "go.mod" => format!(
+            "security:unpinned_git_dependency — go.mod dependency `{}` references a raw Git URL \
+             (`{}`); use a proper Go module path with a pinned version to prevent repojacking",
+            hit.name, hit.url
+        ),
+        "pyproject.toml" => format!(
+            "security:unpinned_git_dependency — pyproject.toml dependency `{}` pulls from raw \
+             Git source (`{}`); pin to an immutable registry artifact to prevent repojacking",
+            hit.name, hit.url
+        ),
+        "pom.xml" => format!(
+            "security:unpinned_git_dependency — pom.xml SCM connection references raw Git source \
+             (`{}`); pin to an immutable artifact release to prevent repojacking",
+            hit.url
+        ),
+        _ => format!(
+            "security:unpinned_git_dependency — dependency `{}` resolves to raw Git source `{}`",
+            hit.name, hit.url
+        ),
+    };
+    SlopFinding {
+        start_byte: hit.start_byte,
+        end_byte: hit.end_byte,
+        description,
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::Critical,
+    }
+}
+
+fn detect_npm_git_deps(text: &str) -> Vec<GitDependencyHit> {
     const GIT_PREFIXES: &[&str] = &[
         "git+https://",
         "git+http://",
@@ -6955,6 +7060,7 @@ fn detect_npm_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
         "bitbucket:",
         "gitlab:",
     ];
+    let mut hits = Vec::new();
     let mut search_start = 0usize;
     while search_start < text.len() {
         let tail = &text[search_start..];
@@ -6970,27 +7076,161 @@ fn detect_npm_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
             .find(['"', '\''])
             .map(|end| offset + end)
             .unwrap_or(context_end);
-        findings.push(SlopFinding {
+        hits.push(GitDependencyHit {
+            name: infer_manifest_key(text, offset)
+                .unwrap_or_else(|| "package.json dependency".to_string()),
+            url: snippet[..end_byte.saturating_sub(offset)].to_string(),
             start_byte: offset,
             end_byte,
-            description: format!(
-                "security:unpinned_git_dependency — package.json dependency resolves to a raw Git \
-                 VCS URL (`{prefix}`); pin to a locked registry version to prevent repojacking"
-            ),
-            domain: DOMAIN_FIRST_PARTY,
-            severity: Severity::Critical,
+            file_label: "package.json",
         });
         search_start = offset + prefix.len();
     }
+    hits
 }
 
-fn detect_cargo_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
+fn detect_cargo_git_deps(text: &str) -> Vec<GitDependencyHit> {
+    let mut hits = Vec::new();
+    if let Ok(value) = toml::from_str::<toml::Value>(text) {
+        collect_cargo_dependency_hits(&value, text, &mut hits);
+    }
+    if hits.is_empty() {
+        hits.extend(detect_inline_toml_git_hits(text, "Cargo.toml"));
+    }
+    hits
+}
+
+fn collect_cargo_dependency_hits(
+    value: &toml::Value,
+    text: &str,
+    hits: &mut Vec<GitDependencyHit>,
+) {
+    let Some(table) = value.as_table() else {
+        return;
+    };
+    for key in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(dep_table) = table.get(key).and_then(toml::Value::as_table) {
+            collect_toml_dependency_table(dep_table, text, "Cargo.toml", hits);
+        }
+    }
+    if let Some(workspace) = table.get("workspace").and_then(toml::Value::as_table) {
+        if let Some(dep_table) = workspace
+            .get("dependencies")
+            .and_then(toml::Value::as_table)
+        {
+            collect_toml_dependency_table(dep_table, text, "Cargo.toml", hits);
+        }
+    }
+    if let Some(targets) = table.get("target").and_then(toml::Value::as_table) {
+        for target in targets.values() {
+            if let Some(target_table) = target.as_table() {
+                for key in ["dependencies", "dev-dependencies", "build-dependencies"] {
+                    if let Some(dep_table) = target_table.get(key).and_then(toml::Value::as_table) {
+                        collect_toml_dependency_table(dep_table, text, "Cargo.toml", hits);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn detect_go_mod_git_deps(text: &str) -> Vec<GitDependencyHit> {
+    let mut hits = Vec::new();
+    let mut byte_cursor = 0usize;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("require ")
+            && (trimmed.contains("git+https://") || trimmed.contains("git://"))
+        {
+            let offset = byte_cursor + line.find(|c: char| !c.is_ascii_whitespace()).unwrap_or(0);
+            let name = trimmed
+                .strip_prefix("require ")
+                .and_then(|rest| rest.split_whitespace().next())
+                .unwrap_or("go.mod dependency");
+            let url = trimmed
+                .split_whitespace()
+                .find(|part| part.contains("git+https://") || part.contains("git://"))
+                .unwrap_or(name);
+            hits.push(GitDependencyHit {
+                name: name.to_string(),
+                url: url.to_string(),
+                start_byte: offset,
+                end_byte: offset + trimmed.len(),
+                file_label: "go.mod",
+            });
+        }
+        byte_cursor += line.len() + 1;
+    }
+    hits
+}
+
+fn detect_pyproject_git_deps(text: &str) -> Vec<GitDependencyHit> {
+    let mut hits = Vec::new();
+    if let Ok(value) = toml::from_str::<toml::Value>(text) {
+        collect_pyproject_git_hits(&value, None, text, &mut hits);
+    }
+    if hits.is_empty() {
+        hits.extend(detect_inline_toml_git_hits(text, "pyproject.toml"));
+    }
+    hits
+}
+
+fn collect_pyproject_git_hits(
+    value: &toml::Value,
+    current_key: Option<&str>,
+    text: &str,
+    hits: &mut Vec<GitDependencyHit>,
+) {
+    let Some(table) = value.as_table() else {
+        return;
+    };
+    if current_key.is_some_and(|key| {
+        matches!(
+            key,
+            "dependencies" | "dev-dependencies" | "optional-dependencies"
+        )
+    }) {
+        collect_toml_dependency_table(table, text, "pyproject.toml", hits);
+    }
+    for (key, child) in table {
+        collect_pyproject_git_hits(child, Some(key.as_str()), text, hits);
+    }
+}
+
+fn collect_toml_dependency_table(
+    table: &toml::map::Map<String, toml::Value>,
+    text: &str,
+    file_label: &'static str,
+    hits: &mut Vec<GitDependencyHit>,
+) {
+    for (name, spec) in table {
+        let Some(spec_table) = spec.as_table() else {
+            continue;
+        };
+        let Some(url) = spec_table.get("git").and_then(toml::Value::as_str) else {
+            continue;
+        };
+        let (start_byte, end_byte) = locate_manifest_value_span(text, name, url);
+        hits.push(GitDependencyHit {
+            name: name.to_string(),
+            url: url.to_string(),
+            start_byte,
+            end_byte,
+            file_label,
+        });
+    }
+}
+
+fn detect_inline_toml_git_hits(text: &str, file_label: &'static str) -> Vec<GitDependencyHit> {
     const GIT_PATTERNS: &[&str] = &[
         "git = \"https://",
         "git = 'https://",
         "git = \"http://",
+        "git = 'http://",
         "git = \"git+https://",
+        "git = 'git+https://",
     ];
+    let mut hits = Vec::new();
     let mut search_start = 0usize;
     while search_start < text.len() {
         let tail = &text[search_start..];
@@ -7000,41 +7240,158 @@ fn detect_cargo_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
             .min_by_key(|(rel, _)| *rel);
         let Some((rel, pat)) = matched else { break };
         let offset = search_start + rel;
-        findings.push(SlopFinding {
+        let name =
+            infer_toml_assignment_key(text, offset).unwrap_or_else(|| "dependency".to_string());
+        let value_start = offset + pat.len();
+        let quote = text
+            .as_bytes()
+            .get(value_start.saturating_sub(1))
+            .copied()
+            .unwrap_or(b'"');
+        let remainder = &text[value_start..];
+        let rel_end = remainder
+            .find(if quote == b'\'' { '\'' } else { '"' })
+            .unwrap_or(remainder.len());
+        hits.push(GitDependencyHit {
+            name,
+            url: remainder[..rel_end].to_string(),
             start_byte: offset,
-            end_byte: offset + pat.len(),
-            description: "security:unpinned_git_dependency — Cargo.toml dependency uses a raw git \
-                          URL instead of a crates.io version; add `rev` or migrate to the registry \
-                          to prevent repojacking"
-                .to_string(),
-            domain: DOMAIN_FIRST_PARTY,
-            severity: Severity::Critical,
+            end_byte: value_start + rel_end,
+            file_label,
         });
-        search_start = offset + pat.len();
+        search_start = value_start + rel_end;
     }
+    hits
 }
 
-fn detect_go_mod_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
-    let mut byte_cursor = 0usize;
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("require ")
-            && (trimmed.contains("git+https://") || trimmed.contains("git://"))
-        {
-            let offset = byte_cursor + line.find(|c: char| !c.is_ascii_whitespace()).unwrap_or(0);
-            findings.push(SlopFinding {
-                start_byte: offset,
-                end_byte: offset + trimmed.len(),
-                description:
-                    "security:unpinned_git_dependency — go.mod dependency references a raw Git URL; \
-                     use a proper Go module path with a pinned version to prevent repojacking"
-                        .to_string(),
-                domain: DOMAIN_FIRST_PARTY,
-                severity: Severity::Critical,
-            });
-        }
-        byte_cursor += line.len() + 1;
+fn detect_pom_git_deps(text: &str) -> Vec<GitDependencyHit> {
+    const CONNECTION_PREFIX: &str = "<connection>scm:git:";
+    const CONNECTION_SUFFIX: &str = "</connection>";
+    let mut hits = Vec::new();
+    let mut search_start = 0usize;
+    while let Some(rel) = text[search_start..].find(CONNECTION_PREFIX) {
+        let start = search_start + rel;
+        let value_start = start + CONNECTION_PREFIX.len();
+        let tail = &text[value_start..];
+        let rel_end = tail.find(CONNECTION_SUFFIX).unwrap_or(tail.len());
+        let url = tail[..rel_end].trim().to_string();
+        hits.push(GitDependencyHit {
+            name: "pom.xml scm".to_string(),
+            url,
+            start_byte: start,
+            end_byte: value_start + rel_end,
+            file_label: "pom.xml",
+        });
+        search_start = value_start + rel_end;
     }
+    hits
+}
+
+fn locate_manifest_value_span(text: &str, name: &str, url: &str) -> (usize, usize) {
+    let start_byte = text.find(name).or_else(|| text.find(url)).unwrap_or(0);
+    let end_byte = text[start_byte..]
+        .find(url)
+        .map(|rel| start_byte + rel + url.len())
+        .unwrap_or_else(|| start_byte + name.len());
+    (start_byte, end_byte)
+}
+
+fn infer_manifest_key(text: &str, value_offset: usize) -> Option<String> {
+    let prefix = &text[..value_offset];
+    let key_line = prefix.lines().last()?;
+    infer_json_key_from_line(key_line)
+}
+
+fn infer_json_key_from_line(line: &str) -> Option<String> {
+    let start = line.find('"')?;
+    let rest = &line[start + 1..];
+    let end = rest.find('"')?;
+    Some(rest[..end].to_string())
+}
+
+fn infer_toml_assignment_key(text: &str, value_offset: usize) -> Option<String> {
+    let prefix = &text[..value_offset];
+    let key_line = prefix.lines().last()?.trim();
+    key_line
+        .split_once('=')
+        .map(|(name, _)| name.trim().trim_matches('"').trim_matches('\'').to_string())
+        .filter(|name| !name.is_empty())
+}
+
+fn read_sibling_lockfile(
+    file_path: &Path,
+    repo_root: Option<&Path>,
+) -> Option<(&'static str, String)> {
+    let filename = file_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    let lockfile_name = match filename {
+        "Cargo.toml" => "Cargo.lock",
+        "go.mod" => "go.sum",
+        _ => return None,
+    };
+    let manifest_dir = if file_path.is_absolute() {
+        file_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    } else if let Some(root) = repo_root {
+        root.join(file_path).parent().unwrap_or(root).to_path_buf()
+    } else {
+        file_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    };
+    let lockfile_path = manifest_dir.join(lockfile_name);
+    let text = std::fs::read_to_string(lockfile_path).ok()?;
+    Some((lockfile_name, text))
+}
+
+fn cargo_lock_verifies_dependency(lock_text: &str, hit: &GitDependencyHit) -> bool {
+    let Ok(value) = toml::from_str::<toml::Value>(lock_text) else {
+        return false;
+    };
+    let Some(packages) = value.get("package").and_then(toml::Value::as_array) else {
+        return false;
+    };
+    packages.iter().any(|package| {
+        let Some(package_table) = package.as_table() else {
+            return false;
+        };
+        let Some(name) = package_table.get("name").and_then(toml::Value::as_str) else {
+            return false;
+        };
+        if name != hit.name {
+            return false;
+        }
+        package_table
+            .get("checksum")
+            .and_then(toml::Value::as_str)
+            .is_some_and(|checksum| !checksum.trim().is_empty())
+            || package_table
+                .get("source")
+                .and_then(toml::Value::as_str)
+                .is_some_and(source_contains_git_commit)
+    })
+}
+
+fn source_contains_git_commit(source: &str) -> bool {
+    let Some((_, suffix)) = source.rsplit_once('#') else {
+        return false;
+    };
+    let commit = suffix.split('?').next().unwrap_or(suffix);
+    let len = commit.len();
+    (7..=64).contains(&len) && commit.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn go_sum_verifies_dependency(lock_text: &str, hit: &GitDependencyHit) -> bool {
+    let prefix = format!("{} ", hit.name);
+    lock_text.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with(&prefix) && trimmed.contains(" h1:")
+    })
 }
 
 #[cfg(test)]
@@ -10963,6 +11320,21 @@ mod phase7_rd_tests {
         assert!(
             !findings.is_empty(),
             "Cargo.toml git URL dep must be flagged"
+        );
+    }
+
+    #[test]
+    fn pyproject_poetry_git_dep_is_flagged_as_repojacking() {
+        let src = br#"
+[tool.poetry.dependencies]
+openfga = { git = "https://github.com/openfga/openfga" }
+"#;
+        let findings = detect_unpinned_git_deps("pyproject.toml", src);
+        assert!(
+            findings.iter().any(|finding| finding
+                .description
+                .contains("security:unpinned_git_dependency")),
+            "pyproject.toml Poetry git dep must be flagged"
         );
     }
 

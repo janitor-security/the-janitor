@@ -2312,8 +2312,15 @@ fn scan_buffer(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
-    if matches!(filename, "package.json" | "Cargo.toml" | "go.mod") {
-        for f in forge::slop_hunter::detect_unpinned_git_deps(filename, source) {
+    if matches!(
+        filename,
+        "package.json" | "Cargo.toml" | "go.mod" | "pyproject.toml" | "pom.xml"
+    ) {
+        for f in forge::slop_hunter::detect_unpinned_git_deps_with_provenance(
+            std::path::Path::new(label),
+            source,
+            None,
+        ) {
             let line = byte_to_line(source, f.start_byte);
             findings.push(StructuredFinding {
                 id: extract_rule_id(&f.description),

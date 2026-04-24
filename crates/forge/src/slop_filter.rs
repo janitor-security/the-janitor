@@ -519,6 +519,73 @@ fn apply_structured_governance_findings(
     }
 }
 
+fn manifest_git_dependency_findings(
+    file_path: &str,
+    source: &[u8],
+    repo_root: Option<&Path>,
+) -> Vec<crate::slop_hunter::SlopFinding> {
+    let path = Path::new(file_path);
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    if !matches!(
+        filename,
+        "package.json" | "Cargo.toml" | "go.mod" | "pyproject.toml" | "pom.xml"
+    ) {
+        return Vec::new();
+    }
+    crate::slop_hunter::detect_unpinned_git_deps_with_provenance(path, source, repo_root)
+}
+
+fn push_manifest_structured_findings(
+    score: &mut SlopScore,
+    findings: &[crate::slop_hunter::SlopFinding],
+    file_path: &str,
+    source: &[u8],
+) {
+    for finding in findings {
+        let line = byte_offset_to_line(source, finding.start_byte);
+        score
+            .structured_findings
+            .push(common::slop::StructuredFinding {
+                id: finding.description.clone(),
+                file: Some(file_path.to_string()),
+                line: Some(line),
+                fingerprint: finding_fingerprint(
+                    extract_rule_id(&finding.description),
+                    file_path,
+                    finding_fingerprint_span(source, finding.start_byte, finding.end_byte),
+                ),
+                severity: Some(format!("{:?}", finding.severity)),
+                remediation: None,
+                docs_url: None,
+                exploit_witness: None,
+                upstream_validation_absent: false,
+            });
+    }
+}
+
+fn enforce_pinned_dependency_gate(score: &mut SlopScore, require_pinned_dependencies: bool) {
+    if !require_pinned_dependencies {
+        return;
+    }
+    let has_violation = score.structured_findings.iter().any(|finding| {
+        matches!(
+            extract_rule_id(&finding.id),
+            "security:unpinned_git_dependency" | "supply_chain:unverified_provenance"
+        )
+    }) || score.antipattern_details.iter().any(|detail| {
+        matches!(
+            extract_rule_id(detail),
+            "security:unpinned_git_dependency" | "supply_chain:unverified_provenance"
+        )
+    });
+    if has_violation {
+        score.antipattern_score = score.antipattern_score.max(500);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Multi-file patch splitting
 // ---------------------------------------------------------------------------
@@ -599,6 +666,7 @@ pub struct PatchBouncer {
     catalog_path: Option<PathBuf>,
     suppressions: Vec<Suppression>,
     deep_scan: bool,
+    require_pinned_dependencies: bool,
     execution_tier: String,
 }
 
@@ -611,6 +679,7 @@ impl PatchBouncer {
             false,
             policy.execution_tier,
         )
+        .with_require_pinned_dependencies(policy.forge.require_pinned_dependencies)
     }
 
     pub fn for_workspace_with_deep_scan(root: &Path, deep_scan: bool) -> Self {
@@ -621,6 +690,7 @@ impl PatchBouncer {
             deep_scan,
             policy.execution_tier,
         )
+        .with_require_pinned_dependencies(policy.forge.require_pinned_dependencies)
     }
 
     pub fn for_workspace_with_deep_scan_and_suppressions(
@@ -635,8 +705,14 @@ impl PatchBouncer {
             catalog_path: Some(root.join(".janitor").join("taint_catalog.rkyv")),
             suppressions,
             deep_scan,
+            require_pinned_dependencies: false,
             execution_tier: execution_tier.into(),
         }
+    }
+
+    pub fn with_require_pinned_dependencies(mut self, require_pinned_dependencies: bool) -> Self {
+        self.require_pinned_dependencies = require_pinned_dependencies;
+        self
     }
 
     fn apply_kev_findings(&self, score: &mut SlopScore, patch_blobs: &HashMap<PathBuf, Vec<u8>>) {
@@ -857,6 +933,11 @@ impl PRBouncer for PatchBouncer {
             .join("\n");
         let governance_findings =
             crate::governance::check_workflow_pinning_source(&file_path, raw_added.as_bytes());
+        let manifest_findings = manifest_git_dependency_findings(
+            &file_path,
+            raw_added.as_bytes(),
+            self.repo_root.as_deref(),
+        );
 
         let pre_lang_payload_findings: Vec<String> = if raw_added.trim().is_empty() {
             vec![]
@@ -877,18 +958,37 @@ impl PRBouncer for PatchBouncer {
         let cfg = match lang_for_ext(ext) {
             Some(c) => c,
             None => {
-                if !metadata_findings.is_empty() {
-                    let antipattern_score = metadata_findings
-                        .iter()
-                        .map(|finding| finding.severity.points())
-                        .sum();
-                    return Ok(SlopScore {
-                        antipatterns_found: metadata_findings.len() as u32,
-                        antipattern_score,
-                        antipattern_details: metadata_findings
-                            .into_iter()
-                            .map(|finding| finding.description)
+                if !metadata_findings.is_empty() || !manifest_findings.is_empty() {
+                    let mut raw_findings = manifest_findings;
+                    raw_findings.extend(metadata_findings);
+                    let mut score = SlopScore {
+                        antipatterns_found: raw_findings.len() as u32,
+                        antipattern_score: raw_findings
+                            .iter()
+                            .map(|finding| finding.severity.points())
+                            .sum(),
+                        antipattern_details: raw_findings
+                            .iter()
+                            .map(|finding| {
+                                let line =
+                                    byte_offset_to_line(raw_added.as_bytes(), finding.start_byte);
+                                format!("{} (line={line})", finding.description)
+                            })
                             .collect(),
+                        ..SlopScore::default()
+                    };
+                    push_manifest_structured_findings(
+                        &mut score,
+                        &raw_findings,
+                        &file_path,
+                        raw_added.as_bytes(),
+                    );
+                    enforce_pinned_dependency_gate(&mut score, self.require_pinned_dependencies);
+                    return Ok(SlopScore {
+                        antipatterns_found: score.antipatterns_found,
+                        antipattern_score: score.antipattern_score,
+                        antipattern_details: score.antipattern_details,
+                        structured_findings: score.structured_findings,
                         ..SlopScore::default()
                     });
                 }
@@ -931,12 +1031,17 @@ impl PRBouncer for PatchBouncer {
                         &raw_added,
                         self.repo_root.as_deref(),
                     );
-                    let mut raw_findings = crate::slop_hunter::find_slop(ext, &parsed);
+                    let mut raw_findings = manifest_findings;
+                    raw_findings.extend(crate::slop_hunter::find_slop(ext, &parsed));
+                    raw_findings.extend(metadata_findings);
                     raw_findings.retain(|finding| {
                         !should_suppress_contextual_finding(finding, package_context.as_deref())
                     });
                     let mut details = pre_lang_payload_findings;
-                    details.extend(raw_findings.iter().map(|f| f.description.clone()));
+                    details.extend(raw_findings.iter().map(|finding| {
+                        let line = byte_offset_to_line(source, finding.start_byte);
+                        format!("{} (line={line})", finding.description)
+                    }));
                     let mut score = SlopScore {
                         antipatterns_found: details.len() as u32,
                         antipattern_score: ((details.len() - raw_findings.len()) as u32) * 50
@@ -947,9 +1052,16 @@ impl PRBouncer for PatchBouncer {
                         antipattern_details: details,
                         ..SlopScore::default()
                     };
+                    push_manifest_structured_findings(
+                        &mut score,
+                        &raw_findings,
+                        &file_path,
+                        source,
+                    );
                     apply_structured_governance_findings(&mut score, governance_findings);
                     let patch_blobs = extract_patch_blobs(patch);
                     self.apply_kev_findings(&mut score, &patch_blobs);
+                    enforce_pinned_dependency_gate(&mut score, self.require_pinned_dependencies);
                     return Ok(score);
                 }
 
@@ -1767,6 +1879,7 @@ impl PRBouncer for PatchBouncer {
         };
         let patch_blobs = extract_patch_blobs(patch);
         self.apply_kev_findings(&mut final_score, &patch_blobs);
+        enforce_pinned_dependency_gate(&mut final_score, self.require_pinned_dependencies);
 
         Ok(final_score)
     }
@@ -2593,6 +2706,55 @@ int vulnerable(const char *path) {
         let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
         assert_eq!(score.score(), 0);
         assert!(score.structured_findings.is_empty());
+    }
+
+    #[test]
+    fn require_pinned_dependencies_hard_fails_unverified_git_manifest() {
+        let dir = std::env::temp_dir().join(format!(
+            "janitor_pinned_deps_gate_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("Cargo.lock"),
+            r#"
+[[package]]
+name = "evil-crate"
+version = "0.1.0"
+source = "git+https://github.com/acme/evil-crate#main"
+"#,
+        )
+        .unwrap();
+        let patch = make_patch(
+            "Cargo.toml",
+            r#"
+[dependencies]
+evil-crate = { git = "https://github.com/acme/evil-crate" }
+"#,
+        );
+        let bouncer = PatchBouncer::for_workspace_with_deep_scan_and_suppressions(
+            &dir,
+            Vec::new(),
+            false,
+            "Community",
+        )
+        .with_require_pinned_dependencies(true);
+        let score = bouncer.bounce(&patch, &empty_registry()).unwrap();
+        assert!(
+            score.antipattern_score >= 500,
+            "require_pinned_dependencies must hard-fail unverified Git dependencies"
+        );
+        assert!(
+            score
+                .structured_findings
+                .iter()
+                .any(|finding| extract_rule_id(&finding.id) == "supply_chain:unverified_provenance"),
+            "hard-fail gate must preserve the provenance violation as a structured finding"
+        );
     }
 
     #[test]
