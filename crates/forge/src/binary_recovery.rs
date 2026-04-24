@@ -165,4 +165,26 @@ mod tests {
     fn malformed_binary_returns_no_findings() {
         assert!(analyze_binary(b"not-a-native-object", "blob.bin").is_empty());
     }
+
+    #[test]
+    fn strcpy_import_triggers_dangerous_native_import_finding() {
+        // Validates that the classic buffer-overflow sink `strcpy` is flagged at
+        // Critical severity when extracted from a binary import table.
+        let findings = dangerous_import_findings(["strcpy"], "lib/target.so");
+        assert_eq!(findings.len(), 1, "strcpy must produce exactly one finding");
+        assert_eq!(findings[0].id, "security:dangerous_native_import");
+        assert_eq!(
+            findings[0].severity.as_deref(),
+            Some("Critical"),
+            "strcpy import must be Critical severity"
+        );
+        assert!(
+            findings[0]
+                .remediation
+                .as_deref()
+                .unwrap_or_default()
+                .contains("strcpy"),
+            "remediation message must name the dangerous sink"
+        );
+    }
 }

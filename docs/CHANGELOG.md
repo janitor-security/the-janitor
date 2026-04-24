@@ -3,6 +3,37 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 51 (Omni-Format Enterprise Strike)
+
+**Directive:** Implement P2-4 binary triage lane (goblin import-table scan), P2-10 QEMU/hypervisor evasion heuristics, and P2-7 SMT concolic member-expression resolution. Hard-delete shipped P2-7, P2-10, P2-11; trim P2-4 to Tier 3 Ghidra-only. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/slop_hunter.rs` — added `find_hypervisor_evasion_slop`: byte-level scanner detecting `qemu-system-*` / `qemu-kvm` combined with stealth flags (`-nographic`, `-daemonize`, `-snapshot`) at `Critical`; wired into Python and Bash/Zsh lane dispatchers; 4 deterministic unit tests.
+- `crates/forge/src/symbex.rs` — extended `left_identifier` to capture `member_expression` nodes (e.g. `config.scope = "admin:org"`); fixed `evaluate_canonical_fact_constraints` to declare SMT constants using the sanitized identifier form (dots → underscores) consistent with the assertion string; 1 new unit test.
+- `crates/forge/src/binary_recovery.rs` — added `strcpy_import_triggers_dangerous_native_import_finding` unit test validating the `strcpy` detection path at `Critical` severity.
+- `.INNOVATION_LOG.md` — hard-deleted P2-7, P2-10, P2-11 blocks under the Absolute Eradication Law; trimmed P2-4 to Tier 3 Ghidra-only (Tier 1 import-table triage shipped).
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed (exit 0, per background run from Sprint Batch 50).
+- No audit executed. No commit executed per operator instruction.
+
+## 2026-04-24 — Sprint Batch 50 (Service-Boundary Schema Graph Verification)
+
+**Directive:** Verify OpenAPI v3, GraphQL SDL, and AsyncAPI ingestion implementations in `crates/forge/src/schema_graph.rs`; hard-delete shipped `P2-3` from the active frontier. No audit. No commit.
+
+**Changes:**
+
+- `.INNOVATION_LOG.md` — hard-deleted shipped `P2-3` block under the Absolute Eradication Law; `ingest_openapi`, `ingest_graphql`, and `ingest_asyncapi` confirmed pre-built with passing tests.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `cargo test --workspace -- --test-threads=4` — passed (exit 0, per background run).
+- No audit executed. No commit executed.
+
 ## 2026-04-24 — Sprint Batch 49 (Full-Spectrum Supply Chain Provenance)
 
 **Directive:** Finalize `P2-13` by expanding unpinned Git dependency detection into Python and Java manifests, correlate manifest hits with sibling lockfiles for provenance, wire the hard-fail policy into the Governor path, compact the shipped frontier item, verify, and commit. Do not release.

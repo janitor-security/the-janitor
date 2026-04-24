@@ -210,9 +210,11 @@ pub fn evaluate_canonical_fact_constraints(facts: &[CanonicalFact]) -> PathFeasi
         let Some(assertion) = fact.smt_constraint.as_deref() else {
             continue;
         };
-        if declared.insert(fact.symbol.clone())
-            && solver.declare_const(&fact.symbol, "String").is_err()
-        {
+        // Use the sanitized form for SMT constant names so that member
+        // expressions (e.g. config.scope → config_scope) produce valid
+        // SMT-LIB2 identifiers consistent with the assertion string.
+        let smt_name = sanitize_identifier(&fact.symbol).unwrap_or_else(|| fact.symbol.clone());
+        if declared.insert(smt_name.clone()) && solver.declare_const(&smt_name, "String").is_err() {
             return PathFeasibility::Unknown;
         }
         if solver.assert(assertion).is_err() {
@@ -349,6 +351,9 @@ fn call_fact(node: Node<'_>, source: &[u8]) -> Option<CanonicalFact> {
 fn left_identifier(node: Node<'_>, source: &[u8]) -> Option<String> {
     match node.kind() {
         "identifier" => node.utf8_text(source).ok().map(str::to_owned),
+        // Capture member expressions (e.g. config.scope) so object property
+        // assignments produce SMT bindings for the full dotted path.
+        "member_expression" => node.utf8_text(source).ok().map(str::to_owned),
         _ => None,
     }
 }
@@ -623,6 +628,34 @@ renderTemplate("{% if user %}{{ payload }}{% endif %}");
         assert!(assertions
             .iter()
             .any(|assertion| assertion.contains("str.contains cmd \";\"")));
+    }
+
+    #[test]
+    fn member_expression_assignment_tracks_object_property_scope() {
+        let source = br#"
+const config = {};
+config.scope = "admin:org";
+fetchData(config);
+"#;
+        let tree = parse_js(source);
+        let executor = SymbolicExecutor::new(witness(), tree.root_node());
+        let facts = executor.extract_js_ts_facts(source);
+        let member_fact = facts
+            .iter()
+            .find(|f| f.kind == CanonicalFactKind::Assignment && f.symbol.contains("scope"));
+        assert!(
+            member_fact.is_some(),
+            "config.scope = 'admin:org' must be captured as a canonical assignment fact"
+        );
+        let fact = member_fact.unwrap();
+        assert_eq!(fact.value.as_deref(), Some("admin:org"));
+        assert!(
+            fact.smt_constraint
+                .as_deref()
+                .unwrap_or_default()
+                .contains("admin"),
+            "SMT constraint must bind the member expression to its literal value"
+        );
     }
 
     #[test]

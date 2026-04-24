@@ -658,6 +658,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_python_slop_ast(eng, parsed));
             f.extend(find_python_phantom_payload_slop(eng, parsed));
             f.extend(find_python_slopsquat_imports(eng, parsed));
+            f.extend(find_hypervisor_evasion_slop(source));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -704,7 +705,11 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f
         }
         "rb" => find_ruby_slop(eng, parsed),
-        "sh" | "bash" | "zsh" => find_bash_slop(eng, parsed),
+        "sh" | "bash" | "zsh" => {
+            let mut f = find_bash_slop(eng, parsed);
+            f.extend(find_hypervisor_evasion_slop(source));
+            f
+        }
         // Phase 5 R&D: PHP, Kotlin, Scala, Swift AST walks
         "php" => find_php_slop(eng, parsed),
         "kt" | "kts" => find_kotlin_slop(eng, parsed),
@@ -2045,6 +2050,60 @@ fn find_python_slop(source: &[u8]) -> Vec<SlopFinding> {
             }]
         })
         .unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------
+// Language-agnostic: QEMU / KVM hypervisor evasion scaffolding (byte-scan)
+// ---------------------------------------------------------------------------
+
+const QEMU_PREFIXES: &[&[u8]] = &[b"qemu-system-", b"qemu-kvm"];
+const HYPERVISOR_STEALTH_FLAGS: &[&[u8]] = &[b"-nographic", b"-daemonize", b"-snapshot"];
+
+/// Detect headless or daemonized QEMU/KVM invocations matching the ransomware
+/// and malware staging pattern.
+///
+/// Fires when the source contains a `qemu-system-*` or `qemu-kvm` invocation
+/// AND at least one stealth flag (`-nographic`, `-daemonize`, `-snapshot`).
+/// The combination is the canonical indicator of payload detonation inside a
+/// hidden hypervisor envelope used to evade host-based EDR telemetry.
+fn find_hypervisor_evasion_slop(source: &[u8]) -> Vec<SlopFinding> {
+    let has_qemu = QEMU_PREFIXES
+        .iter()
+        .any(|p| source.windows(p.len()).any(|w| w == *p));
+    if !has_qemu {
+        return Vec::new();
+    }
+    let has_stealth = HYPERVISOR_STEALTH_FLAGS
+        .iter()
+        .any(|f| source.windows(f.len()).any(|w| w == *f));
+    if !has_stealth {
+        return Vec::new();
+    }
+    let start_byte = QEMU_PREFIXES
+        .iter()
+        .filter_map(|p| {
+            source
+                .windows(p.len())
+                .enumerate()
+                .find(|(_, w)| *w == *p)
+                .map(|(i, _)| i)
+        })
+        .min()
+        .unwrap_or(0);
+    vec![SlopFinding {
+        start_byte,
+        end_byte: start_byte + 12,
+        description: "security:hypervisor_evasion_scaffolding — headless or daemonized \
+                      hypervisor invocation detected (`qemu-system-*` with `-nographic`, \
+                      `-daemonize`, or `-snapshot`); this pattern is used by ransomware \
+                      operators to stage payloads inside a hidden QEMU guest to evade \
+                      host-based EDR telemetry; verify the guest payload is \
+                      integrity-signed and execution is bounded to a trusted CI envelope; \
+                      never pass untrusted shell input as a QEMU argument"
+            .to_string(),
+        domain: DOMAIN_FIRST_PARTY,
+        severity: Severity::Critical,
+    }]
 }
 
 // ---------------------------------------------------------------------------
@@ -7848,6 +7907,53 @@ pub fn find_outliers(data: &[f64], threshold: f64) -> Vec<f64> {
         assert!(
             findings.is_empty(),
             "shell=True without subprocess must not be flagged"
+        );
+    }
+
+    // ── Hypervisor evasion tests ──────────────────────────────────────────
+
+    #[test]
+    fn hypervisor_evasion_qemu_with_nographic_is_flagged() {
+        let src = b"qemu-system-x86_64 -hda payload.img -nographic\n";
+        let findings = find_hypervisor_evasion_slop(src);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].description.split(" — ").next().unwrap_or(""),
+            "security:hypervisor_evasion_scaffolding"
+        );
+        assert!(matches!(findings[0].severity, Severity::Critical));
+    }
+
+    #[test]
+    fn hypervisor_evasion_qemu_without_stealth_not_flagged() {
+        let src = b"qemu-system-x86_64 -hda disk.img\n";
+        assert!(
+            find_hypervisor_evasion_slop(src).is_empty(),
+            "qemu without stealth flags must not be flagged"
+        );
+    }
+
+    #[test]
+    fn hypervisor_evasion_stealth_without_qemu_not_flagged() {
+        let src = b"some_tool -daemonize -snapshot\n";
+        assert!(
+            find_hypervisor_evasion_slop(src).is_empty(),
+            "stealth flags without qemu prefix must not be flagged"
+        );
+    }
+
+    #[test]
+    fn hypervisor_evasion_python_subprocess_qemu_daemonize_flagged() {
+        // Ensures the detector fires through the Python lane dispatcher.
+        let src = b"import subprocess\nsubprocess.run(['qemu-system-x86_64', '-daemonize'])\n";
+        let findings: Vec<_> = find_slop("py", src)
+            .into_iter()
+            .filter(|f| f.description.contains("hypervisor_evasion_scaffolding"))
+            .collect();
+        assert_eq!(
+            findings.len(),
+            1,
+            "Python lane must dispatch hypervisor evasion detection"
         );
     }
 
