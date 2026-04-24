@@ -10,6 +10,14 @@ use base64::Engine as _;
 /// Maximum decoded payload size admitted by the deobfuscation spine.
 pub const MAX_NORMALIZED_BYTES: usize = 4096;
 
+/// Return `true` when `bytes` begins with a Windows PE (`MZ`) or ELF binary magic signature.
+///
+/// Used by the Steganographic Shield to flag compiled executables smuggled inside
+/// base64/hex-encoded string literals.
+pub fn is_binary_magic(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"MZ") || bytes.starts_with(b"\x7FELF")
+}
+
 /// Normalize a staged payload into its bounded decoded form.
 ///
 /// Recognized forms:
@@ -256,5 +264,20 @@ mod tests {
     fn decodes_hex_arrays() {
         let decoded = normalize_payload(br#"[0x63, 0x6f, 0x64, 0x65]"#).unwrap();
         assert_eq!(decoded, b"code");
+    }
+
+    #[test]
+    fn is_binary_magic_detects_pe_header() {
+        assert!(super::is_binary_magic(b"MZ\x90\x00\x03\x00\x00\x00"));
+    }
+
+    #[test]
+    fn is_binary_magic_detects_elf_header() {
+        assert!(super::is_binary_magic(b"\x7FELF\x02\x01\x01\x00"));
+    }
+
+    #[test]
+    fn is_binary_magic_rejects_plain_text() {
+        assert!(!super::is_binary_magic(b"console.log('hello')"));
     }
 }

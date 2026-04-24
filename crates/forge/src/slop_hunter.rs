@@ -6699,6 +6699,24 @@ fn maybe_push_deobfuscated_sink_finding(
     let Some(decoded) = normalize_payload(payload) else {
         return;
     };
+
+    // Steganographic Binary Shield: binary executable smuggled inside an encoded string.
+    if crate::deobfuscate::is_binary_magic(&decoded) {
+        let magic = if decoded.starts_with(b"MZ") { "MZ (Windows PE)" } else { "ELF" };
+        findings.push(SlopFinding {
+            start_byte: node.start_byte(),
+            end_byte: node.end_byte(),
+            description: format!(
+                "security:steganographic_binary_payload — {sink_label} decodes to a compiled \
+                 binary executable ({magic} magic detected); a binary payload is being smuggled \
+                 through base64/hex encoding inside a string literal"
+            ),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::KevCritical,
+        });
+        return;
+    }
+
     let Some(reason) = suspicious_normalized_payload_reason(&decoded) else {
         return;
     };
@@ -6761,6 +6779,125 @@ fn suspicious_normalized_payload_reason(decoded: &[u8]) -> Option<String> {
     }
 
     None
+}
+
+// ---------------------------------------------------------------------------
+// Repojacking & Unpinned Git Dependency Shield
+// ---------------------------------------------------------------------------
+
+/// Scan a manifest file for dependencies pinned to raw VCS Git URLs instead of
+/// canonical registry versions, emitting `security:unpinned_git_dependency` at
+/// `Critical` severity for each match.
+///
+/// Supported manifests: `package.json` (npm `git+https://` / VCS shortcuts),
+/// `Cargo.toml` (`git = "https://..."` blocks), and `go.mod` (raw `git+https://`
+/// references in require directives).
+pub fn detect_unpinned_git_deps(filename: &str, source: &[u8]) -> Vec<SlopFinding> {
+    let Ok(text) = std::str::from_utf8(source) else {
+        return Vec::new();
+    };
+    let mut findings = Vec::new();
+    match filename {
+        "package.json" => detect_npm_git_deps(text, &mut findings),
+        "Cargo.toml" => detect_cargo_git_deps(text, &mut findings),
+        "go.mod" => detect_go_mod_git_deps(text, &mut findings),
+        _ => {}
+    }
+    findings
+}
+
+fn detect_npm_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
+    const GIT_PREFIXES: &[&str] = &[
+        "git+https://",
+        "git+http://",
+        "git://",
+        "github:",
+        "bitbucket:",
+        "gitlab:",
+    ];
+    let mut search_start = 0usize;
+    while search_start < text.len() {
+        let tail = &text[search_start..];
+        let matched = GIT_PREFIXES
+            .iter()
+            .filter_map(|prefix| tail.find(prefix).map(|rel| (rel, *prefix)))
+            .min_by_key(|(rel, _)| *rel);
+        let Some((rel, prefix)) = matched else { break };
+        let offset = search_start + rel;
+        let context_end = text.len().min(offset + 80);
+        let snippet = &text[offset..context_end];
+        let end_byte = snippet
+            .find(|c: char| matches!(c, '"' | '\''))
+            .map(|end| offset + end)
+            .unwrap_or(context_end);
+        findings.push(SlopFinding {
+            start_byte: offset,
+            end_byte,
+            description: format!(
+                "security:unpinned_git_dependency — package.json dependency resolves to a raw Git \
+                 VCS URL (`{prefix}`); pin to a locked registry version to prevent repojacking"
+            ),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        });
+        search_start = offset + prefix.len();
+    }
+}
+
+fn detect_cargo_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
+    const GIT_PATTERNS: &[&str] = &[
+        "git = \"https://",
+        "git = 'https://",
+        "git = \"http://",
+        "git = \"git+https://",
+    ];
+    let mut search_start = 0usize;
+    while search_start < text.len() {
+        let tail = &text[search_start..];
+        let matched = GIT_PATTERNS
+            .iter()
+            .filter_map(|pat| tail.find(pat).map(|rel| (rel, *pat)))
+            .min_by_key(|(rel, _)| *rel);
+        let Some((rel, pat)) = matched else { break };
+        let offset = search_start + rel;
+        findings.push(SlopFinding {
+            start_byte: offset,
+            end_byte: offset + pat.len(),
+            description: "security:unpinned_git_dependency — Cargo.toml dependency uses a raw git \
+                          URL instead of a crates.io version; add `rev` or migrate to the registry \
+                          to prevent repojacking"
+                .to_string(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        });
+        search_start = offset + pat.len();
+    }
+}
+
+fn detect_go_mod_git_deps(text: &str, findings: &mut Vec<SlopFinding>) {
+    let mut byte_cursor = 0usize;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("require ")
+            && (trimmed.contains("git+https://") || trimmed.contains("git://"))
+        {
+            let offset = byte_cursor
+                + line
+                    .find(|c: char| !c.is_ascii_whitespace())
+                    .unwrap_or(0);
+            findings.push(SlopFinding {
+                start_byte: offset,
+                end_byte: offset + trimmed.len(),
+                description:
+                    "security:unpinned_git_dependency — go.mod dependency references a raw Git URL; \
+                     use a proper Go module path with a pinned version to prevent repojacking"
+                        .to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::Critical,
+            });
+        }
+        byte_cursor += line.len() + 1;
+    }
 }
 
 #[cfg(test)]
@@ -10610,6 +10747,62 @@ mod phase7_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("oauth_excessive_scope")),
             "OAuth read-only identity scopes must not fire excessive-scope detector"
+        );
+    }
+
+    // ── detect_unpinned_git_deps ──────────────────────────────────────────────
+
+    #[test]
+    fn npm_git_plus_https_url_is_flagged_as_repojacking() {
+        let src = br#"{"dependencies":{"evil-pkg":"git+https://github.com/attacker/evil-pkg.git"}}"#;
+        let findings = detect_unpinned_git_deps("package.json", src);
+        assert!(
+            !findings.is_empty(),
+            "git+https:// npm dep must be flagged as unpinned_git_dependency"
+        );
+        assert!(
+            findings[0]
+                .description
+                .contains("security:unpinned_git_dependency"),
+            "finding must have the correct rule ID"
+        );
+    }
+
+    #[test]
+    fn cargo_toml_git_url_is_flagged_as_repojacking() {
+        let src = b"[dependencies]\nmy-crate = { git = \"https://github.com/foo/bar\" }\n";
+        let findings = detect_unpinned_git_deps("Cargo.toml", src);
+        assert!(
+            !findings.is_empty(),
+            "Cargo.toml git URL dep must be flagged"
+        );
+    }
+
+    #[test]
+    fn npm_registry_version_is_not_flagged() {
+        let src = br#"{"dependencies":{"lodash":"4.17.21"}}"#;
+        let findings = detect_unpinned_git_deps("package.json", src);
+        assert!(
+            findings.is_empty(),
+            "semver registry dep must not be flagged as repojacking"
+        );
+    }
+
+    // ── steganographic_binary_payload ─────────────────────────────────────────
+
+    #[test]
+    fn elf_magic_in_base64_string_triggers_steganographic_finding() {
+        // "\x7FELF" base64-encoded = "f0VMRg=="
+        use base64::Engine as _;
+        let elf_magic = b"\x7FELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+        let b64 = base64::engine::general_purpose::STANDARD.encode(elf_magic);
+        let src = format!("eval(atob(\"{b64}\"))");
+        let findings = find_slop_bytes("js", src.as_bytes());
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("steganographic_binary_payload")),
+            "ELF magic decoded from base64 must emit steganographic_binary_payload"
         );
     }
 }

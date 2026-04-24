@@ -37,6 +37,8 @@ pub enum VulnerabilityFamily {
     CommandInjection,
     /// Browser DOM XSS through HTML/script execution sinks.
     DOMXSS,
+    /// SQL injection through attacker-controlled query fragments reaching a database sink.
+    SQLInjection,
 }
 
 /// Template engine metadata carried by template-injection facts.
@@ -187,6 +189,11 @@ pub fn minimal_counterexample_assertions(
             format!("(str.contains {symbol} \";\")"),
             format!("(str.contains {symbol} \" id\")"),
             format!("(= {symbol} \"; id\")"),
+        ],
+        VulnerabilityFamily::SQLInjection => vec![
+            format!("(str.contains {symbol} \"'\")"),
+            format!("(str.contains {symbol} \" OR \")"),
+            format!("(= {symbol} \"' OR 1=1 --\")"),
         ],
         _ => Vec::new(),
     }
@@ -616,5 +623,19 @@ renderTemplate("{% if user %}{{ payload }}{% endif %}");
         assert!(assertions
             .iter()
             .any(|assertion| assertion.contains("str.contains cmd \";\"")));
+    }
+
+    #[test]
+    fn sql_injection_minimal_counterexample_yields_or_1_eq_1_payload() {
+        let assertions =
+            minimal_counterexample_assertions(VulnerabilityFamily::SQLInjection, "user_input");
+        assert!(
+            assertions.iter().any(|a| a.contains("' OR 1=1 --")),
+            "SQLi objective must include the canonical OR 1=1 payload"
+        );
+        assert!(
+            assertions.iter().any(|a| a.contains("str.contains")),
+            "SQLi objective must include string containment constraints"
+        );
     }
 }

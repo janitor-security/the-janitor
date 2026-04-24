@@ -584,14 +584,26 @@ sink. Manual dynamic verification is advised."
 }
 
 fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String {
-    findings
+    // Prefer an explicit sanitizer audit from the witness over the IFDS proof statement.
+    if let Some(audit) = findings
         .iter()
         .filter_map(|finding| finding.exploit_witness.as_ref())
         .filter_map(|witness| witness.sanitizer_audit.as_deref())
         .map(str::trim)
         .find(|audit| !audit.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| "No upstream validation audit generated.".to_string())
+    {
+        return audit.to_string();
+    }
+    // If the IFDS solver proved absence of sanitization, emit the canonical proof statement.
+    if findings
+        .iter()
+        .any(|finding| finding.upstream_validation_absent)
+    {
+        return "The IFDS solver mathematically proved that zero sanitization, parameterization, \
+                or type-coercion gates exist on the execution path between the source and the sink."
+            .to_string();
+    }
+    "No upstream validation audit generated.".to_string()
 }
 
 fn defensive_evidence_section(findings: &[&StructuredFinding]) -> String {
@@ -2211,6 +2223,29 @@ fn scan_buffer(
         ext, source, label,
     ));
     findings.extend(forge::idor::scan_source(ext, source, label));
+
+    // Repojacking & unpinned Git dependency shield: scan manifest files.
+    let filename = std::path::Path::new(label)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    if matches!(filename, "package.json" | "Cargo.toml" | "go.mod") {
+        for f in forge::slop_hunter::detect_unpinned_git_deps(filename, source) {
+            let line = byte_to_line(source, f.start_byte);
+            findings.push(StructuredFinding {
+                id: extract_rule_id(&f.description),
+                file: Some(label.to_string()),
+                line: Some(line),
+                fingerprint: fingerprint_finding(source, f.start_byte, f.end_byte),
+                severity: Some(format!("{:?}", f.severity)),
+                remediation: None,
+                docs_url: None,
+                exploit_witness: None,
+                upstream_validation_absent: false,
+            });
+        }
+    }
+
     findings
 }
 
@@ -3846,6 +3881,77 @@ class Handler {
         assert!(
             apply_jaq_filter("invalid ][[ syntax", input).is_err(),
             "malformed filter must return an error"
+        );
+    }
+
+    #[test]
+    fn upstream_validation_audit_emits_ifds_proof_when_absent_and_no_sanitizer_audit() {
+        let finding = StructuredFinding {
+            id: "security:sqli_taint_confirmed".to_string(),
+            file: Some("api/db.go".to_string()),
+            line: Some(42),
+            fingerprint: "ifds_proof_001".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "HandleRequest".to_string(),
+                source_label: "param:query".to_string(),
+                sink_function: "db.QueryContext".to_string(),
+                sink_label: "sink:sql_query".to_string(),
+                call_chain: vec!["HandleRequest".to_string(), "db.QueryContext".to_string()],
+                gadget_chain: None,
+                repro_cmd: None,
+                sanitizer_audit: None,
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+                live_proof: None,
+            }),
+            upstream_validation_absent: true,
+        };
+        let report = format_bugcrowd_report(&[finding]);
+        assert!(
+            report.contains(
+                "The IFDS solver mathematically proved that zero sanitization, parameterization, \
+                 or type-coercion gates exist on the execution path between the source and the sink."
+            ),
+            "upstream_validation_absent=true with no sanitizer_audit must emit the IFDS proof statement"
+        );
+    }
+
+    #[test]
+    fn upstream_validation_audit_prefers_explicit_sanitizer_audit_over_ifds_proof() {
+        let finding = StructuredFinding {
+            id: "security:sqli_taint_confirmed".to_string(),
+            file: Some("api/db.go".to_string()),
+            line: Some(42),
+            fingerprint: "ifds_audit_pref_001".to_string(),
+            severity: Some("KevCritical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: Some(common::slop::ExploitWitness {
+                source_function: "HandleRequest".to_string(),
+                source_label: "param:query".to_string(),
+                sink_function: "db.QueryContext".to_string(),
+                sink_label: "sink:sql_query".to_string(),
+                call_chain: vec!["HandleRequest".to_string(), "db.QueryContext".to_string()],
+                gadget_chain: None,
+                repro_cmd: None,
+                sanitizer_audit: Some("Custom audit detail from IFDS trace.".to_string()),
+                route_path: None,
+                http_method: None,
+                auth_requirement: None,
+                upstream_validation_absent: true,
+                live_proof: None,
+            }),
+            upstream_validation_absent: true,
+        };
+        let report = format_bugcrowd_report(&[finding]);
+        assert!(
+            report.contains("Custom audit detail from IFDS trace."),
+            "explicit sanitizer_audit must take priority over the IFDS proof statement"
         );
     }
 }

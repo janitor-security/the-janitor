@@ -1019,10 +1019,15 @@ fn find_textual_taint_flows(
         for prefix in sink_prefixes {
             let needle = format!("{prefix}({param}");
             if normalized.contains(&needle) {
+                // Resolve the actual byte offset in the un-normalized source so the
+                // emitted line number is accurate instead of always defaulting to line 1.
+                let prefix_needle = format!("{prefix}(");
+                let sink_byte = text.find(prefix_needle.as_str()).unwrap_or(0);
+                let sink_end_byte = sink_byte + prefix_needle.len() + param.len();
                 flows.push(TaintFlow {
                     taint_source: param.clone(),
-                    sink_byte: 0,
-                    sink_end_byte: needle.len(),
+                    sink_byte,
+                    sink_end_byte: sink_end_byte.min(source.len()),
                 });
                 break;
             }

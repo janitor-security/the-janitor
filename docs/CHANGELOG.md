@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-23 — Sprint Batch 46 (Steganographic Shield, Web3 Oracles, & Formatter Supremacy)
+
+**Directive:** Harden manifest ingestion against repojacking, expand Web3 invariant checking with oracle manipulation and flash loan callback detectors, and finalize Bugcrowd/Auth0 report output logic to eliminate placeholder text.
+
+**Changes:**
+
+- `crates/forge/src/deobfuscate.rs` — added `is_binary_magic(bytes: &[u8]) -> bool` to detect Windows PE (MZ) and ELF binary magic signatures; 3 new deterministic tests.
+- `crates/forge/src/slop_hunter.rs` — upgraded `maybe_push_deobfuscated_sink_finding` to emit `security:steganographic_binary_payload` at KevCritical when decoded payload carries MZ/ELF magic; added `detect_unpinned_git_deps(filename, source)` public function scanning `package.json`, `Cargo.toml`, and `go.mod` for raw Git VCS URLs; 3 new tests.
+- `crates/forge/src/solidity_taint.rs` — added `detect_oracle_manipulation` (Uniswap V2 spot-price without TWAP → KevCritical) and `detect_flash_loan_callback` (missing `msg.sender` validation in `executeOperation`/`onFlashLoan` → KevCritical); wired both into `find_solidity_slop`; 4 new deterministic tests.
+- `crates/forge/src/symbex.rs` — added `SQLInjection` variant to `VulnerabilityFamily`; added minimal counterexample assertions yielding `' OR 1=1 --`; 1 new test.
+- `crates/forge/src/exploitability.rs` — added `SQLInjection` to the family-specific String variable injection in `Z3Solver::refine`; 1 new Z3-guarded test.
+- `crates/forge/src/taint_propagate.rs` — fixed `find_textual_taint_flows` `sink_byte: 0` hardcode; now resolves actual byte offset in un-normalized source so Go sinks no longer default to line 1.
+- `crates/cli/src/hunt.rs` — fixed `upstream_validation_audit_section` to emit the canonical IFDS proof statement when `upstream_validation_absent=true` and `sanitizer_audit=None`; integrated `detect_unpinned_git_deps` into `scan_buffer` for manifest files; 2 new tests.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+- `cargo test -p forge` → 627 tests, 0 failures.
+- `cargo test -p cli` → 139 tests, 0 failures.
+- All new Phase 1–3 detectors confirmed with dedicated `#[test]` functions.
+
 ## 2026-04-23 — Sprint Batch 45 (Bounded Symbolic Counterexamples & The Omni-Protocol Release)
 
 **Directive:** Finalize P2-1 with minimal SMT counterexamples, fix local manifest attribution for scan roots, add configuration-flaw exploit witness handling, prepare `10.2.0-beta.2`, verify, commit, and execute the formal release pipeline.

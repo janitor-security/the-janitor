@@ -24,6 +24,8 @@ pub fn find_solidity_slop(source: &[u8]) -> Vec<StructuredFinding> {
     find_unprotected_authority_transitions(source, &tree, &mut findings);
     detect_signature_replay(source, &tree, &mut findings);
     detect_unsafe_delegatecall(source, &tree, &mut findings);
+    detect_oracle_manipulation(source, &tree, &mut findings);
+    detect_flash_loan_callback(source, &tree, &mut findings);
     findings
 }
 
@@ -642,6 +644,140 @@ fn fingerprint(rule: &str, source: &[u8], offset: usize) -> String {
     hasher.finalize().to_hex().to_string()
 }
 
+/// Detect DEX spot-price reads (e.g. Uniswap V2 `getReserves()`) used directly in value
+/// calculations without a TWAP accumulator guard.
+///
+/// Spot-price reads are trivially manipulable inside a single block transaction (flash loans).
+/// Any arithmetic that directly consumes `getReserves` output without a TWAP check is flagged.
+fn detect_oracle_manipulation(source: &[u8], tree: &Tree, findings: &mut Vec<StructuredFinding>) {
+    let text = std::str::from_utf8(source).unwrap_or("");
+    let _lower = text.to_ascii_lowercase();
+
+    // DEX spot-price oracle call patterns (Uniswap V2/V3, Curve, SushiSwap variants).
+    const SPOT_PRICE_PATTERNS: &[&str] = &[
+        "getreserves()",
+        ".reserves0",
+        ".reserves1",
+        "price0cumulativelast",
+        "price1cumulativelast",
+        "slot0()",
+        "observe(",
+    ];
+
+    // TWAP / safe oracle guards that redeem the finding.
+    const TWAP_GUARDS: &[&str] = &[
+        "twap",
+        "consult(",
+        "price0cumulativelast",
+        "price1cumulativelast",
+        "observation",
+        "pricecumulative",
+        "ema(",
+        "chainlink",
+        "latestrounddata",
+    ];
+
+    for function in collect_functions(source, tree) {
+        let has_spot_read = SPOT_PRICE_PATTERNS
+            .iter()
+            .any(|pat| function.lower.contains(pat));
+        if !has_spot_read {
+            continue;
+        }
+        // If the function already uses a TWAP guard or safe oracle, skip.
+        let has_twap_guard = TWAP_GUARDS
+            .iter()
+            .any(|guard| function.lower.contains(guard));
+        if has_twap_guard {
+            continue;
+        }
+        // Confirm the spot-price output is used in arithmetic (value calculation).
+        let used_in_arithmetic = function.lower.contains(" * ")
+            || function.lower.contains(" / ")
+            || function.lower.contains(" + ")
+            || function.lower.contains("amount")
+            || function.lower.contains("price")
+            || function.lower.contains("value");
+        if !used_in_arithmetic {
+            continue;
+        }
+        let start = function.start;
+        findings.push(StructuredFinding {
+            id: "security:oracle_price_manipulation".to_string(),
+            file: None,
+            line: Some(byte_to_line(source, start)),
+            fingerprint: fingerprint("security:oracle_price_manipulation", source, start),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some(
+                "DEX spot-price read is used directly in a value calculation without a \
+                 Time-Weighted Average Price (TWAP) accumulator. Use Uniswap V2 \
+                 `UniswapV2OracleLibrary.currentCumulativePrices` or a Chainlink price feed \
+                 to prevent flash-loan price manipulation."
+                    .to_string(),
+            ),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        });
+    }
+
+    let _ = first_named_descendant(tree.root_node());
+}
+
+/// Detect flash loan callback functions (`executeOperation`, `onFlashLoan`) that do not
+/// validate `msg.sender` against the expected lending pool address.
+///
+/// An unvalidated flash loan callback allows any caller to invoke the callback directly,
+/// potentially draining funds or manipulating state without repaying the flash loan.
+fn detect_flash_loan_callback(source: &[u8], tree: &Tree, findings: &mut Vec<StructuredFinding>) {
+    const FLASH_LOAN_CALLBACKS: &[&str] = &[
+        "executeoperation",
+        "onflashloan",
+        "receiveethereum",
+        "uniswapv2call",
+        "uniswapv3flashcallback",
+        "pancakeswapv2flashcallback",
+    ];
+
+    for function in collect_functions(source, tree) {
+        let fn_lower = function.name.to_ascii_lowercase();
+        if !FLASH_LOAN_CALLBACKS.iter().any(|cb| fn_lower == *cb) {
+            continue;
+        }
+        // A safe callback must validate msg.sender against a known lending pool address.
+        let validates_sender = function.lower.contains("msg.sender")
+            && (function.lower.contains("require(")
+                || function.lower.contains("require (")
+                || function.lower.contains("if (msg.sender")
+                || function.lower.contains("if(msg.sender")
+                || function.lower.contains("== address("));
+        if validates_sender {
+            continue;
+        }
+        let start = function.start;
+        findings.push(StructuredFinding {
+            id: "security:flash_loan_callback_unvalidated_sender".to_string(),
+            file: None,
+            line: Some(byte_to_line(source, start)),
+            fingerprint: fingerprint(
+                "security:flash_loan_callback_unvalidated_sender",
+                source,
+                start,
+            ),
+            severity: Some("KevCritical".to_string()),
+            remediation: Some(format!(
+                "Flash loan callback `{}` does not validate `msg.sender` against the expected \
+                 lending pool address. Add `require(msg.sender == LENDING_POOL, \"invalid initiator\")` \
+                 at the top of the callback to prevent unauthorized direct invocations.",
+                function.name
+            )),
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+        });
+    }
+}
+
 fn byte_to_line(source: &[u8], offset: usize) -> u32 {
     let capped = offset.min(source.len());
     source[..capped]
@@ -774,6 +910,103 @@ contract Permit {
 "#;
         let findings = find_solidity_slop(src);
         assert!(findings.iter().any(|f| f.id == "security:signature_replay"));
+    }
+
+    #[test]
+    fn detects_oracle_manipulation_getreserves_without_twap() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract PriceCalc {
+    IUniswapV2Pair pair;
+
+    function getPrice() external view returns (uint256) {
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        uint256 price = uint256(reserve1) * 1e18 / uint256(reserve0);
+        return price;
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.id == "security:oracle_price_manipulation"),
+            "getReserves without TWAP must be flagged"
+        );
+    }
+
+    #[test]
+    fn oracle_manipulation_not_flagged_when_twap_present() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract SafePriceCalc {
+    function getPrice(address pair) external view returns (uint256) {
+        uint256 twap = IUniswapV2Oracle(pair).consult(address(token), 1e18);
+        return twap;
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "security:oracle_price_manipulation"),
+            "TWAP-protected oracle read must not be flagged"
+        );
+    }
+
+    #[test]
+    fn detects_flash_loan_callback_missing_sender_validation() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract Borrower {
+    function executeOperation(
+        address asset,
+        uint256 amount,
+        uint256 premium,
+        address initiator,
+        bytes calldata params
+    ) external returns (bool) {
+        // Exploit logic without msg.sender check
+        return true;
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.id == "security:flash_loan_callback_unvalidated_sender"),
+            "executeOperation without msg.sender validation must be flagged"
+        );
+    }
+
+    #[test]
+    fn flash_loan_callback_with_sender_check_is_safe() {
+        let src = br#"
+pragma solidity ^0.8.20;
+contract SafeBorrower {
+    address constant LENDING_POOL = 0xabc;
+
+    function executeOperation(
+        address asset,
+        uint256 amount,
+        uint256 premium,
+        address initiator,
+        bytes calldata params
+    ) external returns (bool) {
+        require(msg.sender == LENDING_POOL, "invalid initiator");
+        return true;
+    }
+}
+"#;
+        let findings = find_solidity_slop(src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.id != "security:flash_loan_callback_unvalidated_sender"),
+            "executeOperation with proper msg.sender check must not be flagged"
+        );
     }
 
     #[test]
