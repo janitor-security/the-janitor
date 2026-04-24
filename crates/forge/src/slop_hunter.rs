@@ -4719,12 +4719,6 @@ fn find_go_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
         b"tx.Query(",
         b"tx.Exec(",
     ];
-    if !GO_DB
-        .iter()
-        .any(|p| source.windows(p.len()).any(|w| w == *p))
-    {
-        return Vec::new();
-    }
     if !SQL_KEYWORDS_STR
         .iter()
         .any(|k| source.windows(k.len()).any(|w| w == k.as_bytes()))
@@ -4734,9 +4728,28 @@ fn find_go_sqli_slop(source: &[u8]) -> Vec<SlopFinding> {
     if !source.windows(3).any(|w| w == b"\" +") {
         return Vec::new();
     }
+    // Find the byte offset of the first matching DB call so line numbers are precise.
+    let start_byte = GO_DB
+        .iter()
+        .filter_map(|p| {
+            source
+                .windows(p.len())
+                .enumerate()
+                .find(|(_, w)| w == p)
+                .map(|(i, _)| i)
+        })
+        .min()
+        .unwrap_or(0);
+    if start_byte == 0
+        && !GO_DB
+            .iter()
+            .any(|p| source.windows(p.len()).any(|w| w == *p))
+    {
+        return Vec::new();
+    }
     vec![SlopFinding {
-        start_byte: 0,
-        end_byte: 0,
+        start_byte,
+        end_byte: start_byte + 9, // covers at minimum "db.Query("
         description: "security:sqli_concatenation — SQL query assembled via string \
                       concatenation in a Go database/sql call; use `$1/$2` \
                       placeholders with `db.Query(sql, args...)` to prevent SQL \
