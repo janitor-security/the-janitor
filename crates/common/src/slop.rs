@@ -53,6 +53,24 @@ pub struct ExploitWitness {
     /// the command was not executed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_proof: Option<String>,
+    /// Deterministic IFDS proof path that established the taint chain, or a
+    /// human-readable summary of the symbolic path used to prove reachability.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_proof: Option<String>,
+    /// Inert exploit payload blob (base64 or text) synthesized for
+    /// deserialization and parser-injection findings.  Never contains live
+    /// shellcode; use a signed Wasm policy to enable red-team mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<String>,
+    /// Ordered human-readable steps to reproduce the vulnerability using the
+    /// attached `payload`.  Populated by the deserialization and parser
+    /// payload synthesis pipelines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reproduction_steps: Option<Vec<String>>,
+    /// CVSS-informed plain-text risk classification, e.g.
+    /// `"Critical RCE via Java ObjectOutputStream deserialization"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_classification: Option<String>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.

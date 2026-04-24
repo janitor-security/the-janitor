@@ -568,6 +568,38 @@ fn proof_of_concept_section(findings: &[&StructuredFinding]) -> String {
     {
         return GADGET_CHAIN_BUGCROWD_PROOF.to_string();
     }
+    // Phase B/E capsule: structured reproduction steps + optional payload blob.
+    if let Some(witness) = findings
+        .iter()
+        .filter_map(|f| f.exploit_witness.as_ref())
+        .find(|w| w.reproduction_steps.is_some() || w.payload.is_some())
+    {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(steps) = &witness.reproduction_steps {
+            let numbered = steps
+                .iter()
+                .enumerate()
+                .map(|(i, s)| format!("{}. {s}", i + 1))
+                .collect::<Vec<_>>()
+                .join("\n");
+            parts.push(numbered);
+        }
+        if let Some(cmd) = witness
+            .repro_cmd
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            parts.push(format!("```text\n{cmd}\n```"));
+        }
+        if let Some(blob) = &witness.payload {
+            parts.push(format!(
+                "**Inert probe payload (base64):**\n```\n{blob}\n```"
+            ));
+        }
+        if !parts.is_empty() {
+            return parts.join("\n\n");
+        }
+    }
     if let Some(repro_cmd) = findings
         .iter()
         .filter_map(|finding| finding.exploit_witness.as_ref())
@@ -2806,7 +2838,6 @@ def main(user_id):
                 sink_function: "pickle.loads".to_string(),
                 sink_label: "sink:unsafe_deserialization".to_string(),
                 call_chain: vec!["handler".to_string(), "pickle.loads".to_string()],
-                gadget_chain: None,
                 repro_cmd: Some(
                     "python3 -c \"import base64,pickle; pickle.loads(base64.b64decode('Y29zCnN5c3RlbQooUydlY2hvIEpBTklUT1JfUFJPQkUnCnRSLg=='))\""
                         .to_string(),
@@ -2814,11 +2845,7 @@ def main(user_id):
                 sanitizer_audit: Some(
                     "Path analysis confirms no registered sanitizers or validators (e.g., escapeHtml, Joi.string, express_validator_body) were invoked on this variable prior to the sink.".to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
-                upstream_validation_absent: false,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: false,
         };
@@ -2974,18 +3001,13 @@ def main(user_id):
                     "exec_wrapper".to_string(),
                     "child_process.exec".to_string(),
                 ],
-                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/exec -d '{\"cmd\": \"id\"}'".to_string(),
                 ),
                 sanitizer_audit: Some(
                     "Path analysis confirms no registered sanitizers or validators (e.g., escapeHtml, Joi.string, express_validator_body) were invoked on this variable prior to the sink.".to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
-                upstream_validation_absent: false,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: false,
         };
@@ -3045,7 +3067,6 @@ def main(user_id):
                 sink_function: "db.query".to_string(),
                 sink_label: "sink:sql_query".to_string(),
                 call_chain: vec!["handler".to_string(), "db.query".to_string()],
-                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/users -d '{\"q\": \"1' OR 1=1--\"}'"
                         .to_string(),
@@ -3053,11 +3074,8 @@ def main(user_id):
                 sanitizer_audit: Some(
                     "Sanitizer escape_html was invoked, but mathematical falsification proves it is bypassable. Counterexample payload: javascript:alert(1)".to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };
@@ -3099,7 +3117,6 @@ def main(user_id):
                     "escapeHtml".to_string(),
                     "Http.ssrf_fetch".to_string(),
                 ],
-                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/fetch -d '{\"url\": \"http://internal.admin/secret\"}'"
                         .to_string(),
@@ -3108,11 +3125,8 @@ def main(user_id):
                     "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against XSS but fails to satisfy SSRF constraints."
                         .to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };
@@ -3158,7 +3172,6 @@ def main(user_id):
                     "springRequestBody".to_string(),
                     "InternalFetch.ssrf_fetch".to_string(),
                 ],
-                gadget_chain: None,
                 repro_cmd: Some(
                     "curl -X POST https://target.com/api/users -d '{\"url\": \"http://internal.admin\"}'"
                         .to_string(),
@@ -3167,11 +3180,8 @@ def main(user_id):
                     "Path sanitizers [springRequestBody] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against generic input validation but fails to satisfy SSRF constraints. The Spring framework implicit validator (springRequestBody) was evaluated, but Z3 proves it does not entail safety for this sink."
                         .to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };
@@ -3209,17 +3219,12 @@ def main(user_id):
                     "escapeHtml".to_string(),
                     "Http.ssrf_fetch".to_string(),
                 ],
-                gadget_chain: None,
-                repro_cmd: None,
                 sanitizer_audit: Some(
                     "Path sanitizers [escapeHtml] do not mathematically entail the sink's safety contract. Counterexample: output = http://internal.admin. Gap: path is sanitized against XSS but fails to satisfy SSRF constraints. A concurrent path correctly sanitized by [validateSsrfUrl] was analyzed, but the vulnerability remains exploitable via this bypass path."
                         .to_string(),
                 ),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };
@@ -3990,14 +3995,8 @@ class Handler {
                 sink_function: "db.QueryContext".to_string(),
                 sink_label: "sink:sql_query".to_string(),
                 call_chain: vec!["HandleRequest".to_string(), "db.QueryContext".to_string()],
-                gadget_chain: None,
-                repro_cmd: None,
-                sanitizer_audit: None,
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };
@@ -4027,14 +4026,9 @@ class Handler {
                 sink_function: "db.QueryContext".to_string(),
                 sink_label: "sink:sql_query".to_string(),
                 call_chain: vec!["HandleRequest".to_string(), "db.QueryContext".to_string()],
-                gadget_chain: None,
-                repro_cmd: None,
                 sanitizer_audit: Some("Custom audit detail from IFDS trace.".to_string()),
-                route_path: None,
-                http_method: None,
-                auth_requirement: None,
                 upstream_validation_absent: true,
-                live_proof: None,
+                ..Default::default()
             }),
             upstream_validation_absent: true,
         };

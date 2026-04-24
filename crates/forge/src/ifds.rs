@@ -392,14 +392,7 @@ impl IfdsSolver {
                     sink_function: input.function.clone(),
                     sink_label: sink.sink_label.clone(),
                     call_chain: vec![input.function.clone()],
-                    gadget_chain: None,
-                    repro_cmd: None,
-                    sanitizer_audit: None,
-                    route_path: None,
-                    http_method: None,
-                    auth_requirement: None,
-                    upstream_validation_absent: false,
-                    live_proof: None,
+                    ..ExploitWitness::default()
                 });
             }
         }
@@ -456,7 +449,7 @@ impl IfdsSolver {
                         http_method: witness.http_method.clone(),
                         auth_requirement: witness.auth_requirement.clone(),
                         upstream_validation_absent: witness.upstream_validation_absent,
-                        live_proof: None,
+                        ..ExploitWitness::default()
                     });
                 }
             }

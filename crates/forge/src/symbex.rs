@@ -482,14 +482,7 @@ mod tests {
             sink_function: "withdraw".to_string(),
             sink_label: "call.value".to_string(),
             call_chain: vec!["withdraw".to_string()],
-            gadget_chain: None,
-            repro_cmd: None,
-            sanitizer_audit: None,
-            route_path: None,
-            http_method: None,
-            auth_requirement: None,
-            upstream_validation_absent: false,
-            live_proof: None,
+            ..ExploitWitness::default()
         }
     }
 

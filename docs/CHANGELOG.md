@@ -3,6 +3,23 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 52 (Exploit Capsule Restructure & Inert Payload Synthesis)
+
+**Directive:** Restructure `ExploitWitness` with 4 new capsule fields; implement P3-1 Phase B (serialized-blob synthesis — Java/PHP/Ruby) and Phase E (parser payload — XXE/ZipSlip); upgrade formatters to render structured PoC steps; eradicate Phases B and E from `.INNOVATION_LOG.md`. Do not release.
+
+**Changes:**
+
+- `crates/common/src/slop.rs` — added `path_proof`, `payload`, `reproduction_steps`, `risk_classification` to `ExploitWitness`; all `Option` with `skip_serializing_if`; backwards-compatible.
+- `crates/forge/src/exploitability.rs` — extended `DeserializationFormat` with `JavaObjectStream` (STREAM_MAGIC `\xac\xed` probe), `PhpSerialize` (`O:13:"JanitorProbe":0:{}`), `RubyMarshal` (v4.8 header); added `deserialization_blob_witness` builder populating `payload`, `reproduction_steps`, `risk_classification`; added `ParserScenario` enum (`Xxe`, `ZipSlip`); added `ParserPayload { scenario }` to `IngressKind`; implemented `parser_payload_template` (XXE DOCTYPE + ZipSlip Python recipe) and `parser_payload_witness`; wired `ParserPayload` into `template_for_ingress`; 6 new deterministic unit tests.
+- `crates/cli/src/hunt.rs` — upgraded `proof_of_concept_section` to detect and render `reproduction_steps` as a numbered Markdown list, `repro_cmd` as a fenced code block, and `payload` as a labelled base64 block; updated all explicit `ExploitWitness` struct literals to `..Default::default()`.
+- `crates/forge/src/ifds.rs`, `gadgets.rs`, `symbex.rs` — updated explicit `ExploitWitness` constructions to use `..ExploitWitness::default()`.
+- `.INNOVATION_LOG.md` — hard-deleted Phase B and Phase E from P3-1; Phases C and D remain open.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `just audit` — exit 0; 25 suites, 651 forge + 143 CLI + 376 total tests, 0 failures.
+
 ## 2026-04-24 — Sprint Batch 51 (Omni-Format Enterprise Strike)
 
 **Directive:** Implement P2-4 binary triage lane (goblin import-table scan), P2-10 QEMU/hypervisor evasion heuristics, and P2-7 SMT concolic member-expression resolution. Hard-delete shipped P2-7, P2-10, P2-11; trim P2-4 to Tier 3 Ghidra-only. Do not release.

@@ -157,15 +157,11 @@ fn finding(file_name: &str, line: u32, chain: &[&str], manifest_name: &str) -> S
             sink_label: "sink:rce_gadget_chain".to_string(),
             call_chain: chain_strings.clone(),
             gadget_chain: Some(chain_strings),
-            repro_cmd: None,
             sanitizer_audit: Some(format!(
                 "A complete deserialization gadget chain was verified against {manifest_name}: {chain_text}."
             )),
-            route_path: None,
-            http_method: None,
-            auth_requirement: None,
             upstream_validation_absent: true,
-            live_proof: None,
+            ..ExploitWitness::default()
         }),
         upstream_validation_absent: true,
     }
