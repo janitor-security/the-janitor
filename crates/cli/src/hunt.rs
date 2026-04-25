@@ -2292,8 +2292,17 @@ fn scan_buffer(
     }
 
     let unit = ParsedUnit::unparsed(source);
+    // GitHub issue-form YAML templates (.github/ISSUE_TEMPLATE/) contain
+    // documentation URLs and form-schema links, not production asset loads.
+    // Suppress supply-chain and OAuth FPs for these non-executable paths.
+    let is_issue_template = label.contains("ISSUE_TEMPLATE");
     let mut findings = find_slop(ext, &unit)
         .into_iter()
+        .filter(|f| {
+            !is_issue_template
+                || (!f.description.contains("unpinned_asset")
+                    && !f.description.contains("oauth_excessive_scope"))
+        })
         .map(|finding| {
             let line = byte_to_line(source, finding.start_byte);
             let rule_id = extract_rule_id(&finding.description);

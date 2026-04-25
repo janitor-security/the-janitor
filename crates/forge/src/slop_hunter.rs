@@ -1137,13 +1137,13 @@ fn find_oauth_excessive_scope(source: &[u8]) -> Vec<SlopFinding> {
 
 /// Return `true` only when `*` appears in a scope-assignment context within
 /// `window`.  Acceptable patterns: `scope=*`, `scope: *`, `scope: ["*"]`,
-/// `"scope":"*"`, `scope=%2a`.  A bare `*` in JSDoc comments (`/** */`),
-/// TypeScript glob imports (`import * as`), Javadoc block-comment
-/// continuation lines (`* <text>`), or type widening (`Record<*, V>`)
-/// must NOT trigger this check.  Require `*` to be within 16 bytes of a
-/// `scope` keyword boundary AND not be a line-continuation marker.
+/// `"scope":"*"`, `scope=%2a`.  A bare `*` in JSDoc/TSDoc comment closings
+/// (`*/`), Javadoc block-comment continuation lines (`* <text>`), C/Obj-C
+/// pointer type qualifiers (`NSString * _Nullable`, `Type *)`), TypeScript
+/// glob imports (`import * as`), or type widening (`Record<*, V>`) must NOT
+/// trigger this check.  Require `*` to be within 16 bytes of a `scope`
+/// keyword boundary AND not be a structural non-wildcard marker.
 fn contains_scope_wildcard(window: &[u8]) -> bool {
-    // Require "scope" to appear within 16 bytes before the '*'.
     let scope_needle = b"scope";
     let mut start = 0;
     while let Some(rel) = window[start..]
@@ -1151,11 +1151,16 @@ fn contains_scope_wildcard(window: &[u8]) -> bool {
         .position(|w| w.eq_ignore_ascii_case(scope_needle))
     {
         let scope_pos = start + rel;
-        // Search for '*' in the 16-byte span immediately following "scope".
         let after_scope = scope_pos + scope_needle.len();
         let search_end = (after_scope + 16).min(window.len());
         for (off, &byte) in window[after_scope..search_end].iter().enumerate() {
-            if byte == b'*' && !is_comment_continuation_star(window, after_scope + off) {
+            let abs_pos = after_scope + off;
+            if byte == b'*'
+                && !is_comment_continuation_star(window, abs_pos)
+                && !is_comment_end_star(window, abs_pos)
+                && !is_comment_open_star(window, abs_pos)
+                && !is_pointer_type_star(window, abs_pos)
+            {
                 return true;
             }
         }
@@ -1192,6 +1197,36 @@ fn is_comment_continuation_star(window: &[u8], pos: usize) -> bool {
     }
 }
 
+/// Return `true` when the `*` at `pos` is the opening of a `*/` comment-end
+/// sequence.  TSDoc `/** Scopes requested */` produces `*/` within 16 bytes
+/// of "scope"; this guard prevents that closing sequence from being treated as
+/// an OAuth wildcard.
+#[inline]
+fn is_comment_end_star(window: &[u8], pos: usize) -> bool {
+    window.get(pos + 1) == Some(&b'/')
+}
+
+/// Return `true` when the `*` at `pos` is a C/Obj-C pointer-type qualifier
+/// (e.g. `NSString * _Nullable` or `Type *)`).  In Objective-C React Native
+/// bridge methods the `scope:(NSString * _Nullable)scope` pattern appears
+/// within 16 bytes of the `scope` keyword; without this guard the pointer `*`
+/// fires as an OAuth wildcard.
+///
+/// Only suppresses the two patterns unambiguous in Obj-C method signatures:
+/// * `*)` — pointer immediately before a closing paren (cast or param list)
+/// * `* _` — pointer followed by a space + underscore (`_Nullable`/`_Nonnull`)
+#[inline]
+fn is_pointer_type_star(window: &[u8], pos: usize) -> bool {
+    let next = window.get(pos + 1).copied().unwrap_or(0);
+    if next == b')' {
+        return true; // `*)` — pointer at close of parameter list
+    }
+    if (next == b' ' || next == b'\t') && window.get(pos + 2).copied().unwrap_or(0) == b'_' {
+        return true; // `* _Nullable` / `* _Nonnull` — Obj-C nullability annotation
+    }
+    false
+}
+
 fn contains_scope_repo_token(window: &[u8]) -> bool {
     let needle = b"repo";
     let mut start = 0;
@@ -1212,6 +1247,27 @@ fn contains_scope_repo_token(window: &[u8]) -> bool {
         start = idx + 1;
     }
     false
+}
+
+/// Return `true` when the `*` at `pos` is part of a comment-open sequence.
+///
+/// Catches both forms:
+/// * `/*` — the `*` immediately after `/`
+/// * `/**` — the first AND second `*` of a JSDoc opener (both must be
+///   suppressed since the 16-byte window starting from a `scope` keyword can
+///   reach the second `*` of `/**` when the two symbols are 15 bytes apart)
+#[inline]
+fn is_comment_open_star(window: &[u8], pos: usize) -> bool {
+    let prev = if pos > 0 {
+        window.get(pos - 1).copied().unwrap_or(0)
+    } else {
+        0
+    };
+    if prev == b'/' {
+        return true; // `/*` — first `*` after `/`
+    }
+    // `/**` — second `*`: preceded by `*` which is itself preceded by `/`
+    prev == b'*' && pos >= 2 && window.get(pos - 2) == Some(&b'/')
 }
 
 fn is_scope_boundary(byte: u8) -> bool {
@@ -7194,6 +7250,13 @@ fn detect_npm_git_deps(text: &str) -> Vec<GitDependencyHit> {
             .min_by_key(|(rel, _)| *rel);
         let Some((rel, prefix)) = matched else { break };
         let offset = search_start + rel;
+        // Skip the `"repository"` metadata field — it holds the package's own
+        // source URL, not a dependency that could be repojacked.
+        let ctx_start = offset.saturating_sub(256);
+        if text[ctx_start..offset].contains("\"repository\"") {
+            search_start = offset + prefix.len();
+            continue;
+        }
         let context_end = text.len().min(offset + 80);
         let snippet = &text[offset..context_end];
         let end_byte = snippet

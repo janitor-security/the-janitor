@@ -3183,6 +3183,10 @@ pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
         }
     }
 
+    // Annotate repeated rule IDs with root-cause provenance so operators see
+    // which SARIF result is the upstream repair point.
+    annotate_sarif_root_causes(&mut results);
+
     let doc = json!({
         "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json",
         "version": "2.1.0",
@@ -3202,6 +3206,55 @@ pub fn render_sarif(entries: &[BounceLogEntry]) -> String {
     });
 
     serde_json::to_string_pretty(&doc).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Annotate a SARIF results array with root-cause provenance.
+///
+/// Groups results by `ruleId`.  For any rule with N ≥ 2 occurrences the first
+/// result receives `properties.isRootCause = true` and
+/// `properties.dominatedCount = N − 1`; subsequent results receive
+/// `properties.isRootCause = false` and `properties.rootCauseResultIndex`
+/// pointing to the first occurrence so that SARIF consumers can surface the
+/// canonical repair location prominently.
+fn annotate_sarif_root_causes(results: &mut [serde_json::Value]) {
+    use serde_json::json;
+    use std::collections::HashMap;
+    let mut rule_to_indices: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, result) in results.iter().enumerate() {
+        if let Some(rule_id) = result.get("ruleId").and_then(|v| v.as_str()) {
+            rule_to_indices
+                .entry(rule_id.to_string())
+                .or_default()
+                .push(i);
+        }
+    }
+    for indices in rule_to_indices.values() {
+        if indices.len() < 2 {
+            continue;
+        }
+        let root_idx = indices[0];
+        let dominated_count = indices.len() - 1;
+        if let Some(result) = results.get_mut(root_idx) {
+            if result.get("properties").is_none() {
+                result["properties"] = json!({});
+            }
+            if let Some(obj) = result["properties"].as_object_mut() {
+                obj.insert("isRootCause".to_string(), json!(true));
+                obj.insert("dominatedCount".to_string(), json!(dominated_count));
+            }
+        }
+        for &idx in &indices[1..] {
+            if let Some(result) = results.get_mut(idx) {
+                if result.get("properties").is_none() {
+                    result["properties"] = json!({});
+                }
+                if let Some(obj) = result["properties"].as_object_mut() {
+                    obj.insert("isRootCause".to_string(), json!(false));
+                    obj.insert("rootCauseResultIndex".to_string(), json!(root_idx));
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

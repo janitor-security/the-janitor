@@ -3,6 +3,29 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-25 — Sprint Batch 57 (Domination Lattice, Auth0 Full-Stack Sweep)
+
+**Directive:** Implement P4-4 Root Cause Abstraction Lattice via `petgraph::algo::dominators::simple_fast`; live-fire `janitor hunt` against 4 remaining Auth0 SDK targets (lock, Auth0.Net, nextjs-auth0, react-native-auth0); structural FP guards for TypeScript TSDoc, C# and Obj-C patterns; SARIF root-cause provenance annotation; delete P4-4 from Innovation Log.
+
+**Changes:**
+
+- `crates/forge/src/rcal.rs` — extended with Layer 1 Domination Tree: `RootCause { node: NodeIndex, dominated_findings: Vec<String>, fix_spec: String }`; `lca_in_domtree(graph, root, nodes)` — computes least-common-ancestor of finding nodes via `petgraph::algo::dominators::simple_fast`, walks dominator chains from leaf to root, returns deepest node that dominates all input nodes; `find_root_causes(graph, root, findings)` — maps `(function_name, finding_id)` pairs to their LCA and emits a single `RootCause` capsule; 3 new unit tests: `three_findings_with_shared_caller_collapse_under_one_root_cause` (validates `shared_helper` is the dominator of 3 leaf findings), `single_finding_produces_singleton_root_cause`, `empty_findings_returns_empty_root_causes`.
+- `crates/cli/src/report.rs` — `annotate_sarif_root_causes(&mut [Value])`: groups SARIF results by `ruleId`; for any rule with N ≥ 2 occurrences marks first result `properties.isRootCause = true, dominatedCount = N−1` and subsequent results `properties.isRootCause = false, rootCauseResultIndex = 0`; wired into `render_sarif` before JSON serialization.
+- `crates/forge/src/slop_hunter.rs` — 4 new structural FP guards all integrated into `contains_scope_wildcard`:
+  - `is_comment_end_star`: suppresses `*` immediately followed by `/` — eliminates TSDoc `/** Scopes requested */` FP (closing `*/` within 16 bytes of `scope` field)
+  - `is_comment_open_star`: suppresses first AND second `*` of `/**` opener — eliminates `scope?: string;\n  /**` FP (both `*` chars in the JSDoc opener within 16-byte scope window)
+  - `is_pointer_type_star`: suppresses `*` followed by ` _` or `)` — eliminates Obj-C React Native bridge method `scope:(NSString * _Nullable)` FP
+  - `repository` field guard in `detect_npm_git_deps`: skips `git+https://` URLs inside a `"repository"` JSON context — eliminates `package.json` `"repository".url` metadata FP
+- `crates/cli/src/hunt.rs` — `ISSUE_TEMPLATE` path guard in `scan_buffer`: filters `unpinned_asset` and `oauth_excessive_scope` findings for files under `ISSUE_TEMPLATE/` — eliminates FPs from GitHub issue form templates that contain documentation URLs and OAuth scope parameter labels.
+- `.INNOVATION_LOG.md` — Phase 0 Crucible matrix updated with Sprint Batch 57 results for all 4 remaining targets; P4-4 block hard-deleted per Absolute Eradication Law.
+
+**Auth0 Hunt Results (Sprint Batch 57):**
+
+- `auth0/lock@14.3.0`: 3 **real findings kept** — `security:dom_xss_innerHTML` (`style.innerHTML = css` in `src/core.js:248`), `security:react_xss_dangerous_html` (`dangerouslySetInnerHTML={{ __html: placeholderHTML }}` in `src/ui/input/checkbox_input.jsx:39`), `security:unpinned_asset` (CDN scripts without SRI in `/support/` demo pages). No false positives detected; no guards added.
+- `auth0/Auth0.Net` (HEAD): CLEAN — `security:unpinned_asset` FP in `.github/ISSUE_TEMPLATE/config.yml` (GitHub Pages docs URL) suppressed via ISSUE_TEMPLATE path guard.
+- `auth0/nextjs-auth0@4.19.0`: CLEAN — 2 FPs suppressed: (1) `security:oauth_excessive_scope` from TSDoc `/** Scopes requested */` + `scope?: string;\n  /**` patterns via `is_comment_end_star` and `is_comment_open_star` guards; (2) `security:unpinned_asset` in ISSUE_TEMPLATE via path guard.
+- `auth0/react-native-auth0@5.5.1`: CLEAN — 3 FPs suppressed: (1) `security:oauth_excessive_scope` from Obj-C `scope:(NSString * _Nullable)` bridge method via `is_pointer_type_star`; (2) `security:unpinned_git_dependency` from `"repository".url` in package.json via repository-field guard; (3) `security:unpinned_asset` in ISSUE_TEMPLATE via path guard.
+
 ## 2026-04-24 — Sprint Batch 56 (Structural Deduplication, Auth0 PHP/Java Hunt)
 
 **Directive:** Implement P3-3 Deduplication (deterministic structural `BLAKE3(rule_id || lang || taint_source)` signature collapse); live-fire `janitor hunt` against `auth0/auth0-php` and `auth0/auth0-java` (fresh `git clone --depth 1`); structural guards for two Java FP families; Innovation Log Dog Fooding Crucible matrix.

@@ -1,11 +1,141 @@
-//! Root Cause Abstraction Lattice (RCAL) causality scoring.
+//! Root Cause Abstraction Lattice (RCAL) — domination lattice + causality scoring.
 //!
-//! The first lattice layer groups findings by sanitizer path and vulnerability
-//! class.  A sanitizer becomes a proven invariant for a class only when the
-//! matched repository cohort clears the configured clean-rate threshold.
+//! Two independent layers:
+//!
+//! **Layer 1 — Domination tree** (`DominationTree`, `RootCause`, `find_root_causes`):
+//! Maps a set of `StructuredFinding` leaf nodes back to their dominating caller in a
+//! `CallGraph`, collapsing N findings that originate from one unsanitised helper into a
+//! single `RootCause` capsule.  Uses `petgraph::algo::dominators::simple_fast` (Cooper
+//! et al O(V²) with fast practical performance on call graphs < 30 000 nodes).
+//!
+//! **Layer 2 — Causality vectors** (`CausalityVector`, `ProvenInvariant`,
+//! `evaluate_proven_invariants`):
+//! Propensity-score evidence pairing sanitizer paths with vulnerability classes over a
+//! repository cohort.  A sanitizer becomes a proven invariant when the clean-rate over
+//! the cohort exceeds the configured threshold.
 
+use crate::callgraph::CallGraph;
 use common::slop::StructuredFinding;
-use std::collections::BTreeMap;
+use petgraph::algo::dominators::simple_fast;
+use petgraph::graph::NodeIndex;
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+// ============================================================================
+// Layer 1 — Domination Tree
+// ============================================================================
+
+/// A root cause capsule grouping dominated findings under one repair task.
+///
+/// Emitted by [`find_root_causes`] when multiple findings share the same
+/// dominator in the call graph — meaning a single fix at `node` closes every
+/// finding in `dominated_findings`.
+#[derive(Debug, Clone)]
+pub struct RootCause {
+    /// Index of the dominating call-graph node (the repair point).
+    pub node: NodeIndex,
+    /// Finding IDs dominated by this node.
+    pub dominated_findings: Vec<String>,
+    /// Human-readable minimum fix specification.
+    pub fix_spec: String,
+}
+
+/// Compute the least-common-ancestor of `nodes` in the dominator tree.
+///
+/// The LCA is the deepest node in the dominator tree that dominates every
+/// element of `nodes`.  Runs `simple_fast` once per call; cache the result
+/// externally when calling repeatedly over the same graph.
+///
+/// Returns `None` when `nodes` is empty, when `graph` has no nodes, or when
+/// any node is unreachable from `root`.
+pub fn lca_in_domtree(
+    graph: &CallGraph,
+    root: NodeIndex,
+    nodes: &[NodeIndex],
+) -> Option<NodeIndex> {
+    if nodes.is_empty() || graph.node_count() == 0 {
+        return None;
+    }
+    if nodes.len() == 1 {
+        return Some(nodes[0]);
+    }
+    let doms = simple_fast(graph, root);
+    // For each node, collect the dominator chain from the node up to root.
+    let chains: Vec<Vec<NodeIndex>> = nodes
+        .iter()
+        .map(|&n| {
+            doms.dominators(n)
+                .map(|it| it.collect::<Vec<_>>())
+                .unwrap_or_default()
+        })
+        .collect();
+    if chains.iter().any(|c| c.is_empty()) {
+        return None;
+    }
+    // Build HashSets for chain[1..] for O(1) membership tests.
+    let tail_sets: Vec<HashSet<NodeIndex>> = chains[1..]
+        .iter()
+        .map(|c| c.iter().copied().collect())
+        .collect();
+    // Walk chain[0] from leaf toward root; the first node present in every
+    // tail set is the deepest common dominator (the LCA).
+    chains[0]
+        .iter()
+        .copied()
+        .find(|n| tail_sets.iter().all(|s| s.contains(n)))
+}
+
+/// Collapse `findings` under their dominator root causes in `graph`.
+///
+/// Each entry is `(function_name, finding_id)`.  Findings whose function
+/// name is not a node in `graph` are silently skipped.  All findings that
+/// share the same least-common-ancestor are collapsed into one [`RootCause`]
+/// capsule; if they share no common dominator an empty vec is returned.
+pub fn find_root_causes(
+    graph: &CallGraph,
+    root: NodeIndex,
+    findings: &[(&str, &str)],
+) -> Vec<RootCause> {
+    if findings.is_empty() || graph.node_count() == 0 {
+        return Vec::new();
+    }
+    let name_to_node: HashMap<&str, NodeIndex> = graph
+        .node_indices()
+        .filter_map(|n| graph.node_weight(n).map(|s| (s.as_str(), n)))
+        .collect();
+    let located: Vec<(NodeIndex, String)> = findings
+        .iter()
+        .filter_map(|(fn_name, finding_id)| {
+            name_to_node
+                .get(fn_name)
+                .map(|&n| (n, finding_id.to_string()))
+        })
+        .collect();
+    if located.is_empty() {
+        return Vec::new();
+    }
+    let nodes: Vec<NodeIndex> = located.iter().map(|(n, _)| *n).collect();
+    let lca = match lca_in_domtree(graph, root, &nodes) {
+        Some(n) => n,
+        None => return Vec::new(),
+    };
+    let fn_name = graph
+        .node_weight(lca)
+        .map(String::as_str)
+        .unwrap_or("unknown");
+    let dominated_findings: Vec<String> = located.iter().map(|(_, id)| id.clone()).collect();
+    vec![RootCause {
+        node: lca,
+        dominated_findings: dominated_findings.clone(),
+        fix_spec: format!(
+            "Add input sanitization in `{fn_name}` to remediate {} dominated findings.",
+            dominated_findings.len()
+        ),
+    }]
+}
+
+// ============================================================================
+// Layer 2 — Causality Vectors
+// ============================================================================
 
 /// Propensity-score style evidence for one sanitizer and vulnerability class.
 #[derive(Debug, Clone, PartialEq)]
@@ -249,5 +379,100 @@ mod tests {
         assert!(evidence.contains("Proven Invariant"));
         assert!(evidence.contains("escapeHtml"));
         assert!(evidence.contains("19/20"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Layer 1 — Domination tree tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn three_findings_with_shared_caller_collapse_under_one_root_cause() {
+        use crate::callgraph::build_call_graph;
+        // Call graph: root_entry → shared_helper → {leaf_a, leaf_b, leaf_c}
+        // Findings are in leaf_a, leaf_b, leaf_c.
+        // Expected: shared_helper dominates all three leaves → one RootCause.
+        let source = b"\
+def root_entry():
+    shared_helper()
+
+def shared_helper():
+    leaf_a()
+    leaf_b()
+    leaf_c()
+
+def leaf_a():
+    pass
+
+def leaf_b():
+    pass
+
+def leaf_c():
+    pass
+";
+        let graph = build_call_graph("py", source);
+        let root_node = graph
+            .node_indices()
+            .find(|&n| {
+                graph
+                    .node_weight(n)
+                    .map(|s| s == "root_entry")
+                    .unwrap_or(false)
+            })
+            .expect("root_entry must be in the call graph");
+
+        let findings = [
+            ("leaf_a", "security:sqli"),
+            ("leaf_b", "security:sqli"),
+            ("leaf_c", "security:sqli"),
+        ];
+        let root_causes = find_root_causes(&graph, root_node, &findings);
+
+        assert_eq!(
+            root_causes.len(),
+            1,
+            "three dominated findings must collapse to one RootCause capsule"
+        );
+        assert_eq!(
+            root_causes[0].dominated_findings.len(),
+            3,
+            "all three finding IDs must appear in the capsule"
+        );
+        let rc_fn = graph.node_weight(root_causes[0].node).unwrap();
+        assert_eq!(
+            rc_fn, "shared_helper",
+            "root cause node must be the shared upstream caller"
+        );
+    }
+
+    #[test]
+    fn single_finding_produces_singleton_root_cause() {
+        use crate::callgraph::build_call_graph;
+        // `only_fn` must be a callee so the graph includes it as a node.
+        let source = b"\
+def root():
+    only_fn()
+
+def only_fn():
+    pass
+";
+        let graph = build_call_graph("py", source);
+        let root = graph
+            .node_indices()
+            .find(|&n| graph.node_weight(n).map(|s| s == "root").unwrap_or(false))
+            .expect("root must be in the call graph");
+        let findings = [("only_fn", "security:xss")];
+        let root_causes = find_root_causes(&graph, root, &findings);
+        assert_eq!(root_causes.len(), 1);
+        assert_eq!(root_causes[0].dominated_findings.len(), 1);
+    }
+
+    #[test]
+    fn empty_findings_returns_empty_root_causes() {
+        use petgraph::graph::DiGraph;
+        // find_root_causes returns empty immediately when findings is empty,
+        // regardless of graph structure.
+        let graph: CallGraph = DiGraph::new();
+        let root_causes = find_root_causes(&graph, NodeIndex::new(0), &[]);
+        assert!(root_causes.is_empty());
     }
 }
