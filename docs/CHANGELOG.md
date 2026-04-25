@@ -3,6 +3,36 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-25 — Sprint Batch 59 (Config Taint Wiring, Target Ledger Init, Atlassian Bugcrowd Campaign)
+
+**Directive:** Wire `track_config_taint_js` into the DOM XSS branch of `slop_filter.rs` with `static_source_proven` downgrade to `Informational`; add `static_source_proven: Option<bool>` to `ExploitWitness`; delete Phase 0 Crucible and P4-8 blocks from `.INNOVATION_LOG.md`; create `tools/campaign/TARGET_LEDGER.md`; live-fire `janitor hunt` against Atlassian Bugcrowd targets with SSRF false-positive guards; run `just audit`.
+
+**Changes:**
+
+- `crates/common/src/slop.rs` — `ExploitWitness` gains `pub static_source_proven: Option<bool>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; 2 new unit tests: `static_source_proven_serializes_and_deserializes_correctly` (verifies JSON round-trip with `Some(true)`) and `static_source_proven_none_omitted_from_json` (verifies `None` omitted for schema backwards-compatibility).
+- `crates/forge/src/slop_filter.rs` — DOM XSS / prototype_pollution branch now calls `crate::config_taint::track_config_taint_js(source)`; when taint flows are empty, sets `witness.static_source_proven = Some(true)` and downgrades `finding.severity` to `"Informational"`; when dynamic flows found, sets `Some(false)`.
+- `crates/forge/src/slop_hunter.rs` — `find_js_ssrf_slop` extended with `has_require_safe_url` byte-level flag (scans for bare `requireSafeUrl` byte sequence); `find_ssrf_calls_js` accepts new `has_require_safe_url: bool` parameter; **Guard 1** (Atlassian Forge `ReadonlyRoute`): suppresses SSRF when `requireSafeUrl` is present and arg is a template_string containing `.value` — catches Babel/tsc-compiled `(0, safeUrl_1.requireSafeUrl)(path)` form; **Guard 2** (relative-path fetch): suppresses SSRF when template string starts with `` `./`` or `` `/ `` — same-origin relative paths cannot constitute SSRF; 2 new tests: `test_js_ssrf_relative_path_fetch_not_flagged`, `test_js_ssrf_forge_require_safe_url_not_flagged`.
+- `.INNOVATION_LOG.md` — **Hard-deleted** `Phase 0: The Dog Fooding Crucible` section (Auth0 target matrix) per Absolute Eradication Law; **hard-deleted** `P4-8 — Configuration Taint Analysis` block (fully shipped in Sprint Batch 58).
+- `tools/campaign/TARGET_LEDGER.md` — **NEW FILE**: Atlassian Bugcrowd target checklist organized by tier; Tier 1 Forge ($7k P1): `@forge/cli`, `@forge/api`, `@forge/ui`, `@forge/bridge`; Tier 1 Rovo Dev ($12k P1): Rovo Dev CLI; Tier 2 Loom ($7k P1): Desktop App, Chrome Extension; Tier 2 Bitbucket: `atlassian-python-api`; Hunt Results Log table.
+
+**Atlassian Bugcrowd Hunt Results (Sprint Batch 59):**
+
+All scans run under Sovereign Mode (`JANITOR_LICENSE=<absolute path>` env var; `detect_optimal_concurrency()` workers).
+
+- `@forge/cli@10.7.4`: CLEAN — SSRF Guard 1 (`requireSafeUrl` / `ReadonlyRoute`) suppressed the `wrapRequestConnectedData` false positive; 0 valid findings.
+- `@forge/api@4.9.0`: CLEAN — 0 findings. No SSRF sinks, no DOM sinks, no unpinned assets in NPM package surface.
+- `@forge/ui@0.13.0`: CLEAN — 0 findings. React component primitives only.
+- `@forge/bridge@4.9.0`: CLEAN — SSRF Guard 2 (relative-path fetch) suppressed the i18n bundle fetch `./bundle/${locale}.json` false positive; 0 valid findings.
+- `@forge/bridge` (additional scan variants): All CLEAN after guard application.
+- `figma-for-jira` (manual review): `missing_ownership_check` on `teamsRouter` is a FP — parent `adminRouter` applies `jiraAdminOnlyAuthorizationMiddleware` at mount time; `disconnectFigmaTeamUseCase` further scopes all DB queries by `connectInstallation.id`. Not an IDOR vector; engine limitation is Express router hierarchy traversal (not remediated — requires cross-router middleware join).
+
+**False Positive Forensics:**
+
+- `@forge/cli` SSRF: `wrapRequestConnectedData` uses Atlassian's `route()` tagged-template + `requireSafeUrl()` type guard. Babel compiles to `(0, safeUrl_1.requireSafeUrl)(path)` — byte pattern is `requireSafeUrl` (no paren suffix). Initial guard searched for `requireSafeUrl(` and failed to match; corrected to bare `requireSafeUrl`.
+- `@forge/bridge` SSRF: `fetch(\`./\${bundleFolder}/\${locale}.json\`)` — relative path cannot redirect to attacker-controlled host. Guard 2 matches template strings starting with `` `./ `` or `` `/ ``.
+
+**Audit:** `just audit` exits 0. All 2 new `slop.rs` tests pass. Both new SSRF suppression tests pass. Workspace-wide test suite clean.
+
 ## 2026-04-25 — Sprint Batch 58 (Configuration Taint Analysis, auth0/lock Exploitability Verdict)
 
 **Directive:** Implement P4-8 Configuration Taint Analysis (`crates/forge/src/config_taint.rs`); live-fire `janitor hunt` on auth0/lock and apply the new engine to determine if the CSS injection finding is attacker-controlled; update Innovation Log Phase 0 Crucible with final exploitability verdict; add P4-8 entry to Innovation Log.

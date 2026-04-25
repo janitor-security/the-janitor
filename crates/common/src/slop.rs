@@ -71,6 +71,13 @@ pub struct ExploitWitness {
     /// `"Critical RCE via Java ObjectOutputStream deserialization"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk_classification: Option<String>,
+    /// `Some(true)` when Configuration Taint analysis proved the sink's source
+    /// is a static developer-configured value (e.g., a compiled Stylus bundle),
+    /// not an attacker-controlled runtime input — finding is pattern-true but
+    /// exploitability-false.  `Some(false)` when a dynamic taint flow was confirmed.
+    /// `None` when the analysis was not run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub static_source_proven: Option<bool>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.
@@ -130,4 +137,55 @@ pub struct StructuredFinding {
     /// path bypasses all registered sanitizers or validators.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upstream_validation_absent: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_source_proven_serializes_and_deserializes_correctly() {
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("src/core.js".to_string()),
+            line: Some(248),
+            fingerprint: "abc123".to_string(),
+            severity: Some("Informational".to_string()),
+            exploit_witness: Some(ExploitWitness {
+                static_source_proven: Some(true),
+                source_label: "static compiled bundle".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&finding).expect("serialization must not fail");
+        assert!(
+            json.contains("static_source_proven"),
+            "field must appear in JSON output"
+        );
+        assert!(json.contains("true"), "value must be true");
+        let round_trip: StructuredFinding =
+            serde_json::from_str(&json).expect("deserialization must not fail");
+        assert_eq!(
+            round_trip.exploit_witness.unwrap().static_source_proven,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn static_source_proven_none_omitted_from_json() {
+        let finding = StructuredFinding {
+            id: "security:command_injection".to_string(),
+            exploit_witness: Some(ExploitWitness {
+                static_source_proven: None,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&finding).expect("serialization must not fail");
+        assert!(
+            !json.contains("static_source_proven"),
+            "None field must be omitted from JSON to preserve schema backwards-compatibility"
+        );
+    }
 }

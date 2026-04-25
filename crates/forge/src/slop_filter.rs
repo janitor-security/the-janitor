@@ -1577,8 +1577,16 @@ impl PRBouncer for PatchBouncer {
             } else if rule_id == "security:dom_xss_innerHTML"
                 || rule_id.contains("prototype_pollution")
             {
-                let witness =
+                let mut witness =
                     crate::exploitability::browser_sink_witness(&file_path, rule_id, line);
+                let taint_flows = crate::config_taint::track_config_taint_js(source);
+                if taint_flows.is_empty() {
+                    // No attacker-controlled source found — pattern-true but exploitability-false.
+                    witness.static_source_proven = Some(true);
+                    finding.severity = Some("Informational".to_string());
+                } else {
+                    witness.static_source_proven = Some(false);
+                }
                 finding = crate::exploitability::attach_exploit_witness(finding, witness);
             } else if rule_id == "security:jwt_validation_bypass"
                 || rule_id == "security:oauth_csrf_missing_state"

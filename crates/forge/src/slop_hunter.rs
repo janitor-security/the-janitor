@@ -4560,17 +4560,34 @@ fn find_js_ssrf_slop(eng: &QueryEngine, parsed: &ParsedUnit<'_>) -> Vec<SlopFind
     if !has_http {
         return Vec::new();
     }
+    // Atlassian Forge ReadonlyRoute guard: `requireSafeUrl` + `.value` template pattern
+    // enforces a type-safe route that cannot be a raw attacker string — suppress wholesale.
+    // Babel/tsc transpiles `requireSafeUrl(path)` to `(0, ns.requireSafeUrl)(path)`, so
+    // the byte pattern is `requireSafeUrl` (no open-paren variant needed).
+    let has_require_safe_url = source
+        .windows(b"requireSafeUrl".len())
+        .any(|w| w == b"requireSafeUrl");
     let tree = match parsed.ensure_tree(eng.js_lang.clone(), "js") {
         Ok(Some(tree)) => tree,
         Ok(None) => return Vec::new(),
         Err(finding) => return vec![finding],
     };
     let mut findings = Vec::new();
-    find_ssrf_calls_js(tree.root_node(), source, &mut findings);
+    find_ssrf_calls_js(
+        tree.root_node(),
+        source,
+        has_require_safe_url,
+        &mut findings,
+    );
     findings
 }
 
-fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFinding>) {
+fn find_ssrf_calls_js(
+    node: Node<'_>,
+    source: &[u8],
+    has_require_safe_url: bool,
+    findings: &mut Vec<SlopFinding>,
+) {
     if node.kind() == "call_expression" {
         if let (Some(func_node), Some(args_node)) = (
             node.child_by_field_name("function"),
@@ -4585,18 +4602,32 @@ fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
                 };
                 if let Some(arg) = first_named {
                     if matches!(arg.kind(), "binary_expression" | "template_string") {
-                        findings.push(SlopFinding {
-                            start_byte: node.start_byte(),
-                            end_byte: node.end_byte(),
-                            description: format!(
-                                "security:ssrf_dynamic_url — `{func_text}()` called with a \
-                                 dynamically constructed URL (string concatenation or template \
-                                 literal); if any component is user-controlled this is an SSRF \
-                                 vector — validate and allowlist URL hosts — CISA KEV class"
-                            ),
-                            domain: DOMAIN_FIRST_PARTY,
-                            severity: Severity::KevCritical,
-                        });
+                        let arg_text = arg.utf8_text(source).unwrap_or("");
+                        // Guard 1: Atlassian Forge ReadonlyRoute pattern — requireSafeUrl
+                        // enforces a type-safe wrapper; template uses `.value` property.
+                        let is_safe_route_interp = has_require_safe_url
+                            && arg.kind() == "template_string"
+                            && arg_text.contains(".value");
+                        // Guard 2: relative-path fetch — starts with `./` or `/` and
+                        // therefore cannot redirect to an attacker-controlled host/scheme.
+                        let is_relative_path = arg.kind() == "template_string"
+                            && (arg_text.starts_with("`.//")
+                                || arg_text.starts_with("`./")
+                                || arg_text.starts_with("`/"));
+                        if !is_safe_route_interp && !is_relative_path {
+                            findings.push(SlopFinding {
+                                start_byte: node.start_byte(),
+                                end_byte: node.end_byte(),
+                                description: format!(
+                                    "security:ssrf_dynamic_url — `{func_text}()` called with a \
+                                     dynamically constructed URL (string concatenation or template \
+                                     literal); if any component is user-controlled this is an SSRF \
+                                     vector — validate and allowlist URL hosts — CISA KEV class"
+                                ),
+                                domain: DOMAIN_FIRST_PARTY,
+                                severity: Severity::KevCritical,
+                            });
+                        }
                     }
                 }
             }
@@ -4604,7 +4635,7 @@ fn find_ssrf_calls_js(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_ssrf_calls_js(child, source, findings);
+        find_ssrf_calls_js(child, source, has_require_safe_url, findings);
     }
 }
 
@@ -8831,6 +8862,42 @@ mod kev_tests {
                 .iter()
                 .all(|f| !f.description.contains("ssrf_dynamic_url")),
             "JS SSRF static fetch must not be flagged"
+        );
+    }
+
+    #[test]
+    fn test_js_ssrf_relative_path_fetch_not_flagged() {
+        // Relative-path fetches cannot redirect to an attacker-controlled host — not SSRF.
+        let src = br#"
+const resp = await fetch(`./${bundleFolder}/${locale}.json`);
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "relative-path template fetch must not be flagged as SSRF"
+        );
+    }
+
+    #[test]
+    fn test_js_ssrf_forge_require_safe_url_not_flagged() {
+        // Atlassian Forge ReadonlyRoute pattern in Babel-transpiled form: tsc emits
+        // (0, safeUrl_1.requireSafeUrl)(path) — template string uses .value which is
+        // only accessible on a requireSafeUrl-gated ReadonlyRoute object.
+        let src = br#"
+const safeUrl_1 = require("../safeUrl");
+const wrapRequestConnectedData = (fetch) => (path, init) => {
+    const safeUrl = (0, safeUrl_1.requireSafeUrl)(path);
+    return fetch(`/connected-data/${safeUrl.value.replace(/^\/+/, '')}`, init);
+};
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "Atlassian Forge requireSafeUrl+.value pattern must not be flagged as SSRF"
         );
     }
 
