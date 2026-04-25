@@ -32,6 +32,7 @@ pub mod binary_recovery;
 pub mod brain;
 pub mod callgraph;
 pub mod campaign;
+pub mod config_taint;
 pub mod cst_diff;
 pub mod dedup;
 pub mod deobfuscate;

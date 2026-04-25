@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-25 — Sprint Batch 58 (Configuration Taint Analysis, auth0/lock Exploitability Verdict)
+
+**Directive:** Implement P4-8 Configuration Taint Analysis (`crates/forge/src/config_taint.rs`); live-fire `janitor hunt` on auth0/lock and apply the new engine to determine if the CSS injection finding is attacker-controlled; update Innovation Log Phase 0 Crucible with final exploitability verdict; add P4-8 entry to Innovation Log.
+
+**Changes:**
+
+- `crates/forge/src/config_taint.rs` — NEW FILE. `ConfigTaintSource` enum (UrlSearchParams, WindowLocationHash, WindowLocationSearch, PostMessage, DocumentCookie) with `label()` accessor; `ConfigTaintFlow { property_path, source, assignment_byte, taint_variable }`; `track_config_taint_js(source: &[u8]) -> Vec<ConfigTaintFlow>` — textual backward-trace: collects tainted variable assignments from web API sources, then scans for framework config property assignments where those variables appear on the RHS; `has_framework_constructor(source)` fast-reject guard (Auth0Lock, Lock, Auth0, createAuth0Client); `memmem` shim (dependency-free); `is_identifier_boundary`, `find_config_property_for_rhs`, `extract_lhs_variable` internal helpers; 6 deterministic unit tests.
+- `crates/forge/src/lib.rs` — exported `pub mod config_taint`.
+- `.INNOVATION_LOG.md` — Phase 0 Crucible lock row updated with Sprint Batch 58 Config Taint final verdict; P4-8 Configuration Taint Analysis entry added (Phase A shipped).
+
+**auth0/lock Config Taint Verdict (Sprint Batch 58):**
+
+Live-fire `janitor hunt /tmp/lock --format json` confirms 3 findings still fire: `security:dom_xss_innerHTML` (`src/core.js:248`), `security:react_xss_dangerous_html` (`src/ui/input/checkbox_input.jsx:39`), `security:unpinned_asset` (support pages). Config Taint engine analysis of `src/core.js`:
+
+- `css` variable at line 248: `import css from '../css/index.styl'` — static Stylus bundle compiled at build time. No `URLSearchParams`, `window.location.hash`, `postMessage`, or `document.cookie` assignments flow into `css`.
+- `window.location.hash` is used exactly once in the codebase (`src/core/actions.js:52`) as the argument to `resumeAuth()` — OAuth callback resumption, not a DOM sink.
+- `placeholderHTML` originates from developer-configured `additionalSignUpFields` options, not runtime attacker input.
+
+**Verdict: pattern-true, exploitability-false.** The `style.innerHTML = css` sink is real, but the source is a static compiled bundle. Bounty claim for CSS injection is NOT viable without proof of injection into the build pipeline.
+
 ## 2026-04-25 — Sprint Batch 57 (Domination Lattice, Auth0 Full-Stack Sweep)
 
 **Directive:** Implement P4-4 Root Cause Abstraction Lattice via `petgraph::algo::dominators::simple_fast`; live-fire `janitor hunt` against 4 remaining Auth0 SDK targets (lock, Auth0.Net, nextjs-auth0, react-native-auth0); structural FP guards for TypeScript TSDoc, C# and Obj-C patterns; SARIF root-cause provenance annotation; delete P4-4 from Innovation Log.
