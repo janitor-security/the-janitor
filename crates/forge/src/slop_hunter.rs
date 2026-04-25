@@ -940,7 +940,19 @@ fn find_jwt_validation_bypass(source: &[u8]) -> Vec<SlopFinding> {
                         || window.starts_with(b"jsonwebtoken.verify(")
                         || window.starts_with(b"parsewithclaims(")));
             let has_bad_exp = contains_any_bytes(window, EXPIRY_FALSE_MARKERS) || decode_only;
-            if has_none_alg || has_bad_aud || has_bad_exp {
+            // Guard: a decode-only call that is solely flagged by `decode_only`
+            // (i.e., no `none` algorithm and no bad audience) must be checked
+            // against a wider 1 KB context window.  The Auth0 Java SDK pattern
+            // is JWT.decode(token) inside a SignatureVerifier that calls
+            // this.verifier.verify(decoded) immediately after — a legitimate
+            // verify-then-use flow, not a bypass.  Suppress if any verification
+            // call appears within 512 bytes before or after the decode call.
+            let decode_only_suppressed = decode_only
+                && !has_none_alg
+                && !has_bad_aud
+                && !contains_any_bytes(&lower, EXPIRY_FALSE_MARKERS)
+                && contains_any_bytes(&lower, &[b"jwt.require(", b"verifier.verify("]);
+            if (has_none_alg || has_bad_aud || has_bad_exp) && !decode_only_suppressed {
                 findings.push(SlopFinding {
                     start_byte: start,
                     end_byte: end,
@@ -1126,9 +1138,10 @@ fn find_oauth_excessive_scope(source: &[u8]) -> Vec<SlopFinding> {
 /// Return `true` only when `*` appears in a scope-assignment context within
 /// `window`.  Acceptable patterns: `scope=*`, `scope: *`, `scope: ["*"]`,
 /// `"scope":"*"`, `scope=%2a`.  A bare `*` in JSDoc comments (`/** */`),
-/// TypeScript glob imports (`import * as`), or type widening (`Record<*, V>`)
+/// TypeScript glob imports (`import * as`), Javadoc block-comment
+/// continuation lines (`* <text>`), or type widening (`Record<*, V>`)
 /// must NOT trigger this check.  Require `*` to be within 16 bytes of a
-/// `scope` keyword boundary so only genuine wildcard scope assignments fire.
+/// `scope` keyword boundary AND not be a line-continuation marker.
 fn contains_scope_wildcard(window: &[u8]) -> bool {
     // Require "scope" to appear within 16 bytes before the '*'.
     let scope_needle = b"scope";
@@ -1141,12 +1154,42 @@ fn contains_scope_wildcard(window: &[u8]) -> bool {
         // Search for '*' in the 16-byte span immediately following "scope".
         let after_scope = scope_pos + scope_needle.len();
         let search_end = (after_scope + 16).min(window.len());
-        if window[after_scope..search_end].contains(&b'*') {
-            return true;
+        for (off, &byte) in window[after_scope..search_end].iter().enumerate() {
+            if byte == b'*' && !is_comment_continuation_star(window, after_scope + off) {
+                return true;
+            }
         }
         start = scope_pos + 1;
     }
     false
+}
+
+/// Return `true` when the `*` at `pos` in `window` is a Javadoc/block-comment
+/// line-continuation marker rather than a wildcard operator.
+///
+/// A continuation `*` is preceded on the same line only by whitespace
+/// (spaces, tabs) and a newline (or the start of the window).  E.g.:
+/// ```text
+/// * any scope:\n     *     <code>
+///                    ^ this is a continuation star
+/// ```
+fn is_comment_continuation_star(window: &[u8], pos: usize) -> bool {
+    if pos == 0 {
+        return false;
+    }
+    let mut i = pos - 1;
+    loop {
+        match window[i] {
+            b' ' | b'\t' => {
+                if i == 0 {
+                    return true; // only whitespace before start of window
+                }
+                i -= 1;
+            }
+            b'\n' | b'\r' => return true, // newline before any non-whitespace
+            _ => return false,            // non-whitespace non-newline found
+        }
+    }
 }
 
 fn contains_scope_repo_token(window: &[u8]) -> bool {

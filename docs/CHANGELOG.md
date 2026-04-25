@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 56 (Structural Deduplication, Auth0 PHP/Java Hunt)
+
+**Directive:** Implement P3-3 Deduplication (deterministic structural `BLAKE3(rule_id || lang || taint_source)` signature collapse); live-fire `janitor hunt` against `auth0/auth0-php` and `auth0/auth0-java` (fresh `git clone --depth 1`); structural guards for two Java FP families; Innovation Log Dog Fooding Crucible matrix.
+
+**Changes:**
+
+- `crates/forge/src/dedup.rs` — new file; `FindingOccurrence { file, line }`; `DeduplicatedFinding { finding, occurrences }` with `is_cross_file()`; `structural_signature()` — `BLAKE3(rule_id || "\0" || file_ext || "\0" || source_label)` → `u64`; `deduplicate_findings()` groups by signature, collapses multi-file same-pattern findings, sorts output by `(rule_id, file, line)` for deterministic ordering; 5 deterministic unit tests (`identical_findings_in_two_files_are_collapsed_into_one`, `distinct_rule_ids_are_not_collapsed`, `same_rule_different_extension_not_collapsed`, `single_finding_returned_with_one_occurrence`, `deduplication_is_deterministic`).
+- `crates/forge/src/lib.rs` — exported `pub mod dedup`.
+- `crates/forge/src/slop_hunter.rs` — (1) `is_comment_continuation_star()`: new helper returning `true` when `*` is preceded only by whitespace since last newline (Javadoc block-comment continuation); updated `contains_scope_wildcard()` to call this guard before accepting any `*` hit — eliminates FP on `any scope:\n     *` Javadoc pattern; (2) JWT decode-only FP guard: added `decode_only_suppressed` boolean — when `JWT.decode()` is the sole trigger (no `none` algorithm, no bad audience, no explicit expiry disable) AND the source file contains `jwt.require(` or `verifier.verify(`, the finding is suppressed; prevents false positive on `SignatureVerifier.java` in auth0-java SDK.
+- `.INNOVATION_LOG.md` — added `Phase 0: The Dog Fooding Crucible` table (8 Auth0 SDK targets, status, FPs squashed); hard-deleted P3-3 Deduplication sub-bullet per Absolute Eradication Law (Priority ranking and False-positive clustering remain in P3-3 pending).
+
+**Auth0 Hunt Results (fresh live-fire clones from HEAD):**
+
+- `auth0/auth0-php` (HEAD): 0 findings — clean.
+- `auth0/auth0-java` (HEAD): 0 findings after 2 FP guards:
+  - `security:oauth_excessive_scope` in 8 `*Client.java` management files: Javadoc `* any scope:\n     *` pattern where newline-continuation `*` triggered wildcard detection → suppressed by `is_comment_continuation_star`.
+  - `security:jwt_validation_bypass` in `SignatureVerifier.java:88`: `JWT.decode(token)` in decode-then-verify pipeline → suppressed by file-level `jwt.require(` / `verifier.verify(` context check.
+
+**Verification:**
+- `cargo test --workspace -- --test-threads=4` → all tests pass.
+- `just audit` → exit 0.
+
+---
+
 ## 2026-04-24 — Sprint Batch 55 (EVM AEG, Campaign Planner, Auth0 Hunt)
 
 **Directive:** Implement P3-1 Phase D (EVM transaction synthesis), P3-2 (Autonomous Cross-Service Campaign Planner via petgraph Dijkstra kill-chain), live-fire Auth0 hunt against auth0-js and auth0-spa-js SDKs with auto-correction of false positives, and Innovation Log eradication of both completed P-items.

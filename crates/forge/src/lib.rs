@@ -33,6 +33,7 @@ pub mod brain;
 pub mod callgraph;
 pub mod campaign;
 pub mod cst_diff;
+pub mod dedup;
 pub mod deobfuscate;
 pub mod exploitability;
 pub mod fold;
