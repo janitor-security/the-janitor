@@ -1,4 +1,4 @@
-# The Janitor: Structural Firewall for AI-Generated Code
+# The Janitor: The Mathematical Firewall Against Autonomous AI
 **v10.2.0-beta.2 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
@@ -14,11 +14,11 @@
 
 ---
 
-## The Problem
+## The Problem: Mythos-Class Autonomous Injection
 
-The Veracode 2025 State of Software Security report established the baseline: AI-assisted code contains **36% more high-severity vulnerabilities** than human-written equivalents. Your linter passes Copilot output. Your SAST tool uploads it to a cloud pipeline. By the time the report arrives, the PR is merged.
+The Veracode 2025 State of Software Security report established the baseline: AI-assisted code contains **36% more high-severity vulnerabilities** than human-written equivalents. But the threat has evolved from Copilot assistance to 'Mythos-class' autonomous AI agents that inject vulnerabilities and orchestrate attack chains across microservices. Your linter passes agentic output. Your SAST tool uploads it to a cloud pipeline. By the time the report arrives, the PR is merged.
 
-The threat model has changed. Your enforcement layer has not.
+The threat model has changed. Your enforcement layer has not. The Janitor is the only deterministic defense against 'Mythos-class' AI agents, mathematically verifying intent before code enters the repository. Looking ahead, our decadal roadmap pioneers Zero-Knowledge AST proofs and Labyrinth Deception to neutralize adversarial agents at the structural level.
 
 ## Zero-Friction GitHub Integration
 
@@ -237,16 +237,21 @@ Test without a live PR:
 janitor webhook-test --repo .
 ```
 
-## Pricing
+## Commercial Utility
+
+### Bug Bounty Utility
+The Janitor accelerates offensive operations with Automated Exploit Generation (AEG). It synthesizes actionable, working Proof-of-Concepts—from AEG HTML harnesses to Z3 SMT minimal strings—empowering security researchers to prove impact without violating Terms of Service via automated network requests.
+
+### Enterprise Tiers
 
 **The enforcement is free. The attestation is the product.**
 
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
-| **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. No per-seat limits. |
-| **Sovereign / Air-Gap** | **Custom (Starting at $49,900/yr)** | Everything in Team + Dual-PQC CBOMs (FIPS 204 + FIPS 205) + Wasm BYOR rule mounting + Offline Replayable Decision Capsules + Air-Gap Intel Transfers (SHA-384 + Ed25519) + Jira ASPM dedup sync + SLSA Level 4 reproducible build verification + SOC 2 Type II attestation packages + Dedicated SLA. |
-| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. Unlimited seats. |
+| **Free (Community)** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
+| **Team Tier** | **$499/yr** | Unlimited Seats. All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. |
+| **Sovereign / Air-Gap Tier** | **Custom (Starting at $49,900/yr)** | SLSA L4 reproducible build verification, Offline PQC validation, Governor Control Plane, Wasm BYOR rule mounting, Air-Gap Intel Transfers. |
+| **Industrial Tier** | **Custom** | OT/ICS/SCADA pack. On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. |
 
 ### [→ Get Janitor Sentinel — $499/yr](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
 

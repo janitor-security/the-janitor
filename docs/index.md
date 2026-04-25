@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v10.2.0-beta.2 — Structural Firewall for AI-Generated Code. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
+**v10.2.0-beta.2 — The Mathematical Firewall Against Autonomous AI. 23 Grammars. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
 
 ---
 
@@ -24,7 +24,7 @@ hide:
 
 ## THE ENFORCEMENT LAYER
 
-The Janitor is not a linter. It is not a SAST scanner. It is a **structural enforcement layer** that runs on your hardware, in your pipeline, on every pull request — before the merge button is available.
+The Janitor is not a linter. It is not a SAST scanner. It is a **structural enforcement layer** that runs on your hardware, in your pipeline, on every pull request — before the merge button is available. The Janitor is the only deterministic defense against 'Mythos-class' AI agents, mathematically verifying intent before code enters the repository. Looking ahead, our decadal roadmap pioneers Zero-Knowledge AST proofs and Labyrinth Deception to neutralize adversarial agents at the structural level.
 
 ## Why Not CodeQL, Snyk, or SonarQube?
 
@@ -269,16 +269,21 @@ See the [setup documentation](setup.md#webhook-sub-table) for the full `[webhook
 
 ---
 
-## ECONOMICS
+## COMMERCIAL UTILITY
+
+### Bug Bounty Utility
+The Janitor accelerates offensive operations with Automated Exploit Generation (AEG). It synthesizes actionable, working Proof-of-Concepts—from AEG HTML harnesses to Z3 SMT minimal strings—empowering security researchers to prove impact without violating Terms of Service via automated network requests.
+
+### Enterprise Tiers
 
 **The enforcement is free. The attestation is the product.**
 
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
-| **Free** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **[Team](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)** | **$499/yr** | All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. No per-seat limits. |
-| **Sovereign / Air-Gap** | **Custom (Starting at $49,900/yr)** | Everything in Team + SLSA Level 4 reproducible builds + Wasm BYOR rule mounting + Offline Decision Capsules + Air-Gap Intel Transfers + Jira ASPM dedup + Native SCM (GitLab, AzDO) + SOC 2 Type II packages + Dedicated SLA. |
-| **[Industrial](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7)** | **Custom** | On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. No per-seat limits. |
+| **Free (Community)** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
+| **Team Tier** | **$499/yr** | Unlimited Seats. All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. |
+| **Sovereign / Air-Gap Tier** | **Custom (Starting at $49,900/yr)** | SLSA L4 reproducible build verification, Offline PQC validation, Governor Control Plane, Wasm BYOR rule mounting, Air-Gap Intel Transfers. |
+| **Industrial Tier** | **Custom** | OT/ICS/SCADA pack. On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. |
 
 The cleanup is identical at every tier. What you are paying for is a cryptographically verifiable chain of custody that satisfies a regulator, an auditor, or an incident response team.
 
@@ -301,7 +306,7 @@ The cleanup is identical at every tier. What you are paying for is a cryptograph
 
 ## Pricing
 
-### Free Tier
+### Free (Community)
 
 No account required. No time limit. No LOC cap.
 
@@ -319,7 +324,7 @@ No account required. No time limit. No LOC cap.
 | **CI/CD Compliance Attestation** | — |
 | **Janitor Sentinel** (GitHub App automation) | — |
 
-### Team Specialist — $499 / year
+### Team Tier — $499 / year
 
 Includes all Free tier capabilities, plus:
 
@@ -329,34 +334,31 @@ Includes all Free tier capabilities, plus:
 | **CI/CD Compliance Attestation** — `--token` flag activates signed reports in CI | ✓ |
 | **Janitor Sentinel** — GitHub App that runs `janitor bounce` on every PR | ✓ |
 | **Shared Credit Pool** — team-level token across all CI runners | ✓ |
-| **No per-seat limits** — run on every developer machine and CI runner under one license | ✓ |
+| **Unlimited Seats** — run on every developer machine and CI runner under one license | ✓ |
 
 [**Activate — $499/yr →**](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
 
-### Sovereign / Air-Gap — Starting at $49,900 / year
+### Sovereign / Air-Gap Tier — Starting at $49,900 / year
 
 Includes all Team capabilities, plus:
 
-- **SLSA Level 4 Reproducible Builds** — bit-for-bit deterministic release binaries with Docker verification
-- **Dual-PQC CycloneDX v1.6 CBOMs** — ML-DSA-65 + SLH-DSA signed Software Bills of Materials
+- **SLSA L4 Reproducible Build Verification** — bit-for-bit deterministic release binaries
+- **Offline PQC Validation** — Dual-PQC CycloneDX v1.6 CBOMs
+- **Governor Control Plane** — dedicated monitoring and execution control
 - **Wasm BYOR Rule Mounting** — private governance modules with BLAKE3 integrity pinning
-- **Offline Replayable Decision Capsules** — tamper-evident audit replay without network access
 - **Air-Gap Intel Transfers** — SHA-384 + Ed25519 signed wisdom bundles for IL5/IL6 environments
-- **Jira ASPM Sync** — fingerprint-based deduplication with credential preflight
-- **Native SCM Publishing** — GitLab + Azure DevOps commit-status verdicts
-- **SOC 2 Type II attestation packages** on request
-- **Dedicated SLA** — 4-hour emergency rotation SLA for confirmed compromises
 
 [**Contact sales → sales@thejanitor.app**](mailto:sales@thejanitor.app)
 
-### Industrial Core — Custom
+### Industrial Tier — Custom
 
 Includes all Sovereign capabilities, plus:
 
+- **OT/ICS/SCADA pack** — specialized offensive detection rules for industrial networks
 - **On-Premises Token Server** — dedicated verifying key for air-gapped deployments
 - **Keypair Rotation Protocol** — satisfies SOC 2 Type II change-management requirements
 - **Enterprise SLA** — 4-hour emergency rotation SLA for confirmed compromises
-- **No per-seat limits** — one organization license covers all developers and CI runners
+- **SOC 2 Audit Support** — direct engineering integration for compliance
 
 [**Contact sales → sales@thejanitor.app**](mailto:sales@thejanitor.app)
 

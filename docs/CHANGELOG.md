@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 54 (Protocol-Aware AEG for GraphQL & gRPC)
+
+**Directive:** Implement P3-1 Phase C — extend AEG to synthesize schema-valid payloads for GraphQL mutations and gRPC/Protobuf service methods; wire new `IngressKind` variants through `template_for_ingress`; hard-delete Phase C from `.INNOVATION_LOG.md`. Do not release.
+
+**Changes:**
+
+- `crates/forge/src/exploitability.rs` — added `GraphQl { operation_name, field_name }` and `GrpcWeb { service, method, taint_field }` variants to `IngressKind`; implemented `graphql_payload_template` (curl POST to `/graphql` with mutation JSON envelope and JSON-escaped argument placeholder); implemented `grpc_payload_template` (dual-option: `grpcurl` reflection + REST gateway HTTP POST, both wrapping the Protobuf field in a JSON body); implemented `graphql_payload_witness` and `grpc_payload_witness` builders populating `repro_cmd`, `reproduction_steps`, and `risk_classification`; wired both new variants into `template_for_ingress`; 2 new deterministic unit tests (`graphql_payload_template_emits_valid_json_mutation_envelope`, `grpc_payload_template_emits_grpcurl_and_http_gateway_commands`).
+- `.INNOVATION_LOG.md` — hard-deleted Phase C from P3-1 (GraphQL + gRPC payload synthesis live); header updated to Phase D only; shipped-state summary prepended per Absolute Eradication Law.
+- `docs/CHANGELOG.md` — this entry.
+
+**Verification:**
+
+- `just audit` — exit 0; 653 forge tests, 0 failures across all crates.
+
+## 2026-04-24 — Sprint Batch 53 (The Marketing & Grant Synthesis)
+
+**Directive:** Execute Sovereign Directive: The Marketing & Grant Synthesis. Rewrite documentation to frame the tool as 'The Mathematical Firewall Against Autonomous AI', explicitly detail Bug Bounty Utility and new Enterprise Pricing tiers, and introduce the P4-7 Automated Bounty-to-Invoice Pipeline to the innovation log to support the OpenAI grant application. Do not run tests or cut a release.
+
+**Changes:**
+
+- `README.md` & `docs/index.md` — Updated the core narrative to target 'Mythos-class' AI agents, added roadmap hints for Zero-Knowledge AST proofs and Labyrinth Deception, and explicitly defined the Bug Bounty Utility (AEG HTML harnesses, Z3 SMT minimal strings) alongside the new Enterprise Tier pricing structure (Free, Team, Sovereign/Air-Gap, Industrial).
+- `.INNOVATION_LOG.md` — Added `P4-7: Automated Bounty-to-Invoice Pipeline` to formalize direct-to-vendor zero-day billing via MCP.
+- `docs/CHANGELOG.md` — this entry.
+
 ## 2026-04-24 — Sprint Batch 52 (Exploit Capsule Restructure & Inert Payload Synthesis)
 
 **Directive:** Restructure `ExploitWitness` with 4 new capsule fields; implement P3-1 Phase B (serialized-blob synthesis — Java/PHP/Ruby) and Phase E (parser payload — XXE/ZipSlip); upgrade formatters to render structured PoC steps; eradicate Phases B and E from `.INNOVATION_LOG.md`. Do not release.
