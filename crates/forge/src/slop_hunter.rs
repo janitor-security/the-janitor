@@ -1123,8 +1123,30 @@ fn find_oauth_excessive_scope(source: &[u8]) -> Vec<SlopFinding> {
     Vec::new()
 }
 
+/// Return `true` only when `*` appears in a scope-assignment context within
+/// `window`.  Acceptable patterns: `scope=*`, `scope: *`, `scope: ["*"]`,
+/// `"scope":"*"`, `scope=%2a`.  A bare `*` in JSDoc comments (`/** */`),
+/// TypeScript glob imports (`import * as`), or type widening (`Record<*, V>`)
+/// must NOT trigger this check.  Require `*` to be within 16 bytes of a
+/// `scope` keyword boundary so only genuine wildcard scope assignments fire.
 fn contains_scope_wildcard(window: &[u8]) -> bool {
-    window.contains(&b'*')
+    // Require "scope" to appear within 16 bytes before the '*'.
+    let scope_needle = b"scope";
+    let mut start = 0;
+    while let Some(rel) = window[start..]
+        .windows(scope_needle.len())
+        .position(|w| w.eq_ignore_ascii_case(scope_needle))
+    {
+        let scope_pos = start + rel;
+        // Search for '*' in the 16-byte span immediately following "scope".
+        let after_scope = scope_pos + scope_needle.len();
+        let search_end = (after_scope + 16).min(window.len());
+        if window[after_scope..search_end].contains(&b'*') {
+            return true;
+        }
+        start = scope_pos + 1;
+    }
+    false
 }
 
 fn contains_scope_repo_token(window: &[u8]) -> bool {

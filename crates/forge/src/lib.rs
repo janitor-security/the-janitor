@@ -31,6 +31,7 @@ pub mod authz;
 pub mod binary_recovery;
 pub mod brain;
 pub mod callgraph;
+pub mod campaign;
 pub mod cst_diff;
 pub mod deobfuscate;
 pub mod exploitability;

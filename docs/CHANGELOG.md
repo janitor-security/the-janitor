@@ -3,6 +3,28 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-24 — Sprint Batch 55 (EVM AEG, Campaign Planner, Auth0 Hunt)
+
+**Directive:** Implement P3-1 Phase D (EVM transaction synthesis), P3-2 (Autonomous Cross-Service Campaign Planner via petgraph Dijkstra kill-chain), live-fire Auth0 hunt against auth0-js and auth0-spa-js SDKs with auto-correction of false positives, and Innovation Log eradication of both completed P-items.
+
+**Changes:**
+
+- `crates/forge/src/exploitability.rs` — added `EvmTransaction { target_address, calldata, value }` variant to `IngressKind`; implemented `evm_payload_template` emitting Foundry `cast send <addr> <calldata> --value <value>`; implemented `evm_payload_witness` populating `repro_cmd`, `reproduction_steps`, and `risk_classification`; wired `EvmTransaction` arm into `template_for_ingress`; 3 new deterministic unit tests (`evm_payload_template_emits_foundry_cast_send_command`, `template_for_ingress_evm_produces_cast_send_command`, `evm_payload_witness_populates_all_capsule_fields`).
+- `crates/forge/src/campaign.rs` — new file; `AttackNode` enum (`PrivilegeState(String)` | `Vulnerability(Box<StructuredFinding>)`); `ExploitEdge { cost: u32 }`; `AttackGraph(DiGraph<AttackNode, ExploitEdge>)`; `find_shortest_kill_chain` using `petgraph::algo::dijkstra` with integer path reconstruction; `chain_labels` for human-readable output; 4 deterministic unit tests (direct path, minimum-cost path selection, unreachable node returns None, label output).
+- `crates/forge/src/lib.rs` — exported `pub mod campaign`.
+- `crates/forge/src/slop_hunter.rs` — tightened `contains_scope_wildcard`: bare `*` in 512-byte window no longer triggers `security:oauth_excessive_scope`; now requires `*` within 16 bytes of a `scope` keyword boundary, eliminating TypeScript JSDoc/import-glob/type-widening false positives confirmed in auth0-spa-js@2.1.3 hunt.
+- `.INNOVATION_LOG.md` — hard-deleted P3-1 (AEG Phase D) and P3-2 (Campaign Planner) blocks; updated competitive kill-chain table to reflect shipped state.
+- `docs/CHANGELOG.md` — this entry.
+
+**Auth0 Hunt Results (fresh, live-fire):**
+
+- `auth0-js@9.28.0`: `security:dom_xss_innerHTML` in `captcha.js:402` + `username-password.js:52`; `security:oauth_excessive_scope` (repo/wildcard scope usage); `security:unpinned_git_dependency` in `package.json:52`.
+- `@auth0/auth0-spa-js@2.1.3`: `security:oauth_excessive_scope` in `global.ts:547` (wildcard scope constant); `security:unpinned_git_dependency` in `package.json:35,87`. False positive reduction: 6→1 finding after `contains_scope_wildcard` tightening (removed `errors.ts`, `worker.types.ts`, `Auth0Client.ts`, `Auth0Client.utils.ts`, `cache-manager.ts` matches).
+
+**Verification:**
+
+- `just audit` — exit 0; fmt clean; clippy clean; all workspace tests pass (0 failures).
+
 ## 2026-04-24 — Sprint Batch 54 (Protocol-Aware AEG for GraphQL & gRPC)
 
 **Directive:** Implement P3-1 Phase C — extend AEG to synthesize schema-valid payloads for GraphQL mutations and gRPC/Protobuf service methods; wire new `IngressKind` variants through `template_for_ingress`; hard-delete Phase C from `.INNOVATION_LOG.md`. Do not release.
