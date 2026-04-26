@@ -8,8 +8,8 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 ## Tier 1 — Forge ($7k P1) — Open-Source / Downloadable SDK Targets
 
 - [x] `@forge/cli` (https://www.npmjs.com/package/@forge/cli) — Node.js CLI; `npm pack @forge/cli && tar xf forge-cli-*.tgz -C /tmp/forge-cli` — Sprint Batch 59
-- [ ] `@forge/api` (https://www.npmjs.com/package/@forge/api) — Forge app runtime API surface; Node.js
-- [ ] `@forge/ui` (https://www.npmjs.com/package/@forge/ui) — UI Kit component library; React/Node.js
+- [x] `@forge/api` (https://www.npmjs.com/package/@forge/api) — Forge app runtime API surface; Node.js — Sprint Batch 61
+- [x] `@forge/ui` (https://www.npmjs.com/package/@forge/ui) — UI Kit component library; React/Node.js — Sprint Batch 61
 - [ ] `@forge/bridge` (https://www.npmjs.com/package/@forge/bridge) — iframe bridge; JS XSS surface
 
 ## Tier 1 — Rovo Dev ($12k P1)
@@ -33,3 +33,5 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 |--------|--------|----------|--------------|---------|
 | `@forge/cli` (latest) | 59 | See below | See below | See below |
 | Loom Desktop (macOS) | 59 | N/A — DMG download requires browser auth | — | Deferred to manual ASAR extraction |
+| `@forge/api` v7.1.3 | 61 | 0 | 0 | Clean — pre-built package, no raw TS source |
+| `@forge/ui` v1.11.4 | 61 | 0 | 0 | Clean — pre-built package, no raw TS source |

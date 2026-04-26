@@ -3,6 +3,54 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-25 — Sprint Batch 61 (Cross-File Authorization Propagation — P1-1 Execution)
+
+**Directive:** Execute P1-1: implement `crates/forge/src/router_topology.rs` and `crates/forge/src/authz_propagation.rs` to resolve the Express / Fastify IDOR false-positive class where parent-router middleware (`teamsRouter.use(jiraContextSymmetricJwtAuthenticationMiddleware)`) is invisible to the per-file IDOR detector. Live-fire hunt `@forge/api` v7.1.3 and `@forge/ui` v1.11.4. Eradicate P1-1 from `.INNOVATION_LOG.md` per Absolute Eradication Law.
+
+**Changes:**
+
+- `crates/forge/src/router_topology.rs` — **NEW FILE**. `RouterNode`, `RouterEdge`, `RouterTopology` types; `build_router_topology(files)` builder; lightweight character-scan extraction of `<symbol>.use(path?, mw+, child_router?)` call sites from JS/TS source without tree-sitter dependency; `inherited_middlewares(file, symbol)` BFS ancestor query; `file_level_middlewares(file)` for file-scoped lookup. 5 deterministic unit tests including exact `figma-for-jira` reproduction fixture.
+- `crates/forge/src/authz_propagation.rs` — **NEW FILE**. `AUTH_GUARD_PATTERNS` (27 case-insensitive substrings covering Express / Passport.js / NestJS / Fastify / Atlassian naming conventions); `is_auth_guard(name)` predicate; `propagate_authz(findings, topology)` — downgrades `security:missing_ownership_check` from `KevCritical` to `Informational` and populates `ExploitWitness::auth_requirement` when a recognized auth guard is present in the topology for the finding's file. 7 deterministic unit tests including negative case (unprotected route stays `KevCritical`).
+- `crates/forge/src/lib.rs` — `pub mod authz_propagation` and `pub mod router_topology` registered alphabetically.
+- `tools/campaign/TARGET_LEDGER.md` — `@forge/api` v7.1.3 and `@forge/ui` v1.11.4 marked `[x]` (Sprint Batch 61). Both clean — pre-built packages, no IDOR FPs triggered.
+- `.INNOVATION_LOG.md` — P1-1 block physically deleted (Absolute Eradication Law). P1-2 is now the leading entry.
+
+**Test gate:** 12/12 new tests pass (`router_topology` × 5, `authz_propagation` × 7). Full workspace test suite clean.
+
+---
+
+## 2026-04-25 — Sprint Batch 60 (Opus 4.7 Omni-Audit, Attack Ledger Init, Decadal Blueprint Expansion)
+
+**Directive:** Pure architectural reconnaissance + documentation sprint. Establish a 2026 Threat Campaign Attack Ledger covering the year's five highest-leverage adversary classes. Audit the CISA KEV synchronization workflow + `crates/common/src/wisdom.rs` + `crates/cli/src/main.rs::cmd_update_wisdom_with_urls` for silent-failure modes. Inject a massive wave of P1/P4/P5/P6 entries into `.INNOVATION_LOG.md` covering: Cross-File Authorization Propagation (the operator's IDOR FP blocker), Zero-Knowledge Exploit Brokerage smart-contract bounty escrow, Multi-Repository Taint Tracking for microservice meshes, LLM-Agent Decompilation, plus four Attack-Ledger-aligned detector lanes. NO `cargo test`, NO release, NO commit — pure recon directive.
+
+**Changes (uncommitted, working tree only):**
+
+- `tools/campaign/ATTACK_LEDGER.md` — **NEW FILE**. Five 2026 advanced-threat campaign objectives with explicit AST/IFDS detection strategies: Vercel / Context AI OAuth scope drift; Checkmarx KICS repojacking + poisoned raw Git manifests; Trigona / GoGra LotL Microsoft Graph API C2; PureRAT steganographic PE/ELF binaries hidden inside base64 string literals; Mythos / Kimi agentic-swarm context-window exfiltration. Each entry includes detection algorithm, crate dependencies, Crucible fixture spec (true-positive + true-negative), and bounty TAM. Closes with cross-cutting invariants binding all detectors to the existing determinism / provenance / zero-upload guarantees.
+- `.INNOVATION_LOG.md` — Phase 1 (Immediate Commercial Hardening, previously empty after eradication) refilled with four P1 entries: **P1-1 Cross-File Authorization Propagation** (IFDS-lifted middleware-binding solver — closes the `figma-for-jira` `teamsRouter` / `adminRouter` FP class), **P1-2 CISA KEV Sync Workflow Hardening** (eight enumerated remediations covering egress allowlist completion, block-mode promotion, exact filename matching, repo parameterization, empty-entries hard-fail, idempotent re-runs, in-workflow binary integrity verification, and CISA fetch retry), **P1-3 OAuth Scope Drift Detector**, **P1-4 Manifest URL Drift & Repojacking Pre-Flight**. Phase 4 gains **P4-8 Multi-Repository Taint Mesh & Service Composition Verifier** (cross-repo IFDS composition over service-mesh contracts). Phase 5 gains **P5-6 Zero-Knowledge Exploit Brokerage & On-Chain Bounty Settlement** (zk-SNARK proof-of-exploit + EVM/Move/Cairo escrow + reputation-bonded staking). Phase 6 gains **P6-6 LLM-Agent Decompilation**, **P6-7 Living-off-the-Land Cloud-API C2 Sink Lane**, **P6-8 Steganographic Binary Carrier Detection**, **P6-9 Agentic Swarm Context-Window Exfiltration Detector**. Total: 10 new P-tier entries.
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 60 ledger).
+
+**KEV Pipeline Audit Summary (filed in detail under P1-2 in `.INNOVATION_LOG.md`):**
+
+Inspection of `.github/workflows/cisa-kev-sync.yml` + `crates/cli/src/main.rs::cmd_update_wisdom_with_urls` + `crates/common/src/wisdom.rs` identified eight silent-failure modes:
+
+1. `step-security/harden-runner` egress allowlist omits `osv-vulnerabilities.storage.googleapis.com` — the `cmd_update_slopsquat_with_agent` chained inside `cmd_update_wisdom_with_urls` is silently blocked when the policy is moved off `audit`.
+2. `egress-policy: audit` is not `block` — defense-in-depth gap; the allowlist is logged, not enforced.
+3. `gh release download --pattern "janitor"` over-matches release assets named `janitor.b3` / `janitor.cdx.json` / `janitor.sha384` — the subsequent `chmod +x /tmp/janitor-bin/janitor` step trips when the directory contains non-binary glob hits.
+4. `--repo janitor-security/the-janitor` is hardcoded — the workflow is brittle to repo rename, fork, or org migration.
+5. The `jq -r '.entries[].cve_id'` parser is silent on empty manifests — a server outage that returns `vulnerabilities: []` produces a manifest with `entry_count: 0` indistinguishable from a healthy no-op week. Should hard-fail when `entry_count == 0` inside `cmd_update_wisdom_with_urls`.
+6. `gh pr create` lacks idempotency — retrying after a failed run with the same date branch fails on `git push` (branch exists) and `gh pr create` (PR exists). Needs `git ls-remote --heads` + `gh pr list --head` pre-checks.
+7. The downloaded `janitor` binary is not BLAKE3 / ML-DSA-65 verified inside the workflow — the asset is `chmod`ed and executed without integrity check (TOCTOU on supply chain). The end-user `action.yml` lane already enforces this; the KEV workflow regressed.
+8. No retry / exponential backoff on the CISA endpoint — a transient `www.cisa.gov` outage tanks the entire weekly sync. The existing 3-attempt `apply_slopsquat_offline_fallback` pattern must extend to the CISA fetch.
+
+No code was changed; remediations are filed as a single P1 entry (P1-2) with eight enumerated sub-fixes.
+
+**Telemetry:**
+
+- ZERO new commits, ZERO releases, ZERO test runs (pure recon directive).
+- 10 new P-tier entries injected into `.INNOVATION_LOG.md` across Phases 1, 4, 5, 6.
+- 1 new top-level documentation artifact (`tools/campaign/ATTACK_LEDGER.md`).
+- `just audit` / `cargo test` deliberately not run per directive.
+
 ## 2026-04-25 — Sprint Batch 59 (Config Taint Wiring, Target Ledger Init, Atlassian Bugcrowd Campaign)
 
 **Directive:** Wire `track_config_taint_js` into the DOM XSS branch of `slop_filter.rs` with `static_source_proven` downgrade to `Informational`; add `static_source_proven: Option<bool>` to `ExploitWitness`; delete Phase 0 Crucible and P4-8 blocks from `.INNOVATION_LOG.md`; create `tools/campaign/TARGET_LEDGER.md`; live-fire `janitor hunt` against Atlassian Bugcrowd targets with SSRF false-positive guards; run `just audit`.
