@@ -3,6 +3,45 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-26 — Sprint Batch 63 (KEV Sync Hardening + OAuth Scope Drift Detector)
+
+**Directive:** Intelligence Hardening & OAuth Drift sprint. Execute P1-2 (CISA KEV Sync Workflow Hardening) and P1-3 (OAuth Scope Drift Detector) in full. Hard constraint: append `-- --test-threads=4` to all `cargo test` invocations; no release.
+
+**Changes:**
+
+- `crates/cli/src/main.rs` — `cmd_update_wisdom_with_urls`:
+  - **3-attempt exponential backoff** (1 s → 2 s → 4 s) added to the CISA KEV fetch. A single transient endpoint failure no longer tanks the weekly sync; all three retry attempts exhausted before hard-failing.
+  - **Empty-feed hard-fail**: extracted `parse_kev_json_entries(&[u8]) → anyhow::Result<Vec<Value>>` helper that bails with `"0 entries"` rationale when `vulnerabilities` array is empty. A server outage returning `[]` can no longer publish a zero-entry manifest that downstream `jq` consumers silently treat as "no new entries this week."
+  - **Two new deterministic unit tests**: `empty_kev_feed_returns_error` and `valid_kev_feed_parses_entries` in the `update_wisdom_tests` module.
+
+- `.github/workflows/cisa-kev-sync.yml`:
+  - `egress-policy: audit` → `egress-policy: block` (enforcement enabled).
+  - `osv-vulnerabilities.storage.googleapis.com:443` added to the egress allowlist (silently blocked in audit mode; required by `cmd_update_slopsquat_with_agent`).
+  - `gh release download` step upgraded to download `janitor`, `janitor.sha384`, and `janitor.sig`; post-condition existence check `[ -f /tmp/janitor-bin/janitor ]`; `janitor verify-asset --file --hash` runs before `chmod`.
+  - `Open PR` step guarded by `gh pr list --head "${BRANCH}"` — idempotent: skips `gh pr create` if a PR already exists for the sync branch.
+
+- `crates/forge/src/oauth_scope.rs` — **NEW FILE**. OAuth scope drift detector (P1-3):
+  - `SCOPE_TAXONOMY` static table: 46 entries across GitHub, Google, Slack, Microsoft/Azure AD, Discord, Atlassian, and unbounded wildcards. Scopes mapped to `RiskClass::{Read, Write, Admin, Delete, Unbounded}`.
+  - `extract_scope_tokens(source) → Vec<String>` — pattern scanner recognizing array literals, space-separated strings, URLSearchParams, spread/concat patterns.
+  - `classify_scope(token) → Option<&ScopeTaxonomyEntry>` — exact-match then prefix-wildcard lookup.
+  - `find_oauth_scope_drift(source, file_path, kev_match) → Vec<StructuredFinding>` — emits `security:oauth_scope_drift` at `High` severity (upgrades to `KevCritical` when `kev_match = true`).
+  - 7 deterministic unit tests covering admin-scope trigger, read-only no-fire, KEV upgrade, wildcard, space-separated extraction, prefix-match, exact-match.
+
+- `crates/forge/src/lib.rs` — `pub mod oauth_scope` registered alphabetically.
+
+- `.INNOVATION_LOG.md` — P1-2 and P1-3 blocks physically deleted per Absolute Eradication Law. P1-4 is now the leading Phase 1 entry.
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 63 ledger).
+
+**Telemetry:**
+
+- `cargo test --workspace -- --test-threads=4` executed; result reported in `[TELEMETRY]` section.
+- `just audit` executed; result reported in `[TELEMETRY]` section.
+- ZERO releases per directive.
+- P1-2 and P1-3 eradicated from `.INNOVATION_LOG.md`; P1-4 is now the leading Phase 1 frontier.
+
+---
+
 ## 2026-04-25 — Sprint Batch 62 (CVP-Authorized Threat Ledger Expansion + Red Team Gap Analysis)
 
 **Directive:** CVP-authorized (Anthropic Cyber Verification Authority approval — Organization ID `2fe9d3dd-47ba-4bde-ab67-29f86c79f732`). Documentation and architecture sprint only — no `cargo test`, no release. Five new threat campaigns absorbed into `tools/campaign/ATTACK_LEDGER.md`; a CVP-authorized red-team gap analysis identifies two vulnerability classes that the current AST + IFDS + Z3 engine cannot detect; matching P-tier architectural solutions injected into `.INNOVATION_LOG.md`.

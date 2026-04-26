@@ -49,6 +49,7 @@ pub mod labyrinth;
 pub mod metadata;
 pub mod migration_guard;
 pub mod negtaint;
+pub mod oauth_scope;
 pub mod pr_collider;
 pub mod rcal;
 pub mod router_topology;

@@ -5198,6 +5198,51 @@ fn cmd_update_wisdom(project_root: &Path, ci_mode: bool) -> anyhow::Result<()> {
     )
 }
 
+/// Parses raw CISA KEV JSON bytes into a sorted entry list.
+///
+/// Fails with an error if:
+/// - the bytes are not valid JSON
+/// - the `vulnerabilities` array is absent or empty — a zero-entry feed indicates
+///   a server outage or upstream truncation and must never be published as a manifest.
+fn parse_kev_json_entries(raw: &[u8]) -> anyhow::Result<Vec<serde_json::Value>> {
+    let kev_json: serde_json::Value = serde_json::from_slice(raw)
+        .map_err(|e| anyhow::anyhow!("update-wisdom --ci-mode: parsing KEV JSON failed: {e}"))?;
+
+    let empty_vec = vec![];
+    let vulns = kev_json["vulnerabilities"].as_array().unwrap_or(&empty_vec);
+
+    let mut entries: Vec<serde_json::Value> = vulns
+        .iter()
+        .map(|v| {
+            serde_json::json!({
+                "cve_id":     v["cveID"].as_str().unwrap_or(""),
+                "vendor":     v["vendorProject"].as_str().unwrap_or(""),
+                "product":    v["product"].as_str().unwrap_or(""),
+                "name":       v["vulnerabilityName"].as_str().unwrap_or(""),
+                "date_added": v["dateAdded"].as_str().unwrap_or(""),
+            })
+        })
+        .collect();
+    entries.sort_by(|a, b| {
+        a["cve_id"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["cve_id"].as_str().unwrap_or(""))
+    });
+
+    // Hard-fail on empty feed: a server outage returning `vulnerabilities: []`
+    // must not publish a zero-entry manifest that downstream jq consumers
+    // silently treat as "no new entries this week".
+    if entries.is_empty() {
+        anyhow::bail!(
+            "update-wisdom --ci-mode: CISA KEV feed returned 0 entries — \
+             refusing to publish empty manifest (server outage or upstream truncation)"
+        );
+    }
+
+    Ok(entries)
+}
+
 fn cmd_update_wisdom_with_urls(
     project_root: &Path,
     ci_mode: bool,
@@ -5263,53 +5308,37 @@ fn cmd_update_wisdom_with_urls(
     println!("\u{1f9e0} Wisdom Registry synchronized with Janitor Sentinel.");
 
     if ci_mode {
-        let mut kev_resp = match ureq::get(kev_url).call() {
-            Ok(response) => response,
-            Err(_e) => {
-                // CodeQL: URL and error details redacted — URL may carry credentials.
-                return Err(anyhow::anyhow!(
-                    "update-wisdom --ci-mode: CISA KEV fetch failed"
-                ));
-            }
-        };
-
-        // Circuit breaker: cap CISA KEV JSON at 32 MiB. Current feed is ~2 MiB;
-        // 32 MiB provides a 16× safety margin against unbounded heap growth.
+        // 3-attempt exponential backoff: 1 s → 2 s → 4 s.
+        // A single transient CISA endpoint failure must not silently produce
+        // an empty KEV manifest and tank the weekly sync.
         const MAX_KEV_BYTES: u64 = 32 * 1024 * 1024;
-        let kev_bytes = kev_resp
-            .body_mut()
-            .with_config()
-            .limit(MAX_KEV_BYTES)
-            .read_to_vec()
-            .map_err(|_e| {
-                anyhow::anyhow!("update-wisdom --ci-mode: reading KEV response failed")
-            })?;
-
-        let kev_json: serde_json::Value = serde_json::from_slice(&kev_bytes).map_err(|e| {
-            anyhow::anyhow!("update-wisdom --ci-mode: parsing KEV JSON failed: {e}")
+        let mut kev_bytes_opt: Option<Vec<u8>> = None;
+        for attempt in 0u32..3 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(1u64 << (attempt - 1)));
+            }
+            let mut resp = match ureq::get(kev_url).call() {
+                Ok(r) => r,
+                Err(_e) => continue, // CodeQL: URL redacted — may carry credentials.
+            };
+            match resp
+                .body_mut()
+                .with_config()
+                .limit(MAX_KEV_BYTES)
+                .read_to_vec()
+            {
+                Ok(bytes) => {
+                    kev_bytes_opt = Some(bytes);
+                    break;
+                }
+                Err(_e) => continue,
+            }
+        }
+        let kev_bytes = kev_bytes_opt.ok_or_else(|| {
+            anyhow::anyhow!("update-wisdom --ci-mode: CISA KEV fetch failed after 3 attempts")
         })?;
 
-        let empty_vec = vec![];
-        let vulns = kev_json["vulnerabilities"].as_array().unwrap_or(&empty_vec);
-
-        let mut entries: Vec<serde_json::Value> = vulns
-            .iter()
-            .map(|v| {
-                serde_json::json!({
-                    "cve_id":     v["cveID"].as_str().unwrap_or(""),
-                    "vendor":     v["vendorProject"].as_str().unwrap_or(""),
-                    "product":    v["product"].as_str().unwrap_or(""),
-                    "name":       v["vulnerabilityName"].as_str().unwrap_or(""),
-                    "date_added": v["dateAdded"].as_str().unwrap_or(""),
-                })
-            })
-            .collect();
-        entries.sort_by(|a, b| {
-            a["cve_id"]
-                .as_str()
-                .unwrap_or("")
-                .cmp(b["cve_id"].as_str().unwrap_or(""))
-        });
+        let entries = parse_kev_json_entries(&kev_bytes)?;
 
         let manifest = serde_json::json!({
             "source":       "CISA Known Exploited Vulnerabilities Catalog",
@@ -8098,6 +8127,50 @@ mod slopsquat_sync_tests {
             vec!["existing-package".to_string()],
             "fresh on-disk corpus must not be overwritten"
         );
+    }
+
+    /// An empty CISA KEV feed (`vulnerabilities: []`) MUST cause `update-wisdom`
+    /// to fail — never publish a zero-entry manifest.
+    #[test]
+    fn empty_kev_feed_returns_error() {
+        let empty_feed = serde_json::json!({
+            "title": "CISA KEV",
+            "vulnerabilities": [],
+        });
+        let bytes = serde_json::to_vec(&empty_feed).expect("serialization must succeed");
+        let result = parse_kev_json_entries(&bytes);
+        assert!(
+            result.is_err(),
+            "empty KEV vulnerabilities list must produce Err, not an empty manifest"
+        );
+        let msg = format!("{}", result.unwrap_err());
+        assert!(
+            msg.contains("0 entries"),
+            "error message must mention 0 entries, got: {msg}"
+        );
+    }
+
+    /// A well-formed KEV feed with at least one entry must parse successfully.
+    #[test]
+    fn valid_kev_feed_parses_entries() {
+        let feed = serde_json::json!({
+            "title": "CISA KEV",
+            "vulnerabilities": [
+                {
+                    "cveID": "CVE-2024-0001",
+                    "vendorProject": "TestVendor",
+                    "product": "TestProduct",
+                    "vulnerabilityName": "Test Injection",
+                    "dateAdded": "2024-01-01",
+                }
+            ],
+        });
+        let bytes = serde_json::to_vec(&feed).expect("serialization must succeed");
+        let result = parse_kev_json_entries(&bytes);
+        assert!(result.is_ok(), "valid KEV feed must parse successfully");
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 1, "one entry must be parsed");
+        assert_eq!(entries[0]["cve_id"], "CVE-2024-0001");
     }
 }
 
