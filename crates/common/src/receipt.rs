@@ -195,6 +195,42 @@ pub struct SignedDecisionReceipt {
     pub signature: String,
 }
 
+/// Attestation capsule wrapping a Critical+ finding with its full provenance chain.
+///
+/// Every `KevCritical` or `Critical` finding should be promoted into a
+/// `GovernanceProof` for the final JSON/SARIF output so downstream consumers
+/// (GRC platforms, SIEM/SOAR integrations) receive the complete evidence chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GovernanceProof {
+    /// The structured finding this proof attests.
+    pub finding: crate::slop::StructuredFinding,
+    /// IFDS/taint chain establishing source-to-sink reachability, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taint_chain: Option<Vec<String>>,
+    /// Governor-sealed decision receipt binding this finding to a specific engine run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sealed_receipt: Option<DecisionReceipt>,
+}
+
+impl GovernanceProof {
+    /// Construct a proof from a finding without a sealed receipt.
+    pub fn from_finding(finding: crate::slop::StructuredFinding) -> Self {
+        Self {
+            finding,
+            taint_chain: None,
+            sealed_receipt: None,
+        }
+    }
+
+    /// Returns `true` when the wrapped finding is severity `KevCritical` or `Critical`.
+    pub fn is_critical_or_above(&self) -> bool {
+        matches!(
+            self.finding.severity.as_deref(),
+            Some("KevCritical") | Some("Critical")
+        )
+    }
+}
+
 /// On-disk replay envelope pairing the sealed capsule and Governor receipt.
 #[derive(
     Debug,
@@ -357,5 +393,39 @@ pub mod tests {
         };
         capsule.verify_roots().unwrap();
         assert!(!capsule.hash().unwrap().is_empty());
+    }
+
+    #[test]
+    fn governance_proof_wraps_critical_finding() {
+        let finding = crate::slop::StructuredFinding {
+            id: "supply_chain:repojacking_window".to_string(),
+            severity: Some("KevCritical".to_string()),
+            file: Some("go.mod".to_string()),
+            ..Default::default()
+        };
+        let proof = GovernanceProof::from_finding(finding);
+        assert!(
+            proof.is_critical_or_above(),
+            "KevCritical must pass the gate"
+        );
+        let json = serde_json::to_string(&proof).expect("must serialize");
+        assert!(
+            json.contains("repojacking_window"),
+            "finding id must appear in output"
+        );
+    }
+
+    #[test]
+    fn governance_proof_informational_does_not_pass_gate() {
+        let finding = crate::slop::StructuredFinding {
+            id: "architecture:dead_symbol".to_string(),
+            severity: Some("Informational".to_string()),
+            ..Default::default()
+        };
+        let proof = GovernanceProof::from_finding(finding);
+        assert!(
+            !proof.is_critical_or_above(),
+            "Informational must not pass the Critical gate"
+        );
     }
 }

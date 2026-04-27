@@ -3,6 +3,48 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-27 — Sprint Batch 67 (Repojacking Guillotine & Governance Proofs)
+
+**Directive:** Implement P1-4 (5-manifest Git-ref repojacking detector), ship GovernanceProof capsule (P3-4 sub-item), advance Atlassian live-fire campaign. No release.
+
+**Changes:**
+
+- `crates/anatomist/src/manifest.rs` — **P1-4 Git-ref dependency extractor** (Checkmarx KICS class):
+  - `RefKind` enum: `CommitSha(String)`, `Branch(String)`, `Tag(String)`, `Head`.
+  - `GitRefDependency` struct: `manifest_file`, `package_name`, `source_url`, `ref_kind`.
+  - `find_git_ref_deps_in_blobs` — dispatches to 5 manifest parsers (go.mod, Cargo.toml, package.json, pyproject.toml, Gemfile) over the PR blob map; O(B) zero-filesystem scan.
+  - `emit_git_ref_dep_findings` — emits `security:unpinned_git_dependency` at `Critical` for mutable branch/HEAD refs; emits `security:repojacking_window` at `KevCritical` for known-squatted usernames (seed corpus, refreshed via update-wisdom).
+  - `emit_git_ref_governance_proofs` — wraps every Critical+ finding in a `GovernanceProof` capsule with populated taint chain.
+  - Parsers: `parse_go_mod_git_refs` (single-line + block replace directives, pseudo-version SHA detection), `parse_cargo_toml_git_refs` (patch table), `parse_package_json_git_refs` (git+https/git+ssh/github: scheme), `parse_pyproject_toml_git_refs` (Poetry git deps), `parse_gemfile_git_refs` (git: / github: options + ruby string extractor).
+  - `MANIFEST_NAMES` extended with `go.mod` and `Gemfile`.
+  - 7 new deterministic unit tests: `test_go_mod_replace_without_version_emits_unpinned_git_dependency`, `test_go_mod_replace_with_sha_is_not_flagged`, `test_package_json_branch_ref_emits_unpinned_git_dependency`, `test_package_json_sha_ref_not_flagged`, `test_pyproject_toml_branch_dep_flagged`, `test_gemfile_branch_dep_flagged`, `test_cargo_toml_patch_branch_flagged`, `test_governance_proof_wraps_mutable_ref_dep`.
+
+- `crates/common/src/receipt.rs` — **`GovernanceProof` capsule** (P3-4 sub-item):
+  - `GovernanceProof { finding: StructuredFinding, taint_chain: Option<Vec<String>>, sealed_receipt: Option<DecisionReceipt> }`.
+  - `from_finding(finding)` constructor — zero-cost wrapper for single-finding attestation.
+  - `is_critical_or_above()` predicate — gates capsule promotion on KevCritical / Critical severity.
+  - 2 new tests: `governance_proof_wraps_critical_finding`, `governance_proof_informational_does_not_pass_gate`.
+
+- `tools/campaign/TARGET_LEDGER.md` — **Phase 3 live-fire hunt**:
+  - `Rovo Dev CLI`: not on PyPI (`pip download rovo-dev-cli` → no distribution); deferred (requires Atlassian authenticated session).
+  - `Loom Chrome Extension`: CRX3 downloaded via Google CRX API (28 MB, version 3), zip extracted, `janitor hunt` executed; see Hunt Results Log.
+
+- `.INNOVATION_LOG.md` — **Absolute Eradication Law**:
+  - P1-4 block physically deleted.
+  - P3-4 "Diff-to-proof governance artifacts" bullet physically deleted.
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 67 ledger).
+
+**Telemetry:**
+
+- `cargo check -p common -p anatomist` — exit 0 before test run.
+- 8 new deterministic unit tests in `manifest.rs` + 2 in `receipt.rs`.
+- Loom Chrome Extension hunted (see Hunt Results Log in TARGET_LEDGER.md).
+- P1-4 and P3-4 diff-to-proof bullet eradicated from Innovation Log.
+- No release cut.
+
+---
+
 ## 2026-04-26 — Sprint Batch 66 (Intelligence Restoration & JWT Polymorphism)
 
 **Directive:** Intelligence pipeline restoration + P1-5 implementation. Fix `update-wisdom --ci-mode` argument-parsing crash in CI. Implement JWT Library Wrapper Identity Resolution (P1-5): `library_identity.rs`, `ArgEvidence` lattice extension, `SanitizerRegistry::JwtConditionalSpec`. Hunt `@forge/bridge` and `atlassian-python-api`. No release.

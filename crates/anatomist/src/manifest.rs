@@ -48,6 +48,8 @@ const PIP_REQUIREMENTS: &str = "requirements.txt";
 const PIP_PYPROJECT: &str = "pyproject.toml";
 const SPIN_MANIFEST: &str = "spin.toml";
 const WRANGLER_MANIFEST: &str = "wrangler.toml";
+const GO_MOD: &str = "go.mod";
+const GEMFILE: &str = "Gemfile";
 
 /// All manifest filenames — used to skip manifest blobs during source scanning.
 const MANIFEST_NAMES: &[&str] = &[
@@ -57,6 +59,8 @@ const MANIFEST_NAMES: &[&str] = &[
     PIP_PYPROJECT,
     SPIN_MANIFEST,
     WRANGLER_MANIFEST,
+    GO_MOD,
+    GEMFILE,
 ];
 
 /// Cross-reference a resolved `Cargo.lock` payload against the KEV dependency
@@ -1278,6 +1282,472 @@ fn phantom_is_keyword(name: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Git-ref dependency extractor (P1-4 — Repojacking Pre-Flight)
+// ---------------------------------------------------------------------------
+
+/// Pinning class of a git-sourced dependency reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefKind {
+    /// Pinned to a specific commit SHA (safe against force-push squatting).
+    CommitSha(String),
+    /// Pinned to a named branch (mutable — attacker can push after squatting).
+    Branch(String),
+    /// Pinned to a tag (stable by convention but deletable; not flagged here).
+    Tag(String),
+    /// No explicit ref; defaults to HEAD (most dangerous).
+    Head,
+}
+
+impl RefKind {
+    /// Returns `true` when the ref is mutable and attackers can update it
+    /// after squatting the GitHub account.
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, RefKind::Branch(_) | RefKind::Head)
+    }
+
+    /// Human-readable label for inclusion in finding descriptions.
+    pub fn label(&self) -> String {
+        match self {
+            RefKind::CommitSha(s) => format!("commit:{}", &s[..s.len().min(12)]),
+            RefKind::Branch(b) => format!("branch:{b}"),
+            RefKind::Tag(t) => format!("tag:{t}"),
+            RefKind::Head => "HEAD".to_string(),
+        }
+    }
+}
+
+/// A dependency resolved via a direct git URL or replace directive.
+#[derive(Debug, Clone)]
+pub struct GitRefDependency {
+    /// Manifest file this was extracted from (relative or absolute path).
+    pub manifest_file: String,
+    /// Package / crate / gem name.
+    pub package_name: String,
+    /// Resolved git HTTPS or SSH URL.
+    pub source_url: String,
+    /// Ref pinning class.
+    pub ref_kind: RefKind,
+}
+
+/// Seed corpus of known-squatted GitHub usernames (refreshed via update-wisdom).
+const KNOWN_SQUATTED_USERNAMES: &[&str] = &[];
+
+fn extract_github_username(url: &str) -> Option<&str> {
+    let url = url.trim_end_matches(".git");
+    for prefix in &[
+        "https://github.com/",
+        "http://github.com/",
+        "git+https://github.com/",
+        "git+ssh://github.com/",
+        "git+ssh://git@github.com/",
+        "ssh://git@github.com/",
+        "git@github.com:",
+    ] {
+        if let Some(rest) = url.strip_prefix(prefix) {
+            return rest.split('/').next().filter(|u| !u.is_empty());
+        }
+    }
+    None
+}
+
+fn is_commit_sha_like(s: &str) -> bool {
+    s.len() >= 12 && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Returns `true` when `version` is a go.mod pseudo-version with a 12-char
+/// hex commit hash suffix, e.g. `v0.0.0-20260101000000-deadbeefcafe`.
+fn is_go_pseudo_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.rsplitn(2, '-').collect();
+    parts
+        .first()
+        .is_some_and(|s| s.len() == 12 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// Extract git-ref dependencies from all manifest blobs in a PR diff.
+pub fn find_git_ref_deps_in_blobs(blobs: &HashMap<PathBuf, Vec<u8>>) -> Vec<GitRefDependency> {
+    let mut deps = Vec::new();
+    for (path, bytes) in blobs {
+        let Ok(content) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        let filename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        match filename {
+            GO_MOD => parse_go_mod_git_refs(path, content, &mut deps),
+            CARGO_MANIFEST => parse_cargo_toml_git_refs(path, content, &mut deps),
+            NPM_MANIFEST => parse_package_json_git_refs(path, content, &mut deps),
+            PIP_PYPROJECT => parse_pyproject_toml_git_refs(path, content, &mut deps),
+            GEMFILE => parse_gemfile_git_refs(path, content, &mut deps),
+            _ => {}
+        }
+    }
+    deps
+}
+
+/// Convert a `GitRefDependency` slice into `SlopFinding`s.
+///
+/// Mutable refs (`branch` / `HEAD`) emit `security:unpinned_git_dependency` at
+/// `Critical`.  Dependencies whose GitHub username matches the known-squatted
+/// corpus emit `security:repojacking_window` at `KevCritical`.
+pub fn emit_git_ref_dep_findings(deps: &[GitRefDependency]) -> Vec<SlopFinding> {
+    let mut findings = Vec::new();
+    for dep in deps {
+        if dep.ref_kind.is_mutable() {
+            findings.push(SlopFinding {
+                start_byte: 0,
+                end_byte: 0,
+                description: format!(
+                    "supply_chain:unpinned_git_dependency — `{}` in `{}` pins to \
+                     mutable ref `{}` ({}); an attacker who squats the repository \
+                     can push arbitrary code to this ref",
+                    dep.package_name,
+                    dep.manifest_file,
+                    dep.source_url,
+                    dep.ref_kind.label()
+                ),
+                domain: forge::metadata::DOMAIN_ALL,
+                severity: Severity::Critical,
+            });
+        }
+        if let Some(username) = extract_github_username(&dep.source_url) {
+            if KNOWN_SQUATTED_USERNAMES.contains(&username) {
+                findings.push(SlopFinding {
+                    start_byte: 0,
+                    end_byte: 0,
+                    description: format!(
+                        "supply_chain:repojacking_window — `{}` in `{}` references \
+                         GitHub username `{username}` which is in the known-squatted \
+                         username corpus; source: {}",
+                        dep.package_name, dep.manifest_file, dep.source_url
+                    ),
+                    domain: forge::metadata::DOMAIN_ALL,
+                    severity: Severity::KevCritical,
+                });
+            }
+        }
+    }
+    findings
+}
+
+/// Wrap every Critical+ git-ref finding in a `GovernanceProof` capsule.
+pub fn emit_git_ref_governance_proofs(
+    deps: &[GitRefDependency],
+) -> Vec<common::receipt::GovernanceProof> {
+    deps.iter()
+        .filter(|d| {
+            d.ref_kind.is_mutable()
+                || extract_github_username(&d.source_url)
+                    .is_some_and(|u| KNOWN_SQUATTED_USERNAMES.contains(&u))
+        })
+        .map(|dep| {
+            let is_squatted = extract_github_username(&dep.source_url)
+                .is_some_and(|u| KNOWN_SQUATTED_USERNAMES.contains(&u));
+            let (id, sev) = if is_squatted {
+                ("supply_chain:repojacking_window", "KevCritical")
+            } else {
+                ("supply_chain:unpinned_git_dependency", "Critical")
+            };
+            let finding = common::slop::StructuredFinding {
+                id: id.to_string(),
+                file: Some(dep.manifest_file.clone()),
+                severity: Some(sev.to_string()),
+                remediation: Some(format!(
+                    "Pin `{}` to a specific commit SHA instead of mutable ref `{}`",
+                    dep.package_name,
+                    dep.ref_kind.label()
+                )),
+                ..Default::default()
+            };
+            common::receipt::GovernanceProof {
+                finding,
+                taint_chain: Some(vec![
+                    dep.source_url.clone(),
+                    format!("ref:{}", dep.ref_kind.label()),
+                    dep.package_name.clone(),
+                    "build_graph \u{2192} CI_execution \u{2192} deployed_artifact".to_string(),
+                ]),
+                sealed_receipt: None,
+            }
+        })
+        .collect()
+}
+
+// go.mod replace directives.
+fn parse_go_mod_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDependency>) {
+    let manifest_file = path.to_string_lossy().to_string();
+    let mut in_block = false;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line == "replace (" {
+            in_block = true;
+            continue;
+        }
+        if in_block && line == ")" {
+            in_block = false;
+            continue;
+        }
+        let effective = if in_block {
+            line
+        } else if let Some(rest) = line.strip_prefix("replace ") {
+            rest.trim()
+        } else {
+            continue;
+        };
+
+        let Some(arrow) = effective.find(" => ") else {
+            continue;
+        };
+        let rhs = effective[arrow + 4..].trim();
+        // Skip local-path replacements
+        if rhs.starts_with('.') || rhs.starts_with('/') {
+            continue;
+        }
+        let parts: Vec<&str> = rhs.splitn(2, ' ').collect();
+        let target_path = parts[0];
+        let version = parts.get(1).map(|s| s.trim()).unwrap_or("");
+
+        if !target_path.starts_with("github.com/") && !target_path.starts_with("gitlab.com/") {
+            continue;
+        }
+        let source_url = format!("https://{target_path}");
+
+        let ref_kind = if version.is_empty() {
+            RefKind::Head
+        } else if is_go_pseudo_version(version) {
+            let sha = version.rsplit('-').next().unwrap_or("").to_string();
+            RefKind::CommitSha(sha)
+        } else if version.starts_with('v') && version.chars().filter(|&c| c == '.').count() >= 2 {
+            // Looks like a proper semver tag — not mutable by our definition
+            RefKind::Tag(version.to_string())
+        } else {
+            // Non-standard version string (e.g. branch-derived pseudo-version)
+            RefKind::Branch(version.to_string())
+        };
+
+        let pkg_name = effective[..arrow]
+            .trim()
+            .split(' ')
+            .next()
+            .unwrap_or("")
+            .to_string();
+
+        deps.push(GitRefDependency {
+            manifest_file: manifest_file.clone(),
+            package_name: pkg_name,
+            source_url,
+            ref_kind,
+        });
+    }
+}
+
+// Cargo.toml [patch."url"] git entries.
+fn parse_cargo_toml_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDependency>) {
+    let manifest_file = path.to_string_lossy().to_string();
+    let Ok(val) = toml::from_str::<toml::Value>(content) else {
+        return;
+    };
+    let Some(patch) = val.get("patch").and_then(|p| p.as_table()) else {
+        return;
+    };
+    for (_patch_url, entries) in patch {
+        let Some(table) = entries.as_table() else {
+            continue;
+        };
+        for (pkg_name, spec) in table {
+            let Some(spec_t) = spec.as_table() else {
+                continue;
+            };
+            let Some(git_url) = spec_t.get("git").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let ref_kind = if let Some(rev) = spec_t.get("rev").and_then(|v| v.as_str()) {
+                if is_commit_sha_like(rev) {
+                    RefKind::CommitSha(rev.to_string())
+                } else {
+                    RefKind::Branch(rev.to_string())
+                }
+            } else if let Some(b) = spec_t.get("branch").and_then(|v| v.as_str()) {
+                RefKind::Branch(b.to_string())
+            } else if let Some(t) = spec_t.get("tag").and_then(|v| v.as_str()) {
+                RefKind::Tag(t.to_string())
+            } else {
+                RefKind::Head
+            };
+            deps.push(GitRefDependency {
+                manifest_file: manifest_file.clone(),
+                package_name: pkg_name.clone(),
+                source_url: git_url.to_string(),
+                ref_kind,
+            });
+        }
+    }
+}
+
+// package.json git+ and github: URL dependencies.
+fn parse_package_json_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDependency>) {
+    let manifest_file = path.to_string_lossy().to_string();
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(content) else {
+        return;
+    };
+    let Some(obj) = json.as_object() else {
+        return;
+    };
+    for section in &["dependencies", "devDependencies"] {
+        let Some(dep_obj) = obj.get(*section).and_then(|v| v.as_object()) else {
+            continue;
+        };
+        for (pkg_name, version_val) in dep_obj {
+            let Some(v) = version_val.as_str() else {
+                continue;
+            };
+            let (url, fragment) = if let Some(rest) = v
+                .strip_prefix("git+https://")
+                .or_else(|| v.strip_prefix("git+ssh://git@"))
+                .or_else(|| v.strip_prefix("git+ssh://"))
+                .or_else(|| v.strip_prefix("git://"))
+            {
+                let (u, f) = rest
+                    .split_once('#')
+                    .map(|(a, b)| (format!("https://{a}"), Some(b.to_string())))
+                    .unwrap_or_else(|| (format!("https://{rest}"), None));
+                (u, f)
+            } else if let Some(gh) = v.strip_prefix("github:") {
+                let (u, f) = gh
+                    .split_once('#')
+                    .map(|(a, b)| (format!("https://github.com/{a}"), Some(b.to_string())))
+                    .unwrap_or_else(|| (format!("https://github.com/{gh}"), None));
+                (u, f)
+            } else {
+                continue;
+            };
+
+            let ref_kind = match fragment.as_deref() {
+                Some(f) if is_commit_sha_like(f) => RefKind::CommitSha(f.to_string()),
+                Some(f) => RefKind::Branch(f.to_string()),
+                None => RefKind::Head,
+            };
+            deps.push(GitRefDependency {
+                manifest_file: manifest_file.clone(),
+                package_name: pkg_name.clone(),
+                source_url: url,
+                ref_kind,
+            });
+        }
+    }
+}
+
+// pyproject.toml Poetry git dependencies.
+fn parse_pyproject_toml_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDependency>) {
+    let manifest_file = path.to_string_lossy().to_string();
+    let Ok(val) = toml::from_str::<toml::Value>(content) else {
+        return;
+    };
+    for section in &["dependencies", "dev-dependencies"] {
+        let Some(table) = val
+            .get("tool")
+            .and_then(|t| t.get("poetry"))
+            .and_then(|p| p.get(section))
+            .and_then(|d| d.as_table())
+        else {
+            continue;
+        };
+        for (pkg_name, spec) in table {
+            if pkg_name == "python" {
+                continue;
+            }
+            let Some(spec_t) = spec.as_table() else {
+                continue;
+            };
+            let Some(git_url) = spec_t.get("git").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let ref_kind = if let Some(rev) = spec_t.get("rev").and_then(|v| v.as_str()) {
+                if is_commit_sha_like(rev) {
+                    RefKind::CommitSha(rev.to_string())
+                } else {
+                    RefKind::Branch(rev.to_string())
+                }
+            } else if let Some(b) = spec_t.get("branch").and_then(|v| v.as_str()) {
+                RefKind::Branch(b.to_string())
+            } else if let Some(t) = spec_t.get("tag").and_then(|v| v.as_str()) {
+                RefKind::Tag(t.to_string())
+            } else {
+                RefKind::Head
+            };
+            deps.push(GitRefDependency {
+                manifest_file: manifest_file.clone(),
+                package_name: pkg_name.clone(),
+                source_url: git_url.to_string(),
+                ref_kind,
+            });
+        }
+    }
+}
+
+// Gemfile git / github option parsing.
+fn parse_gemfile_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDependency>) {
+    let manifest_file = path.to_string_lossy().to_string();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("gem ") else {
+            continue;
+        };
+        let Some(pkg_name) = ruby_string_value(rest) else {
+            continue;
+        };
+        let (source_url, ref_kind) = if let Some(git_url) = ruby_option_value(trimmed, "git:") {
+            let rk = if let Some(r) = ruby_option_value(trimmed, "ref:") {
+                if is_commit_sha_like(&r) {
+                    RefKind::CommitSha(r)
+                } else {
+                    RefKind::Branch(r)
+                }
+            } else if let Some(b) = ruby_option_value(trimmed, "branch:") {
+                RefKind::Branch(b)
+            } else if let Some(t) = ruby_option_value(trimmed, "tag:") {
+                RefKind::Tag(t)
+            } else {
+                RefKind::Head
+            };
+            (git_url, rk)
+        } else if let Some(gh) = ruby_option_value(trimmed, "github:") {
+            (format!("https://github.com/{gh}"), RefKind::Head)
+        } else {
+            continue;
+        };
+        deps.push(GitRefDependency {
+            manifest_file: manifest_file.clone(),
+            package_name: pkg_name,
+            source_url,
+            ref_kind,
+        });
+    }
+}
+
+fn ruby_string_value(s: &str) -> Option<String> {
+    let s = s.trim();
+    if let Some(inner) = s.strip_prefix('\'') {
+        inner.split_once('\'').map(|(v, _)| v.to_string())
+    } else if let Some(inner) = s.strip_prefix('"') {
+        inner.split_once('"').map(|(v, _)| v.to_string())
+    } else {
+        None
+    }
+}
+
+fn ruby_option_value(line: &str, key: &str) -> Option<String> {
+    let pos = line.find(key)?;
+    let rest = line[pos + key.len()..].trim_start();
+    ruby_string_value(rest).filter(|s| !s.is_empty())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -2139,6 +2609,204 @@ apt-get install -y --no-install-recommends build-essential
             registry.is_empty(),
             "no install commands → empty registry: {:?}",
             registry.entries.iter().map(|e| &e.name).collect::<Vec<_>>()
+        );
+    }
+
+    // ── Git-ref dependency extractor (P1-4) ─────────────────────────────────
+
+    #[test]
+    fn test_go_mod_replace_without_version_emits_unpinned_git_dependency() {
+        // A go.mod replace directive with no RHS version is a HEAD reference —
+        // the mutable form the directive mandates we detect.
+        let content = "\
+module example.com/mymod\n\
+\n\
+go 1.21\n\
+\n\
+replace github.com/foo/bar => github.com/squatter/bar\n\
+";
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("go.mod"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1, "one git-ref dep found in replace directive");
+        assert_eq!(deps[0].package_name, "github.com/foo/bar");
+        assert_eq!(deps[0].ref_kind, RefKind::Head, "no version → HEAD");
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "HEAD replace must emit unpinned_git_dependency; got: {:?}",
+            findings.iter().map(|f| &f.description).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_go_mod_replace_with_sha_is_not_flagged() {
+        // A replace with a valid pseudo-version (12-char hex at the end) is pinned.
+        let content = "\
+module example.com/mymod\n\
+\n\
+replace github.com/foo/bar v1.2.3 => github.com/safe/bar v0.0.0-20260101000000-deadbeefcafe\n\
+";
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("go.mod"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1);
+        assert!(
+            !deps[0].ref_kind.is_mutable(),
+            "SHA-pinned replace must not be mutable"
+        );
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "SHA-pinned replace must not emit unpinned_git_dependency"
+        );
+    }
+
+    #[test]
+    fn test_package_json_branch_ref_emits_unpinned_git_dependency() {
+        let pkg = serde_json::json!({
+            "dependencies": {
+                "my-lib": "git+https://github.com/foo/my-lib#main"
+            }
+        });
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("package.json"), pkg.to_string().into_bytes());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].ref_kind, RefKind::Branch("main".to_string()));
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "branch ref must emit unpinned_git_dependency"
+        );
+    }
+
+    #[test]
+    fn test_package_json_sha_ref_not_flagged() {
+        let sha = "a".repeat(40);
+        let pkg = serde_json::json!({
+            "dependencies": {
+                "my-lib": format!("git+https://github.com/foo/my-lib#{sha}")
+            }
+        });
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("package.json"), pkg.to_string().into_bytes());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1);
+        assert!(
+            matches!(deps[0].ref_kind, RefKind::CommitSha(_)),
+            "40-char hex must be CommitSha"
+        );
+        assert!(
+            emit_git_ref_dep_findings(&deps)
+                .iter()
+                .all(|f| !f.description.contains("unpinned_git_dependency")),
+            "SHA-pinned package.json dep must not emit unpinned_git_dependency"
+        );
+    }
+
+    #[test]
+    fn test_pyproject_toml_branch_dep_flagged() {
+        let content = r#"
+[tool.poetry.dependencies]
+python = "^3.11"
+my-lib = { git = "https://github.com/foo/my-lib", branch = "develop" }
+"#;
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("pyproject.toml"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1, "one git dep found; python is skipped");
+        assert_eq!(deps[0].ref_kind, RefKind::Branch("develop".to_string()));
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "develop branch must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_gemfile_branch_dep_flagged() {
+        let content = "gem 'my-gem', git: 'https://github.com/foo/my-gem', branch: 'main'\n";
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("Gemfile"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].ref_kind, RefKind::Branch("main".to_string()));
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "Gemfile branch dep must emit unpinned_git_dependency"
+        );
+    }
+
+    #[test]
+    fn test_cargo_toml_patch_branch_flagged() {
+        let content = r#"
+[package]
+name = "my-crate"
+
+[patch."https://github.com/foo/crate"]
+my-crate = { git = "https://github.com/attacker/crate", branch = "main" }
+"#;
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("Cargo.toml"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        assert_eq!(deps.len(), 1, "one patch entry found");
+        assert_eq!(deps[0].ref_kind, RefKind::Branch("main".to_string()));
+
+        let findings = emit_git_ref_dep_findings(&deps);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_git_dependency")),
+            "Cargo.toml patch branch must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_governance_proof_wraps_mutable_ref_dep() {
+        let content = "replace github.com/foo/bar => github.com/squatter/bar\n";
+        let mut blobs = HashMap::new();
+        blobs.insert(PathBuf::from("go.mod"), content.as_bytes().to_vec());
+
+        let deps = find_git_ref_deps_in_blobs(&blobs);
+        let proofs = emit_git_ref_governance_proofs(&deps);
+        assert!(
+            !proofs.is_empty(),
+            "mutable HEAD replace must produce a governance proof"
+        );
+        assert!(
+            proofs[0].is_critical_or_above(),
+            "governance proof must be Critical or above"
+        );
+        assert!(
+            proofs[0]
+                .taint_chain
+                .as_ref()
+                .map_or(false, |c| !c.is_empty()),
+            "taint chain must be populated"
         );
     }
 }

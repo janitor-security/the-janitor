@@ -14,12 +14,12 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 
 ## Tier 1 — Rovo Dev ($12k P1)
 
-- [ ] `Rovo Dev CLI` (https://support.atlassian.com/rovo/docs/use-rovo-dev-cli/) — Python; `pip download rovo-dev-cli --no-deps -d /tmp/rovo-cli` then inspect wheel
+- [x] `Rovo Dev CLI` — Python; package not published on PyPI (`pip download rovo-dev-cli` → no distribution found); download via Atlassian support page requires authenticated session — Sprint Batch 67 (deferred: requires auth)
 
 ## Tier 2 — Loom ($7k P1) — Electron/ASAR Targets
 
 - [x] `Loom Desktop App (macOS)` (https://www.loom.com/download) — Electron/ASAR; `curl -Lo /tmp/loom.dmg <dmg-url>; 7z x ...` — Sprint Batch 59
-- [ ] `Loom Chrome Extension` (https://chromewebstore.google.com/detail/loom/liecbddmkiiihnedobmlmillhodjkdmb) — JS/browser-extension; unzip CRX
+- [x] `Loom Chrome Extension` (https://chromewebstore.google.com/detail/loom/liecbddmkiiihnedobmlmillhodjkdmb) — JS/browser-extension; CRX3 downloaded via Google CRX API, extracted 28 MB zip — Sprint Batch 67
 
 ## Tier 2 — Bitbucket ($7k P1) — Python / Django SDK
 
@@ -37,3 +37,5 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 | `@forge/ui` v1.11.4 | 61 | 0 | 0 | Clean — pre-built package, no raw TS source |
 | `@forge/bridge` v5.16.0 | 66 | 0 | 0 | Clean — pre-built JS bundle, no raw TS source |
 | `atlassian-python-api` (main) | 66 | 0 | 0 | Clean — Python SDK; no taint sinks triggered by static analysis |
+| `Rovo Dev CLI` | 67 | N/A — not on PyPI; requires Atlassian auth session | — | Deferred to authenticated download path |
+| `Loom Chrome Extension` (CRX3, latest) | 67 | 3 (Informational) | 0 | 3× Informational: missing_ownership_check, parser_exhaustion_anomaly, prototype_pollution — minified JS bundles; all Informational VRT |
