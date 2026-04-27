@@ -3,6 +3,34 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-26 — Sprint Batch 65 (Context Shredder, ICS Ledger & Active Interrogation Dungeon)
+
+**Directive:** Documentation and architecture sprint — no tests, no release. Expand the attack ledger with two new threat campaigns (Agentic Orchestration Drift and IT-to-OT ICS pivot), add Phase 12 architecture entries P12-B and P12-C to the Innovation Log, and update P6-5 with GCC compiler working group alignment.
+
+**Changes:**
+
+- `tools/campaign/ATTACK_LEDGER.md` — **two new threat campaigns** added (inserted before Cross-Cutting Detection Invariants):
+  - **Agentic Orchestration Drift & Context Decay**: Transformer KV-cache eviction exploitation enabling context decay in enterprise RAG pipelines. AST/IFDS detection of RAG ingest paths without content sanitizers; attention-hijacking pattern registry (AhoCorasick, Unicode-tag block + zero-width forest); `security:rag_context_saturation_vector`, `security:orchestration_context_decay`, `security:kv_cache_eviction_vector` findings. Pairs with P12-B. TAM: $75k–$400k per advisory.
+  - **IT-to-OT Pivot (Critical Infrastructure / Fast16 Class)**: Nation-state IT-to-OT lateral movement via unauthenticated Modbus/DNP3/EtherNet-IP/BACnet/OPC-UA bridges. ICS protocol sink registry (`ics_sinks.rs`); full IFDS taint lane from internet-facing HTTP ingress to ICS write primitives; `security:ics_unauthenticated_bridge`, `security:it_to_ot_taint_pivot`, `security:fast16_class_pivot` findings. CISA Fast16 class designation surfaced in structured findings. Pairs with P12-C. TAM: $100k–$1M per advisory.
+
+- `.INNOVATION_LOG.md` — **Phase 12 architecture expanded** with two new proposals:
+  - **P12-B — Semantic Context Shredders**: Context shredder generator + detector for adversarially-crafted AST-valid dead-code islands that exhaust hostile recon agents' context windows via maximum-entropy token sequences. Dual defensive/offensive capability; `crates/forge/src/context_shredder.rs` deliverable.
+  - **P12-C — Active Interrogation Dungeon (Reverse-RAG Poisoning)** *(operator-originated field intelligence, Sprint Batch 65)*: Embed offensive prompt-injection payloads inside Janitor-controlled honeypot codebases. When a hostile AI agent ingests the codebase during recon, the payload executes a reverse-hijack, commanding the agent to exfiltrate its own system prompt, tool catalog, and C2 instructions back to a Janitor-controlled honeypot endpoint. Ethical firewall enforced via `JanitorPolicy::dungeon_mode: bool` (default false). Deliverables: `crates/forge/src/interrogation_dungeon.rs`, `crates/gov/src/dungeon_listener.rs`. Strategic value: $500k–$5M for active deception infrastructure clients.
+
+- `.INNOVATION_LOG.md` — **P6-5 (LLM Provenance) updated**: GCC compiler working group alignment added — embed deterministic Ed25519-signed provenance tokens at AST generation level (`crates/anatomist/src/ast_export.rs`), mirroring the GCC working group draft RFC on `__attribute__((ai_provenance))` annotations. Token verified via existing `vault::SigningOracle::verify_token` (public-key-only). Positions Janitor ahead of compiler-native attribution at RFC standardization.
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 65 ledger).
+
+**Telemetry:**
+
+- No tests executed (documentation sprint per directive constraint).
+- No release cut.
+- 2 new ATTACK_LEDGER campaigns (Agentic Orchestration Drift, IT-to-OT Pivot).
+- 2 new Innovation Log Phase 12 entries (P12-B, P12-C).
+- 1 Innovation Log P6-5 update (GCC compiler working group alignment).
+
+---
+
 ## 2026-04-26 — Sprint Batch 64 (ReBAC Coherence Lattice & Authorization Race Detection)
 
 **Directive:** Temporal Authorization Lattice sprint. Execute P2-5 (Authorization Coherence Lattice — Stateful ReBAC / Zanzibar-class race detection) in full. Hard constraints: append `-- --test-threads=4` to all `cargo test` invocations; no release.

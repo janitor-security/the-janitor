@@ -261,6 +261,56 @@
 
 ---
 
+## Agentic Orchestration Drift & Context Decay
+
+**Class:** Adversarial AI Context Corruption / Transformer Attention Exploitation
+**Reference:** Emerging threat class (2026); observed in enterprise RAG deployments and long-context LLM orchestration pipelines; convergent with MITRE ATLAS T1552.LLM and operator field intelligence.
+**Threat profile:** An adversarial actor exploits the finite-context architecture of Transformer-based orchestration agents. When key-value caches are overloaded (context window saturation, cache eviction under memory pressure, KV-cache poisoning via crafted token sequences), the agent enters a state of "context decay" — prior security-relevant instructions, session state, and access-control attestations are silently dropped from the attention window. The attacker's injected content then occupies the recency-weighted portion of the context, effectively hijacking the orchestration loop. Enterprise RAG pipelines are especially vulnerable: they ingest code blocks from indexed repositories without sanitizing **attention-hijacking token sequences** (adversarial Unicode-dense token runs, crafted repetition patterns that trigger KV eviction, or maximum-entropy byte sequences that saturate positional embeddings). The agent's security-relevant state is decayed; attacker-supplied instructions occupy the high-attention residual.
+
+**AST / IFDS Detection Strategy:**
+
+1. **RAG ingestion pipeline scanner** (`crates/forge/src/rag_ingest_audit.rs` — new module): identify code paths that read external content into an LLM context *without* a sanitization pass that strips or escapes attention-hijacking payloads. Target primitives: vector-store retrievers (`pinecone.query`, `chromadb.query`, `pgvector::SELECT`, `weaviate.get`), document loaders (`langchain_core.document_loaders.*`, `llama_index.readers.*`), and raw HTTP fetch-to-context chains.
+2. **Attention-hijacking pattern registry** (rkyv-baked): catalog known adversarial token sequences — Unicode-dense runs (`U+E0000`–`U+E007F` tag block, maximum-entropy zero-width forests), crafted repetition bursts (`repeated_token_n > 512` in a single chunk), and null-byte / control-character runs that exploit tokenizer normalization seams. AhoCorasick pre-filter before deeper analysis.
+3. **Context-saturation sink detection** (IFDS): taint flows from un-sanitized external content (web fetch, vector-store retrieval, GitHub README ingest) to an LLM `messages[]` injection point that does NOT traverse a `ContentSanitizer` (registered: `llm-guard`, `nemoguardrails`, `rebuff`, `protectai`). Emit `security:rag_context_saturation_vector` at `KevCritical`.
+4. **Orchestration-state decay probe**: detect agent loops where each iteration re-ingests external content without re-affirming the system prompt at the head of the context window. Pattern: `while True` / `for turn in agent_loop` with no `system_message` reassertion and at least one external-fetch primitive per iteration. Emit `security:orchestration_context_decay`.
+5. **Cache-eviction trigger detection**: overly long single-turn context injections (string literals or retrieved chunks ≥ 32 KiB concatenated into a single message) that probabilistically evict prior session-state pages from sliding-window KV caches. Emit `security:kv_cache_eviction_vector`.
+
+**Crates:** existing tree-sitter (Python / JS / TS / Go); existing IFDS engine; existing `aho-corasick`; rkyv-baked attention-hijacking pattern corpus.
+
+**Crucible fixture:** A LangChain Python agent that retrieves a 50 KiB document chunk from ChromaDB and injects it verbatim into `messages` with no sanitizer — detector emits `rag_context_saturation_vector`. Negative fixture: same pipeline with `llm_guard.input_scanners.PromptInjection.scan(chunk)` interposed — no fire.
+
+**Bounty TAM:** $75k–$400k per advisory; first-mover detection class — no SAST vendor catalogs KV-cache eviction or attention-hijacking token sequences today. Pairs with `.INNOVATION_LOG.md` P12-B (Semantic Context Shredders).
+
+---
+
+## IT-to-OT Pivot — Critical Infrastructure / Fast16 Class
+
+**Class:** Nation-State Critical Infrastructure Attack / ICS Protocol Taint
+**Reference:** Fast16 adversary class (CISA AA26-114A); ICS/SCADA targeting campaigns by Sandworm / Volt Typhoon / ELECTRUM; Dragos CHERNOVITE (FrostyGoop / BUSTLEBERM) Modbus exploitation; CISA ICS-CERT Advisory ICSA-25-310-01.
+**Threat profile:** Nation-state actors breach enterprise IT networks (initial access via phishing, supply-chain compromise, or exposed VPN concentrators), then pivot laterally to OT/ICS environments by exploiting **unauthenticated Modbus/DNP3/EtherNet-IP/BACnet bridges** — devices that translate IT-network packets into ICS bus commands. The bridge device accepts TCP connections from the IT subnet and forwards coil-write or function-code-16 commands to PLCs and RTUs without authentication, integrity verification, or rate limiting. Code written to "integrate" SCADA dashboards with enterprise APIs is often the carrier: a Python FastAPI handler or Go HTTP service accepts an external webhook, parses a JSON body, and calls `pymodbus.client.ModbusTcpClient.write_coil` or `DNP3Outstation.sendUnsolicited()` with attacker-controlled register addresses and values. CISA designates this as a Fast16 class because Modbus Function Code 16 (Write Multiple Registers) is the canonical pivot payload.
+
+**AST / IFDS Detection Strategy:**
+
+1. **ICS protocol sink registry** (`crates/forge/src/ics_sinks.rs` — new module): catalog every primitive that issues commands to ICS bus protocols:
+   * **Modbus** (`pymodbus.client.ModbusTcpClient.write_coil`, `write_register`, `write_registers`, `write_coils`; `libmodbus::modbus_write_bit`, `modbus_write_register`, `modbus_write_registers`; Go `gomodbus.Client.WriteSingleCoil`, `WriteMultipleRegisters`; Java `j2mod.modbus.io.ModbusTransaction.execute` with `WriteSingleCoilRequest` / `WriteMultipleRegistersRequest`).
+   * **DNP3** (`dnp3.outstation.OutstationApplication.handle_control_request`; `openDNP3.IDNP3Manager.AddOutstation`; Go `dnp3-go.Master.SendDirectOperate`).
+   * **EtherNet/IP / CIP** (`pycomm3.CIPDriver.write`; `cpppo.server.enip.*`; `odva/ethernetip` Java `EtherNetIP.writeTag`).
+   * **BACnet** (`BAC0.network.write`; `bacpypes.primitivedata.BACnetObjectIdentifier` write path; `bacnet4j.LocalDevice.send` with `WritePropertyRequest`).
+   * **OPC-UA** (`opcua.Client.get_node().set_value`; `opcua-asyncio.Node.write_value`; `Eclipse Milo Client.writeValues`).
+2. **Internet-facing IT ingress sources** (IFDS taint source): any HTTP handler entry point (FastAPI `@app.post`, Flask `@app.route`, Express `router.post`, Go `http.HandleFunc`, Spring `@PostMapping`, ASP.NET `[HttpPost]`) whose route pattern matches external-facing paths (no IP-allowlist middleware, no `@RequireRole` / `@Authenticated` annotation on the handler itself).
+3. **IFDS taint propagation**: build a taint lane from each IT-ingress source to each ICS-protocol sink. Standard input-validation sanitizers (`pydantic.BaseModel`, `zod.parse`, `class-validator`, `javax.validation`) are **insufficient** — only an explicit **protocol allowlist check** (`if register_address in ALLOWED_REGISTERS`, `if coil_value in [True, False]`, `if function_code == 3`) or an OT-network-boundary guard (`OT_NETWORK_FIREWALL_ENFORCED` flag set in policy) breaks the taint lane.
+4. **Unauthenticated bridge pattern**: HTTP handler that calls an ICS sink without traversing authentication middleware (`@login_required`, `verify_jwt_token`, `AuthenticationMiddleware`, `oauth2_scheme`) emits `security:ics_unauthenticated_bridge` at `KevCritical`.
+5. **Full IT-to-OT taint flow**: when taint from an external HTTP request body parameter flows unmodified into an ICS protocol primitive (e.g., `client.write_register(address=request.json["register"], value=request.json["value"])`), emit `security:it_to_ot_taint_pivot` at `KevCritical` with the ingress route, the ICS primitive, and the unvalidated parameter names.
+6. **Protocol-specific escalation**: Modbus Function Code 16 (`write_registers` with count ≥ 16) from a tainted source upgrades severity annotation to `security:fast16_class_pivot` — the CISA Fast16 designation surfaces directly in the finding for procurement/IR teams.
+
+**Crates:** existing tree-sitter (Python / Go / Java / JS / TS / C#); existing IFDS engine; new `ics_sinks.rs` registry; `petgraph` for IT-to-OT bridge graph.
+
+**Crucible fixture:** A FastAPI Python endpoint `POST /webhook` that calls `ModbusTcpClient.write_registers(address=body["addr"], values=body["vals"])` with no auth middleware and no register allowlist — detector emits `it_to_ot_taint_pivot` and `ics_unauthenticated_bridge`. Negative fixture: same handler with `if address not in ALLOWED_MODBUS_REGISTERS: raise HTTPException(403)` before the call — no fire.
+
+**Bounty TAM:** $100k–$1M per advisory; nation-state and critical-infrastructure clients pay premium rates; OT/ICS security is an under-served SAST market with zero competitors today providing interprocedural taint from HTTP ingress to ICS protocol sinks. Pairs with `.INNOVATION_LOG.md` P12-C (Active Interrogation Dungeon) and the existing CISA KEV correlation pipeline.
+
+---
+
 ## Cross-Cutting Detection Invariants
 
 1. **Determinism:** every detector here MUST be reproducible with fixed-seed inputs. No wall-clock dependency, no network-dependent verdicts. Provider taxonomies are baked into the binary at compile time via `crates/cli/build.rs`.
