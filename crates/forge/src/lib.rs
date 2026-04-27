@@ -38,6 +38,7 @@ pub mod cst_diff;
 pub mod dedup;
 pub mod deobfuscate;
 pub mod exploitability;
+pub mod financial_pii;
 pub mod fold;
 pub mod gadgets;
 pub mod git_sig;

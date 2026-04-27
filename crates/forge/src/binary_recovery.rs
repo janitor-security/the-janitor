@@ -95,6 +95,7 @@ fn dangerous_import_findings<'a>(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             })
         })
         .collect()

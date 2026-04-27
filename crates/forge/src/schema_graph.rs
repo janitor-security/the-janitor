@@ -619,6 +619,7 @@ pub fn find_openfga_invariant_findings(source: &[u8], label: &str) -> Vec<Struct
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             });
         }
     }
@@ -691,6 +692,7 @@ fn find_openfga_privilege_escalation_proofs(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             });
         }
     }

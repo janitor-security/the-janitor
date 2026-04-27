@@ -659,6 +659,22 @@ pub struct JanitorPolicy {
     /// See [`RbacConfig`] for available fields.
     #[serde(default)]
     pub rbac: RbacConfig,
+
+    /// Declared LLM compliance attestations for this repository.
+    ///
+    /// Each entry is a free-form attestation string identifying an LLM
+    /// deployment that is confirmed to be VPC-private and covered by a
+    /// documented BAA or DPA, e.g.
+    /// `"azure-openai-prod.privatelink.openai.azure.com (BAA: contract-2026-04)"`.
+    ///
+    /// When a `security:financial_pii_to_external_llm` finding's resolved
+    /// endpoint matches an attested deployment, severity is downgraded to
+    /// `Informational` with rationale.
+    ///
+    /// Default: `[]` (no attestations — all external LLM endpoints are
+    /// treated as unprotected).
+    #[serde(default)]
+    pub llm_compliance_attestations: Vec<String>,
 }
 
 impl Default for JanitorPolicy {
@@ -684,6 +700,7 @@ impl Default for JanitorPolicy {
             wasm_pqc_pub_key: None,
             suppressions: None,
             rbac: RbacConfig::default(),
+            llm_compliance_attestations: Vec::new(),
         }
     }
 }
@@ -1110,6 +1127,7 @@ mod tests {
                 approved: false,
             }]),
             rbac: RbacConfig::default(),
+            llm_compliance_attestations: Vec::new(),
             execution_tier: "Community".to_string(),
         };
         let serialised = toml::to_string(&original).unwrap();

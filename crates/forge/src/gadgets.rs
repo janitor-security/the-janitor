@@ -164,6 +164,7 @@ fn finding(file_name: &str, line: u32, chain: &[&str], manifest_name: &str) -> S
             ..ExploitWitness::default()
         }),
         upstream_validation_absent: true,
+        ..Default::default()
     }
 }
 

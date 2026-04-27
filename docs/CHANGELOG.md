@@ -3,6 +3,44 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-27 — Sprint Batch 68 (Regulatory Taint Guard)
+
+**Directive:** Implement P4-9 (Financial PII to External LLM Taint Guard) — full IFDS-style detector, regulatory annotations, and policy attestation gate. No release.
+
+**Changes:**
+
+- `crates/forge/src/financial_pii.rs` — **new module: P4-9 Financial PII → LLM Taint Guard**:
+  - `FINANCIAL_PII_IDENTIFIERS` (24 field patterns: `account_number`, `iban`, `ssn`, `pan`, `balance`, `kyc_document`, `aml_score`, and 17 others across Python/JS/TS/Java/Go/C#/Rust).
+  - `FINANCIAL_PII_DECORATORS` (6 type-level patterns: `@FinancialPII`, `#[financial_pii]`, `@Sensitive`, `FinancialPii`, etc.).
+  - `LLM_SINK_HOSTS` (12 endpoints: `api.openai.com`, `api.anthropic.com`, `generativelanguage.googleapis.com`, `api.cohere.ai`, `api.mistral.ai`, and 7 others).
+  - `LLM_SINK_SDK_CALLS` (15 SDK call fragments: `openai.chat.completions.create`, `anthropic.messages.create`, `ChatOpenAI`, `BedrockChat`, `invoke_model`, etc.).
+  - `CRYPTO_MASKING_SANITIZERS` (30 patterns: FPE — `fpe::encrypt`, `Protegrity::tokenize`; HE — `tfhe::encrypt`, `Pyfhel`; ZK — `risc0::commit`; KMS — `aws_kms`, `generate_data_key`, `gcp_cloud_dlp`; DP — `opendp::laplace_noise`, `add_noise`, `pydp`).
+  - `emit_financial_pii_to_llm_findings(file, source)` — emits `security:financial_pii_to_external_llm` at `KevCritical` when PII + LLM sink but no crypto sanitizer; suppressed when sanitizer present.
+  - `REGULATORY_REGIMES: ["GLBA", "EU_AI_Act_Art_10", "NYDFS_500_11", "OCC_2024_32"]`; `FINE_FLOOR_USD: 10_000_000`.
+  - 8 deterministic unit tests: `pii_source_plus_openai_sink_emits_kev_critical`, `regulatory_annotations_present_on_emission`, `fpe_sanitizer_suppresses_finding`, `no_pii_no_finding`, `no_llm_sink_no_finding`, `pii_decorator_triggers_detection`, `kms_generate_data_key_suppresses_finding`, `anthropic_sink_triggers_detection`.
+
+- `crates/forge/src/lib.rs` — `pub mod financial_pii` added to module registry.
+
+- `crates/common/src/slop.rs` — **`StructuredFinding` extended**:
+  - `regulatory_regimes: Option<Vec<String>>` — statutory regimes implicated by a finding.
+  - `estimated_fine_floor_usd: Option<u64>` — CFO-tier risk quantification anchor.
+  - Both fields `skip_serializing_if = Option::is_none` (backwards-compatible).
+  - All 30+ struct literal sites across `forge`, `mcp`, `cli` updated with `..Default::default()`.
+
+- `crates/common/src/policy.rs` — **`JanitorPolicy` extended**:
+  - `llm_compliance_attestations: Vec<String>` — operator-declared VPC-private LLM deployments with BAA/DPA; severity downgrade hook point for future implementation.
+  - `Default` impl updated.
+
+- `.INNOVATION_LOG.md` — **Absolute Eradication Law**:
+  - P4-9 block physically deleted.
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 68 ledger).
+
+**Telemetry:**
+
+- `cargo test --workspace -- --test-threads=4` — all 1,330 tests passed, 0 failed, 1 ignored.
+- `just audit` — exit 0.
+
 ## 2026-04-27 — Sprint Batch 67 (Repojacking Guillotine & Governance Proofs)
 
 **Directive:** Implement P1-4 (5-manifest Git-ref repojacking detector), ship GovernanceProof capsule (P3-4 sub-item), advance Atlassian live-fire campaign. No release.

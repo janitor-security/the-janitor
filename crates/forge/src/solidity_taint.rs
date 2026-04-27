@@ -65,6 +65,7 @@ fn find_reentrancy(source: &[u8], tree: &Tree, findings: &mut Vec<StructuredFind
         docs_url: None,
         exploit_witness: None,
         upstream_validation_absent: false,
+        ..Default::default()
     });
 
     let _ = first_named_descendant(tree.root_node());
@@ -163,6 +164,7 @@ fn find_cross_function_reentrancy(
                     docs_url: None,
                     exploit_witness: None,
                     upstream_validation_absent: false,
+                    ..Default::default()
                 });
                 return;
             }
@@ -198,6 +200,7 @@ fn find_unprotected_authority_transitions(
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
 
@@ -226,6 +229,7 @@ fn detect_signature_replay(source: &[u8], tree: &Tree, findings: &mut Vec<Struct
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
 }
@@ -254,6 +258,7 @@ fn detect_unsafe_delegatecall(source: &[u8], tree: &Tree, findings: &mut Vec<Str
                     docs_url: None,
                     exploit_witness: None,
                     upstream_validation_absent: false,
+                    ..Default::default()
                 });
                 break;
             }
@@ -718,6 +723,7 @@ fn detect_oracle_manipulation(source: &[u8], tree: &Tree, findings: &mut Vec<Str
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
 
@@ -774,6 +780,7 @@ fn detect_flash_loan_callback(source: &[u8], tree: &Tree, findings: &mut Vec<Str
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
 }

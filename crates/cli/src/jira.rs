@@ -273,6 +273,7 @@ mod tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
 
         let payload = build_issue_payload(&config, &finding);
@@ -330,6 +331,7 @@ mod tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let sender = MockJiraSender::new(vec![
             Err(anyhow::anyhow!("jira issue create failed with HTTP 500")),
@@ -365,6 +367,7 @@ mod tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         }];
         let sender = MockJiraSender::new(vec![Err(anyhow::anyhow!(
             "jira issue create transport failure: timeout"
@@ -408,6 +411,7 @@ mod tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
 
         // search_total = 1 → open ticket exists → send must not be called.
@@ -458,6 +462,7 @@ mod tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let janitor_tmp = tempdir().expect("tempdir");
         let janitor_dir = janitor_tmp.path().join(".janitor");

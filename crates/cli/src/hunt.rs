@@ -2324,6 +2324,7 @@ fn scan_buffer(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent,
+                ..Default::default()
             };
             if rule_id == "security:dom_xss_innerHTML" || rule_id.contains("prototype_pollution") {
                 let mut witness =
@@ -2373,6 +2374,7 @@ fn scan_buffer(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             });
         }
     }
@@ -2492,6 +2494,7 @@ fn slopsquat_artifact_finding(
         docs_url: None,
         exploit_witness: None,
         upstream_validation_absent: false,
+        ..Default::default()
     })
 }
 
@@ -2812,6 +2815,7 @@ def main(user_id):
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -2857,6 +2861,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: false,
+                ..Default::default()
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -2897,6 +2902,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+            ..Default::default()
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -2944,6 +2950,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+                ..Default::default()
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -2980,6 +2987,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: false,
+            ..Default::default()
         };
 
         let report = format_bugcrowd_report(&[finding]);
@@ -3019,6 +3027,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: false,
+                ..Default::default()
         };
 
         let report = format_auth0_report(&[finding]);
@@ -3087,6 +3096,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+                ..Default::default()
         };
 
         let report = format_auth0_report(&[finding]);
@@ -3138,6 +3148,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+                ..Default::default()
         };
 
         let report = format_auth0_report(&[finding]);
@@ -3193,6 +3204,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+                ..Default::default()
         };
 
         let report = format_auth0_report(&[finding]);
@@ -3236,6 +3248,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+                ..Default::default()
         };
 
         let report = format_auth0_report(&[finding]);
@@ -3260,6 +3273,7 @@ def main(user_id):
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             },
             StructuredFinding {
                 id: "security:hardcoded_secret".to_string(),
@@ -3271,6 +3285,7 @@ def main(user_id):
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             },
         ];
 
@@ -3315,6 +3330,7 @@ def main(user_id):
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let bugcrowd = format_bugcrowd_report(&[finding.clone()]);
         assert!(
@@ -3340,6 +3356,7 @@ def main(user_id):
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let report = format_auth0_report_with_component(
             &[finding],
@@ -3411,6 +3428,7 @@ def main(user_id):
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let report = format_auth0_report(&[finding]);
         assert!(
@@ -3444,6 +3462,7 @@ def main(user_id):
                 ..Default::default()
             }),
             upstream_validation_absent: false,
+            ..Default::default()
         };
         let report = format_auth0_report(&[finding]);
         assert!(
@@ -3641,6 +3660,7 @@ class Handler {
                 ..Default::default()
             }),
             upstream_validation_absent: false,
+                ..Default::default()
         }];
 
         emit_browser_dom_harnesses(&mut findings, temp.path()).unwrap();
@@ -4008,6 +4028,7 @@ class Handler {
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+            ..Default::default()
         };
         let report = format_bugcrowd_report(&[finding]);
         assert!(
@@ -4040,6 +4061,7 @@ class Handler {
                 ..Default::default()
             }),
             upstream_validation_absent: true,
+            ..Default::default()
         };
         let report = format_bugcrowd_report(&[finding]);
         assert!(

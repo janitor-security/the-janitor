@@ -131,6 +131,7 @@ pub fn find_agentic_privilege_escalations(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             }
         })
         .collect()

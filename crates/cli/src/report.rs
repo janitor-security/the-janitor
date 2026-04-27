@@ -180,6 +180,7 @@ fn structured_findings_from_entry(entry: &BounceLogEntry) -> Vec<common::slop::S
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         })
         .collect()
 }
@@ -3923,6 +3924,7 @@ mod webhook_tests {
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         }];
 
         emit_lifecycle_webhook(&entry, None, &findings, 100, &policy);

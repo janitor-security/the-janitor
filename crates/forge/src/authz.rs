@@ -196,6 +196,7 @@ pub fn check_authz_consistency(endpoints: &[EndpointSurface]) -> Vec<StructuredF
                     docs_url: None,
                     exploit_witness: None,
                     upstream_validation_absent: false,
+                    ..Default::default()
                 });
             }
         }

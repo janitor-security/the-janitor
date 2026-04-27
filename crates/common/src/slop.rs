@@ -137,6 +137,23 @@ pub struct StructuredFinding {
     /// path bypasses all registered sanitizers or validators.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upstream_validation_absent: bool,
+
+    /// Regulatory compliance regimes implicated by this finding, e.g.
+    /// `["GLBA", "EU_AI_Act_Art_10", "NYDFS_500_11", "OCC_2024_32"]`.
+    ///
+    /// Populated by detectors with statutory exposure (Financial PII, health
+    /// data, COPPA-scope children's data). Surfaced in SARIF `help.markdown`
+    /// and Bugcrowd VRT exports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regulatory_regimes: Option<Vec<String>>,
+
+    /// Estimated minimum regulatory fine floor in USD for this finding class.
+    ///
+    /// Populated alongside `regulatory_regimes` to support CFO-tier risk
+    /// quantification in the actuarial ledger. `None` for findings without
+    /// statutory dollar exposure (e.g. dead-code, logic clone).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimated_fine_floor_usd: Option<u64>,
 }
 
 #[cfg(test)]

@@ -150,6 +150,7 @@ fn toctou_finding(file_name: &str, check: &Operation, act: &Operation) -> Struct
         docs_url: None,
         exploit_witness: None,
         upstream_validation_absent: false,
+        ..Default::default()
     }
 }
 

@@ -155,6 +155,7 @@ pub fn emit_jwt_polymorphism(
             ..ExploitWitness::default()
         }),
         upstream_validation_absent: true,
+        ..Default::default()
     }
 }
 

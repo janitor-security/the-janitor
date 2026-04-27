@@ -146,6 +146,7 @@ pub fn find_missing_ownership_checks(
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
     findings
@@ -215,6 +216,7 @@ fn scan_surfaces(
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: false,
+            ..Default::default()
         });
     }
     findings

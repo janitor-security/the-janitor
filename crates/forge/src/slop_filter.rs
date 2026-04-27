@@ -562,6 +562,7 @@ fn push_manifest_structured_findings(
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             });
     }
 }
@@ -1556,6 +1557,7 @@ impl PRBouncer for PatchBouncer {
                 docs_url: None,
                 exploit_witness: None,
                 upstream_validation_absent: false,
+                ..Default::default()
             };
             let rule_id = extract_rule_id(&f.description);
             if rule_id == "security:cross_file_taint_sink" {
@@ -2427,6 +2429,7 @@ fn apply_cross_vulnerability_chain_findings(
             docs_url: None,
             exploit_witness: None,
             upstream_validation_absent: true,
+            ..Default::default()
         };
         finding = crate::exploitability::attach_exploit_witness(finding, witness);
         *antipattern_score += crate::slop_hunter::Severity::KevCritical.points();
