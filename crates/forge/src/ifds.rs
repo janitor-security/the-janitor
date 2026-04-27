@@ -12,6 +12,7 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use smallvec::SmallVec;
 
 use crate::negtaint::{sink_predicate_for_label, NegTaintLabel, NegTaintSolver};
+use crate::rebac_coherence::ConsistencyLevel;
 use crate::sanitizer::SanitizerRegistry;
 
 /// Canonical taint label propagated by the IFDS solver.
@@ -118,6 +119,13 @@ pub struct FunctionModel {
     pub calls: SmallVec<[CallSite; 4]>,
     /// Summary outputs returned to callers for cross-file reuse.
     pub passthroughs: SmallVec<[(TaintLabel, TaintLabel); 2]>,
+    /// ReBAC authorization consistency level observed in this function.
+    ///
+    /// `None` means no ReBAC check was detected.  `Some(Strong)` means all
+    /// observed checks are at strong consistency.  `Some(Eventual)` means at
+    /// least one eventual-consistency check was seen — the solver uses the
+    /// pessimistic meet of all observed levels.
+    pub authz_consistency: Option<ConsistencyLevel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -3,6 +3,50 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-26 — Sprint Batch 64 (ReBAC Coherence Lattice & Authorization Race Detection)
+
+**Directive:** Temporal Authorization Lattice sprint. Execute P2-5 (Authorization Coherence Lattice — Stateful ReBAC / Zanzibar-class race detection) in full. Hard constraints: append `-- --test-threads=4` to all `cargo test` invocations; no release.
+
+**Changes:**
+
+- `crates/forge/src/rebac_registry.rs` — **NEW FILE**. ReBAC primitive catalog (P2-5 Phase 1):
+  - `PrimitiveKind` enum: `Check | Write | List`.
+  - `RebacPrimitive` struct: `library`, `function_name`, `kind`, `eventual_tokens`, `strong_tokens`.
+  - `REBAC_PRIMITIVES` static table: 18 entries covering OpenFGA (6), AuthZed/SpiceDB (5), and Oso Cloud (6); each `Check`-kind entry maps consistency-level argument tokens to their semantic tier.
+  - 4 deterministic unit tests: provider coverage, MINIMIZE_LATENCY token presence, AT_LEAST_AS_FRESH token presence, write-primitive no-token invariant.
+
+- `crates/forge/src/rebac_coherence.rs` — **NEW FILE**. 4-tier consistency lattice + coherence gap + revocation race detectors (P2-5 Phases 2–3):
+  - `ConsistencyLevel` lattice: `Strong < BoundedStaleness < Eventual < Unknown` via `derive(PartialOrd, Ord)`; `meet()` (pessimistic join) and `demote()` operations.
+  - `classify_consistency(token) → ConsistencyLevel` — maps `MINIMIZE_LATENCY/BEST_EFFORT` → `Eventual`, `HIGHER_CONSISTENCY/AT_LEAST_AS_FRESH/FULL_CONSISTENCY` → `Strong`.
+  - `find_coherence_gaps(source, file_path) → Vec<StructuredFinding>` — emits `security:rebac_coherence_gap` at `KevCritical` when an eventual-consistency check (512-byte backward window) dominates a state-mutating sink (1 024-byte forward window) without a strong-consistency token in the forward window.
+  - `find_revocation_races(source, file_path) → Vec<StructuredFinding>` — emits `security:rebac_revocation_race` at `High` when a write primitive is followed by a check primitive within 1 024 bytes without consistency-token threading (`Zedtoken`, `zookie`, `AT_LEAST_AS_FRESH`, etc.).
+  - 9 deterministic unit tests: lattice ordering, meet semantics, demote, classify_consistency (2), coherence gap trigger, strong-consistency no-fire, no-mutation no-fire, revocation race trigger, Zedtoken suppression, write-no-check no-fire.
+
+- `crates/forge/src/callgraph.rs`:
+  - `EdgeKind` enum added: `Call` (default) | `HappensBefore` | `ConsistencyToken`. Documents sequential ordering constraints and consistency-token edges for the ReBAC coherence solver.
+  - `CallSiteArgs` extended with `pub kind: EdgeKind` field (`Default = EdgeKind::Call`). Construction site updated to explicit `kind: EdgeKind::Call`.
+
+- `crates/forge/src/ifds.rs`:
+  - `FunctionModel` gains `pub authz_consistency: Option<ConsistencyLevel>` field. Imports `ConsistencyLevel` from `rebac_coherence`. Default is `None` (no authz check observed). The field carries the pessimistic meet of all authorization predicate consistency levels seen in the function.
+
+- `crates/forge/src/lib.rs` — `pub mod rebac_coherence` and `pub mod rebac_registry` registered alphabetically between `rcal` and `router_topology`.
+
+- `.INNOVATION_LOG.md` — P2-5 block physically deleted per Absolute Eradication Law. Phase 3 (`P3-3`) is now the leading Phase 2 → Phase 3 boundary entry.
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 64 ledger).
+
+**Telemetry:**
+
+- `cargo test --workspace -- --test-threads=4`: 1 357 passed, 0 failed (workspace total including 712 forge tests).
+- `cargo fmt --all --check`: 0 diffs after `cargo fmt --all` applied.
+- `cargo clippy --workspace --all-targets -- -D warnings`: 0 errors, 0 warnings.
+- `just audit`: exit 0.
+- ZERO releases per directive.
+- P2-5 eradicated from `.INNOVATION_LOG.md`; P3-3 is now the leading Phase 3 entry.
+
+---
+
+
 ## 2026-04-26 — Sprint Batch 63 (KEV Sync Hardening + OAuth Scope Drift Detector)
 
 **Directive:** Intelligence Hardening & OAuth Drift sprint. Execute P1-2 (CISA KEV Sync Workflow Hardening) and P1-3 (OAuth Scope Drift Detector) in full. Hard constraint: append `-- --test-threads=4` to all `cargo test` invocations; no release.

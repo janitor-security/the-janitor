@@ -52,6 +52,8 @@ pub mod negtaint;
 pub mod oauth_scope;
 pub mod pr_collider;
 pub mod rcal;
+pub mod rebac_coherence;
+pub mod rebac_registry;
 pub mod router_topology;
 pub mod sanitizer;
 pub mod sanitizer_sym;

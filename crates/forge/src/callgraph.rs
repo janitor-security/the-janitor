@@ -38,14 +38,31 @@ use tree_sitter::{Node, Parser};
 // Public types
 // ---------------------------------------------------------------------------
 
+/// Semantic kind of a call-graph edge.
+///
+/// `Call` is the default for every regular function invocation.
+/// `HappensBefore` records a sequential ordering constraint used by the
+/// ReBAC coherence solver to detect write-then-check races.
+/// `ConsistencyToken` marks an edge that carries a Zedtoken / zookie /
+/// `at_revision` consistency handle from a write to a subsequent check.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EdgeKind {
+    #[default]
+    Call,
+    HappensBefore,
+    ConsistencyToken,
+}
+
 /// Positional argument identifiers recorded at a single call site.
 ///
 /// Each entry in `args` is either the bare identifier name passed to that
 /// positional slot (e.g. `Some("user_input")`) or `None` for literals,
 /// member expressions, or otherwise non-identifier arguments.
+/// `kind` records the semantic relationship encoded by this edge.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CallSiteArgs {
     pub args: Vec<Option<String>>,
+    pub kind: EdgeKind,
 }
 
 /// Call graph edge weight — a list of call sites between the same pair.
@@ -253,7 +270,10 @@ fn walk_node(
             let caller_idx = get_or_insert(caller, graph, node_map);
             let callee_idx = get_or_insert(&callee, graph, node_map);
             let args = extract_call_args(node, source, language);
-            let site = CallSiteArgs { args };
+            let site = CallSiteArgs {
+                args,
+                kind: EdgeKind::Call,
+            };
             if let Some(edge_id) = graph.find_edge(caller_idx, callee_idx) {
                 if let Some(weight) = graph.edge_weight_mut(edge_id) {
                     weight.push(site);
