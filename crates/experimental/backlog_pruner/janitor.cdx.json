@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:43feaca3-9f1e-41c6-9f7d-81291eb4b6e3",
+  "serialNumber": "urn:uuid:0dd6111a-387c-4ba9-b1ec-363cbe5aec28",
   "metadata": {
-    "timestamp": "2026-04-23T20:05:09.669511073Z",
+    "timestamp": "2026-04-27T21:15:34.188778117Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.3",
       "name": "backlog_pruner",
-      "version": "10.2.0-beta.2",
+      "version": "10.2.0-beta.3",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.2?download_url=file://.",
+      "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.3?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.3 bin-target-0",
           "name": "backlog_pruner",
-          "version": "10.2.0-beta.2",
-          "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.2?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.3",
+          "purl": "pkg:cargo/backlog_pruner@10.2.0-beta.3?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -174,16 +174,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
       "author": "Jack O'Connor <oconnor663@gmail.com>, Samuel Neves",
       "name": "blake3",
-      "version": "1.8.4",
+      "version": "1.8.5",
       "description": "the BLAKE3 hash function",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4d2d5991425dfd0785aed03aedcf0b321d61975c9b5b3689c774a2610ae0b51e"
+          "content": "0aa83c34e62843d924f905e0f5c866eb1dd6545fc4d719e803d9ba6030371fce"
         }
       ],
       "licenses": [
@@ -191,7 +191,7 @@
           "expression": "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"
         }
       ],
-      "purl": "pkg:cargo/blake3@1.8.4",
+      "purl": "pkg:cargo/blake3@1.8.5",
       "externalReferences": [
         {
           "type": "documentation",
@@ -236,16 +236,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.61",
       "author": "Alex Crichton <alex@alexcrichton.com>",
       "name": "cc",
-      "version": "1.2.60",
+      "version": "1.2.61",
       "description": "A build-time dependency for Cargo build scripts to assist in invoking the native C compiler to compile native C code into a static archive to be linked into Rust code. ",
       "scope": "excluded",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
+          "content": "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
         }
       ],
       "licenses": [
@@ -253,7 +253,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/cc@1.2.60",
+      "purl": "pkg:cargo/cc@1.2.61",
       "externalReferences": [
         {
           "type": "documentation",
@@ -872,16 +872,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
       "author": "The Rust Project Developers",
       "name": "libc",
-      "version": "0.2.185",
+      "version": "0.2.186",
       "description": "Raw FFI bindings to platform libraries like libc.",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
+          "content": "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
         }
       ],
       "licenses": [
@@ -889,7 +889,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.185",
+      "purl": "pkg:cargo/libc@0.2.186",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1746,10 +1746,10 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.2",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/backlog_pruner#10.2.0-beta.3",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-        "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
+        "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
         "registry+https://github.com/rust-lang/crates.io-index#fips204@0.4.6",
         "registry+https://github.com/rust-lang/crates.io-index#petgraph@0.8.3",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8"
@@ -1771,11 +1771,11 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#arrayvec@0.7.6"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.4",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#arrayref@0.3.9",
         "registry+https://github.com/rust-lang/crates.io-index#arrayvec@0.7.6",
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.61",
         "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
         "registry+https://github.com/rust-lang/crates.io-index#constant_time_eq@0.4.2",
         "registry+https://github.com/rust-lang/crates.io-index#cpufeatures@0.3.0"
@@ -1788,11 +1788,11 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.61",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.9",
         "registry+https://github.com/rust-lang/crates.io-index#jobserver@0.1.34",
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
         "registry+https://github.com/rust-lang/crates.io-index#shlex@1.3.0"
       ]
     },
@@ -1860,7 +1860,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
       ]
     },
     {
@@ -1886,14 +1886,14 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#jobserver@0.1.34",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
       ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#keccak@0.1.6"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.0"
@@ -2011,7 +2011,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.60",
+        "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.61",
         "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
         "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.10",
         "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",

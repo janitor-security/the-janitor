@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:5e5be2b6-de22-4334-9877-a4c1d653216a",
+  "serialNumber": "urn:uuid:171f70f5-edce-448f-bb6c-7f94b6b5df2b",
   "metadata": {
-    "timestamp": "2026-04-23T20:05:09.819325517Z",
+    "timestamp": "2026-04-27T21:15:34.370802159Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.2",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.3",
       "name": "mint-token",
-      "version": "10.2.0-beta.2",
+      "version": "10.2.0-beta.3",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.2.0-beta.2?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.2.0-beta.3?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.2 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.3 bin-target-0",
           "name": "mint-token",
-          "version": "10.2.0-beta.2",
-          "purl": "pkg:cargo/mint-token@10.2.0-beta.2?download_url=file://.#src/main.rs"
+          "version": "10.2.0-beta.3",
+          "purl": "pkg:cargo/mint-token@10.2.0-beta.3?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -870,16 +870,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
       "author": "The Rust Project Developers",
       "name": "libc",
-      "version": "0.2.185",
+      "version": "0.2.186",
       "description": "Raw FFI bindings to platform libraries like libc.",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
+          "content": "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
         }
       ],
       "licenses": [
@@ -887,7 +887,7 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.185",
+      "purl": "pkg:cargo/libc@0.2.186",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1711,7 +1711,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.2",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.3",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
@@ -1874,7 +1874,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
       ]
     },
     {
@@ -1887,7 +1887,7 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#is_terminal_polyfill@1.70.2"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186"
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#pem-rfc7468@0.7.0",
@@ -1923,7 +1923,7 @@
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.6",
       "dependsOn": [
-        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.185",
+        "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
         "registry+https://github.com/rust-lang/crates.io-index#rand_chacha@0.3.1",
         "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4"
       ]
