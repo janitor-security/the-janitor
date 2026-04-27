@@ -571,7 +571,9 @@ enum Commands {
     /// entries without forking out to `curl`.
     UpdateWisdom {
         /// Project root (writes .janitor/wisdom.rkyv and, with --ci-mode,
-        /// .janitor/wisdom_manifest.json).
+        /// .janitor/wisdom_manifest.json). Defaults to the current directory
+        /// when omitted, enabling bare `janitor update-wisdom --ci-mode` in CI.
+        #[arg(default_value = ".")]
         path: PathBuf,
         /// Emit a diffable `.janitor/wisdom_manifest.json` alongside wisdom.rkyv.
         ///

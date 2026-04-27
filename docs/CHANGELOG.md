@@ -3,6 +3,43 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-26 — Sprint Batch 66 (Intelligence Restoration & JWT Polymorphism)
+
+**Directive:** Intelligence pipeline restoration + P1-5 implementation. Fix `update-wisdom --ci-mode` argument-parsing crash in CI. Implement JWT Library Wrapper Identity Resolution (P1-5): `library_identity.rs`, `ArgEvidence` lattice extension, `SanitizerRegistry::JwtConditionalSpec`. Hunt `@forge/bridge` and `atlassian-python-api`. No release.
+
+**Changes:**
+
+- `crates/cli/src/main.rs` — **`UpdateWisdom.path` now optional** via `#[arg(default_value = ".")]`. `janitor update-wisdom --ci-mode` no longer crashes when invoked without a positional path argument; defaults to current directory. Fixes CI argument-parsing regression in `cisa-kev-sync.yml`.
+
+- `crates/forge/src/library_identity.rs` — **NEW FILE**. JWT wrapper polymorphism detector (P1-5):
+  - `WrapperResolution` enum: `VerifiedSafe { algorithm }`, `DecodedOnly { primitive }`, `VerificationDisabled`, `NoneAlgorithm`, `Unresolved`.
+  - `resolve_jwt_wrapper(callee, algorithms_evidence, verify_evidence, registry) → WrapperResolution` — resolves inner call against `DECODE_PRIMITIVES` / `VERIFY_PRIMITIVES` tables (11 canonical JWT entry-points across 7 libraries); checks `verify_signature: false` and `algorithms: ["none"]` constants.
+  - `is_dangerous_resolution(resolution) → bool` — predicate for authorization-gate callsite gating.
+  - `emit_jwt_polymorphism(wrapper_name, file, line, resolution) → StructuredFinding` — emits `security:jwt_wrapper_polymorphism` at `KevCritical`; populates `exploit_witness.sanitizer_audit` with resolution rationale.
+  - 5 deterministic unit tests: `decode_only_wrapper_is_flagged`, `verify_with_rs256_is_safe`, `verify_signature_false_is_flagged`, `none_algorithm_is_flagged`, `parse_unverified_is_flagged`.
+
+- `crates/forge/src/ifds.rs` — `ArgEvidence` enum added to the dataflow lattice: `Constant(String)`, `Tainted`, `Symbolic`. Used by `library_identity` to carry per-call-site option-argument evidence across the IFDS boundary.
+
+- `crates/forge/src/sanitizer.rs` — `JwtConditionalSpec` struct added (`name`, `algorithms_arg`, `verify_arg: Option`). `SanitizerRegistry` gains `jwt_conditionals: Vec<JwtConditionalSpec>` field, `push_jwt_conditional`, `is_jwt_conditional`, `jwt_conditional_for`. `default_jwt_conditionals()` seeds 7 entries covering jsonwebtoken, jose, PyJWT, golang-jwt, Microsoft.IdentityModel, nimbus-jose-jwt, Auth0 java-jwt.
+
+- `crates/forge/src/lib.rs` — `pub mod library_identity` registered.
+
+- `.INNOVATION_LOG.md` — P1-5 block physically deleted (Absolute Eradication Law).
+
+- `tools/campaign/TARGET_LEDGER.md` — `@forge/bridge` and `atlassian-python-api` marked (see Hunt Results Log).
+
+- `docs/CHANGELOG.md` — this entry (Sprint Batch 66 ledger).
+
+**Telemetry:**
+
+- `cargo check -p forge -p cli` — exit 0 before and after changes.
+- 5 new deterministic unit tests in `library_identity.rs`.
+- `@forge/bridge` v5.16.0 hunted; `atlassian-python-api` hunted (see TARGET_LEDGER).
+- P1-5 eradicated from Innovation Log.
+- No release cut.
+
+---
+
 ## 2026-04-26 — Sprint Batch 65 (Context Shredder, ICS Ledger & Active Interrogation Dungeon)
 
 **Directive:** Documentation and architecture sprint — no tests, no release. Expand the attack ledger with two new threat campaigns (Agentic Orchestration Drift and IT-to-OT ICS pivot), add Phase 12 architecture entries P12-B and P12-C to the Innovation Log, and update P6-5 with GCC compiler working group alignment.

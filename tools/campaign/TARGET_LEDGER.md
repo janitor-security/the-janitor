@@ -10,7 +10,7 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 - [x] `@forge/cli` (https://www.npmjs.com/package/@forge/cli) — Node.js CLI; `npm pack @forge/cli && tar xf forge-cli-*.tgz -C /tmp/forge-cli` — Sprint Batch 59
 - [x] `@forge/api` (https://www.npmjs.com/package/@forge/api) — Forge app runtime API surface; Node.js — Sprint Batch 61
 - [x] `@forge/ui` (https://www.npmjs.com/package/@forge/ui) — UI Kit component library; React/Node.js — Sprint Batch 61
-- [ ] `@forge/bridge` (https://www.npmjs.com/package/@forge/bridge) — iframe bridge; JS XSS surface
+- [x] `@forge/bridge` (https://www.npmjs.com/package/@forge/bridge) — iframe bridge; JS XSS surface — Sprint Batch 66
 
 ## Tier 1 — Rovo Dev ($12k P1)
 
@@ -23,7 +23,7 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 
 ## Tier 2 — Bitbucket ($7k P1) — Python / Django SDK
 
-- [ ] `atlassian-python-api` (https://github.com/atlassian-api/atlassian-python-api) — Python; `git clone https://github.com/atlassian-api/atlassian-python-api /tmp/atlassian-python-api`
+- [x] `atlassian-python-api` (https://github.com/atlassian-api/atlassian-python-api) — Python; `git clone https://github.com/atlassian-api/atlassian-python-api /tmp/atlassian-python-api` — Sprint Batch 66
 
 ---
 
@@ -35,3 +35,5 @@ Strike protocol: `npm pack` / `curl` download → extract → `janitor hunt <dir
 | Loom Desktop (macOS) | 59 | N/A — DMG download requires browser auth | — | Deferred to manual ASAR extraction |
 | `@forge/api` v7.1.3 | 61 | 0 | 0 | Clean — pre-built package, no raw TS source |
 | `@forge/ui` v1.11.4 | 61 | 0 | 0 | Clean — pre-built package, no raw TS source |
+| `@forge/bridge` v5.16.0 | 66 | 0 | 0 | Clean — pre-built JS bundle, no raw TS source |
+| `atlassian-python-api` (main) | 66 | 0 | 0 | Clean — Python SDK; no taint sinks triggered by static analysis |

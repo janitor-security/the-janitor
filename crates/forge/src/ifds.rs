@@ -15,6 +15,24 @@ use crate::negtaint::{sink_predicate_for_label, NegTaintLabel, NegTaintSolver};
 use crate::rebac_coherence::ConsistencyLevel;
 use crate::sanitizer::SanitizerRegistry;
 
+/// Argument-shape evidence carried at a call site by the IFDS lattice.
+///
+/// Used by the JWT wrapper polymorphism detector (`library_identity`) to
+/// resolve whether the `verify_signature`, `algorithms`, or `unsafe`
+/// option-object field is statically determinable at the call site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArgEvidence {
+    /// Argument resolved to a concrete constant (boolean literal, string
+    /// literal, or small integer).
+    Constant(String),
+    /// Argument is tainted — flows from an untrusted source; runtime value
+    /// unknown but attacker-influenced.
+    Tainted,
+    /// Argument could not be resolved statically (complex expression or
+    /// cross-function propagation required).
+    Symbolic,
+}
+
 /// Canonical taint label propagated by the IFDS solver.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TaintLabel {

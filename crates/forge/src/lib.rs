@@ -46,6 +46,7 @@ pub mod hashing;
 pub mod idor;
 pub mod ifds;
 pub mod labyrinth;
+pub mod library_identity;
 pub mod metadata;
 pub mod migration_guard;
 pub mod negtaint;

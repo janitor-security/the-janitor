@@ -105,12 +105,39 @@ pub struct SanitizerSpec {
 }
 
 // ---------------------------------------------------------------------------
+// JwtConditionalSpec
+// ---------------------------------------------------------------------------
+
+/// Conditional suppression rule for JWT library wrappers.
+///
+/// A JWT function is a valid verifier only when its option arguments satisfy
+/// safety conditions:
+/// - `algorithms_arg` resolves to a non-`["none"]` algorithm list, AND
+/// - `verify_arg` (if present) resolves to `true`.
+///
+/// When either condition fails, `library_identity::resolve_jwt_wrapper` returns
+/// a dangerous resolution and the engine emits `security:jwt_wrapper_polymorphism`.
+#[derive(Debug, Clone)]
+pub struct JwtConditionalSpec {
+    /// Bare function name as it appears in call expressions.
+    pub name: &'static str,
+    /// Name of the options field that specifies allowed algorithms
+    /// (e.g. `"algorithms"` for jsonwebtoken, `"alg"` for jose).
+    pub algorithms_arg: &'static str,
+    /// Name of the options field that enables or disables signature
+    /// verification. `None` when the library always verifies if invoked via
+    /// the canonical verify entry-point.
+    pub verify_arg: Option<&'static str>,
+}
+
+// ---------------------------------------------------------------------------
 // SanitizerRegistry
 // ---------------------------------------------------------------------------
 
 /// Registry of known sanitizer/validator functions.
 pub struct SanitizerRegistry {
     specs: Vec<SanitizerSpec>,
+    jwt_conditionals: Vec<JwtConditionalSpec>,
 }
 
 impl SanitizerRegistry {
@@ -119,17 +146,36 @@ impl SanitizerRegistry {
     pub fn with_defaults() -> Self {
         Self {
             specs: default_specs(),
+            jwt_conditionals: default_jwt_conditionals(),
         }
     }
 
     /// Creates an empty registry.  Use [`push`][Self::push] to add custom specs.
     pub fn empty() -> Self {
-        Self { specs: Vec::new() }
+        Self {
+            specs: Vec::new(),
+            jwt_conditionals: Vec::new(),
+        }
     }
 
     /// Appends a custom [`SanitizerSpec`] to the registry.
     pub fn push(&mut self, spec: SanitizerSpec) {
         self.specs.push(spec);
+    }
+
+    /// Appends a [`JwtConditionalSpec`] to the JWT conditional registry.
+    pub fn push_jwt_conditional(&mut self, spec: JwtConditionalSpec) {
+        self.jwt_conditionals.push(spec);
+    }
+
+    /// Returns `true` when `name` is a registered JWT conditional verifier.
+    pub fn is_jwt_conditional(&self, name: &str) -> bool {
+        self.jwt_conditionals.iter().any(|s| s.name == name)
+    }
+
+    /// Returns the [`JwtConditionalSpec`] for `name`, if registered.
+    pub fn jwt_conditional_for(&self, name: &str) -> Option<&JwtConditionalSpec> {
+        self.jwt_conditionals.iter().find(|s| s.name == name)
     }
 
     /// Returns `true` when `name` is a registered sanitizer that kills at least
@@ -393,6 +439,57 @@ fn framework_implicit(
         origin: SanitizerOrigin::FrameworkImplicit,
         framework_label: Some(framework),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Default JWT conditional table
+// ---------------------------------------------------------------------------
+
+fn default_jwt_conditionals() -> Vec<JwtConditionalSpec> {
+    vec![
+        // jsonwebtoken (Node.js) — `jwt.verify(token, secret, { algorithms: [...] })`
+        JwtConditionalSpec {
+            name: "verify",
+            algorithms_arg: "algorithms",
+            verify_arg: None,
+        },
+        // jose (Node.js) — `jwtVerify(token, key, { algorithms: [...] })`
+        JwtConditionalSpec {
+            name: "jwtVerify",
+            algorithms_arg: "algorithms",
+            verify_arg: None,
+        },
+        // PyJWT — `jwt.decode(token, key, algorithms=[...], options={...})`
+        JwtConditionalSpec {
+            name: "decode",
+            algorithms_arg: "algorithms",
+            verify_arg: Some("verify_signature"),
+        },
+        // golang-jwt/jwt — `ParseWithClaims(token, claims, keyFunc)`
+        JwtConditionalSpec {
+            name: "ParseWithClaims",
+            algorithms_arg: "alg",
+            verify_arg: None,
+        },
+        // Microsoft.IdentityModel.Tokens — `ValidateToken(token, params, out _)`
+        JwtConditionalSpec {
+            name: "ValidateToken",
+            algorithms_arg: "ValidAlgorithms",
+            verify_arg: Some("RequireSignedTokens"),
+        },
+        // nimbus-jose-jwt — `JWTParser.parse(token).verify(verifier)`
+        JwtConditionalSpec {
+            name: "parse",
+            algorithms_arg: "expectedJWSAlgorithm",
+            verify_arg: None,
+        },
+        // Auth0 java-jwt — `JWT.require(algorithm).build().verify(token)`
+        JwtConditionalSpec {
+            name: "verify",
+            algorithms_arg: "algorithm",
+            verify_arg: None,
+        },
+    ]
 }
 
 // ---------------------------------------------------------------------------
