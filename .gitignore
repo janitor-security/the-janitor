@@ -41,7 +41,15 @@
 # None of these belong in source control.
 # rkyv files anywhere in the workspace are binary runtime data.
 # ------------------------------------------------------------------------------
-.janitor/
+.janitor/bounce_log.ndjson
+.janitor/cargo_lock.hash
+.janitor/diag.log
+.janitor/ghost/
+.janitor/heartbeat
+.janitor/janitor.lic
+.janitor/shadow_src/
+.janitor/symbols.db
+.janitor/*.rkyv
 *.rkyv
 !docs/v1/wisdom.rkyv
 
@@ -88,7 +96,6 @@ RUNBOOK.md
 .codex/
 .cursorrules
 AGENTS.md
-SOVEREIGN_BRIEFING.md
 .cursor/
 .windsurf/
 # Machine-local Claude Code state — never commit.
@@ -96,10 +103,7 @@ SOVEREIGN_BRIEFING.md
 .claude/settings.local.json
 .claude/mcp.json
 # Internal R&D intelligence — never push to public repo.
-docs/INNOVATION_LOG.md
-docs/ENTERPRISE_GAPS.md
 .INNOVATION_LOG.md
-docs/IMPLEMENTATION_BACKLOG.md
 
 
 # ------------------------------------------------------------------------------
@@ -152,6 +156,8 @@ htmlcov/
 *.lib
 *.dll
 *.exe
+# jadx toolchain — download artifact, never commit
+tools/jadx/lib/*.jar
 
 
 # ------------------------------------------------------------------------------

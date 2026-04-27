@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 160" width="760" height="160">
+  <defs>
+    <!-- Neon glow for icon and text -->
+    <filter id="glow-icon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-text" x="-5%" y="-20%" width="110%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Void background -->
+  <rect width="760" height="160" fill="#0d1117"/>
+
+  <!-- ── Icon: flat-top hex R=62, center (80,80) ── -->
+  <!-- Vertices: (142,80) (111,26.3) (49,26.3) (18,80) (49,133.7) (111,133.7) -->
+  <polygon
+    points="142,80 111,26 49,26 18,80 49,134 111,134"
+    fill="#161b22"
+    stroke="#dea584"
+    stroke-width="2"
+    stroke-opacity="0.50"
+  />
+  <!-- inner ring accent -->
+  <polygon
+    points="133,80 105,33 55,33 27,80 55,127 105,127"
+    fill="none"
+    stroke="#dea584"
+    stroke-width="1"
+    stroke-opacity="0.14"
+  />
+
+  <!-- >_ scaled to hex (scale=62/220=0.282, center 80,80): -->
+  <!-- > tips: (79.6-28.4*2.24, ...) — computed from logo.svg main proportions -->
+  <!-- > tips at (51,61) apex (77,80) tips (51,99); _ from (83,99) to (110,99) -->
+  <g filter="url(#glow-icon)">
+    <polyline
+      points="51,61 77,80 51,99"
+      fill="none"
+      stroke="#dea584"
+      stroke-width="8"
+      stroke-linecap="square"
+      stroke-linejoin="miter"
+    />
+    <line
+      x1="83" y1="99"
+      x2="110" y2="99"
+      stroke="#dea584"
+      stroke-width="8"
+      stroke-linecap="square"
+    />
+  </g>
+
+  <!-- ── Vertical divider ── -->
+  <line
+    x1="158" y1="22"
+    x2="158" y2="138"
+    stroke="#dea584"
+    stroke-width="1"
+    stroke-opacity="0.20"
+  />
+
+  <!-- ── Wordmark: THE JANITOR ── -->
+  <text
+    x="178" y="80"
+    dominant-baseline="middle"
+    font-family="'Courier New', 'Consolas', 'Lucida Console', monospace"
+    font-size="58"
+    font-weight="700"
+    letter-spacing="7"
+    fill="#dea584"
+    filter="url(#glow-text)"
+  >THE JANITOR</text>
+</svg>

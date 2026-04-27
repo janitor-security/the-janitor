@@ -1,9 +1,9 @@
 # The Janitor: The Mathematical Firewall Against Autonomous AI
-**v10.2.0-beta.2 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
+**v10.2.0-beta.3 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.2.0-beta.2: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
+*Attested by The Janitor v10.2.0-beta.3: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
 
 ---
 
@@ -140,6 +140,15 @@ AI coding assistants are becoming autonomous agents — systems that open PRs wi
 
 When your team deploys AI engineers, the gate does not move.
 
+### Decadal Roadmap: The Next Frontier
+
+The current engine intercepts threats at the static structural level — provably, at machine speed, offline. The decadal horizon pushes the frontier into mathematically certified territory that no competitor can reach without rebuilding the entire stack:
+
+- **Zero-Knowledge AST Enclaves** — Proving that a codebase satisfies all 200 governance rules without revealing a single line of source. A zk-SNARK attests the engine's verdict; the auditor verifies the proof in milliseconds. No code exfiltration. No trust boundary. The compliance answer exists on-chain without the source ever leaving your environment.
+- **The Labyrinth Deception Plane** — A runtime honeypot layer that presents adversarial agents with a structurally valid but semantically poisoned codebase, trapping autonomous attackers mid-campaign and extracting their full attack graph before they know they have been detected.
+
+These are not roadmap promises — they are the logical next tier of a deterministic engine that already proves reachability via IFDS and path-feasibility via Z3. The mathematical foundation is live today.
+
 ---
 
 ## PR Gate: Live Results
@@ -248,10 +257,10 @@ The Janitor accelerates offensive operations with Automated Exploit Generation (
 
 | Tier | Cost | What You Get |
 |:-----|:-----|:-------------|
-| **Free (Community)** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. No signed logs. |
-| **Team Tier** | **$499/yr** | Unlimited Seats. All free features + Dual-PQC Integrity Bonds (ML-DSA-65 + SLH-DSA) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App. |
-| **Sovereign / Air-Gap Tier** | **Custom (Starting at $49,900/yr)** | SLSA L4 reproducible build verification, Offline PQC validation, Governor Control Plane, Wasm BYOR rule mounting, Air-Gap Intel Transfers. |
-| **Industrial Tier** | **Custom** | OT/ICS/SCADA pack. On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA. |
+| **Free (Community)** | $0 | Unlimited scan, clean, dedup, bounce, dashboard, report. 23 grammar spine. IFDS taint solver. Z3 SMT path feasibility. AEG curl synthesis. No signed logs. |
+| **Team Tier** | **$499/yr** | Unlimited Seats. All free features + Dual-PQC Integrity Bonds (ML-DSA-65 FIPS 204 + SLH-DSA FIPS 205) + CycloneDX v1.6 CBOMs + CI/CD Compliance Attestation + Janitor Sentinel GitHub App + Financial PII taint guard with regulatory regime annotations (GLBA, EU AI Act Art. 10, NYDFS 500.11). |
+| **Sovereign / Air-Gap Tier** | **Custom (Starting at $49,900/yr)** | SLSA L4 reproducible build verification, Offline PQC validation, Governor Control Plane, Wasm BYOR rule mounting, Air-Gap Intel Transfer Capsules, Mesh Topology Discovery (docker-compose + K8s service graph). |
+| **Industrial Tier** | **Custom** | OT/ICS/SCADA pack. On-Premises Token Server + Keypair Rotation Protocol + SOC 2 Audit Support + Enterprise SLA + Dedicated threat intelligence briefings. |
 
 ### [→ Get Janitor Sentinel — $499/yr](https://thejanitor.lemonsqueezy.com/checkout/buy/cf4f5dbd-1354-4e97-8b55-0d4375ec9be7?enabled=1361348)
 

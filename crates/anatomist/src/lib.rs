@@ -21,6 +21,7 @@ pub mod imports;
 pub mod induce;
 pub mod languages;
 pub mod manifest;
+pub mod mesh_topology;
 pub mod parser;
 pub mod path_util;
 pub mod pipeline;
