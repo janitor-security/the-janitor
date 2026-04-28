@@ -2013,36 +2013,52 @@ fn extract_asar_dir(
 // ---------------------------------------------------------------------------
 
 /// Apply a `jq`-compatible filter expression to a `serde_json::Value` using
-/// the pure-Rust [`jaq`](https://crates.io/crates/jaq-interpret) engine.
+/// the pure-Rust [`jaq`](https://crates.io/crates/jaq-core) engine.
 ///
 /// Returns a `Value::Array` of all output values produced by the filter.
 fn apply_jaq_filter(
     filter_str: &str,
     findings_json: serde_json::Value,
 ) -> anyhow::Result<serde_json::Value> {
-    use jaq_interpret::{Ctx, FilterT as _, ParseCtx, RcIter, Val};
+    use jaq_core::load::{Arena, File, Loader};
+    use jaq_core::{data, unwrap_valr, Ctx, Vars};
 
-    // Parse the filter expression.
-    let (prog, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
-    if !errs.is_empty() {
-        anyhow::bail!("jaq: filter parse failed — check filter syntax");
-    }
-    let prog = prog.ok_or_else(|| anyhow::anyhow!("jaq: empty filter expression"))?;
+    let input: jaq_json::Val =
+        serde_json::from_value(findings_json).context("jaq: invalid JSON input")?;
+    let program = File {
+        code: filter_str,
+        path: (),
+    };
 
-    // Compile: load native core functions + standard library definitions.
-    let mut defs = ParseCtx::new(Vec::new());
-    defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
-    let filter = defs.compile(prog);
-
-    // Execute against the findings JSON.
-    let inputs = RcIter::new(core::iter::empty());
+    let defs = jaq_core::defs()
+        .chain(jaq_std::defs())
+        .chain(jaq_json::defs());
+    let funs = jaq_core::funs()
+        .chain(jaq_std::funs())
+        .chain(jaq_json::funs());
+    let loader = Loader::new(defs);
+    let arena = Arena::default();
+    let modules = loader
+        .load(&arena, program)
+        .map_err(|errs| anyhow::anyhow!("jaq: filter parse failed: {errs:?}"))?;
+    let filter = jaq_core::Compiler::default()
+        .with_funs(funs)
+        .compile(modules)
+        .map_err(|errs| anyhow::anyhow!("jaq: filter compile failed: {errs:?}"))?;
 
     let results: Vec<serde_json::Value> = filter
-        .run((Ctx::new([], &inputs), Val::from(findings_json)))
-        .filter_map(|r| r.ok())
-        .map(serde_json::Value::from)
-        .collect();
+        .id
+        .run((
+            Ctx::<data::JustLut<jaq_json::Val>>::new(&filter.lut, Vars::new([])),
+            input,
+        ))
+        .map(unwrap_valr)
+        .filter_map(Result::ok)
+        .map(|value| {
+            let rendered = value.to_string();
+            serde_json::from_str(&rendered).context("jaq: output is not JSON")
+        })
+        .collect::<anyhow::Result<_>>()?;
 
     Ok(serde_json::Value::Array(results))
 }

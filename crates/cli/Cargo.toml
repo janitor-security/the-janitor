@@ -52,10 +52,9 @@ tempfile = "3"
 flate2 = "1"
 tar = "0.4"
 plist = "1"
-jaq-core = "1"
-jaq-parse = "1"
-jaq-std = "1"
-jaq-interpret = "1"
+jaq-core = "3"
+jaq-json = { version = "2", features = ["serde"] }
+jaq-std = "3"
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 

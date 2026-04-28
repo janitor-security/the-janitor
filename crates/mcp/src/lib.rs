@@ -687,8 +687,7 @@ fn run_provenance(path: &str) -> Result<serde_json::Value> {
 
     let last_line = content
         .lines()
-        .filter(|l| !l.trim().is_empty())
-        .next_back()
+        .rfind(|l| !l.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("bounce log is empty"))?;
 
     let entry: serde_json::Value =

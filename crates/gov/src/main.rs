@@ -24,6 +24,7 @@ use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::future::{ready, Future};
 use std::io::Write;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -460,7 +461,8 @@ async fn main() -> anyhow::Result<()> {
     });
     if let Some(tls) = resolve_rustls_config().await? {
         eprintln!("janitor-gov listening on https://{bind_addr}");
-        axum_server::bind(bind_addr.parse()?)
+        let socket_addr: SocketAddr = bind_addr.parse()?;
+        axum_server::bind(socket_addr)
             .acceptor(GovernorTlsAcceptor::new(tls))
             .serve(app.into_make_service())
             .await

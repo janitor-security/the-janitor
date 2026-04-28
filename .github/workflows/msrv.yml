@@ -1,10 +1,10 @@
 name: MSRV Check
 
 # Guards against Dependabot or manual dep bumps that silently require a Rust
-# version newer than the pinned 1.91.0 toolchain.  Runs `cargo +1.91.0 check`
+# version newer than the pinned 1.92.0 toolchain.  Runs `cargo +1.92.0 check`
 # against the exact locked dependency tree — the same check that surfaces the
-# "requires rustc X.Y.Z" error caught in the RUSTSEC-2026-0002 remediation
-# (wasmtime 43.0.0 raised the minimum supported Rust version to 1.91.0).
+# "requires rustc X.Y.Z" error caught in dependency remediation
+# (wasmtime 44.0.0 raised the minimum supported Rust version to 1.92.0).
 #
 # Trigger: every PR targeting main + every push to main.
 on:
@@ -21,14 +21,14 @@ permissions:
 
 jobs:
   msrv:
-    name: MSRV — Rust 1.91.0
+    name: MSRV — Rust 1.92.0
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
@@ -37,14 +37,14 @@ jobs:
 
       # Install only the pinned stable toolchain — no additional components
       # needed for a check-only pass.
-      - name: Install Rust 1.91.0
+      - name: Install Rust 1.92.0
         run: |
-          rustup toolchain install 1.91.0 --profile minimal
-          rustup override set 1.91.0
+          rustup toolchain install 1.92.0 --profile minimal
+          rustup override set 1.92.0
 
       # --locked: honour the committed Cargo.lock exactly.
       # --workspace: include every crate (dashboard, forge, anatomist …).
-      # If any dependency declares rust-version > 1.91 this step fails with
-      # "error: rustc 1.91.0 is not supported by the following packages: …"
-      - name: cargo check (Rust 1.91.0, locked)
-        run: cargo +1.91.0 check --workspace --locked
+      # If any dependency declares rust-version > 1.92 this step fails with
+      # "error: rustc 1.92.0 is not supported by the following packages: …"
+      - name: cargo check (Rust 1.92.0, locked)
+        run: cargo +1.92.0 check --workspace --locked

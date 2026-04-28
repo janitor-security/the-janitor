@@ -3,7 +3,7 @@
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.2.0-beta.3: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
+*Attested by The Janitor v10.2.0-beta.3: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
 
 ---
 

@@ -59,9 +59,8 @@ fn main() -> anyhow::Result<()> {
 
 /// Generate a fresh keypair and print copy-pasteable Rust/CLI output.
 fn cmd_generate() -> anyhow::Result<()> {
-    use rand::rngs::OsRng;
-
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let seed: [u8; 32] = rand::random();
+    let signing_key = SigningKey::from_bytes(&seed);
     let verifying_key = signing_key.verifying_key();
     let sk_hex = hex::encode(signing_key.to_bytes());
     let vk_bytes = verifying_key.to_bytes();
