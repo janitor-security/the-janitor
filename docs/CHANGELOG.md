@@ -3,6 +3,36 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-29 — Sprint Batch 76 (Omni-Context Optimization, Deterministic Triage, & The Beta.4 Release)
+
+**Directive:** Compress governance for future context efficiency, enforce the Autonomous Ideation Law, expand SBOM component attribution for C++ and Web3 targets, implement P3-3 deterministic triage ranking, hydrate three more GitHub targets, verify, commit locally, and cut `10.2.0-beta.4`.
+
+**Changes:**
+
+* `.agent_governance/rules/evolution.md` — compressed redundant governance prose and added the Autonomous Ideation Law. Hunt output that reports unknown source attribution, pending payload synthesis, manual verification, or any non-standalone proof now forces immediate Rust implementation or a concrete P1/P2 innovation-log proposal.
+* `crates/cli/src/hunt.rs` — expanded component detection for CMake and Web3 surfaces by parsing `CMakeLists.txt`, `foundry.toml`, and `hardhat.config.js`; live-fire review also hardened Gradle, Swift Package, and CocoaPods attribution.
+* `crates/forge/src/brain.rs` and `crates/forge/Cargo.toml` — implemented the lightweight `FindingRanker` on `ndarray`, ranking findings by exploit witness evidence, SBOM attribution, severity, and static-source confidence without heavy ML inference.
+* `crates/cli/src/hunt.rs` — wired deterministic ranking into the hunt report pipeline so concrete, attributed exploit reports appear before theoretical or informational findings.
+* `.INNOVATION_LOG.md` — physically deleted the shipped P3-3 implementation block and added `P1-1 — Autonomous AEG Template Completion` after Batch 76 hunts exposed remaining pending/manual proof gaps.
+* `Cargo.toml`, `README.md`, and `docs/index.md` — bumped the workspace and public docs to `10.2.0-beta.4`.
+
+**Live-fire Hunt Results:**
+
+* `https://github.com/electroneum/electroneum-sc` cloned to `/tmp/electroneum-sc`; `janitor hunt --format bugcrowd` emitted `security:jwt_validation_bypass`, `security:ssrf_dynamic_url`, and `security:unpinned_asset` against `**github.com/electroneum/electroneum-sc** go1.24.0`.
+* `https://github.com/afterpay/sdk-android` cloned to `/tmp/afterpay-sdk-android`; after Gradle attribution hardening, `janitor hunt --format bugcrowd` emitted `security:dom_xss_innerHTML` against `**AfterpaySDK** v4.8.3-SNAPSHOT`.
+* `https://github.com/afterpay/sdk-ios` cloned to `/tmp/afterpay-sdk-ios`; after CocoaPods attribution hardening, `janitor hunt --format bugcrowd` emitted `security:dom_xss_innerHTML` and `security:unpinned_asset` against `**Afterpay** v1.0.0`.
+
+**Telemetry:**
+
+* `cargo test -p forge brain -- --test-threads=4` — exit 0.
+* `cargo test -p cli component -- --test-threads=4` — exit 0.
+* `cargo test -p cli bugcrowd_report_ranks -- --test-threads=4` — exit 0.
+* `cargo run -p cli -- hunt /tmp/electroneum-sc --format bugcrowd` — exit 0.
+* `cargo run -p cli -- hunt /tmp/afterpay-sdk-android --format bugcrowd` — exit 0.
+* `cargo run -p cli -- hunt /tmp/afterpay-sdk-ios --format bugcrowd` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; documentation parity verified for `v10.2.0-beta.4` and audit fingerprint saved.
+
 ## 2026-04-29 — Sprint Batch 75 (RAG Taint Lane \& SSRF AEG Finality)
 
 **Directive:** Finalize SSRF exploit synthesis, suppress MCP SSRF false positives unless internal metadata access is proven, implement the P6-10 RAG context-poisoning taint lane, hydrate the next three GitHub targets, verify, and commit locally. No release.

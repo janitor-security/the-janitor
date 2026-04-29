@@ -26,7 +26,9 @@
 //! so the same integrity tooling works across both files.
 
 use anyhow::Result;
+use common::slop::StructuredFinding;
 use memmap2::Mmap;
+use ndarray::arr1;
 use rkyv::bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::fs::File;
@@ -35,6 +37,8 @@ use std::path::Path;
 
 /// Probability above which a finding is suppressed by the local brain.
 pub const SUPPRESS_THRESHOLD: f32 = 0.85;
+
+const TRIAGE_WEIGHTS: [f32; 4] = [3.0, 1.5, 1.0, -4.0];
 
 /// Number of independent hash rows in the Count-Min Sketch.
 const DEPTH: usize = 4;
@@ -214,6 +218,116 @@ impl AdaptiveBrain {
     }
 }
 
+/// Deterministic lightweight finding ranker for bounty/report triage.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FindingRanker;
+
+impl FindingRanker {
+    /// Rank findings by exploit evidence, component attribution, severity, and
+    /// static-source disproof. Higher scores sort first.
+    pub fn rank_findings(
+        mut findings: Vec<StructuredFinding>,
+        component_info: Option<&str>,
+    ) -> Vec<StructuredFinding> {
+        findings.sort_by(|left, right| {
+            let left_score = Self::score(left, component_info);
+            let right_score = Self::score(right, component_info);
+            right_score
+                .total_cmp(&left_score)
+                .then_with(|| left.id.cmp(&right.id))
+                .then_with(|| left.file.cmp(&right.file))
+                .then_with(|| left.line.cmp(&right.line))
+                .then_with(|| left.fingerprint.cmp(&right.fingerprint))
+        });
+        findings
+    }
+
+    /// Return ranked borrowed findings without cloning the underlying records.
+    pub fn rank_finding_refs<'a>(
+        findings: &'a [StructuredFinding],
+        component_info: Option<&str>,
+    ) -> Vec<&'a StructuredFinding> {
+        let mut refs = findings.iter().collect::<Vec<_>>();
+        refs.sort_by(|left, right| {
+            let left_score = Self::score(left, component_info);
+            let right_score = Self::score(right, component_info);
+            right_score
+                .total_cmp(&left_score)
+                .then_with(|| left.id.cmp(&right.id))
+                .then_with(|| left.file.cmp(&right.file))
+                .then_with(|| left.line.cmp(&right.line))
+                .then_with(|| left.fingerprint.cmp(&right.fingerprint))
+        });
+        refs
+    }
+
+    /// Compute the deterministic triage score for one finding.
+    pub fn score(finding: &StructuredFinding, component_info: Option<&str>) -> f32 {
+        let features = Self::feature_vector(finding, component_info);
+        let weights = arr1(&TRIAGE_WEIGHTS);
+        features.dot(&weights)
+    }
+
+    fn feature_vector(
+        finding: &StructuredFinding,
+        component_info: Option<&str>,
+    ) -> ndarray::Array1<f32> {
+        arr1(&[
+            has_concrete_poc(finding),
+            has_component_attribution(component_info),
+            severity_weight(finding.severity.as_deref()),
+            static_source_proven(finding),
+        ])
+    }
+}
+
+fn has_concrete_poc(finding: &StructuredFinding) -> f32 {
+    let Some(witness) = finding.exploit_witness.as_ref() else {
+        return 0.0;
+    };
+    if witness.repro_cmd.is_some()
+        || witness.payload.is_some()
+        || witness.reproduction_steps.is_some()
+    {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+fn has_component_attribution(component_info: Option<&str>) -> f32 {
+    match component_info {
+        Some(component)
+            if !component.trim().is_empty()
+                && !component.contains("Unknown / Source Repository")
+                && !component.contains("Unknown Component") =>
+        {
+            1.0
+        }
+        _ => 0.0,
+    }
+}
+
+fn severity_weight(severity: Option<&str>) -> f32 {
+    match severity {
+        Some("KevCritical") => 5.0,
+        Some("Exhaustion" | "Critical") => 4.0,
+        Some("High") => 3.0,
+        Some("Medium") => 2.0,
+        Some("Low" | "Informational") => 1.0,
+        _ => 0.0,
+    }
+}
+
+fn static_source_proven(finding: &StructuredFinding) -> f32 {
+    finding
+        .exploit_witness
+        .as_ref()
+        .and_then(|witness| witness.static_source_proven)
+        .map(|value| if value { 1.0 } else { 0.0 })
+        .unwrap_or(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,10 +337,7 @@ mod tests {
         let brain = AdaptiveBrain::new();
         // Laplace prior for unseen symbol: (0+1)/(0+0+2) = 0.5
         let p = brain.predict_false_positive_probability("unknown_fn");
-        assert!(
-            (p - 0.5).abs() < f32::EPSILON,
-            "prior should be 0.5, got {p}"
-        );
+        assert!((p - 0.5).abs() < f32::EPSILON, "prior should be 0.5");
     }
 
     #[test]
@@ -236,10 +347,7 @@ mod tests {
             brain.update("simulate_merge", true);
         }
         let p = brain.predict_false_positive_probability("simulate_merge");
-        assert!(
-            p > SUPPRESS_THRESHOLD,
-            "p={p} should exceed threshold after 20 pardons"
-        );
+        assert!(p > SUPPRESS_THRESHOLD, "p should exceed threshold");
     }
 
     #[test]
@@ -252,7 +360,7 @@ mod tests {
             brain.update("real_dead_fn", false);
         }
         let p = brain.predict_false_positive_probability("real_dead_fn");
-        assert!(p < 0.2, "p={p} should be low after many confirmations");
+        assert!(p < 0.2, "p should be low after many confirmations");
     }
 
     #[test]
@@ -267,7 +375,7 @@ mod tests {
             p_pardoned > SUPPRESS_THRESHOLD,
             "pardoned_fn should be suppressed"
         );
-        assert!(p_other < 0.6, "other_fn should be near prior; p={p_other}");
+        assert!(p_other < 0.6, "other_fn should be near prior");
     }
 
     #[test]
@@ -280,7 +388,7 @@ mod tests {
         brain.save(&tmp).unwrap();
         let loaded = AdaptiveBrain::load(&tmp).unwrap();
         let p = loaded.predict_false_positive_probability("my_macro_fn");
-        assert!(p > 0.8, "loaded brain should remember pardons; p={p}");
+        assert!(p > 0.8, "loaded brain should remember pardons");
         std::fs::remove_file(tmp).ok();
     }
 
@@ -299,9 +407,29 @@ mod tests {
             brain.update("my_macro_fn", true);
         }
         let p = brain.predict_false_positive_probability("my_macro_fn");
-        assert!(
-            p > SUPPRESS_THRESHOLD,
-            "5 pardons should cross the 0.85 threshold; p={p}"
-        );
+        assert!(p > SUPPRESS_THRESHOLD, "5 pardons should cross threshold");
+    }
+
+    #[test]
+    fn exploit_witness_payload_ranks_above_informational_noise() {
+        let exploitable = StructuredFinding {
+            id: "security:deserialization_gadget".to_string(),
+            severity: Some("Critical".to_string()),
+            exploit_witness: Some(common::slop::ExploitWitness {
+                payload: Some("aced0005".to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let informational = StructuredFinding {
+            id: "security:unpinned_asset".to_string(),
+            severity: Some("Informational".to_string()),
+            ..Default::default()
+        };
+
+        let ranked =
+            FindingRanker::rank_findings(vec![informational, exploitable], Some("**pkg** v1"));
+
+        assert_eq!(ranked[0].id, "security:deserialization_gadget");
     }
 }

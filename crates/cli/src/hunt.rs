@@ -27,6 +27,7 @@
 use anyhow::Context as _;
 use common::slop::StructuredFinding;
 use common::wisdom::{ArchivedSlopsquatCorpus, SlopsquatCorpus};
+use forge::brain::FindingRanker;
 use forge::slop_hunter::{find_slop, ParsedUnit};
 use std::collections::BTreeMap;
 use std::io::Read as _;
@@ -203,11 +204,13 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         findings
     };
 
+    let component_info_context = component_info_override
+        .as_deref()
+        .or(local_scan_component_info.as_deref());
+    let findings = FindingRanker::rank_findings(findings, component_info_context);
+
     if format == "bugcrowd" {
-        let report = if let Some(component_info) = component_info_override
-            .as_deref()
-            .or(local_scan_component_info.as_deref())
-        {
+        let report = if let Some(component_info) = component_info_context {
             format_bugcrowd_report_with_component(&findings, Some(component_info))
         } else {
             format_bugcrowd_report(&findings)
@@ -217,10 +220,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     }
 
     if format == "auth0" {
-        let report = if let Some(component_info) = component_info_override
-            .as_deref()
-            .or(local_scan_component_info.as_deref())
-        {
+        let report = if let Some(component_info) = component_info_context {
             format_auth0_report_with_component(&findings, Some(component_info))
         } else {
             format_auth0_report(&findings)
@@ -272,13 +272,10 @@ fn format_bugcrowd_report_with_component(
     let component_info = component_info_override
         .map(str::to_owned)
         .unwrap_or_else(|| detect_component_info(findings));
-    let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
-    for finding in findings {
-        grouped
-            .entry(finding.id.as_str())
-            .or_default()
-            .push(finding);
-    }
+    let grouped = group_ranked_findings(FindingRanker::rank_finding_refs(
+        findings,
+        Some(&component_info),
+    ));
 
     let mut reports = Vec::with_capacity(grouped.len().max(1));
     for (rule_id, group) in grouped {
@@ -378,13 +375,10 @@ fn format_auth0_report_with_component(
     let component_info = component_info_override
         .map(str::to_owned)
         .unwrap_or_else(|| detect_component_info(findings));
-    let mut grouped: BTreeMap<&str, Vec<&StructuredFinding>> = BTreeMap::new();
-    for finding in findings {
-        grouped
-            .entry(finding.id.as_str())
-            .or_default()
-            .push(finding);
-    }
+    let grouped = group_ranked_findings(FindingRanker::rank_finding_refs(
+        findings,
+        Some(&component_info),
+    ));
 
     if grouped.is_empty() {
         return format!(
@@ -508,6 +502,21 @@ proof-of-concept payload was not autonomously synthesized. Manual verification i
     }
 
     reports.join("\n\n---\n\n")
+}
+
+fn group_ranked_findings(ranked: Vec<&StructuredFinding>) -> Vec<(&str, Vec<&StructuredFinding>)> {
+    let mut grouped: Vec<(&str, Vec<&StructuredFinding>)> = Vec::new();
+    for finding in ranked {
+        if let Some((_, group)) = grouped
+            .iter_mut()
+            .find(|(rule_id, _)| *rule_id == finding.id.as_str())
+        {
+            group.push(finding);
+        } else {
+            grouped.push((finding.id.as_str(), vec![finding]));
+        }
+    }
+    grouped
 }
 
 /// Map a rule ID and severity to an Auth0-tailored business risk statement.
@@ -1014,6 +1023,107 @@ fn detect_component_info_inner(
                     }
                 }
             }
+            for settings_name in &["settings.gradle", "settings.gradle.kts"] {
+                let settings_path = dir.join(settings_name);
+                if settings_path
+                    .metadata()
+                    .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                    .unwrap_or(false)
+                {
+                    if let Ok(text) = std::fs::read_to_string(&settings_path) {
+                        if let Some(name) = parse_gradle_settings_project_name(&text) {
+                            if let Some((_, ver)) =
+                                parse_gradle_properties_component(&dir.join("gradle.properties"))
+                            {
+                                return format!("**{name}** v{ver} (`{settings_name}`)");
+                            }
+                            return format!("**{name}** (`{settings_name}`)");
+                        }
+                    }
+                }
+            }
+            if let Some((group, ver)) =
+                parse_gradle_properties_component(&dir.join("gradle.properties"))
+            {
+                return format!("**{group}** v{ver} (`gradle.properties`)");
+            }
+            let cmake_path = dir.join("CMakeLists.txt");
+            if cmake_path
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&cmake_path) {
+                    if let Some((name, ver)) = parse_cmake_project_component(&text) {
+                        if let Some(ver) = ver {
+                            return format!("**{name}** v{ver} (`CMakeLists.txt`)");
+                        }
+                        return format!("**{name}** (`CMakeLists.txt`)");
+                    }
+                }
+            }
+            let foundry_path = dir.join("foundry.toml");
+            if foundry_path
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&foundry_path) {
+                    if let Some(profile) = parse_foundry_component(&text) {
+                        return format!("**{profile}** (`foundry.toml`)");
+                    }
+                }
+            }
+            let hardhat_path = dir.join("hardhat.config.js");
+            if hardhat_path
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&hardhat_path) {
+                    let name = parse_hardhat_component(&text).or_else(|| {
+                        dir.file_name()
+                            .map(|value| value.to_string_lossy().into_owned())
+                    });
+                    if let Some(name) = name {
+                        return format!("**{name}** (`hardhat.config.js`)");
+                    }
+                }
+            }
+            let podspec = dir.read_dir().ok().and_then(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .find(|path| path.extension().and_then(|ext| ext.to_str()) == Some("podspec"))
+            });
+            if let Some(podspec_path) = podspec {
+                if podspec_path
+                    .metadata()
+                    .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                    .unwrap_or(false)
+                {
+                    if let Ok(text) = std::fs::read_to_string(&podspec_path) {
+                        if let Some((name, ver)) = parse_podspec_component(&text) {
+                            if let Some(ver) = ver {
+                                return format!("**{name}** v{ver} (`*.podspec`)");
+                            }
+                            return format!("**{name}** (`*.podspec`)");
+                        }
+                    }
+                }
+            }
+            let package_swift = dir.join("Package.swift");
+            if package_swift
+                .metadata()
+                .map(|m| m.len() <= MAX_MANIFEST_BYTES)
+                .unwrap_or(false)
+            {
+                if let Ok(text) = std::fs::read_to_string(&package_swift) {
+                    if let Some(name) = parse_swift_package_component(&text) {
+                        return format!("**{name}** (`Package.swift`)");
+                    }
+                }
+            }
             match dir.parent() {
                 Some(parent) if parent != dir => dir = parent,
                 _ => break,
@@ -1147,6 +1257,129 @@ fn extract_gradle_quoted_value(line: &str, key: &str) -> Option<String> {
         return rest.find('"').map(|end| rest[..end].to_string());
     }
     None
+}
+
+fn parse_gradle_settings_project_name(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with("rootProject.name") {
+            return extract_assignment_string(t);
+        }
+    }
+    None
+}
+
+fn parse_gradle_properties_component(path: &Path) -> Option<(String, String)> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut group = None;
+    let mut version = None;
+    for line in text.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("GROUP=") {
+            group = Some(rest.trim().to_string());
+        }
+        if let Some(rest) = t.strip_prefix("VERSION_NAME=") {
+            version = Some(rest.trim().to_string());
+        }
+    }
+    group.zip(version)
+}
+
+fn parse_cmake_project_component(content: &str) -> Option<(String, Option<String>)> {
+    for line in content.lines() {
+        let t = line.split('#').next().unwrap_or("").trim();
+        if !t.to_ascii_lowercase().starts_with("project") {
+            continue;
+        }
+        let args = t
+            .split_once('(')
+            .and_then(|(_, rest)| rest.rsplit_once(')').map(|(inner, _)| inner))?;
+        let tokens = args
+            .split_whitespace()
+            .map(|token| token.trim_matches(|c| c == '"' || c == '\''))
+            .collect::<Vec<_>>();
+        let name = tokens.first().copied().filter(|value| !value.is_empty())?;
+        let version = tokens
+            .windows(2)
+            .find(|pair| pair[0].eq_ignore_ascii_case("VERSION"))
+            .map(|pair| pair[1].to_string());
+        return Some((name.to_string(), version));
+    }
+    None
+}
+
+fn parse_foundry_component(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        if let Some(value) = extract_toml_quoted_value(t, "project") {
+            return Some(value);
+        }
+        if let Some(value) = extract_toml_quoted_value(t, "name") {
+            return Some(value);
+        }
+        if let Some(profile) = t
+            .strip_prefix("[profile.")
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            return Some(format!("foundry:{profile}"));
+        }
+    }
+    None
+}
+
+fn parse_hardhat_component(content: &str) -> Option<String> {
+    for key in ["projectName", "name", "defaultNetwork"] {
+        for line in content.lines() {
+            if let Some(value) = extract_js_string_property(line.trim(), key) {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+fn extract_js_string_property(line: &str, key: &str) -> Option<String> {
+    let key_pos = line.find(key)?;
+    let after_key = &line[key_pos + key.len()..];
+    let quote_pos = after_key.find(['"', '\''])?;
+    let quote = after_key.as_bytes()[quote_pos] as char;
+    let after_quote = &after_key[quote_pos + 1..];
+    after_quote
+        .find(quote)
+        .map(|end| after_quote[..end].to_string())
+}
+
+fn parse_swift_package_component(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find_map(|line| extract_js_string_property(line.trim(), "name"))
+}
+
+fn parse_podspec_component(content: &str) -> Option<(String, Option<String>)> {
+    let mut name = None;
+    let mut version = None;
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with("spec.name") {
+            name = extract_assignment_string(t);
+        }
+        if t.starts_with("spec.version") {
+            version = t
+                .rsplit_once("||")
+                .and_then(|(_, fallback)| extract_assignment_string(fallback.trim()))
+                .or_else(|| extract_assignment_string(t));
+        }
+    }
+    name.map(|name| (name, version))
+}
+
+fn extract_assignment_string(line: &str) -> Option<String> {
+    let quote_pos = line.find(['"', '\''])?;
+    let quote = line.as_bytes()[quote_pos] as char;
+    let after_quote = &line[quote_pos + 1..];
+    after_quote
+        .find(quote)
+        .map(|end| after_quote[..end].to_string())
 }
 
 fn vrt_category(rule_id: &str) -> &'static str {
@@ -3348,6 +3581,43 @@ def main(user_id):
         assert!(!report.contains("security:hardcoded_secret"));
     }
 
+    #[test]
+    fn bugcrowd_report_ranks_poc_findings_before_informational_noise() {
+        let findings = vec![
+            StructuredFinding {
+                id: "security:aaa_informational".to_string(),
+                file: Some("noise.txt".to_string()),
+                line: Some(1),
+                fingerprint: "noise".to_string(),
+                severity: Some("Informational".to_string()),
+                ..Default::default()
+            },
+            StructuredFinding {
+                id: "security:zz_payload".to_string(),
+                file: Some("src/app.rs".to_string()),
+                line: Some(9),
+                fingerprint: "poc".to_string(),
+                severity: Some("Critical".to_string()),
+                exploit_witness: Some(common::slop::ExploitWitness {
+                    repro_cmd: Some("curl -X POST http://target.local/pwn".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ];
+
+        let report = format_bugcrowd_report_with_component(&findings, Some("**demo** v1"));
+        let first_summary = report
+            .lines()
+            .find(|line| line.starts_with("**Summary Title:**"))
+            .unwrap_or("");
+
+        assert!(
+            first_summary.contains("security:zz_payload"),
+            "PoC-backed finding must rank first"
+        );
+    }
+
     // -----------------------------------------------------------------------
     // SBOM linkage — Affected Package / Component header
     // -----------------------------------------------------------------------
@@ -3456,6 +3726,126 @@ def main(user_id):
         assert!(
             component.contains("build.gradle"),
             "build.gradle component must cite build.gradle"
+        );
+    }
+
+    #[test]
+    fn cmake_component_extracts_project_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("CMakeLists.txt"),
+            "cmake_minimum_required(VERSION 3.20)\nproject(ClickHouse VERSION 24.1 LANGUAGES CXX)\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("ClickHouse"),
+            "cmake project must be named"
+        );
+        assert!(component.contains("24.1"), "cmake version must be included");
+        assert!(
+            component.contains("CMakeLists.txt"),
+            "cmake component must cite CMakeLists.txt"
+        );
+    }
+
+    #[test]
+    fn foundry_component_extracts_profile_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("foundry.toml"),
+            "[profile.default]\nsrc = 'src'\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("foundry:default"),
+            "foundry profile must be named"
+        );
+        assert!(
+            component.contains("foundry.toml"),
+            "foundry component must cite foundry.toml"
+        );
+    }
+
+    #[test]
+    fn hardhat_component_extracts_project_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("hardhat.config.js"),
+            "module.exports = { projectName: 'wallet-contracts', defaultNetwork: 'hardhat' };\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("wallet-contracts"),
+            "hardhat project must be named"
+        );
+        assert!(
+            component.contains("hardhat.config.js"),
+            "hardhat component must cite hardhat config"
+        );
+    }
+
+    #[test]
+    fn gradle_settings_component_extracts_root_project_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("settings.gradle.kts"),
+            "rootProject.name = \"AfterpaySDK\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("gradle.properties"),
+            "GROUP=com.afterpay\nVERSION_NAME=4.8.3-SNAPSHOT\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("AfterpaySDK"),
+            "gradle settings project must be named"
+        );
+        assert!(
+            component.contains("4.8.3-SNAPSHOT"),
+            "gradle properties version must be included"
+        );
+    }
+
+    #[test]
+    fn swift_package_component_extracts_package_name() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("Package.swift"),
+            "let package = Package(\n  name: \"Afterpay\",\n)\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("Afterpay"),
+            "swift package component must be named"
+        );
+        assert!(
+            component.contains("Package.swift"),
+            "swift component must cite Package.swift"
+        );
+    }
+
+    #[test]
+    fn podspec_component_extracts_name_and_fallback_version() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("Afterpay.podspec"),
+            "Pod::Spec.new do |spec|\n  spec.name = \"Afterpay\"\n  spec.version = ENV['LIB_VERSION'] || '1.0.0'\nend\n",
+        )
+        .unwrap();
+        let component = detect_component_info_inner(&[], Some(tmp.path()));
+        assert!(
+            component.contains("Afterpay"),
+            "podspec component must be named"
+        );
+        assert!(
+            component.contains("1.0.0"),
+            "podspec fallback version must be included"
         );
     }
 
