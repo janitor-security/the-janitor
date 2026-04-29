@@ -7,6 +7,16 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Regulatory regime identifiers recognized by Janitor structured findings.
+pub const RECOGNIZED_REGULATORY_REGIMES: &[&str] = &[
+    "GLBA",
+    "EU_AI_Act_Art_10",
+    "EU_NIS2",
+    "EU_DORA",
+    "NYDFS_500_11",
+    "OCC_2024_32",
+];
+
 /// Deterministic exploitability proof for a confirmed source-to-sink chain.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExploitWitness {
@@ -139,7 +149,7 @@ pub struct StructuredFinding {
     pub upstream_validation_absent: bool,
 
     /// Regulatory compliance regimes implicated by this finding, e.g.
-    /// `["GLBA", "EU_AI_Act_Art_10", "NYDFS_500_11", "OCC_2024_32"]`.
+    /// `["GLBA", "EU_AI_Act_Art_10", "EU_NIS2", "EU_DORA", "NYDFS_500_11", "OCC_2024_32"]`.
     ///
     /// Populated by detectors with statutory exposure (Financial PII, health
     /// data, COPPA-scope children's data). Surfaced in SARIF `help.markdown`

@@ -3,6 +3,33 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-28 — Sprint Batch 71 (Generative Build-Time Shields \& Omni-Ledger Batch 2)
+
+**Directive:** Block compile-time LLM supply-chain execution in build scripts and procedural macro surfaces, add EU NIS2/DORA regulatory regimes, ingest five more Bugcrowd engagements, update the Innovation Log, verify, and commit locally. No release.
+
+**Changes:**
+
+* `crates/forge/src/slop_hunter.rs` — **Generative Build-Time Shield**:
+
+  * Added `find_generative_build_execution(file_path, language, source)`.
+  * Detects `build.rs`, `setup.py`, `Cargo.toml` with `proc-macro = true`, and Rust procedural macro entrypoints.
+  * Requires both outbound HTTP sink evidence (`reqwest`, `urllib.request`, `requests`, `fetch`, `axios`, etc.) and a hosted LLM endpoint (`api.openai.com`, `api.anthropic.com`, `api.x.ai`, `api.deepseek.com`, `generativelanguage.googleapis.com`, and others).
+  * Emits `security:generative_build_time_execution` at `KevCritical` because compile-time LLM code generation destroys deterministic builds and SLSA L4 provenance.
+  * Added deterministic regression test: `build_rs_openai_http_call_triggers_generative_build_time_execution`.
+* `crates/forge/src/slop_filter.rs` — Forge bounce path now invokes the path-aware build-time detector for full-file and semantic-root scans.
+* `crates/cli/src/hunt.rs` — `janitor hunt` now invokes the build-time detector using the scan label as file context.
+* `crates/common/src/slop.rs` — added `RECOGNIZED_REGULATORY_REGIMES` with `EU_NIS2` and `EU_DORA`.
+* `crates/forge/src/financial_pii.rs` — regulatory regime list now uses the common recognized-regime table; test coverage asserts `EU_NIS2` and `EU_DORA`.
+* `tools/campaign/TARGET_LEDGER.md` — **Omni-Ledger: Batch 2** initialized from exactly five new engagement files: `binance_targets.md`, `cisco_thousandeyes_targets.md`, `cloudinary_targets.md`, `mattermost_targets.md`, and `tesla_targets.md`.
+* `.INNOVATION_LOG.md` — added `P12-D — The Honey-Agent Interrogator`; tombstone marker scan returned clean.
+
+**Telemetry:**
+
+* `cargo test -p forge build_rs_openai_http_call_triggers_generative_build_time_execution -- --test-threads=4` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; audit fingerprint saved.
+* No release cut.
+
 ## 2026-04-28 — Sprint Batch 70 (GitHub Exorcism Part II \& Omni-Ledger Initialization)
 
 **Directive:** Resolve Dependabot workflow and Cargo alerts, finish CodeQL cleartext-logging suppressions, ingest exactly five high-value Bugcrowd engagement files into the Omni-Ledger, update the Innovation Log, verify, and commit locally. No release.

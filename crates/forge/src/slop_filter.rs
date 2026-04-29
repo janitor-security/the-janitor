@@ -1034,6 +1034,9 @@ impl PRBouncer for PatchBouncer {
                     );
                     let mut raw_findings = manifest_findings;
                     raw_findings.extend(crate::slop_hunter::find_slop(ext, &parsed));
+                    raw_findings.extend(crate::slop_hunter::find_generative_build_execution(
+                        &file_path, ext, source,
+                    ));
                     raw_findings.extend(metadata_findings);
                     raw_findings.retain(|finding| {
                         !should_suppress_contextual_finding(finding, package_context.as_deref())
@@ -1346,6 +1349,9 @@ impl PRBouncer for PatchBouncer {
             let subtree_unit = crate::slop_hunter::ParsedUnit::unparsed(subtree_bytes);
             raw_findings.extend(crate::slop_hunter::find_slop(ext, &subtree_unit));
         }
+        raw_findings.extend(crate::slop_hunter::find_generative_build_execution(
+            &file_path, ext, source,
+        ));
         raw_findings.retain(|finding| {
             !should_suppress_contextual_finding(finding, package_context.as_deref())
         });

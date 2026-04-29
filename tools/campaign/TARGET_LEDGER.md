@@ -100,6 +100,52 @@ Rules: only listed targets are authorized; no negative production impact; smart 
 - [ ] `0x00005EA00Ac477B1030CE78506496e8C2dE24bf5` — Seadrop Smart Contract. Payout: P1 `$50000`, P2 `$10000`. Language: Solidity. Focus: mint/drop access control, payment/accounting invariants, pure on-chain exploitability.
 - [ ] OpenSea curated content broken links — Broken Links. Payout: P4 `$50`. Language: web content. Focus: takeover-capable broken links on curated OpenSea content only; user-generated content and employee blogs are out.
 
+## Omni-Ledger: Batch 2
+
+Source corpus: `tools/campaign/targets/`. Parsed exactly five additional high-value engagements not listed in Batch 1.
+
+### Binance (`binance_targets.md`)
+
+Rules: cryptocurrency-component issues should be reported directly to the relevant program when applicable; rewards paid in BNB; only working PoCs with security impact qualify; extraordinary impact may be rewarded up to `$100000`; non-security issues go through Binance support.
+
+- [ ] `*.binance.com`, `https://www.binance.com/`, `api.binance.com`, Binance desktop/macOS apps, Binance Android/iOS apps — Binance exchange. Payout: P1 up to `$100000`, P2 `$5000-$10000`. Language: React/JS, API, Java/Kotlin, Swift/Objective-C, desktop native. Focus: auth/session compromise, trading/API authorization, wallet/account data exposure, SSRF/SQLi/RCE with user-fund impact.
+- [ ] `api.coinmarketcap.com`, `pro-api.coinmarketcap.com`, `pro.coinmarketcap.com`, `portal-api.coinmarketcap.com`, `coinmarketcap.com`, `3rdparty-apis.coinmarketcap.com`, CoinMarketCap Android/iOS apps — CoinMarketCap surfaces. Payout: P1 up to `$100000`, P2 `$5000-$10000`. Language: API/JS/mobile. Focus: API authz, data integrity, account takeover, mobile storage/session flaws.
+- [ ] `*.binance.us`, `https://www.binance.us/`, `binance.tr`, `https://binance.tr` — regional Binance web properties. Payout: P1 up to `$100000`, P2 `$5000-$10000`. Language: React/JS/API. Focus: regional account boundary bypass, payment/trading authorization, sensitive data exposure.
+- [ ] Trust Wallet Android/iOS apps, Trust Wallet Chrome Extension, `https://github.com/trustwallet/wallet-core/` — Trust Wallet. Payout: P1 up to `$100000`, P2 `$5000-$10000`. Language: Kotlin/Java, Swift/Objective-C, JS extension, C++ crypto core. Focus: wallet key/session exposure, signing-flow integrity, extension XSS, crypto invariant breaks.
+
+### Cisco ThousandEyes (`cisco_thousandeyes_targets.md`)
+
+Rules: append `Bugcrowd-<BugcrowdUsername>` to all HTTP user agents; no automated vulnerability scans or brute-force enumeration; use `@bugcrowdninja.com` signup; do not access, alter, or download customer data; no DoS; no manually crafted or altered agent ingress/controller traffic; edited binaries do not qualify.
+
+- [ ] `https://app.thousandeyes.com/` — ThousandEyes SaaS application. Payout: P1 `$4100-$4500`, P2 `$1500-$1750`. Language: Java/Vue.js. Focus: IDOR, authentication bypass, cross-account access, incorrect permissions, SQLi, XSS, RCE, file inclusion/traversal.
+- [ ] `https://api.thousandeyes.com/` — customer API. Payout: P1 `$4100-$4500`, P2 `$1500-$1750`. Language: HTTP API/Java service surface. Focus: API authorization, data exposure, command injection, auth/session flaws.
+- [ ] `https://www.thousandeyes.com/` — public website. Payout: P1 `$4100-$4500`, P2 `$1500-$1750`. Language: Java/jQuery/Moment.js web. Focus: account creation/auth flows, XSS with impact, injection, sensitive disclosure.
+- [ ] ThousandEyes Enterprise Agent and Endpoint Agent — Linux and Windows agents. Payout: P1 `$4100-$4500`, P2 `$1500-$1750`. Language: Linux/Windows native agent surface. Focus: local privilege escalation, agent configuration/test-setting abuse, authorization boundary issues without crafted controller traffic.
+
+### Cloudinary (`cloudinary_targets.md`)
+
+Rules: use `@bugcrowdninja.com`; no automated scanners; no webshell upload or persistent connections; do not access/modify data beyond proof; no support-system testing; external SSRF through intended fetch/upload URL behavior is out unless internal-network or significant security impact is shown.
+
+- [ ] `https://cloudinary.com/console` — Cloudinary console. Payout: P1 `$7000`, P2 `$2000-$4000`. Language: Ruby on Rails/web. Focus: IDOR, privilege escalation, auth vulnerabilities, XSS/CSRF with impact, business logic bypass.
+- [ ] `https://api.cloudinary.com` — Cloudinary API. Payout: P1 `$7000`, P2 `$2000-$4000`. Language: Ruby on Rails/JSON API. Focus: API authz, injection, server-side code execution, sensitive data exposure, internal SSRF through media-ingest primitives.
+- [ ] `https://res.cloudinary.com` — resource delivery and transformation surface. Payout: P1 `$7000`, P2 `$2000-$4000`. Language: Ruby on Rails/JSON/media pipeline. Focus: transformation authorization, internal fetch abuse, file handling, cache/data isolation.
+- [ ] `https://mediaflows.cloudinary.com/`, `https://dimensions.cloudinary.com` — Tier II tools. Payout: P1 `$500-$1000`, P2 up to `$500`. Language: AWS/API/web. Focus: auth/session, API authorization, injection, security misconfiguration.
+
+### Mattermost (`mattermost_targets.md`)
+
+Rules: sign up with `@bugcrowdninja.com`; use listed cloud/self-hosted targets and official plugins; `*.mattermost.com` is in scope but ineligible for bounty; no brute force, DDoS, social engineering, rooted/jailbroken-only mobile issues, public plugin findings beyond informational, or Enterprise Edition unlock attacks.
+
+- [ ] `https://bugcrowd-*your-own-instance*.cloud.mattermost.com/` and Mattermost source install — core platform. Payout: P1 `$2000`, P2 `$750`. Language: Go/React/TypeScript. Focus: authz, cross-team isolation, role/permission bypass, plugin trust boundaries, XSS/SSRF where cloud-impacting.
+- [ ] Mattermost Android/iOS/mobile and desktop apps — clients. Payout: P1 `$2000`, P2 `$750`. Language: TypeScript/React Native/Java/Objective-C/Electron. Focus: session/local storage, deep links, desktop IPC, mobile auth boundary issues.
+- [ ] Mattermost Jira, Zoom, GitHub, GitLab, Calls, Playbooks, Boards, Copilot, MS Calendar, MSTeams, and Confluence plugins — official plugin ecosystem. Payout: P1 `$2000`, P2 `$750`. Language: Go/TypeScript/React. Focus: OAuth/integration token handling, webhook verification, cross-plugin authz, command injection, stored XSS in workflow content.
+
+### Tesla (`tesla_targets.md`)
+
+Rules: research must use owned accounts or owned Tesla products; immediately stop and report if other-customer data or accounts become accessible; hardware research on owned vehicles/Powerwall must be registered with Tesla first; do not brute force or DoS without written approval; vehicle/product issues should be reported through Tesla's direct channel.
+
+- [ ] `*.tesla.com`, `*.teslamotors.com`, `*.tesla.cn`, `*.tesla.services`, `*.solarcity.com`, `*.teslainsuranceservices.com`, and Tesla-owned verified hosts/IP space — non-vehicle web properties. Payout: P1 `$3000-$10000`, P2 `$500-$4000`. Language: Drupal/web/API/CDN. Focus: account/authz, sensitive data exposure, injection, SSRF, business logic, cloud/CDN misconfiguration with exploitability.
+- [ ] Official Tesla iOS and Android apps — mobile clients. Payout: P1 `$3000-$10000`, P2 `$500-$4000`. Language: Swift/Objective-C, Java/Kotlin. Focus: mobile auth/session, deep-link abuse, local storage, API authorization, vehicle/account command boundary issues using owned assets.
+
 ## Parsed Engagements
 
 - `tools/campaign/targets/okta_targets.md`
@@ -107,3 +153,8 @@ Rules: only listed targets are authorized; no negative production impact; smart 
 - `tools/campaign/targets/clickhouse_targets.md`
 - `tools/campaign/targets/fireblocks_web_targets.md`
 - `tools/campaign/targets/opensea_targets.md`
+- `tools/campaign/targets/binance_targets.md`
+- `tools/campaign/targets/cisco_thousandeyes_targets.md`
+- `tools/campaign/targets/cloudinary_targets.md`
+- `tools/campaign/targets/mattermost_targets.md`
+- `tools/campaign/targets/tesla_targets.md`

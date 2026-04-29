@@ -146,8 +146,7 @@ pub const CRYPTO_MASKING_SANITIZERS: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 /// Regulatory regimes triggered by an unmasked PII-to-LLM data flow.
-pub const REGULATORY_REGIMES: &[&str] =
-    &["GLBA", "EU_AI_Act_Art_10", "NYDFS_500_11", "OCC_2024_32"];
+pub const REGULATORY_REGIMES: &[&str] = common::slop::RECOGNIZED_REGULATORY_REGIMES;
 
 /// Minimum estimated regulatory fine floor in USD under simultaneous
 /// multi-regime enforcement (GLBA + state AG + NYDFS).
@@ -283,6 +282,14 @@ result = openai.chat.completions.create(
         assert!(
             regimes.contains(&"EU_AI_Act_Art_10".to_string()),
             "EU_AI_Act_Art_10 must be present"
+        );
+        assert!(
+            regimes.contains(&"EU_NIS2".to_string()),
+            "EU_NIS2 must be present"
+        );
+        assert!(
+            regimes.contains(&"EU_DORA".to_string()),
+            "EU_DORA must be present"
         );
         assert!(
             regimes.contains(&"NYDFS_500_11".to_string()),

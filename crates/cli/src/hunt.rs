@@ -2312,7 +2312,12 @@ fn scan_buffer(
     // documentation URLs and form-schema links, not production asset loads.
     // Suppress supply-chain and OAuth FPs for these non-executable paths.
     let is_issue_template = label.contains("ISSUE_TEMPLATE");
-    let mut findings = find_slop(ext, &unit)
+    let mut slop_findings = find_slop(ext, &unit);
+    slop_findings.extend(forge::slop_hunter::find_generative_build_execution(
+        label, ext, source,
+    ));
+
+    let mut findings = slop_findings
         .into_iter()
         .filter(|f| {
             !is_issue_template

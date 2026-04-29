@@ -310,6 +310,116 @@ pub struct SlopFinding {
     pub severity: Severity,
 }
 
+const GENERATIVE_BUILD_LLM_ENDPOINTS: &[&str] = &[
+    "api.openai.com",
+    "api.anthropic.com",
+    "api.x.ai",
+    "api.deepseek.com",
+    "generativelanguage.googleapis.com",
+    "api.cohere.ai",
+    "api.mistral.ai",
+    "api.perplexity.ai",
+    "api.together.xyz",
+    "api.groq.com",
+];
+
+const GENERATIVE_BUILD_HTTP_SINKS: &[&str] = &[
+    "reqwest::get",
+    "reqwest::blocking::get",
+    "reqwest::Client",
+    "ureq::get",
+    "surf::get",
+    "isahc::get",
+    "urllib.request",
+    "requests.get",
+    "requests.post",
+    "httpx.get",
+    "httpx.post",
+    "fetch(",
+    "axios.get",
+    "axios.post",
+    "node-fetch",
+    "curl ",
+];
+
+/// Detect compile-time LLM execution in build scripts and procedural macro crates.
+///
+/// Build scripts and procedural macros execute during compilation. Any outbound
+/// call to a hosted LLM from that phase makes generated code non-deterministic
+/// and destroys SLSA L4 provenance.
+pub fn find_generative_build_execution(
+    file_path: &str,
+    language: &str,
+    source: &[u8],
+) -> Vec<SlopFinding> {
+    if !is_generative_build_surface(file_path, language, source) {
+        return Vec::new();
+    }
+    let Ok(source_text) = std::str::from_utf8(source) else {
+        return Vec::new();
+    };
+    if !GENERATIVE_BUILD_HTTP_SINKS
+        .iter()
+        .any(|sink| source_text.contains(sink))
+    {
+        return Vec::new();
+    }
+    let Some(endpoint) = GENERATIVE_BUILD_LLM_ENDPOINTS
+        .iter()
+        .find(|endpoint| source_text.contains(**endpoint))
+    else {
+        return Vec::new();
+    };
+    let endpoint_start = source_text.find(endpoint).unwrap_or(0);
+
+    vec![SlopFinding {
+        start_byte: endpoint_start,
+        end_byte: endpoint_start + endpoint.len(),
+        description: format!(
+            "security:generative_build_time_execution — build-time surface `{file_path}` performs \
+             outbound HTTP to hosted LLM endpoint `{endpoint}` during compilation; dynamic \
+             code generation destroys build determinism and SLSA L4 provenance"
+        ),
+        domain: DOMAIN_ALL,
+        severity: Severity::KevCritical,
+    }]
+}
+
+fn is_generative_build_surface(file_path: &str, language: &str, source: &[u8]) -> bool {
+    let normalized = file_path.replace('\\', "/");
+    let file_name = Path::new(&normalized)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(file_path);
+
+    if matches!(file_name, "build.rs" | "setup.py") {
+        return true;
+    }
+    if file_name == "Cargo.toml" && source_contains_proc_macro_manifest(source) {
+        return true;
+    }
+    language == "rs" && source_contains_proc_macro_entrypoint(source)
+}
+
+fn source_contains_proc_macro_manifest(source: &[u8]) -> bool {
+    let Ok(source_text) = std::str::from_utf8(source) else {
+        return false;
+    };
+    source_text.lines().any(|line| {
+        let compact: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+        compact == "proc-macro=true"
+    })
+}
+
+fn source_contains_proc_macro_entrypoint(source: &[u8]) -> bool {
+    let Ok(source_text) = std::str::from_utf8(source) else {
+        return false;
+    };
+    source_text.contains("#[proc_macro")
+        || source_text.contains("proc_macro::TokenStream")
+        || source_text.contains("proc_macro2::TokenStream")
+}
+
 // ---------------------------------------------------------------------------
 // Query constants (documentary — direct AST walking used instead)
 // ---------------------------------------------------------------------------
@@ -7670,6 +7780,27 @@ mod tests {
     fn test_unknown_language_returns_empty() {
         let findings = find_slop("unknown_lang_xyz", b"some code");
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn build_rs_openai_http_call_triggers_generative_build_time_execution() {
+        let src = br#"
+fn main() {
+    let body = reqwest::blocking::get("https://api.openai.com/v1/responses")
+        .unwrap()
+        .text()
+        .unwrap();
+    println!("cargo:rustc-env=GENERATED={body}");
+}
+"#;
+        let findings = find_generative_build_execution("build.rs", "rs", src);
+        assert!(
+            findings.iter().any(|f| f
+                .description
+                .contains("security:generative_build_time_execution")
+                && f.severity == Severity::KevCritical),
+            "OpenAI HTTP calls from build.rs must be blocked as build-time generative execution"
+        );
     }
 
     // ── Linter annihilation regression guards (v7.6.0) ────────────────────
