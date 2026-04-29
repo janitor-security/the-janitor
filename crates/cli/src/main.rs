@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+mod campaign_ingest;
 mod cbom;
 mod daemon;
 mod export;
@@ -587,6 +588,11 @@ enum Commands {
     UpdateSlopsquat {
         /// Project root (writes .janitor/slopsquat_corpus.rkyv).
         path: PathBuf,
+    },
+    /// Parse offline campaign markdown into a ranked target ledger.
+    IngestCampaigns {
+        /// Directory containing campaign markdown files.
+        dir: PathBuf,
     },
     /// Export bounce log as a CSV file for spreadsheet or notebook analysis.
     ///
@@ -1434,6 +1440,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::UpdateWisdom { path, ci_mode } => cmd_update_wisdom(path, *ci_mode)?,
         Commands::UpdateSlopsquat { path } => cmd_update_slopsquat(path, &execution_tier)?,
+        Commands::IngestCampaigns { dir } => campaign_ingest::cmd_ingest_campaigns(dir)?,
         Commands::Export {
             repo,
             out,

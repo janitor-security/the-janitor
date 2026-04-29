@@ -3,6 +3,30 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-29 — Sprint Batch 73 (Autonomous Target Factory \& Pipeline Severance)
+
+**Directive:** Add hard PR workflow timeouts, implement `janitor ingest-campaigns <DIR>` for deterministic offline campaign ingestion, eradicate the shipped P7-5 innovation-log block, verify, and commit locally. No release.
+
+**Changes:**
+
+* `.github/workflows/janitor-pr-gate.yml`, `.github/workflows/msrv.yml`, `.github/workflows/dependency-review.yml`, and `.github/workflows/codeql.yml` — added `timeout-minutes: 15` to every PR-triggered job and normalized CodeQL to `ubuntu-latest`.
+* `crates/cli/src/campaign_ingest.rs` — added the offline campaign ingestion engine:
+
+  * Walks campaign markdown sequentially and skips `ATTACK_LEDGER.md` / `TARGET_LEDGER.md`.
+  * Extracts unchecked target rows, URLs, inferred language tags, and matched attack-ledger keywords.
+  * Ranks targets deterministically by URL evidence, language fit, and attack-ledger keyword matches.
+  * Emits `target_ledger.json` under the supplied campaign directory.
+  * Added regression coverage proving an OAuth target outranks a generic target.
+* `crates/cli/src/main.rs` — exported the campaign ingester and added the `janitor ingest-campaigns <DIR>` subcommand.
+* `.INNOVATION_LOG.md` — physically deleted the shipped `P7-5 — Offline Campaign Ingestion Engine` block under the Absolute Eradication Law.
+
+**Telemetry:**
+
+* `cargo test -p cli oauth_target_ranks_above_generic_target -- --test-threads=4` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; documentation parity verified and audit fingerprint saved.
+* No release cut.
+
 ## 2026-04-29 — Sprint Batch 72 (IDE Supply Chain Shield \& Omni-Ledger Batch 3)
 
 **Directive:** Implement malicious VS Code/devcontainer extension detection, unpinned HuggingFace model-weight provenance detection, LaTeX CamoLeak prompt-injection detection, ingest five more Bugcrowd engagements, verify, and commit locally. No release.

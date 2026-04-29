@@ -13,6 +13,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # External OpenSSF API timeouts must not block PR merges.
     # The Janitor slop-gate (janitor-pr-gate.yml) is the primary blocking check.
     continue-on-error: true
