@@ -3,6 +3,35 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-29 — Sprint Batch 75 (RAG Taint Lane \& SSRF AEG Finality)
+
+**Directive:** Finalize SSRF exploit synthesis, suppress MCP SSRF false positives unless internal metadata access is proven, implement the P6-10 RAG context-poisoning taint lane, hydrate the next three GitHub targets, verify, and commit locally. No release.
+
+**Changes:**
+
+* `crates/forge/src/slop_hunter.rs` — added an MCP tool-context guard for dynamic SSRF fetches and HTTP calls. MCP read-only tool fetches are suppressed unless the URL expression proves reachability to `169.254.169.254`, `localhost`, loopback, or metadata-host endpoints.
+* `crates/forge/src/exploitability.rs` — added concrete SSRF AEG metadata-service payload synthesis so `security:ssrf_dynamic_url` findings emit a repro command instead of a pending placeholder.
+* `crates/forge/src/rag_source_registry.rs` and `crates/forge/src/ifds.rs` — added the P6-10 RAG source/sink catalog and IFDS predicate for external data flowing into LLM context sinks without `PromptInjectionDetector`-class sanitization. Emits `security:rag_context_poisoning` at `KevCritical`.
+* `crates/forge/src/slop_hunter.rs` — constrained `security:oauth_excessive_scope` to OAuth-capable web/config/backend languages after the ClickHouse hunt proved C++ identifier-scope false positives.
+* `.INNOVATION_LOG.md` — marked `P6-10 — RAG Context-Poisoning Taint Lane` as `[COMPLETED - Sprint Batch 75]` and physically deleted the shipped implementation details.
+
+**Live-fire Hunt Results:**
+
+* `https://github.com/trustwallet/wallet-core/` cloned to `/tmp/wallet-core`; `janitor hunt --format bugcrowd` emitted three report groups: `security:protobuf_any_type_field`, `security:unpinned_git_dependency`, and `security:unsafe_string_function`.
+* `https://github.com/immutable/wallet-contracts` cloned to `/tmp/wallet-contracts`; `janitor hunt --format bugcrowd` emitted one report group: `security:unpinned_asset`.
+* `https://github.com/ClickHouse/ClickHouse` cloned to `/tmp/clickhouse`; after the OAuth C++ false-positive guard, `janitor hunt --format bugcrowd` emitted nine report groups: `security:dom_xss_innerHTML`, `security:lotl_api_c2_exfiltration`, `security:os_command_injection`, `security:parser_exhaustion_anomaly`, `security:raw_pointer_deref`, `security:subprocess_shell_injection`, `security:unpinned_asset`, `security:unpinned_ml_model_weights`, and `security:unsafe_string_function`.
+
+**Telemetry:**
+
+* `cargo test -p forge ssrf -- --test-threads=4` — exit 0.
+* `cargo test -p forge fetch_flowing -- --test-threads=4` — exit 0.
+* `cargo run -p cli -- hunt /tmp/wallet-core --format bugcrowd` — exit 0.
+* `cargo run -p cli -- hunt /tmp/wallet-contracts --format bugcrowd` — exit 0.
+* `cargo run -p cli -- hunt /tmp/clickhouse --format bugcrowd` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; documentation parity verified and audit fingerprint saved.
+* No release cut.
+
 ## 2026-04-29 — Sprint Batch 74 (CamoLeak Shield \& Target Hydration)
 
 **Directive:** Enforce the 8GB hardware constraint in governance, implement the CamoLeak invisible-payload scanner, hydrate source-code targets from `target_ledger.json`, run live-fire hunts against Glean and Electroneum, verify, and commit locally. No release.

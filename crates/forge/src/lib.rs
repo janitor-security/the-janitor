@@ -54,6 +54,7 @@ pub mod migration_guard;
 pub mod negtaint;
 pub mod oauth_scope;
 pub mod pr_collider;
+pub mod rag_source_registry;
 pub mod rcal;
 pub mod rebac_coherence;
 pub mod rebac_registry;

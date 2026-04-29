@@ -73,6 +73,7 @@ use tree_sitter::{Language, Node};
 use crate::deobfuscate::normalize_payload;
 use crate::fold::fold_string_concat;
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
+use crate::rag_source_registry::find_rag_context_poisoning;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -948,6 +949,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "glsl" | "vert" | "frag" => find_glsl_slop(source),
         "py" => {
             let mut f = find_python_slop(source);
+            f.extend(find_rag_context_poisoning(source));
             // CISA KEV gates — AST-based (Python grammar); share parse tree via ParsedUnit
             f.extend(find_python_sqli_slop(eng, parsed));
             f.extend(find_python_ssrf_slop(eng, parsed));
@@ -966,6 +968,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         }
         "js" | "jsx" | "ts" | "tsx" => {
             let mut f = find_js_slop(eng, parsed);
+            f.extend(find_rag_context_poisoning(source));
             // CISA KEV gates — AST-based (JS grammar); share parse tree via ParsedUnit
             f.extend(find_js_sqli_slop(eng, parsed));
             f.extend(find_js_ssrf_slop(eng, parsed));
@@ -1037,13 +1040,37 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
     // Language-agnostic: credential header scan runs on every source file
     // regardless of detected language.  Secrets can appear in any file type.
     findings.extend(find_credential_slop(source));
-    // Language-agnostic: OAuth privilege escalation can be assembled in config,
-    // JS/TS route handlers, Java/Python backends, or IaC-generated callback URLs.
-    findings.extend(find_oauth_excessive_scope(source));
+    // OAuth privilege escalation belongs to web/config/backend surfaces.  Do
+    // not run it on systems languages where `scope` is usually a lexical name.
+    if is_oauth_authorization_surface(language) {
+        findings.extend(find_oauth_excessive_scope(source));
+    }
     // Language-agnostic: supply-chain integrity scan runs on every source file.
     // Catches external script loading without SRI and GitHub Pages URL embedding.
     findings.extend(find_supply_chain_slop_with_context(language, parsed));
     filter_standard_sast_suppressions(source, findings)
+}
+
+fn is_oauth_authorization_surface(language: &str) -> bool {
+    matches!(
+        language,
+        "js" | "jsx"
+            | "ts"
+            | "tsx"
+            | "py"
+            | "java"
+            | "go"
+            | "rb"
+            | "php"
+            | "yaml"
+            | "yml"
+            | "json"
+            | "toml"
+            | "tf"
+            | "hcl"
+            | "html"
+            | "md"
+    )
 }
 
 fn filter_standard_sast_suppressions(
@@ -3968,6 +3995,11 @@ fn find_ssrf_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
                 };
                 if let Some(arg) = first_named {
                     if arg.kind() == "binary_operator" && binary_node_has_plus_op(arg, source) {
+                        if is_mcp_tool_context(node, source)
+                            && !ssrf_arg_proves_internal_metadata(arg, source)
+                        {
+                            return;
+                        }
                         findings.push(SlopFinding {
                             start_byte: node.start_byte(),
                             end_byte: node.end_byte(),
@@ -3990,6 +4022,57 @@ fn find_ssrf_calls_py(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFind
     for child in node.children(&mut cursor) {
         find_ssrf_calls_py(child, source, findings);
     }
+}
+
+fn node_text_contains_any(node: Node<'_>, source: &[u8], needles: &[&str]) -> bool {
+    let text = node.utf8_text(source).unwrap_or("");
+    needles.iter().any(|needle| text.contains(needle))
+}
+
+fn is_mcp_tool_context(mut node: Node<'_>, source: &[u8]) -> bool {
+    const MCP_MARKERS: &[&str] = &[
+        "server.tool",
+        ".tool(",
+        "mcp",
+        "McpServer",
+        "read_documents",
+        "readDocuments",
+        "list_resources",
+        "call_tool",
+    ];
+
+    while let Some(parent) = node.parent() {
+        if matches!(
+            parent.kind(),
+            "function_declaration"
+                | "function"
+                | "arrow_function"
+                | "method_definition"
+                | "function_definition"
+                | "call_expression"
+                | "call"
+        ) && node_text_contains_any(parent, source, MCP_MARKERS)
+        {
+            return true;
+        }
+        node = parent;
+    }
+    false
+}
+
+fn ssrf_arg_proves_internal_metadata(arg: Node<'_>, source: &[u8]) -> bool {
+    node_text_contains_any(
+        arg,
+        source,
+        &[
+            "169.254.169.254",
+            "metadata.google.internal",
+            "localhost",
+            "127.0.0.1",
+            "[::1]",
+            "::1",
+        ],
+    )
 }
 
 /// LotL API C2 detection for Python: flags trusted SaaS API calls whose
@@ -5011,7 +5094,9 @@ fn find_ssrf_calls_js(
                             && (arg_text.starts_with("`.//")
                                 || arg_text.starts_with("`./")
                                 || arg_text.starts_with("`/"));
-                        if !is_safe_route_interp && !is_relative_path {
+                        let is_mcp_tool_dynamic_url = is_mcp_tool_context(node, source)
+                            && !ssrf_arg_proves_internal_metadata(arg, source);
+                        if !is_safe_route_interp && !is_relative_path && !is_mcp_tool_dynamic_url {
                             findings.push(SlopFinding {
                                 start_byte: node.start_byte(),
                                 end_byte: node.end_byte(),
@@ -9386,6 +9471,40 @@ const wrapRequestConnectedData = (fetch) => (path, init) => {
     }
 
     #[test]
+    fn test_js_ssrf_mcp_tool_dynamic_fetch_not_flagged() {
+        let src = br#"
+server.tool("read_documents", async ({ url }) => {
+  const resp = await fetch(`${url}/documents`);
+  return { content: await resp.text() };
+});
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "MCP read-only tool fetch must not be flagged as SSRF without internal-host proof"
+        );
+    }
+
+    #[test]
+    fn test_js_ssrf_mcp_tool_metadata_fetch_still_flagged() {
+        let src = br#"
+server.tool("read_documents", async ({ path }) => {
+  const resp = await fetch(`http://169.254.169.254/${path}`);
+  return { content: await resp.text() };
+});
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("ssrf_dynamic_url")),
+            "MCP tool metadata-service fetch must remain SSRF"
+        );
+    }
+
+    #[test]
     fn test_js_lotl_api_c2_process_env_to_graph_detected() {
         let src = br#"
 const api = "https://graph.microsoft.com/v1.0/me/messages";
@@ -12076,6 +12195,23 @@ mod phase7_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("oauth_excessive_scope")),
             "OAuth read-only identity scopes must not fire excessive-scope detector"
+        );
+    }
+
+    #[test]
+    fn test_oauth_scope_identifier_in_cpp_not_flagged() {
+        let src = br#"
+IdentifierResolveScope & scope = createIdentifierResolveScope(node, nullptr);
+if (!scope.context) {
+    scope.context = context;
+}
+"#;
+        let findings = find_slop("cpp", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("oauth_excessive_scope")),
+            "C++ identifier scope analysis must not trigger OAuth scope detector"
         );
     }
 

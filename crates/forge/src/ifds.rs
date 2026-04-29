@@ -15,6 +15,56 @@ use crate::negtaint::{sink_predicate_for_label, NegTaintLabel, NegTaintSolver};
 use crate::rebac_coherence::ConsistencyLevel;
 use crate::sanitizer::SanitizerRegistry;
 
+const RAG_EXTERNAL_SOURCES: &[&[u8]] = &[
+    b"fetch(",
+    b"requests.get",
+    b"urllib.request",
+    b"fs.readFile",
+    b"fs.promises.readFile",
+    b".similaritySearch",
+    b".asRetriever",
+    b".retrieve(",
+    b".query(",
+    b"pinecone.query",
+    b"weaviate",
+    b"chromadb",
+];
+
+const RAG_LLM_SINKS: &[&[u8]] = &[
+    b"openai.chat.completions.create",
+    b"client.chat.completions.create",
+    b"anthropic.messages.create",
+    b"messages.create",
+    b"server.tool",
+    b"mcp.tool",
+    b"return { content",
+];
+
+const RAG_PROMPT_SANITIZERS: &[&[u8]] = &[
+    b"PromptInjectionDetector",
+    b"detectPromptInjection",
+    b"prompt_injection_detector",
+    b"llm_guard",
+    b"rebuff",
+    b"nemoguardrails",
+    b"sanitizePrompt",
+    b"sanitize_prompt",
+];
+
+fn contains_any(haystack: &[u8], needles: &[&[u8]]) -> bool {
+    needles
+        .iter()
+        .any(|needle| haystack.windows(needle.len()).any(|w| w == *needle))
+}
+
+/// Return true when an external RAG source reaches an LLM-context sink without
+/// an explicit prompt-injection sanitizer in the same compilation unit.
+pub fn external_rag_flow_reaches_llm_sink(source: &[u8]) -> bool {
+    contains_any(source, RAG_EXTERNAL_SOURCES)
+        && contains_any(source, RAG_LLM_SINKS)
+        && !contains_any(source, RAG_PROMPT_SANITIZERS)
+}
+
 /// Argument-shape evidence carried at a call site by the IFDS lattice.
 ///
 /// Used by the JWT wrapper polymorphism detector (`library_identity`) to
