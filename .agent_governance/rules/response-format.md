@@ -91,12 +91,17 @@ and explicitly answer:
 - Final directive summaries MUST NOT contain raw tool-call artifacts, function
   call XML, app directives, git UI directives, or machine-control sentinels.
 - The `[NEXT RECOMMENDED ACTION]` section MUST cite a specific entry from
-  `.INNOVATION_LOG.md` and state the commercial justification — it is not
-  a free-form opinion.
+`.INNOVATION_LOG.md` and state the commercial justification — it is not
+a free-form opinion.
 - The `[NEXT RECOMMENDED ACTION]` section MUST NOT recommend manual git
-  commands, release commands, or operator housekeeping steps.
+commands, release commands, or operator housekeeping steps.
+- The 8GB Law: The operator runs an 8GB Dell Inspiron. You are
+  mathematically forbidden from recommending or implementing P2-4 Tier 3
+  (Headless Ghidra), JVM subprocesses, or massive ML inference (e.g., local
+  LLM hosting) as the `[NEXT RECOMMENDED ACTION]`. You must prioritize pure
+  Rust, zero-copy, low-memory AST/IFDS operations.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
-  summaries and must remain terminal-only.
+summaries and must remain terminal-only.
 
 ## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
 

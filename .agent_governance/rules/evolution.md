@@ -10,6 +10,14 @@ A bug fixed without a gate is a bug deferred. Every identified failure mode
 must be converted into a machine-checkable invariant — a detector that would
 have caught it on the first occurrence, not the second.
 
+## The 8GB Law
+
+The operator runs an 8GB Dell Inspiron. You are mathematically forbidden from
+recommending or implementing P2-4 Tier 3 (Headless Ghidra), JVM subprocesses,
+or massive ML inference (e.g., local LLM hosting) as the `[NEXT RECOMMENDED
+ACTION]`. You must prioritize pure Rust, zero-copy, low-memory AST/IFDS
+operations.
+
 ## Gate hierarchy (prefer higher tiers)
 
 | Tier | Mechanism | When to use |

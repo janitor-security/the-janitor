@@ -171,6 +171,43 @@ pub fn parser_exhaustion_finding_with_budget(lang_hint: &str, timeout_micros: u6
     }
 }
 
+/// Suppress path-scoped hunt findings that are structurally non-production.
+pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
+    let path = label.replace('\\', "/").to_ascii_lowercase();
+    let rule = description
+        .split([' ', '—'])
+        .next()
+        .unwrap_or(description)
+        .to_ascii_lowercase();
+
+    if path.starts_with("external/") || path.contains("/external/") {
+        return matches!(
+            rule.as_str(),
+            "security:unsafe_string_function"
+                | "security:command_injection"
+                | "security:os_command_injection"
+        );
+    }
+    if path.contains("/fuzz/") || path.contains("/bench") || path.contains("/mtest") {
+        return matches!(
+            rule.as_str(),
+            "security:unsafe_string_function"
+                | "security:command_injection"
+                | "security:os_command_injection"
+        );
+    }
+    if path.starts_with("cmake/") && rule == "security:cmake_execute_process_injection" {
+        return true;
+    }
+    if path.contains("crypto_ops_builder/") && rule == "security:os_command_injection" {
+        return true;
+    }
+    if path.starts_with("contrib/gitian/") && rule == "security:subprocess_shell_injection" {
+        return true;
+    }
+    path == "src/mnemonics/lojban.h" && rule == "security:unpinned_asset"
+}
+
 /// Parse `source` with a hard timeout of [`PARSER_TIMEOUT_MICROS`] (500 ms).
 ///
 /// Uses `tree_sitter::ParseOptions::progress_callback` to abort the parse when
@@ -1578,6 +1615,9 @@ fn find_dockerfile_slop(source: &[u8]) -> Vec<SlopFinding> {
             });
         }
     }
+    findings.extend(crate::invisible_payload::scan_invisible_payloads(
+        source, false,
+    ));
     findings
 }
 

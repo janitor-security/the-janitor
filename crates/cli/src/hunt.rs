@@ -1600,7 +1600,7 @@ fn resolve_python_module_path(root: &Path, module: &str) -> Option<PathBuf> {
 fn scan_python_priority_file(path: &Path, label: &str) -> anyhow::Result<Vec<StructuredFinding>> {
     let source =
         std::fs::read(path).with_context(|| format!("read python file {}", path.display()))?;
-    Ok(scan_buffer("py", &source, label, &[]))
+    Ok(scan_buffer("py", &source, label, &[], false))
 }
 
 // ---------------------------------------------------------------------------
@@ -2077,6 +2077,7 @@ fn is_placeholder_scan_root(scan_root: Option<&Path>, has_explicit_ingest_source
 fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     let mut all: Vec<StructuredFinding> = Vec::new();
     let mut frontend_routes = Vec::new();
+    let has_ai_assistant_config = has_ai_assistant_config(dir);
     let gadget_manifests = collect_gadget_manifest_blobs(dir);
     let gadget_manifest_refs: Vec<(&str, &[u8])> = gadget_manifests
         .iter()
@@ -2153,7 +2154,13 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
             .to_string_lossy()
             .to_string();
 
-        all.extend(scan_buffer(ext, &source, &rel_path, &frontend_routes));
+        all.extend(scan_buffer(
+            ext,
+            &source,
+            &rel_path,
+            &frontend_routes,
+            has_ai_assistant_config,
+        ));
         all.extend(forge::gadgets::analyze_source_for_gadgets(
             ext,
             &source,
@@ -2163,6 +2170,13 @@ fn scan_directory(dir: &Path) -> anyhow::Result<Vec<StructuredFinding>> {
     }
 
     Ok(dedup_findings(all))
+}
+
+fn has_ai_assistant_config(root: &Path) -> bool {
+    [".cursor", ".windsurf", ".mcp"]
+        .iter()
+        .any(|name| root.join(name).is_dir())
+        || root.join("claude.json").is_file()
 }
 
 fn collect_gadget_manifest_blobs(dir: &Path) -> Vec<(String, Vec<u8>)> {
@@ -2302,6 +2316,7 @@ fn scan_buffer(
     source: &[u8],
     label: &str,
     frontend_routes: &[forge::authz::FrontendRoute],
+    has_ai_assistant_config: bool,
 ) -> Vec<StructuredFinding> {
     if is_compiled_artifact_extension(ext) {
         return forge::binary_recovery::analyze_binary(source, label);
@@ -2319,13 +2334,21 @@ fn scan_buffer(
     slop_findings.extend(forge::slop_hunter::find_untrusted_ide_extensions(
         label, source,
     ));
+    if has_ai_assistant_config {
+        for finding in &mut slop_findings {
+            if finding.description.contains("security:camoleak_") {
+                finding.severity = forge::slop_hunter::Severity::KevCritical;
+            }
+        }
+    }
 
     let mut findings = slop_findings
         .into_iter()
         .filter(|f| {
-            !is_issue_template
-                || (!f.description.contains("unpinned_asset")
-                    && !f.description.contains("oauth_excessive_scope"))
+            !forge::slop_hunter::is_hunt_false_positive_path(label, &f.description)
+                && (!is_issue_template
+                    || (!f.description.contains("unpinned_asset")
+                        && !f.description.contains("oauth_excessive_scope")))
         })
         .map(|finding| {
             let line = byte_to_line(source, finding.start_byte);

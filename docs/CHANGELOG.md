@@ -3,6 +3,37 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-29 — Sprint Batch 74 (CamoLeak Shield \& Target Hydration)
+
+**Directive:** Enforce the 8GB hardware constraint in governance, implement the CamoLeak invisible-payload scanner, hydrate source-code targets from `target_ledger.json`, run live-fire hunts against Glean and Electroneum, verify, and commit locally. No release.
+
+**Changes:**
+
+* `.agent_governance/rules/evolution.md` and `.agent_governance/rules/response-format.md` — added the 8GB Law: do not recommend or implement Headless Ghidra, JVM subprocesses, or local massive ML inference as the next action; prioritize pure Rust, zero-copy AST/IFDS work.
+* `crates/forge/src/invisible_payload.rs` — added the CamoLeak shield:
+
+  * Detects contiguous runs of at least four `U+200B`, `U+200C`, `U+200D`, or `U+FEFF` zero-width characters in string/comment/markdown-like contexts.
+  * Detects Markdown/HTML comments containing `ignore previous instructions`, `system prompt`, or `exfiltrate`.
+  * Emits `security:camoleak_zwc_payload` or `security:camoleak_prompt_injection`, with `KevCritical` severity when the scanned repo contains AI assistant config.
+* `crates/forge/src/lib.rs` and `crates/forge/src/slop_hunter.rs` — exported the scanner and wired it into the existing `find_slop` path.
+* `crates/cli/src/hunt.rs` — detects repo-local `.cursor/`, `.windsurf/`, `.mcp/`, or `claude.json` config and upgrades CamoLeak findings during `janitor hunt`.
+* `crates/forge/src/slop_hunter.rs` and `crates/cli/src/hunt.rs` — added path-scoped live-fire false-positive suppression for vendored, fuzz, benchmark, generated crypto-builder, CMake probe, Gitian helper, and static wordlist source paths.
+* `.INNOVATION_LOG.md` — marked the P6-10 invisible-content scanner sub-item as `[COMPLETED - Sprint Batch 74]`.
+
+**Live-fire Hunt Results:**
+
+* `https://github.com/gleanbugbounty/mcp-server-bugbounty` cloned to `/tmp/mcp-server-bugbounty`; `janitor hunt --format bugcrowd` emitted one report group: `security:ssrf_dynamic_url` in `packages/local-mcp-server/src/tools/read_documents.ts`.
+* `https://github.com/electroneum/electroneum` cloned to `/tmp/electroneum`; after structural false-positive suppression, `janitor hunt --format bugcrowd` emitted three report groups: `security:parser_exhaustion_anomaly`, `security:ssrf_dynamic_url`, and `security:unsafe_string_function`.
+
+**Telemetry:**
+
+* `cargo test -p forge camoleak -- --test-threads=4` — exit 0.
+* `cargo run -p cli -- hunt /tmp/mcp-server-bugbounty --format bugcrowd` — exit 0.
+* `cargo run -p cli -- hunt /tmp/electroneum --format bugcrowd` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; documentation parity verified and audit fingerprint saved.
+* No release cut.
+
 ## 2026-04-29 — Sprint Batch 73 (Autonomous Target Factory \& Pipeline Severance)
 
 **Directive:** Add hard PR workflow timeouts, implement `janitor ingest-campaigns <DIR>` for deterministic offline campaign ingestion, eradicate the shipped P7-5 innovation-log block, verify, and commit locally. No release.

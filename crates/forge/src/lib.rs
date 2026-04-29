@@ -46,6 +46,7 @@ pub mod governance;
 pub mod hashing;
 pub mod idor;
 pub mod ifds;
+pub mod invisible_payload;
 pub mod labyrinth;
 pub mod library_identity;
 pub mod metadata;
