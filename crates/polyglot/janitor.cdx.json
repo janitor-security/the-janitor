@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:becc2a83-72af-4ad9-8a1a-128911cf9459",
+  "serialNumber": "urn:uuid:4427decc-0683-440d-9f82-08b49a6def26",
   "metadata": {
-    "timestamp": "2026-04-27T21:15:34.197390703Z",
+    "timestamp": "2026-04-29T08:52:26.347903934Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.4",
       "name": "polyglot",
-      "version": "10.2.0-beta.3",
+      "version": "10.2.0-beta.4",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/polyglot@10.2.0-beta.3?download_url=file://.",
+      "purl": "pkg:cargo/polyglot@10.2.0-beta.4?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.4 bin-target-0",
           "name": "polyglot",
-          "version": "10.2.0-beta.3",
-          "purl": "pkg:cargo/polyglot@10.2.0-beta.3?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.4",
+          "purl": "pkg:cargo/polyglot@10.2.0-beta.4?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -167,6 +167,33 @@
         {
           "type": "vcs",
           "url": "https://github.com/rust-lang/cc-rs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+      "author": "Orson Peters <orsonpeters@gmail.com>",
+      "name": "foldhash",
+      "version": "0.2.0",
+      "description": "A fast, non-cryptographic, minimally DoS-resistant hashing algorithm.",
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "purl": "pkg:cargo/foldhash@0.2.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/orlp/foldhash"
         }
       ]
     },
@@ -1105,16 +1132,16 @@
     },
     {
       "type": "library",
-      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.26.0",
       "author": "Max Brunsfeld <maxbrunsfeld@gmail.com>",
       "name": "tree-sitter-scala",
-      "version": "0.25.1",
+      "version": "0.26.0",
       "description": "Scala grammar for tree-sitter",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3394d6bc99bceae03c75482a93f1bcefff11e69d3a405f1410e864212b52739a"
+          "content": "de5a4a7ff23a55474ce6a741d52aaeca7a82fe9421bb982b86e98c6ac8629397"
         }
       ],
       "licenses": [
@@ -1122,7 +1149,7 @@
           "expression": "MIT"
         }
       ],
-      "purl": "pkg:cargo/tree-sitter-scala@0.25.1",
+      "purl": "pkg:cargo/tree-sitter-scala@0.26.0",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1310,7 +1337,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/polyglot#10.2.0-beta.4",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter@0.26.8",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-bash@0.25.1",
@@ -1331,7 +1358,7 @@
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-python@0.25.0",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-ruby@0.23.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-rust@0.24.2",
-        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
+        "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.26.0",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-swift@0.7.1",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-typescript@0.23.2",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-yaml@0.7.2",
@@ -1360,7 +1387,13 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#find-msvc-tools@0.1.9"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
@@ -1554,7 +1587,7 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.25.1",
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-scala@0.26.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.61",
         "registry+https://github.com/rust-lang/crates.io-index#tree-sitter-language@0.1.7"

@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:dd878f07-6424-425b-9a1e-4ddd6f708611",
+  "serialNumber": "urn:uuid:f092659f-a343-4b14-b285-249e1a0ecc87",
   "metadata": {
-    "timestamp": "2026-04-27T21:15:34.383741065Z",
+    "timestamp": "2026-04-29T08:52:26.494261938Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.4",
       "name": "parallel-bounce",
-      "version": "10.2.0-beta.3",
+      "version": "10.2.0-beta.4",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/parallel-bounce@10.2.0-beta.3?download_url=file://.",
+      "purl": "pkg:cargo/parallel-bounce@10.2.0-beta.4?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.4 bin-target-0",
           "name": "parallel-bounce",
-          "version": "10.2.0-beta.3",
-          "purl": "pkg:cargo/parallel-bounce@10.2.0-beta.3?download_url=file://.#src/main.rs"
+          "version": "10.2.0-beta.4",
+          "purl": "pkg:cargo/parallel-bounce@10.2.0-beta.4?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -223,6 +223,33 @@
         {
           "type": "vcs",
           "url": "https://github.com/indexmap-rs/equivalent"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+      "author": "Orson Peters <orsonpeters@gmail.com>",
+      "name": "foldhash",
+      "version": "0.2.0",
+      "description": "A fast, non-cryptographic, minimally DoS-resistant hashing algorithm.",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "purl": "pkg:cargo/foldhash@0.2.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/orlp/foldhash"
         }
       ]
     },
@@ -707,7 +734,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/parallel-bounce#10.2.0-beta.4",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#rayon@1.12.0",
@@ -741,7 +768,13 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2"
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+    },
+    {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",

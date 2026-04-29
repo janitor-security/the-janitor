@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:ba2ec935-87eb-4ffc-b4c9-a390ade873bf",
+  "serialNumber": "urn:uuid:482d2150-9dc3-4c43-a375-dba85f234715",
   "metadata": {
-    "timestamp": "2026-04-27T21:15:34.179370339Z",
+    "timestamp": "2026-04-29T08:52:26.332781277Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.3",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.4",
       "name": "advanced_threats",
-      "version": "10.2.0-beta.3",
+      "version": "10.2.0-beta.4",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/advanced_threats@10.2.0-beta.3?download_url=file://.",
+      "purl": "pkg:cargo/advanced_threats@10.2.0-beta.4?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.3 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.4 bin-target-0",
           "name": "advanced_threats",
-          "version": "10.2.0-beta.3",
-          "purl": "pkg:cargo/advanced_threats@10.2.0-beta.3?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-beta.4",
+          "purl": "pkg:cargo/advanced_threats@10.2.0-beta.4?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -531,6 +531,33 @@
         }
       ],
       "purl": "pkg:cargo/foldhash@0.1.5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/orlp/foldhash"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+      "author": "Orson Peters <orsonpeters@gmail.com>",
+      "name": "foldhash",
+      "version": "0.2.0",
+      "description": "A fast, non-cryptographic, minimally DoS-resistant hashing algorithm.",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Zlib"
+        }
+      ],
+      "purl": "pkg:cargo/foldhash@0.2.0",
       "externalReferences": [
         {
           "type": "vcs",
@@ -1684,7 +1711,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.3",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/experimental/advanced_threats#10.2.0-beta.4",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.4",
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -1775,6 +1802,9 @@
       "ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.1.5"
     },
     {
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+    },
+    {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#generic-array@0.14.9",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#typenum@1.20.0",
@@ -1796,7 +1826,10 @@
       ]
     },
     {
-      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0"
+      "ref": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.0",
+      "dependsOn": [
+        "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0"
+      ]
     },
     {
       "ref": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
