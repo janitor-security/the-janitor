@@ -3,6 +3,38 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-29 — Sprint Batch 72 (IDE Supply Chain Shield \& Omni-Ledger Batch 3)
+
+**Directive:** Implement malicious VS Code/devcontainer extension detection, unpinned HuggingFace model-weight provenance detection, LaTeX CamoLeak prompt-injection detection, ingest five more Bugcrowd engagements, verify, and commit locally. No release.
+
+**Changes:**
+
+* `crates/forge/src/slop_hunter.rs` — **IDE Sleeper Extension Shield**:
+
+  * Added `find_untrusted_ide_extensions(file_path, source)` for `.vscode/extensions.json` and `.devcontainer/devcontainer.json`.
+  * Extracts VS Code extension IDs from `recommendations`, `extensions`, and nested `customizations.vscode` surfaces.
+  * Emits `supply_chain:untrusted_ide_extension` at `High` when an extension is unpinned, pinned to `latest`, or uses a generic/squattable publisher namespace.
+  * Added `Severity::High` with deterministic score contribution.
+* `crates/forge/src/slop_filter.rs` and `crates/cli/src/hunt.rs` — wired the IDE extension shield into Forge bounce and `janitor hunt`.
+* `crates/forge/src/slop_hunter.rs` — **Unpinned ML Model Provenance**:
+
+  * Detects Python HuggingFace `from_pretrained(...)` and `pipeline(...)` calls.
+  * Requires `revision` to be a 40-character Git commit SHA.
+  * Emits `security:unpinned_ml_model_weights` at `KevCritical` when revision is absent or mutable.
+  * Added deterministic unit test: `python_from_pretrained_without_revision_triggers_ml_model_provenance`.
+* `crates/forge/src/slop_hunter.rs` — **LaTeX CamoLeak expansion**:
+
+  * Added `.tex` dispatch and LaTeX comment scanning for imperative AI hijack verbs.
+  * Emits `security:camoleak_payload` for `%` comments containing `ignore`, `system instruction`, or `override`.
+* `tools/campaign/TARGET_LEDGER.md` — **Omni-Ledger: Batch 3** initialized from exactly five new engagement files: `canva_targets.md`, `fivetran_targets.md`, `sap_targets.md`, `mastercard_targets.md`, and `recorded_future_targets.md`.
+
+**Telemetry:**
+
+* `cargo test -p forge python_from_pretrained_without_revision_triggers_ml_model_provenance -- --test-threads=4` — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; audit fingerprint saved.
+* No release cut.
+
 ## 2026-04-28 — Sprint Batch 71 (Generative Build-Time Shields \& Omni-Ledger Batch 2)
 
 **Directive:** Block compile-time LLM supply-chain execution in build scripts and procedural macro surfaces, add EU NIS2/DORA regulatory regimes, ingest five more Bugcrowd engagements, update the Innovation Log, verify, and commit locally. No release.

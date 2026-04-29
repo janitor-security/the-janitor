@@ -2316,6 +2316,9 @@ fn scan_buffer(
     slop_findings.extend(forge::slop_hunter::find_generative_build_execution(
         label, ext, source,
     ));
+    slop_findings.extend(forge::slop_hunter::find_untrusted_ide_extensions(
+        label, source,
+    ));
 
     let mut findings = slop_findings
         .into_iter()

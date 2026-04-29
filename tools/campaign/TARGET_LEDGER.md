@@ -146,6 +146,45 @@ Rules: research must use owned accounts or owned Tesla products; immediately sto
 - [ ] `*.tesla.com`, `*.teslamotors.com`, `*.tesla.cn`, `*.tesla.services`, `*.solarcity.com`, `*.teslainsuranceservices.com`, and Tesla-owned verified hosts/IP space — non-vehicle web properties. Payout: P1 `$3000-$10000`, P2 `$500-$4000`. Language: Drupal/web/API/CDN. Focus: account/authz, sensitive data exposure, injection, SSRF, business logic, cloud/CDN misconfiguration with exploitability.
 - [ ] Official Tesla iOS and Android apps — mobile clients. Payout: P1 `$3000-$10000`, P2 `$500-$4000`. Language: Swift/Objective-C, Java/Kotlin. Focus: mobile auth/session, deep-link abuse, local storage, API authorization, vehicle/account command boundary issues using owned assets.
 
+## Omni-Ledger: Batch 3
+
+Source corpus: `tools/campaign/targets/`. Parsed exactly five additional engagements not listed in Batches 1-2.
+
+### Canva (`canva_targets.md`)
+
+Rules: focus on user-data confidentiality, collaboration boundaries, developer platform isolation, and exploitable third-party misconfiguration; legacy authentication issues in some Canva-branded apps may be ineligible if they match known deprecation patterns.
+
+- [ ] `https://www.canva.com` — Canva Editor and core product. Payout: P1 `$15000`, P2 `$4000`. Language: Java/web/JS. Focus: authn/authz, team/org access control, design/data exposure, AI tool boundary issues, SQLi/RCE, content injection.
+- [ ] `https://www.canva.com/developers/`, `https://api.canva.com`, Apps SDK Sandboxing — Developer Platform. Payout: P1 `$15000`, P2 `$4000`. Language: API/JS sandbox. Focus: Connect API IDOR, developer key/app settings access, sandbox escape, injected content in developer tooling.
+- [ ] `*.canva.com`, `*.canva-apps.com`, `*.canva.tech` — services and infrastructure. Payout: P1 `$15000`, P2 `$4000`. Language: Java/MySQL/web/cloud. Focus: Canva-operated service compromise, customer-data exposure, AWS/Cloudflare misconfiguration with tangible impact.
+
+### Fivetran (`fivetran_targets.md`)
+
+Rules: use only `@bugcrowdninja.com` accounts; do not access or modify customer data beyond proof; no DoS; no AI tools during research; do not contact Fivetran directly for follow-up; only P1-P3 rewarded.
+
+- [ ] `*.fivetran.com`, `https://fivetran.com/login` — Fivetran product surface. Payout: P1 `$2500-$7500`, P2 `$1000-$2500`, P3 `$500-$1000`. Language: Java/Kubernetes/web. Focus: auth/session, connector/data-plane authorization, sensitive data exposure, service compromise.
+- [ ] Fivetran Connector SDK CTF at `https://fivetran.com/login` — sandboxed connector feature. Payout: P1 `$15000`. Language: Python/Kubernetes sandbox. Focus: connector sandbox escape, target-account secret extraction, internal-service reachability from untrusted connector execution.
+
+### SAP (`sap_targets.md`)
+
+Rules: this page is an invitation funnel; direct submissions to this page are Not Applicable. Eligibility requires Bugcrowd background check, SAP NDA, >=80% accuracy, and a valid P3+ submission. No DoS, resource exhaustion, DNS poisoning, rootkits, real PII, or non-listed SAP domains.
+
+- [ ] SAP SuccessFactors, S/4HANA Cloud Public/Private, Integrated Business Planning, Cloud ALM, Customer Data Cloud/CDP, Business Network, BusinessObjects BI, SAP AI Core, WalkMe, Signavio, BusinessOne, and listed SAP SaaS products — private SAP engagements. Payout: P1 `$4000-$20000`, P2 `$2000-$7500`, P3 `$700-$2500`, P4 `$250-$600`. Language: enterprise Java/SAP web/mobile/API. Focus: authz, tenant isolation, PII exposure, workflow/business-logic compromise, AI Core model/data boundary issues, mobile/web application flaws.
+
+### Mastercard (`mastercard_targets.md`)
+
+Rules: regional sites are in scope only on core Mastercard domains; use provided test data where specified; Recorded Future, `biz360.mastercard.com`, and `mybiz360.mastercard.com` are out of scope; Public Other/vendor applications pay lower bounties; subdomain takeover has separate payout rules.
+
+- [ ] Mastercard regional public sites, `https://developer.mastercard.com`, `https://performancemarketing.mastercard.com/portal/`, `https://src.mastercard.com/*`, Finicity APIs/apps, Priceless demo, Donate, and listed Mastercard assets — Public Targets. Payout: P1 `$5000`, P2 `$2000`. Language: Java/AEM/Vue/ASP.NET/Node/PHP/API. Focus: payment/auth flows, API authorization, checkout/SRC integration, account/data exposure, SQLi/RCE, subdomain takeover with impact.
+- [ ] Public Other Mastercard-owned or M&A targets — lower-tier catch-all. Payout: P1 `$700-$2500`, P2 `$300-$1000`. Language: web/API/vendor apps. Focus: demonstrable Mastercard-owned security impact; vendor lower environments pay 50% of standard.
+
+### Recorded Future (`recorded_future_targets.md`)
+
+Rules: test only listed targets; non-listed Recorded Future assets are appreciated but not reward-eligible; use `@bugcrowdninja.com` for self-provisioned accounts where available; no DoS, non-auth brute force/rate limit, missing cookie/security headers, software-version disclosure, or low-impact open redirects.
+
+- [ ] `https://www.recordedfuture.com`, `https://tria.ge`, `https://id.recordedfuture.com`, `https://hatching.io`, `https://geminiadvisory.io`, `https://app.recordedfuture.com`, `https://api.recordedfuture.com`, `https://securitytrails.com` — Recorded Future web/API estate. Payout: P1 `$5000`, P2 `$2000`, P3 `$750`, P4 `$250`. Language: web/API/threat-intel platforms. Focus: auth/session, API authorization, tenant/data exposure, XSS with impact, injection, account boundary issues.
+- [ ] Recorded Future iOS and Android apps — mobile clients. Payout: P1 `$5000`, P2 `$2000`. Language: iOS/Android. Focus: mobile auth/session, local data exposure, deep links, API authorization, threat-intel data boundary issues.
+
 ## Parsed Engagements
 
 - `tools/campaign/targets/okta_targets.md`
@@ -158,3 +197,8 @@ Rules: research must use owned accounts or owned Tesla products; immediately sto
 - `tools/campaign/targets/cloudinary_targets.md`
 - `tools/campaign/targets/mattermost_targets.md`
 - `tools/campaign/targets/tesla_targets.md`
+- `tools/campaign/targets/canva_targets.md`
+- `tools/campaign/targets/fivetran_targets.md`
+- `tools/campaign/targets/sap_targets.md`
+- `tools/campaign/targets/mastercard_targets.md`
+- `tools/campaign/targets/recorded_future_targets.md`

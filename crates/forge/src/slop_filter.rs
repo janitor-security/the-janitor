@@ -1037,6 +1037,9 @@ impl PRBouncer for PatchBouncer {
                     raw_findings.extend(crate::slop_hunter::find_generative_build_execution(
                         &file_path, ext, source,
                     ));
+                    raw_findings.extend(crate::slop_hunter::find_untrusted_ide_extensions(
+                        &file_path, source,
+                    ));
                     raw_findings.extend(metadata_findings);
                     raw_findings.retain(|finding| {
                         !should_suppress_contextual_finding(finding, package_context.as_deref())
@@ -1351,6 +1354,9 @@ impl PRBouncer for PatchBouncer {
         }
         raw_findings.extend(crate::slop_hunter::find_generative_build_execution(
             &file_path, ext, source,
+        ));
+        raw_findings.extend(crate::slop_hunter::find_untrusted_ide_extensions(
+            &file_path, source,
         ));
         raw_findings.retain(|finding| {
             !should_suppress_contextual_finding(finding, package_context.as_deref())
