@@ -354,7 +354,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 34
+      "priority_score": 34,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "aiven_targets",
@@ -566,7 +568,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "block_targets",
@@ -580,7 +584,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "block_targets",
@@ -594,7 +600,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "block_targets",
@@ -888,7 +896,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "electroneum_blockchain_targets",
@@ -902,7 +912,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "electroneum_blockchain_targets",
@@ -916,7 +928,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "electroneum_blockchain_targets",
@@ -930,7 +944,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "electroneum_blockchain_targets",
@@ -944,7 +960,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "electroneum_targets",
@@ -958,7 +976,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "fireblocks_mpc_targets",

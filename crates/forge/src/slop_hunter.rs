@@ -7930,14 +7930,17 @@ fn detect_npm_git_deps(text: &str) -> Vec<GitDependencyHit> {
 }
 
 fn detect_cargo_git_deps(text: &str) -> Vec<GitDependencyHit> {
-    let mut hits = Vec::new();
     if let Ok(value) = toml::from_str::<toml::Value>(text) {
+        // Structured parse succeeded: trust the result. Pinned deps (rev/tag) were
+        // already skipped inside collect_cargo_dependency_hits, so an empty Vec here
+        // correctly means "no unpinned git deps". Do NOT fall back to the pattern
+        // scanner, which cannot distinguish rev/tag pins from bare git URLs.
+        let mut hits = Vec::new();
         collect_cargo_dependency_hits(&value, text, &mut hits);
+        return hits;
     }
-    if hits.is_empty() {
-        hits.extend(detect_inline_toml_git_hits(text, "Cargo.toml"));
-    }
-    hits
+    // TOML parse failed (malformed manifest) — fall back to inline pattern scan.
+    detect_inline_toml_git_hits(text, "Cargo.toml")
 }
 
 fn collect_cargo_dependency_hits(
@@ -8050,6 +8053,14 @@ fn collect_toml_dependency_table(
         let Some(url) = spec_table.get("git").and_then(toml::Value::as_str) else {
             continue;
         };
+        // `rev =` or `tag =` is an immutable pin — do not flag as unpinned.
+        if spec_table
+            .get("rev")
+            .or_else(|| spec_table.get("tag"))
+            .is_some()
+        {
+            continue;
+        }
         let (start_byte, end_byte) = locate_manifest_value_span(text, name, url);
         hits.push(GitDependencyHit {
             name: name.to_string(),
@@ -12406,6 +12417,39 @@ openfga = { git = "https://github.com/openfga/openfga" }
         assert!(
             findings.is_empty(),
             "semver registry dep must not be flagged as repojacking"
+        );
+    }
+
+    #[test]
+    fn cargo_toml_git_dep_with_rev_is_not_flagged() {
+        // TrustWallet-style: git dep pinned with an immutable rev SHA.
+        let src = b"[dependencies]\nmove-core-types = { git = \"https://github.com/move-language/move\", rev = \"ea70797099baea64f05194a918cebd69ed02b285\", features = [\"address32\"] }\n";
+        let findings = detect_unpinned_git_deps("Cargo.toml", src);
+        assert!(
+            findings.is_empty(),
+            "Cargo.toml dep with rev = <sha> must NOT be flagged as unpinned; got: {:?}",
+            findings
+        );
+    }
+
+    #[test]
+    fn cargo_toml_git_dep_with_tag_is_not_flagged() {
+        let src = b"[dependencies]\nmy-lib = { git = \"https://github.com/foo/my-lib\", tag = \"v1.2.3\" }\n";
+        let findings = detect_unpinned_git_deps("Cargo.toml", src);
+        assert!(
+            findings.is_empty(),
+            "Cargo.toml dep with tag = ... must NOT be flagged as unpinned; got: {:?}",
+            findings
+        );
+    }
+
+    #[test]
+    fn cargo_toml_git_dep_without_pin_is_flagged() {
+        let src = b"[dependencies]\ndangerous = { git = \"https://github.com/attacker/lib\" }\n";
+        let findings = detect_unpinned_git_deps("Cargo.toml", src);
+        assert!(
+            !findings.is_empty(),
+            "Cargo.toml git dep with no pin must be flagged"
         );
     }
 

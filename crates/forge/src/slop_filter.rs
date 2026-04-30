@@ -1641,6 +1641,25 @@ impl PRBouncer for PatchBouncer {
                     &file_path, rule_id, line, url, context,
                 );
                 finding = crate::exploitability::attach_exploit_witness(finding, witness);
+            } else if rule_id.contains("unpinned_ml_model_weights")
+                || rule_id.contains("unpinned_model")
+            {
+                let model_id = f
+                    .description
+                    .split('"')
+                    .find(|s| !s.is_empty() && !s.starts_with("http"))
+                    .map(str::to_string);
+                let fmt = if f.description.contains("git lfs") || f.description.contains("lfs") {
+                    crate::exploitability::ModelLockfileFormat::GitLfs
+                } else if f.description.contains("local") || f.description.contains("cache") {
+                    crate::exploitability::ModelLockfileFormat::LocalCache
+                } else {
+                    crate::exploitability::ModelLockfileFormat::HuggingFace
+                };
+                let witness = crate::exploitability::model_weight_witness(
+                    &file_path, rule_id, line, model_id, fmt,
+                );
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
             }
             structured_findings.push(finding);
         }

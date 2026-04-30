@@ -2496,7 +2496,7 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     let name = entry.file_name().to_string_lossy();
-    matches!(
+    if matches!(
         name.as_ref(),
         ".git"
             | "node_modules"
@@ -2504,23 +2504,24 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | "build"
             | "dist"
             | "docs"
-            | "debug"
-            | "Debug"
-            | "Tests"
-            | "tests"
-            | "__tests__"
             | "examples"
             | "coverage"
             | "vendor"
-            | "mock"
-            | "testutils"
-            | "testfixtures"
-            | "mocks"
             // Labyrinth deception directories: skip in O(1) to prevent friendly fire.
             | ".labyrinth"
             | "janitor_decoys"
             | "ast_maze"
-    ) || is_internal_mocks_dir(entry.path())
+    ) {
+        return true;
+    }
+    // Aggressively drop all test and debug infrastructure using full-path matching
+    // so nested directories like `src/internal/test_helpers/debug/` are caught
+    // regardless of OS path separator or depth.
+    let full_path = entry.path().to_string_lossy().to_lowercase();
+    if full_path.contains("test") || full_path.contains("mock") || full_path.contains("debug") {
+        return true;
+    }
+    is_internal_mocks_dir(entry.path())
 }
 
 fn is_internal_mocks_dir(path: &Path) -> bool {
@@ -2731,6 +2732,29 @@ fn scan_buffer(
                 };
                 let witness = forge::exploitability::asset_integrity_witness(
                     label, &rule_id, line, url, context,
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id.contains("unpinned_ml_model_weights")
+                || rule_id.contains("unpinned_model")
+            {
+                let model_id = finding
+                    .description
+                    .split('"')
+                    .find(|s| !s.is_empty() && !s.starts_with("http"))
+                    .map(str::to_string);
+                let fmt = if finding.description.contains("git lfs")
+                    || finding.description.contains("lfs")
+                {
+                    forge::exploitability::ModelLockfileFormat::GitLfs
+                } else if finding.description.contains("local")
+                    || finding.description.contains("cache")
+                {
+                    forge::exploitability::ModelLockfileFormat::LocalCache
+                } else {
+                    forge::exploitability::ModelLockfileFormat::HuggingFace
+                };
+                let witness = forge::exploitability::model_weight_witness(
+                    label, &rule_id, line, model_id, fmt,
                 );
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
             }

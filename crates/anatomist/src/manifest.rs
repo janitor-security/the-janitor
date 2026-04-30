@@ -1563,12 +1563,10 @@ fn parse_cargo_toml_git_refs(path: &Path, content: &str, deps: &mut Vec<GitRefDe
             let Some(git_url) = spec_t.get("git").and_then(|v| v.as_str()) else {
                 continue;
             };
+            // `rev =` is always an immutable pin regardless of SHA format.
+            // Only `branch =` or a missing pin is mutable.
             let ref_kind = if let Some(rev) = spec_t.get("rev").and_then(|v| v.as_str()) {
-                if is_commit_sha_like(rev) {
-                    RefKind::CommitSha(rev.to_string())
-                } else {
-                    RefKind::Branch(rev.to_string())
-                }
+                RefKind::CommitSha(rev.to_string())
             } else if let Some(b) = spec_t.get("branch").and_then(|v| v.as_str()) {
                 RefKind::Branch(b.to_string())
             } else if let Some(t) = spec_t.get("tag").and_then(|v| v.as_str()) {
@@ -1664,12 +1662,9 @@ fn parse_pyproject_toml_git_refs(path: &Path, content: &str, deps: &mut Vec<GitR
             let Some(git_url) = spec_t.get("git").and_then(|v| v.as_str()) else {
                 continue;
             };
+            // `rev =` is always an immutable pin regardless of SHA format.
             let ref_kind = if let Some(rev) = spec_t.get("rev").and_then(|v| v.as_str()) {
-                if is_commit_sha_like(rev) {
-                    RefKind::CommitSha(rev.to_string())
-                } else {
-                    RefKind::Branch(rev.to_string())
-                }
+                RefKind::CommitSha(rev.to_string())
             } else if let Some(b) = spec_t.get("branch").and_then(|v| v.as_str()) {
                 RefKind::Branch(b.to_string())
             } else if let Some(t) = spec_t.get("tag").and_then(|v| v.as_str()) {

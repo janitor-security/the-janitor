@@ -3,6 +3,22 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 80: P2-7 ML Model Witnesses, Cargo.toml Precision Guardrails & UAP Governance Upgrade
+
+**Directive:** Implement P2-7 ML Model Weight Pinning Witnesses; fix Cargo.toml rev=/tag= false positive in `detect_cargo_git_deps`; upgrade WalkDir exclusion lattice with full-path lowercase matching; upgrade governance to dual NRA; execute live-fire hunt on 3 new authorized targets.
+
+**Changes Implemented:**
+- `.agent_governance/rules/response-format.md`: `[NEXT RECOMMENDED ACTION]` upgraded to require TWO items — absolute highest commercial priority + orthogonally synergistic sprint companion.
+- `crates/forge/src/exploitability.rs`: Added `ModelLockfileFormat` enum (HuggingFace/GitLfs/LocalCache); added `ModelWeightArtifact { url, model_id, lockfile_format }` variant to `IngressKind`; implemented `model_weight_integrity_template()` emitting deterministic Hugging Face `revision="<sha>"` kwarg patch, Git LFS `sha256sum` guard, or local cache digest guard; implemented `model_weight_witness()` public builder; updated `infer_ingress_from_finding_id()`, `template_for_ingress()`, and `synthesize_repro_cmd_for_finding()` for the new variant; added 3 new deterministic tests — all proving no `"Pending"` in output.
+- `crates/forge/src/slop_filter.rs`: Added `ModelWeightArtifact` dispatch for `unpinned_ml_model_weights` / `unpinned_model` finding IDs; restructured `detect_cargo_git_deps` to NOT fall back to `detect_inline_toml_git_hits` when TOML parse succeeds (preventing false positives for rev/tag-pinned dependencies); added `rev =`/`tag =` immutable-pin guard in `collect_toml_dependency_table`; added 3 new tests: `rev_is_not_flagged`, `tag_is_not_flagged`, `without_pin_is_flagged`.
+- `crates/anatomist/src/manifest.rs`: Fixed `parse_cargo_toml_git_refs` and `parse_pyproject_toml_git_refs` — any `rev =` key is now classified as `RefKind::CommitSha` (immutable) regardless of SHA format; eliminates false positives for named revisions.
+- `crates/cli/src/hunt.rs`: Added `ModelWeightArtifact` dispatch in finding map closure; upgraded `is_excluded_hunt_entry` to use full-path lowercase matching (`.to_string_lossy().to_lowercase().contains()`) for `"test"`, `"mock"`, `"debug"` — drops nested test/debug dirs across all OS platforms.
+- `tools/campaign/target_ledger.json`: Marked `electroneum/electroneum`, `afterpay/sdk-android`, `afterpay/sdk-ios` as hunted.
+- `.INNOVATION_LOG.md`: P2-7 block + Sprint Batch 78 Live-Fire Gaps section header physically deleted (Absolute Eradication Law).
+- `.janitor/hunt_reports/`: 3 new report files generated: `electroneum_electroneum.md` (SSRF 4 sinks + parser exhaustion + sprintf unsafe string 7 sinks), `afterpay_sdk-android.md` (clean), `afterpay_sdk-ios.md` (unpinned asset in Swift Environment.swift).
+
+**Audit Status:** `just audit` — `cargo fmt` ✓, `cargo clippy` ✓, `cargo check` ✓, `cargo test --workspace -- --test-threads=4` ✓ (1,340+ tests passed).
+
 ## 2026-04-30 — Sprint Batch 79: P1-3/P2-6 AEG Payload Finality & Target Hydration
 
 **Directive:** Implement P1-3 Command Execution Witness Finality and P2-6 Remote Asset Integrity Witnesses; execute live-fire hunt on 3 authorized bug bounty targets.

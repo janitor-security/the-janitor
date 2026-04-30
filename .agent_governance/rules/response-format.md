@@ -51,13 +51,18 @@ Direct-triage backlog changes logged this session. Format:
 If none: <!-- no triage changes this session -->
 
 [NEXT RECOMMENDED ACTION]
-The single highest-priority actionable item from `.INNOVATION_LOG.md`.
-State: the P0/P1/P2 ID, the file to modify, the function to change, the exact
-command to begin, and the commercial justification. No vague "consider"
-language — name the action and quantify the TAM / TEI expansion unlocked.
-The Next Recommended Action MUST be a P-tier item drawn directly from
-`.INNOVATION_LOG.md`, providing the file paths and a brief commercial
-justification.
+TWO distinct, high-priority actionable items from `.INNOVATION_LOG.md`.
+Item 1 must be the absolute highest commercial-priority frontier (highest
+TAM × severity × addressable language market share). Item 2 must be
+orthogonally related or synergistic — implementable in the same sprint to
+maximize context-window token efficiency.
+
+For each item state: the P0/P1/P2 ID, the file to modify, the function to
+change, the exact command to begin, and the commercial justification. No vague
+"consider" language — name the action and quantify the TAM / TEI expansion
+unlocked.
+Both items MUST be drawn directly from `.INNOVATION_LOG.md`, providing the
+file paths and brief commercial justification.
 Explicitly forbid manual operator shell guidance in this section. Do not
 suggest manual git commands, staging, signing, `/compact`, or other workflow
 rituals. The section is for implementation sequencing only.
