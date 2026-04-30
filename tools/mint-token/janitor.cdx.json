@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:0b81f8ec-8f3f-4678-a24b-3fae0aee0519",
+  "serialNumber": "urn:uuid:55e9af48-35bb-4e0e-8412-44d9dd28f113",
   "metadata": {
-    "timestamp": "2026-04-29T08:52:26.486135027Z",
+    "timestamp": "2026-04-30T08:20:47.746328891Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "application",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.4",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.5",
       "name": "mint-token",
-      "version": "10.2.0-beta.4",
+      "version": "10.2.0-beta.5",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/mint-token@10.2.0-beta.4?download_url=file://.",
+      "purl": "pkg:cargo/mint-token@10.2.0-beta.5?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "application",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.4 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.5 bin-target-0",
           "name": "mint-token",
-          "version": "10.2.0-beta.4",
-          "purl": "pkg:cargo/mint-token@10.2.0-beta.4?download_url=file://.#src/main.rs"
+          "version": "10.2.0-beta.5",
+          "purl": "pkg:cargo/mint-token@10.2.0-beta.5?download_url=file://.#src/main.rs"
         }
       ]
     },
@@ -1777,7 +1777,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.4",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/tools/mint-token#10.2.0-beta.5",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
