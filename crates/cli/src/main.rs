@@ -1082,6 +1082,12 @@ enum Commands {
         /// replaying any network requests.
         #[arg(long)]
         live_tenant_client_id: Option<String>,
+        /// Automatically submit the generated report to the Bugcrowd Submissions API.
+        ///
+        /// Requires `BUGCROWD_API_TOKEN` in the environment.  Only active when
+        /// `--format bugcrowd` is also set.  Fails gracefully when the token is absent.
+        #[arg(long, default_value_t = false)]
+        submit: bool,
     },
 
     /// Deploy a Labyrinth deception forest to exhaust adversarial AI agent context windows.
@@ -1591,6 +1597,7 @@ async fn main() -> anyhow::Result<()> {
             live_tenant,
             live_tenant_domain,
             live_tenant_client_id,
+            submit,
         } => {
             hunt::cmd_hunt(hunt::HuntArgs {
                 scan_root: path.as_deref(),
@@ -1609,6 +1616,7 @@ async fn main() -> anyhow::Result<()> {
                 live_tenant: live_tenant.as_deref(),
                 live_tenant_domain: live_tenant_domain.as_deref(),
                 live_tenant_client_id: live_tenant_client_id.as_deref(),
+                submit: *submit,
             })?;
         }
         Commands::DeployLabyrinth {

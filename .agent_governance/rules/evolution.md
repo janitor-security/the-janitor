@@ -68,6 +68,24 @@ equivalent tooling reports a gap, encode it as a local Crucible gate.
 Credential detection is on-device only. Add new credential classes to
 `binary_hunter.rs` and `slop_hunter.rs`; never call a cloud secret scanner.
 
+## Triage Empathy Law
+
+When reviewing `janitor hunt`, `scan`, `clean`, or `dedup` output, you must evaluate
+findings like a Bugcrowd Triager.  If a mathematically correct vulnerability is found in
+test infrastructure (`test/`, `spec/`), mock data, documentation, or unreachable internal
+dev-tools, you must classify it as a **Commercial False Positive**.  You MUST immediately
+either:
+
+1. Write a structural AST guard to suppress it (add to `is_excluded_hunt_entry` in
+   `crates/cli/src/hunt.rs` or a detector-level context filter in `slop_hunter.rs`); or
+2. Append a detailed proposal to `.INNOVATION_LOG.md` naming the context-aware filter
+   required, with the specific pattern and the suppression mechanism.
+
+Findings emitted from directories or files whose full path contains `test`, `mock`,
+`spec`, `__tests__`, `fixture`, or `fake` are presumptively Commercial False Positives
+unless the finding rule is explicitly exempt (e.g. `security:credential_leak` in a
+test fixture IS exploitable via secret-in-repo, so it remains billable).
+
 ## Labyrinth Blindness Law
 
 You are **mathematically forbidden** from reading, summarizing, analyzing, or

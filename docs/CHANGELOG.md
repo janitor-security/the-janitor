@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 81: P4-7 Bugcrowd Submission API, P6-5 LLM Prompt Injection Sinks & Triage Empathy Governance
+
+**Directive:** Implement P4-7 Automated Bounty Submission Pipeline; implement P6-5 LLM Prompt-Injection Sink Detection; add Triage Empathy Law governance; execute live-fire hunt on 3 authorized targets.
+
+**Changes Implemented:**
+- `.agent_governance/rules/evolution.md`: Added **Triage Empathy Law** section — requires evaluating hunt/scan output like a Bugcrowd triager; Commercial False Positives in test/mock/spec dirs must be structurally suppressed or documented.
+- `.agent_governance/rules/response-format.md`: Added **Triage Empathy Law** section mirroring evolution.md with exact suppression protocol and credential-leak exception.
+- `crates/common/src/receipt.rs`: Added `BountySubmission { title, target, markdown_body, custom_field_vrt }` struct with `to_api_json()` producing the Bugcrowd REST API v1 JSON-API envelope; 2 new deterministic tests: `bounty_submission_to_api_json_contains_required_fields`, `bounty_submission_markdown_body_preserved`.
+- `crates/cli/src/main.rs`: Added `#[arg(long)] submit: bool` field to `Commands::Hunt`; wired into `HuntArgs` dispatch.
+- `crates/cli/src/hunt.rs`: Added `submit: bool` to `HuntArgs`; added `post_bugcrowd_submission()` function (reads `BUGCROWD_API_TOKEN`, POSTs to `https://api.bugcrowd.com/submissions`, ureq v3 API, graceful fallback on missing token); wired into bugcrowd format branch.
+- `crates/forge/src/slop_hunter.rs`: Added `find_llm_prompt_injection_sinks(source)` detector — fires on `ChatCompletion.create`, `messages.create(`, `langchain.llms`, `langchain_community.llms`, `LLMChain(`, `AgentExecutor.from_agent_and_tools`, `initialize_agent(`; wired into `find_slop` for `py` and `js/jsx/ts/tsx` branches; 4 deterministic tests added.
+- `crates/forge/src/exploitability.rs`: Added `LlmPromptInjection { model_api }` variant to `IngressKind`; added `llm_prompt_injection_template()` emitting tainted `{"role":"user","content":"JANITOR_INJECT: ..."}` JSON envelope; added `llm_prompt_injection_witness()` public builder; updated `infer_ingress_from_finding_id()`, `template_for_ingress()`, and `synthesize_repro_cmd_for_finding()` for the new variant; 3 new deterministic tests — all proving no `"Pending"` in output.
+- `crates/forge/src/slop_filter.rs`: Added `llm_prompt_injection` dispatch block — extracts API call from description and calls `llm_prompt_injection_witness()`.
+- `tools/campaign/target_ledger.json`: Marked `cashapp/cash-app-pay-android-sdk`, `cashapp/cash-app-pay-ios-sdk`, `cashapp/hermit` as hunted.
+- `.INNOVATION_LOG.md`: P4-7 block physically deleted; P6-5 prompt-injection sub-bullets (items 4 and prompt_injection.rs deliverable) physically deleted (Absolute Eradication Law).
+- `.janitor/hunt_reports/`: 3 new report files generated: `cashapp_cash-app-pay-android-sdk.md` (clean), `cashapp_cash-app-pay-ios-sdk.md` (clean), `cashapp_hermit.md` (unpinned_asset in install.sh.tmpl ×2; curl_pipe_execution in `it/` suppressed as Commercial False Positive per Triage Empathy Law).
+
+**Audit Status:** `just audit` — pending test completion.
+
 ## 2026-04-30 — Sprint Batch 80: P2-7 ML Model Witnesses, Cargo.toml Precision Guardrails & UAP Governance Upgrade
 
 **Directive:** Implement P2-7 ML Model Weight Pinning Witnesses; fix Cargo.toml rev=/tag= false positive in `detect_cargo_git_deps`; upgrade WalkDir exclusion lattice with full-path lowercase matching; upgrade governance to dual NRA; execute live-fire hunt on 3 new authorized targets.

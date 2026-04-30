@@ -1660,6 +1660,17 @@ impl PRBouncer for PatchBouncer {
                     &file_path, rule_id, line, model_id, fmt,
                 );
                 finding = crate::exploitability::attach_exploit_witness(finding, witness);
+            } else if rule_id.contains("llm_prompt_injection") {
+                // Extract the detected API call from the description for the AEG template.
+                let model_api = f
+                    .description
+                    .split('`')
+                    .find(|s| s.contains('.') && !s.is_empty())
+                    .map(str::to_string);
+                let witness = crate::exploitability::llm_prompt_injection_witness(
+                    &file_path, rule_id, line, model_api,
+                );
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
             }
             structured_findings.push(finding);
         }

@@ -108,6 +108,22 @@ commands, release commands, or operator housekeeping steps.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
 summaries and must remain terminal-only.
 
+## Triage Empathy Law (mandatory for all hunt/scan output review)
+
+When reviewing `janitor hunt`, `scan`, `clean`, or `dedup` output, evaluate every finding
+like a Bugcrowd Triager.  A mathematically correct vulnerability found in test
+infrastructure (`test/`, `spec/`), mock data, documentation, or unreachable internal
+dev-tools is a **Commercial False Positive**.
+
+Required action on a Commercial False Positive:
+1. Suppress it immediately by adding a structural AST guard to `is_excluded_hunt_entry`
+   in `crates/cli/src/hunt.rs`, or a detector-level context filter in `slop_hunter.rs`.
+2. If no immediate guard exists, append a detailed P1 proposal to `.INNOVATION_LOG.md`
+   naming the suppression mechanism and the specific pattern.
+
+The exception: `security:credential_leak` in test fixtures is billable regardless of
+directory — a secret in a repo is a secret in a repo.
+
 ## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
 
 You MUST scan the **entire** `.INNOVATION_LOG.md` — P0, P1, and P2 — before

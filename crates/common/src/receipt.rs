@@ -195,6 +195,42 @@ pub struct SignedDecisionReceipt {
     pub signature: String,
 }
 
+/// Bugcrowd submission payload assembled from a proven exploit witness.
+///
+/// Used by `janitor hunt --submit` to POST a VRT-formatted report to the
+/// Bugcrowd Submissions API (`https://api.bugcrowd.com/submissions`) when
+/// `BUGCROWD_API_TOKEN` is present in the environment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BountySubmission {
+    /// Report title shown to the triager (e.g. "security:ssrf_dynamic_url in <target>").
+    pub title: String,
+    /// Bugcrowd program target identifier (slug or UUID from the program URL).
+    pub target: String,
+    /// Full VRT Markdown report body produced by `format_bugcrowd_report`.
+    pub markdown_body: String,
+    /// Bugcrowd VRT category string (e.g. "Server-Side Injection > SSRF").
+    pub custom_field_vrt: String,
+}
+
+impl BountySubmission {
+    /// Format the submission as the JSON body expected by the Bugcrowd REST API v1.
+    pub fn to_api_json(&self) -> anyhow::Result<String> {
+        let payload = serde_json::json!({
+            "data": {
+                "type": "submission",
+                "attributes": {
+                    "title": self.title,
+                    "body": self.markdown_body,
+                    "vrt_id": self.custom_field_vrt,
+                    "target": self.target
+                }
+            }
+        });
+        serde_json::to_string(&payload)
+            .map_err(|e| anyhow::anyhow!("serializing BountySubmission failed: {e}"))
+    }
+}
+
 /// Attestation capsule wrapping a Critical+ finding with its full provenance chain.
 ///
 /// Every `KevCritical` or `Critical` finding should be promoted into a
@@ -413,6 +449,45 @@ pub mod tests {
             json.contains("repojacking_window"),
             "finding id must appear in output"
         );
+    }
+
+    #[test]
+    fn bounty_submission_to_api_json_contains_required_fields() {
+        let sub = BountySubmission {
+            title: "Critical SSRF in target-api".to_string(),
+            target: "target-api-v1".to_string(),
+            markdown_body: "## Summary\nSSRF found at /api/fetch".to_string(),
+            custom_field_vrt: "Server-Side Request Forgery (SSRF)".to_string(),
+        };
+        let json = sub.to_api_json().expect("must serialize");
+        assert!(json.contains("target-api-v1"), "target must appear");
+        assert!(
+            json.contains("Critical SSRF in target-api"),
+            "title must appear"
+        );
+        assert!(
+            json.contains("Server-Side Request Forgery"),
+            "vrt must appear"
+        );
+        assert!(json.contains("\"type\""), "JSON API type key must appear");
+        assert!(json.contains("submission"), "type value must be submission");
+    }
+
+    #[test]
+    fn bounty_submission_markdown_body_preserved() {
+        let body = "**Summary Title:** SSRF\n**VRT Category:** SSRF";
+        let sub = BountySubmission {
+            title: "SSRF test".to_string(),
+            target: "test".to_string(),
+            markdown_body: body.to_string(),
+            custom_field_vrt: "SSRF".to_string(),
+        };
+        let json = sub.to_api_json().expect("serialize");
+        let val: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        let body_field = val["data"]["attributes"]["body"]
+            .as_str()
+            .expect("body field present");
+        assert_eq!(body_field, body, "markdown body must be preserved verbatim");
     }
 
     #[test]

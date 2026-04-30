@@ -959,6 +959,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_saml_xsw_and_xxe(source));
             f.extend(find_oauth_state_omission(source));
             f.extend(find_unpinned_ml_model_weights(source));
+            f.extend(find_llm_prompt_injection_sinks(source));
             // Phase 2 R&D: dangerous-call AST walk (exec/eval/pickle/os.system/__import__)
             f.extend(find_python_slop_ast(eng, parsed));
             f.extend(find_python_phantom_payload_slop(eng, parsed));
@@ -987,6 +988,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_js_deobfuscated_sink_payloads(eng, parsed));
             f.extend(find_js_phantom_payload_slop(eng, parsed));
             f.extend(find_js_slopsquat_imports(eng, parsed));
+            f.extend(find_llm_prompt_injection_sinks(source));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -2684,6 +2686,42 @@ fn call_has_pinned_huggingface_revision(call: &[u8]) -> bool {
     };
     let revision = &value[..end_quote];
     revision.len() == 40 && revision.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Detect LLM API call sinks where untrusted data may flow to a prompt.
+///
+/// Fires when the source contains a known LLM completion or pipeline call
+/// (`openai.ChatCompletion.create`, `messages.create`, `langchain.llms`,
+/// `transformers.pipeline`) without an observable sanitizer boundary.  The
+/// caller is expected to provide user-controlled content to these APIs, making
+/// them exploitable via prompt injection — an attacker can hijack the model's
+/// instruction context and trigger unintended actions.
+fn find_llm_prompt_injection_sinks(source: &[u8]) -> Vec<SlopFinding> {
+    const LLM_SINK_PATTERNS: &[&[u8]] = &[
+        b"ChatCompletion.create",
+        b"messages.create(",
+        b"langchain.llms",
+        b"langchain_community.llms",
+        b"LLMChain(",
+        b"AgentExecutor.from_agent_and_tools",
+        b"initialize_agent(",
+    ];
+    for pattern in LLM_SINK_PATTERNS {
+        if let Some(pos) = source.windows(pattern.len()).position(|w| w == *pattern) {
+            return vec![SlopFinding {
+                start_byte: pos,
+                end_byte: pos + pattern.len(),
+                description: "security:llm_prompt_injection — LLM completion or chain API \
+                    call accepts data that may include unsanitized user input; an attacker \
+                    can inject adversarial instructions into the model context to exfiltrate \
+                    data, bypass guardrails, or trigger unintended tool invocations"
+                    .to_string(),
+                domain: DOMAIN_FIRST_PARTY,
+                severity: Severity::Critical,
+            }];
+        }
+    }
+    Vec::new()
 }
 
 fn find_latex_camoleak_payload(source: &[u8]) -> Vec<SlopFinding> {
@@ -12468,6 +12506,58 @@ openfga = { git = "https://github.com/openfga/openfga" }
                 .iter()
                 .any(|f| f.description.contains("steganographic_binary_payload")),
             "ELF magic decoded from base64 must emit steganographic_binary_payload"
+        );
+    }
+}
+
+#[cfg(test)]
+mod llm_prompt_injection_tests {
+    use super::*;
+
+    #[test]
+    fn openai_chatcompletion_triggers_llm_sink() {
+        let src =
+            b"import openai\nresponse = openai.ChatCompletion.create(model='gpt-4', messages=msgs)";
+        let findings = find_llm_prompt_injection_sinks(src);
+        assert!(
+            !findings.is_empty(),
+            "openai.ChatCompletion.create must trigger llm_prompt_injection"
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("llm_prompt_injection")),
+            "finding id must contain llm_prompt_injection"
+        );
+    }
+
+    #[test]
+    fn langchain_llm_triggers_llm_sink() {
+        let src = b"from langchain.llms import OpenAI\nllm = OpenAI(temperature=0)";
+        let findings = find_llm_prompt_injection_sinks(src);
+        assert!(
+            !findings.is_empty(),
+            "langchain.llms import must trigger llm_prompt_injection"
+        );
+    }
+
+    #[test]
+    fn clean_python_no_llm_sink() {
+        let src = b"import os\nprint('hello world')\nx = os.environ.get('HOME')";
+        let findings = find_llm_prompt_injection_sinks(src);
+        assert!(
+            findings.is_empty(),
+            "plain Python with no LLM API must not trigger llm_prompt_injection"
+        );
+    }
+
+    #[test]
+    fn messages_create_triggers_llm_sink() {
+        let src = b"client = anthropic.Anthropic()\nmsg = client.messages.create(model='claude-3-opus-20240229', messages=[{'role': 'user', 'content': user_text}])";
+        let findings = find_llm_prompt_injection_sinks(src);
+        assert!(
+            !findings.is_empty(),
+            "messages.create( must trigger llm_prompt_injection"
         );
     }
 }

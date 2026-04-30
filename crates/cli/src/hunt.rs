@@ -69,6 +69,10 @@ pub struct HuntArgs<'a> {
     pub live_tenant_domain: Option<&'a str>,
     /// Explicit BrowserDOM client ID override for harness synthesis.
     pub live_tenant_client_id: Option<&'a str>,
+    /// When `true` and `BUGCROWD_API_TOKEN` is set, POST the generated
+    /// Bugcrowd report to the Bugcrowd Submissions API.  Only active with
+    /// `format == "bugcrowd"`.
+    pub submit: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +104,7 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         live_tenant,
         live_tenant_domain,
         live_tenant_client_id,
+        submit,
     } = args;
 
     match format {
@@ -216,6 +221,24 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
             format_bugcrowd_report(&findings)
         };
         println!("{report}");
+        if submit {
+            let target_label = component_info_context.unwrap_or("unknown-target");
+            let top_rule = findings
+                .first()
+                .and_then(|f| f.severity.as_deref())
+                .unwrap_or("Informational");
+            let submission = common::receipt::BountySubmission {
+                title: format!("{top_rule} findings in {target_label}"),
+                target: target_label.to_string(),
+                markdown_body: report.clone(),
+                custom_field_vrt: findings
+                    .first()
+                    .map(|f| vrt_category(&f.id))
+                    .unwrap_or("Other")
+                    .to_string(),
+            };
+            post_bugcrowd_submission(&submission)?;
+        }
         return Ok(());
     }
 
@@ -259,6 +282,41 @@ fn synthesize_browser_tenant_spec(
         tokens.push(format!("client_id={client_id}"));
     }
     Some(tokens.join(";"))
+}
+
+/// POST a `BountySubmission` to the Bugcrowd Submissions API.
+///
+/// Reads `BUGCROWD_API_TOKEN` from the environment.  Fails gracefully with a
+/// log message when the token is absent so non-submission runs are unaffected.
+fn post_bugcrowd_submission(submission: &common::receipt::BountySubmission) -> anyhow::Result<()> {
+    let token = match std::env::var("BUGCROWD_API_TOKEN") {
+        Ok(t) if !t.trim().is_empty() => t,
+        _ => {
+            eprintln!("[janitor] --submit: BUGCROWD_API_TOKEN not set; skipping submission");
+            return Ok(());
+        }
+    };
+    let body = submission
+        .to_api_json()
+        .context("failed to build Bugcrowd submission body")?;
+    let agent = ureq::Agent::new_with_defaults();
+    let result = agent
+        .post("https://api.bugcrowd.com/submissions")
+        .header("Authorization", &format!("Token {token}"))
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .send(body.as_str());
+    match result {
+        Ok(r) if r.status() == 200 || r.status() == 201 => {
+            eprintln!(
+                "[janitor] bugcrowd submission accepted (HTTP {})",
+                r.status()
+            );
+            Ok(())
+        }
+        Ok(r) => anyhow::bail!("bugcrowd submission rejected with HTTP {}", r.status()),
+        Err(_) => anyhow::bail!("bugcrowd submission network error"),
+    }
 }
 
 fn format_bugcrowd_report(findings: &[StructuredFinding]) -> String {
@@ -2755,6 +2813,16 @@ fn scan_buffer(
                 };
                 let witness = forge::exploitability::model_weight_witness(
                     label, &rule_id, line, model_id, fmt,
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id.contains("llm_prompt_injection") {
+                let model_api = finding
+                    .description
+                    .split('`')
+                    .find(|s| s.contains('.') && !s.is_empty())
+                    .map(str::to_string);
+                let witness = forge::exploitability::llm_prompt_injection_witness(
+                    label, &rule_id, line, model_api,
                 );
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
             }
