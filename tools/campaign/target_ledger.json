@@ -17,7 +17,7 @@
       "engagement": "glean_tech_targets",
       "source_file": "targets/glean_tech_targets.md",
       "line_number": 99,
-      "target": "Example trigger: “Update markdown https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md by replacing every occurence of mise with foo. Create a PR.”",
+      "target": "Example trigger: \u201cUpdate markdown https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md by replacing every occurence of mise with foo. Create a PR.\u201d",
       "urls": [
         "https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md"
       ],
@@ -26,13 +26,15 @@
         "GitHub",
         "MCP"
       ],
-      "priority_score": 52
+      "priority_score": 52,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "glean_tech_targets",
       "source_file": "targets/glean_tech_targets.md",
       "line_number": 155,
-      "target": "Example trigger: “Update markdown https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md by replacing every occurence of mise with foo. Create a PR.”",
+      "target": "Example trigger: \u201cUpdate markdown https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md by replacing every occurence of mise with foo. Create a PR.\u201d",
       "urls": [
         "https://github.com/gleanbugbounty/mcp-server-bugbounty/blob/main/CONTRIBUTING.md"
       ],
@@ -74,7 +76,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 36
+      "priority_score": 36,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "aiven_targets",
@@ -250,13 +254,15 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 35
+      "priority_score": 35,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "immutable_targets",
       "source_file": "targets/immutable_targets.md",
       "line_number": 249,
-      "target": "As a Web3 wallet, it lets one view NFT collections, trade, track assets, etc., but also lets one sign in to games and marketplaces. The Passport wallet is an SPA written in Typescript and uses Magic underneath for key generation and key management, while Passport’s on-chain contracts are deployed by https://github.com/immutable/wallet-contracts. The wallet traditionally allows buying/selling assets, signing/approving transactions, displaying assets at passport.immutable.com (and soon, transaction history).",
+      "target": "As a Web3 wallet, it lets one view NFT collections, trade, track assets, etc., but also lets one sign in to games and marketplaces. The Passport wallet is an SPA written in Typescript and uses Magic underneath for key generation and key management, while Passport\u2019s on-chain contracts are deployed by https://github.com/immutable/wallet-contracts. The wallet traditionally allows buying/selling assets, signing/approving transactions, displaying assets at passport.immutable.com (and soon, transaction history).",
       "urls": [
         "https://github.com/immutable/wallet-contracts"
       ],
@@ -874,7 +880,7 @@
       "engagement": "electroneum_blockchain_targets",
       "source_file": "targets/electroneum_blockchain_targets.md",
       "line_number": 63,
-      "target": "Our ‘Legacy’ Blockchain codebase (https://github.com/electroneum/electroneum/), which contains the legacy blockchain code and the code for the accompanying suite of utility programs (the blockchain client/daemon, the RPC wallet client, the command line wallet and tools for importing and exporting the blockchain).",
+      "target": "Our \u2018Legacy\u2019 Blockchain codebase (https://github.com/electroneum/electroneum/), which contains the legacy blockchain code and the code for the accompanying suite of utility programs (the blockchain client/daemon, the RPC wallet client, the command line wallet and tools for importing and exporting the blockchain).",
       "urls": [
         "https://github.com/electroneum/electroneum/"
       ],
@@ -4816,7 +4822,7 @@
       "engagement": "optimizely_targets",
       "source_file": "targets/optimizely_targets.md",
       "line_number": 124,
-      "target": "Support system accessed via the 'Provide Feedback' link.​Generally non-qualifying Web related bug reports have little or no practical significance to product security. Google Bughunter University has a great writeup of bugs that fall into this category - https://sites.google.com/site/bughunteruniversity/nonvuln",
+      "target": "Support system accessed via the 'Provide Feedback' link.\u200bGenerally non-qualifying Web related bug reports have little or no practical significance to product security. Google Bughunter University has a great writeup of bugs that fall into this category - https://sites.google.com/site/bughunteruniversity/nonvuln",
       "urls": [
         "https://sites.google.com/site/bughunteruniversity/nonvuln"
       ],
@@ -6174,7 +6180,7 @@
       "engagement": "afterpay_targets",
       "source_file": "targets/afterpay_targets.md",
       "line_number": 33,
-      "target": "You can read about Afterpay’s integration methods and APIs at https://developers.afterpay.com/.",
+      "target": "You can read about Afterpay\u2019s integration methods and APIs at https://developers.afterpay.com/.",
       "urls": [
         "https://developers.afterpay.com/"
       ],
@@ -16878,7 +16884,7 @@
       "engagement": "chipotle_targets",
       "source_file": "targets/chipotle_targets.md",
       "line_number": 30,
-      "target": "Chipotle reserves the right to modify terms and conditions of this program and your participation in the program constitutes acceptance of all terms. Please check this site regularly as we routinely update our program terms and eligibility, which are effective upon posting. We reserve the right to cancel this program at any time. Must be 18 or older to be eligible for an award. Chipotle is the program owner and all the information described in this “Program Overview” are “program details.” Together these program details and the terms constitute the “Program Brief” referenced in the SDT. You acknowledge and agree (i) that you are already bound to the terms and conditions stated in Bugcrowd’s Standard Disclosure Terms, which can be found at https://www.bugcrowd.com/resources/essentials/standard-disclosure-terms and (ii) that Chipotle may directly enforce any breach by you of the Standard Disclosure Terms, which are supplemented by the additional terms in this program.",
+      "target": "Chipotle reserves the right to modify terms and conditions of this program and your participation in the program constitutes acceptance of all terms. Please check this site regularly as we routinely update our program terms and eligibility, which are effective upon posting. We reserve the right to cancel this program at any time. Must be 18 or older to be eligible for an award. Chipotle is the program owner and all the information described in this \u201cProgram Overview\u201d are \u201cprogram details.\u201d Together these program details and the terms constitute the \u201cProgram Brief\u201d referenced in the SDT. You acknowledge and agree (i) that you are already bound to the terms and conditions stated in Bugcrowd\u2019s Standard Disclosure Terms, which can be found at https://www.bugcrowd.com/resources/essentials/standard-disclosure-terms and (ii) that Chipotle may directly enforce any breach by you of the Standard Disclosure Terms, which are supplemented by the additional terms in this program.",
       "urls": [
         "https://www.bugcrowd.com/resources/essentials/standard-disclosure-terms"
       ],
@@ -17898,7 +17904,7 @@
       "engagement": "cloudinary_targets",
       "source_file": "targets/cloudinary_targets.md",
       "line_number": 109,
-      "target": "Do not test UI widgets posting feedback (“Tell us what you think” form) to https://cloudinary.com/console/api/v1/user/send_feedback",
+      "target": "Do not test UI widgets posting feedback (\u201cTell us what you think\u201d form) to https://cloudinary.com/console/api/v1/user/send_feedback",
       "urls": [
         "https://cloudinary.com/console/api/v1/user/send_feedback"
       ],
@@ -21666,9 +21672,9 @@
       "engagement": "etsy_targets",
       "source_file": "targets/etsy_targets.md",
       "line_number": 305,
-      "target": "If you're interested in testing listings or other shop-related functionality, please put your shop in developer mode: https://www.etsy.com/developers/shop​",
+      "target": "If you're interested in testing listings or other shop-related functionality, please put your shop in developer mode: https://www.etsy.com/developers/shop\u200b",
       "urls": [
-        "https://www.etsy.com/developers/shop​"
+        "https://www.etsy.com/developers/shop\u200b"
       ],
       "language_tags": [],
       "matched_attack_keywords": [],
@@ -21834,9 +21840,9 @@
       "engagement": "etsy_targets",
       "source_file": "targets/etsy_targets.md",
       "line_number": 299,
-      "target": "iPhone: https://itunes.apple.com/us/app/etsy-shop-creative/id477128284?mt=8​",
+      "target": "iPhone: https://itunes.apple.com/us/app/etsy-shop-creative/id477128284?mt=8\u200b",
       "urls": [
-        "https://itunes.apple.com/us/app/etsy-shop-creative/id477128284?mt=8​"
+        "https://itunes.apple.com/us/app/etsy-shop-creative/id477128284?mt=8\u200b"
       ],
       "language_tags": [],
       "matched_attack_keywords": [],
@@ -24270,7 +24276,7 @@
       "engagement": "indeed_targets",
       "source_file": "targets/indeed_targets.md",
       "line_number": 443,
-      "target": "https://m5.apply.indeed.com\tApply for jobs. This application is accessible by clicking on the job “Apply” button. Remember to only test your own jobs! Focus areas: injection",
+      "target": "https://m5.apply.indeed.com\tApply for jobs. This application is accessible by clicking on the job \u201cApply\u201d button. Remember to only test your own jobs! Focus areas: injection",
       "urls": [
         "https://m5.apply.indeed.com"
       ],
@@ -44274,7 +44280,7 @@
       "engagement": "ynab_targets",
       "source_file": "targets/ynab_targets.md",
       "line_number": 72,
-      "target": "🚫 Internal Testing & Development Sites: https://develop-app.ynab.com",
+      "target": "\ud83d\udeab Internal Testing & Development Sites: https://develop-app.ynab.com",
       "urls": [
         "https://develop-app.ynab.com"
       ],
@@ -44286,7 +44292,7 @@
       "engagement": "ynab_targets",
       "source_file": "targets/ynab_targets.md",
       "line_number": 68,
-      "target": "🚫 Production environments: https://app.ynab.com/ (Live production app). Our customers’ real data is off-limits!",
+      "target": "\ud83d\udeab Production environments: https://app.ynab.com/ (Live production app). Our customers\u2019 real data is off-limits!",
       "urls": [
         "https://app.ynab.com/"
       ],
@@ -44298,7 +44304,7 @@
       "engagement": "ynab_targets",
       "source_file": "targets/ynab_targets.md",
       "line_number": 70,
-      "target": "🚫 Support Site: https://support.ynab.com/ (Hosted by a third party)",
+      "target": "\ud83d\udeab Support Site: https://support.ynab.com/ (Hosted by a third party)",
       "urls": [
         "https://support.ynab.com/"
       ],
@@ -44310,7 +44316,7 @@
       "engagement": "ynab_targets",
       "source_file": "targets/ynab_targets.md",
       "line_number": 71,
-      "target": "🚫 YNAB Learn: https://learn.ynab.com/ (Hosted by a third party)",
+      "target": "\ud83d\udeab YNAB Learn: https://learn.ynab.com/ (Hosted by a third party)",
       "urls": [
         "https://learn.ynab.com/"
       ],

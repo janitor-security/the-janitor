@@ -3,6 +3,24 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 79: P1-3/P2-6 AEG Payload Finality & Target Hydration
+
+**Directive:** Implement P1-3 Command Execution Witness Finality and P2-6 Remote Asset Integrity Witnesses; execute live-fire hunt on 3 authorized bug bounty targets.
+
+**Changes Implemented:**
+- `crates/forge/src/exploitability.rs`: Added `CommandExecution` and `AssetIntegrity` variants to `IngressKind`; added `AssetContext` enum (HtmlScript/ShellDownload/CmakeExternalProject); implemented `command_execution_template()` emitting inert `JANITOR_CANARY=$(id -u)` shell canary or argv-safe allowlist remediation patch; implemented `asset_integrity_template()` emitting SRI `sha384` for HTML scripts, `sha256sum` guard for shell downloads, `URL_HASH` for CMake; added `command_execution_witness()` and `asset_integrity_witness()` public builder functions; updated `infer_ingress_from_finding_id()`, `template_for_ingress()`, and `synthesize_repro_cmd_for_finding()` for both new variants; added 7 new deterministic tests — all proving no `"Pending"` placeholder in output.
+- `crates/forge/src/slop_filter.rs`: Added witness attachment dispatch for `security:os_command_injection`, `security:subprocess_shell_injection`, `lotl_api_c2_exfiltration`, and `unpinned_asset` finding IDs.
+- `crates/cli/src/hunt.rs`: Mirror witness dispatch for all four finding families; added `extract_quoted_url()` helper for URL extraction from finding descriptions.
+- `tools/campaign/target_ledger.json`: Marked 3 targets as hunted: `gleanbugbounty/mcp-server-bugbounty`, `electroneum/electroneum-sc`, `trustwallet/wallet-core`.
+- `.INNOVATION_LOG.md`: P1-3 and P2-6 blocks physically deleted (Absolute Eradication Law).
+
+**Live-Fire Hunt Results (Sprint Batch 79):**
+- `gleanbugbounty/mcp-server-bugbounty`: Markdown-only repo — no static code findings (expected for prompt injection target).
+- `electroneum/electroneum-sc` (Electroneum bug bounty): `security:unpinned_asset` — 8 findings in `cmd/faucet/faucet.html` and `cmd/puppeth/module_dashboard.go`; SRI witness rendered with `openssl dgst -sha384` repro. No false positives — all are genuine `<script src="http://...">` without integrity attributes in production HTML templates.
+- `trustwallet/wallet-core` (Binance bug bounty): `security:unsafe_string_function` — 3 `strcpy()` calls in `trezor-crypto/crypto/bip39.c` (lines 97, 247, 248); 1024-byte A canary witness rendered; `security:ssrf_dynamic_url` — metadata exfil curl repro rendered.
+
+**Audit:** `just audit` exit 0; `cargo test --workspace -- --test-threads=4` — 0 failures.
+
 ## 2026-04-30 — Sprint Batch 78 (GPT-5.5 Omni-Audit, Corporate Facade, & Payload Finality)
 
 **Directive:** Build the Google-compliance corporate landing page, implement

@@ -2699,6 +2699,40 @@ fn scan_buffer(
                     extract_backtick_after(&finding.description, "message path "),
                 );
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:os_command_injection"
+                || rule_id == "security:subprocess_shell_injection"
+                || rule_id.contains("lotl_api_c2_exfiltration")
+            {
+                let shell_mode = rule_id == "security:subprocess_shell_injection"
+                    || rule_id.contains("lotl_api_c2_exfiltration");
+                let witness = forge::exploitability::command_execution_witness(
+                    label,
+                    &rule_id,
+                    line,
+                    extract_c_function_name(&finding.description),
+                    source_snippet(source, finding.start_byte, finding.end_byte),
+                    None,
+                    shell_mode,
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id.contains("unpinned_asset") {
+                let url = extract_quoted_url(&finding.description);
+                let context = if finding.description.contains("<script")
+                    || finding.description.contains("script src")
+                {
+                    forge::exploitability::AssetContext::HtmlScript
+                } else if finding.description.contains("cmake")
+                    || finding.description.contains("CMake")
+                    || finding.description.contains("ExternalProject")
+                {
+                    forge::exploitability::AssetContext::CmakeExternalProject
+                } else {
+                    forge::exploitability::AssetContext::ShellDownload
+                };
+                let witness = forge::exploitability::asset_integrity_witness(
+                    label, &rule_id, line, url, context,
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
             }
             structured
         })
@@ -2880,6 +2914,23 @@ fn extract_go_url_parameter(description: &str) -> Option<String> {
                 .to_string()
         })
         .filter(|value| !value.is_empty())
+}
+
+/// Extract the first `http://` or `https://` URL from a finding description.
+fn extract_quoted_url(description: &str) -> Option<String> {
+    let start = description
+        .find("http://")
+        .or_else(|| description.find("https://"))?;
+    let tail = &description[start..];
+    let end = tail
+        .find(|ch: char| ch == '"' || ch == '\'' || ch == '>' || ch.is_whitespace())
+        .unwrap_or(tail.len());
+    let url = tail[..end].trim_end_matches('"').trim_end_matches('\'');
+    if url.is_empty() {
+        None
+    } else {
+        Some(url.to_string())
+    }
 }
 
 fn fingerprint_finding(source: &[u8], start: usize, end: usize) -> String {

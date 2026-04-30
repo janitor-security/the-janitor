@@ -1609,6 +1609,38 @@ impl PRBouncer for PatchBouncer {
                 let witness =
                     crate::exploitability::protocol_bypass_witness(&file_path, rule_id, line, None);
                 finding = crate::exploitability::attach_exploit_witness(finding, witness);
+            } else if rule_id == "security:os_command_injection"
+                || rule_id == "security:subprocess_shell_injection"
+                || rule_id.contains("lotl_api_c2_exfiltration")
+            {
+                let shell_mode = rule_id == "security:subprocess_shell_injection"
+                    || rule_id.contains("lotl_api_c2_exfiltration");
+                let witness = crate::exploitability::command_execution_witness(
+                    &file_path, rule_id, line, None, None, None, shell_mode,
+                );
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
+            } else if rule_id.contains("unpinned_asset") {
+                // Extract URL from the description heuristically (present as a
+                // quoted http/https string in the pattern description).
+                let url = f
+                    .description
+                    .split('"')
+                    .find(|s| s.starts_with("http"))
+                    .map(str::to_string);
+                let context = if f.description.contains("<script") {
+                    crate::exploitability::AssetContext::HtmlScript
+                } else if f.description.contains("cmake")
+                    || f.description.contains("CMake")
+                    || f.description.contains("ExternalProject")
+                {
+                    crate::exploitability::AssetContext::CmakeExternalProject
+                } else {
+                    crate::exploitability::AssetContext::ShellDownload
+                };
+                let witness = crate::exploitability::asset_integrity_witness(
+                    &file_path, rule_id, line, url, context,
+                );
+                finding = crate::exploitability::attach_exploit_witness(finding, witness);
             }
             structured_findings.push(finding);
         }
