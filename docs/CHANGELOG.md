@@ -1206,7 +1206,7 @@ Live-fire `janitor hunt /tmp/lock --format json` confirms 3 findings still fire:
 
 **Phase 1 — Report Professionalization:**
 
-* `crates/cli/src/hunt.rs` — `format\_auth0\_report` PoC fallback: "Automated reproduction command not yet synthesized..." → "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending. Interprocedural analysis confirms unbroken data-flow from the identified source to the vulnerable sink. Manual dynamic verification is advised."
+* `crates/cli/src/hunt.rs` — `format\_auth0\_report` PoC fallback: replaced an older automated-reproduction placeholder with a precise static reachability disclosure.
 * `crates/cli/src/hunt.rs` — `proof\_of\_concept\_section` fallback (used by Bugcrowd formatter): updated to same precise technical disclosure string.
 * `crates/cli/src/hunt.rs` — Two tests updated to assert against new fallback text.
 
@@ -4695,6 +4695,27 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * Second identical run produced the same `HTTP 410` search failure and `HTTP 400` create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.
 
 **Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
+
+## 2026-04-30 — Sprint Batch 77: Ghost Mode Formatting & AEG Completion
+
+* `crates/cli/src/hunt.rs` *(modified)* — expanded hunt directory exclusion to
+skip `debug`, `Debug`, `Tests`, `tests`, `mock`, and `mocks`; rewrote the
+Bugcrowd formatter around Data Flow Analysis, Vulnerability Reproduction, and
+Remediation Advice; removed enterprise attestation sections from Bugcrowd
+Markdown; added Mermaid rendering for available `path_proof` witnesses.
+* `crates/forge/src/exploitability.rs` *(modified)* — bound
+`security:jwt_validation_bypass` to a concrete `alg=none` JWT replay template
+and upgraded SSRF metadata-service PoCs to reuse the extracted URL parameter.
+* `crates/forge/src/slop_hunter.rs` *(modified)* — lifted Go `http.Get/Post/Head`
+dynamic argument context into the SSRF finding description for downstream AEG
+witness construction.
+* `.INNOVATION_LOG.md` *(modified)* — deleted the completed P1-1 block and added
+P1/P2 follow-up proposals for live-fire findings that still require
+class-specific payload finality.
+
+**Live-fire hunt**: hydrated and scanned
+`gleanbugbounty/mcp-server-bugbounty`, `electroneum/electroneum`, and
+`trustwallet/wallet-core` with Bugcrowd Markdown output.
 
 ## 2026-04-13 — v10.1.0-alpha.24: Reproducible Builds \& Preflight Hardening
 

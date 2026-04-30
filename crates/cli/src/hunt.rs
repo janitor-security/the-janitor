@@ -317,25 +317,25 @@ fn format_bugcrowd_report_with_component(
         let business_impact = business_impact_statement(rule_id, highest_severity);
         let mitigation = suggested_mitigation(&sorted_group);
         let upstream_validation_audit = upstream_validation_audit_section(&sorted_group);
-        let defensive_evidence = defensive_evidence_section(&sorted_group);
         let proof_of_concept = proof_of_concept_section(&sorted_group);
         let live_section = live_tenant_section(&sorted_group);
+        let data_flow = path_proof_mermaid_section(&sorted_group);
 
         reports.push(format!(
             "**Summary Title:** Multiple instances of {rule_id} in target\n\
 **VRT Category:** {}\n\
 **Affected Package / Component:** {component_info}\n\
 **Vulnerability Details:**\n\
-During a static analysis of the target artifacts, the following critical security sinks were identified:\n\
+I found the following vulnerable code paths while reviewing the target artifacts:\n\
 {details}\n\
+{data_flow}\
 **Business Impact:** {business_impact}\n\
-**Upstream Validation Audit:**\n\
+**Data Flow Analysis:**\n\
 {upstream_validation_audit}\n\
-{defensive_evidence}\
-**Proof of Concept:**\n\
+**Vulnerability Reproduction:**\n\
 {proof_of_concept}\n\
 {live_section}\
-**Suggested Mitigation:** {mitigation}",
+**Remediation Advice:** {mitigation}",
             vrt_category(rule_id)
         ));
     }
@@ -346,13 +346,13 @@ During a static analysis of the target artifacts, the following critical securit
 **VRT Category:** Informational\n\
 **Affected Package / Component:** {component_info}\n\
 **Vulnerability Details:**\n\
-During a static analysis of the target artifacts, no findings were identified.\n\
+No exploitable issue was identified in the reviewed target artifacts.\n\
 **Business Impact:** No direct business impact was identified because the scan did not emit any findings.\n\
-**Upstream Validation Audit:**\n\
-No upstream validation audit generated.\n\
-**Proof of Concept:**\n\
-No automated reproduction command generated. See vulnerable source lines above.\n\
-**Suggested Mitigation:** No mitigation required."
+**Data Flow Analysis:**\n\
+No vulnerable source-to-sink path was identified.\n\
+**Vulnerability Reproduction:**\n\
+No reproduction steps are required.\n\
+**Remediation Advice:** No mitigation required."
         );
     }
 
@@ -677,10 +677,21 @@ Remediation: remove `InsecureSkipVerify: true` / `TLSClientConfig` overrides and
 enforce system CA pool validation."
         );
     }
-    "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending. \
-Interprocedural analysis confirms unbroken data-flow from the identified source to the vulnerable \
-sink. Manual dynamic verification is advised."
-        .to_string()
+    let location = findings
+        .iter()
+        .find_map(|f| match (f.file.as_deref(), f.line) {
+            (Some(file), Some(line)) => Some(format!("`{file}` line {line}")),
+            (Some(file), None) => Some(format!("`{file}`")),
+            _ => None,
+        })
+        .unwrap_or_else(|| "the affected source location".to_string());
+    format!(
+        "Pentester notes:\n\
+1. Review {location} and identify the route, command, or parser entry point that reaches this sink.\n\
+2. Send a benign canary value through the affected input and confirm it reaches the sink without normalization or allowlist enforcement.\n\
+3. Replace the canary with the payload class for this finding and capture the response, log entry, or state transition that demonstrates impact.\n\
+4. Retest after adding the recommended validation control to confirm the sink no longer receives attacker-controlled input."
+    )
 }
 
 fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String {
@@ -711,11 +722,11 @@ fn upstream_validation_audit_section(findings: &[&StructuredFinding]) -> String 
         .iter()
         .any(|finding| finding.upstream_validation_absent)
     {
-        return "The IFDS solver mathematically proved that zero sanitization, parameterization, \
-                or type-coercion gates exist on the execution path between the source and the sink."
+        return "Data flow reaches the vulnerable sink without an intervening sanitizer, \
+                parameterization boundary, allowlist, or type-enforced validation gate."
             .to_string();
     }
-    "No upstream validation audit generated.".to_string()
+    "No additional validation evidence was identified for this finding.".to_string()
 }
 
 fn defensive_evidence_section(findings: &[&StructuredFinding]) -> String {
@@ -736,11 +747,44 @@ fn live_tenant_section(findings: &[&StructuredFinding]) -> String {
     match proof {
         Some(p) => format!(
             "\n**Live Tenant Context:**\n\
-The synthesized witness was bound to an approved test tenant context. Captured verification context:\n\
+The reproduction was prepared for an approved test tenant. Captured verification context:\n\
 ```http\n{p}\n```\n\n"
         ),
         None => String::new(),
     }
+}
+
+fn path_proof_mermaid_section(findings: &[&StructuredFinding]) -> String {
+    let Some(proof) = findings
+        .iter()
+        .filter_map(|f| f.exploit_witness.as_ref())
+        .filter_map(|w| w.path_proof.as_deref())
+        .find(|proof| !proof.trim().is_empty())
+    else {
+        return String::new();
+    };
+    let nodes = proof
+        .split(['\n', '>', '|'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .take(8)
+        .collect::<Vec<_>>();
+    if nodes.len() < 2 {
+        return String::new();
+    }
+    let mut graph = String::from("**Data Flow Graph:**\n```mermaid\nflowchart LR\n");
+    for (idx, node) in nodes.iter().enumerate() {
+        graph.push_str(&format!("  n{idx}[\"{}\"]\n", escape_mermaid_label(node)));
+    }
+    for idx in 0..nodes.len() - 1 {
+        graph.push_str(&format!("  n{idx} --> n{}\n", idx + 1));
+    }
+    graph.push_str("```\n");
+    graph
+}
+
+fn escape_mermaid_label(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Bind browser-side PoCs to a live test tenant without executing them.
@@ -762,7 +806,7 @@ fn apply_live_tenant_browser_context(
         ) {
             witness.repro_cmd = Some(repro);
             witness.live_proof = Some(
-                "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; the harness requires manual operator action."
+                "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; use the harness only against an approved test tenant."
                     .to_string(),
             );
         }
@@ -798,7 +842,7 @@ fn emit_browser_dom_harnesses(
         std::fs::write(&path, html)
             .with_context(|| format!("failed to write BrowserDOM harness {}", path.display()))?;
         let note = format!(
-            "BrowserDOM harness written to {}. No network request was executed by Janitor; manual operator action is still required.",
+            "BrowserDOM harness written to {}. No network request was executed by Janitor; use the harness only against an approved test tenant.",
             path.display()
         );
         witness.live_proof = Some(match witness.live_proof.take() {
@@ -2460,11 +2504,15 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | "build"
             | "dist"
             | "docs"
+            | "debug"
+            | "Debug"
+            | "Tests"
             | "tests"
             | "__tests__"
             | "examples"
             | "coverage"
             | "vendor"
+            | "mock"
             | "testutils"
             | "testfixtures"
             | "mocks"
@@ -2615,6 +2663,16 @@ fn scan_buffer(
                     witness.route_path = Some(route.route_path.clone());
                 }
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:jwt_validation_bypass" {
+                let witness =
+                    forge::exploitability::protocol_bypass_witness(label, &rule_id, line, None);
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:ssrf_dynamic_url" {
+                let method = extract_go_http_method(&finding.description);
+                let parameter = extract_go_url_parameter(&finding.description);
+                let witness =
+                    forge::exploitability::ssrf_witness(label, &rule_id, line, method, parameter);
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
             }
             structured
         })
@@ -2675,6 +2733,37 @@ fn extract_rule_id(description: &str) -> String {
         .next()
         .unwrap_or(description)
         .to_owned()
+}
+
+fn extract_go_http_method(description: &str) -> Option<String> {
+    let call = description
+        .split('`')
+        .nth(1)
+        .and_then(|value| value.strip_prefix("http."))
+        .and_then(|value| value.strip_suffix("()"))?;
+    match call {
+        "Get" | "Head" => Some("GET".to_string()),
+        "Post" => Some("POST".to_string()),
+        _ => None,
+    }
+}
+
+fn extract_go_url_parameter(description: &str) -> Option<String> {
+    description
+        .split("dynamic URL parameter `")
+        .nth(1)
+        .and_then(|tail| tail.split('`').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .rsplit(['.', '[', ']'])
+                .find(|part| !part.is_empty())
+                .unwrap_or(value)
+                .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+                .to_string()
+        })
+        .filter(|value| !value.is_empty())
 }
 
 fn fingerprint_finding(source: &[u8], start: usize, end: usize) -> String {
@@ -3105,13 +3194,11 @@ def main(user_id):
         assert!(report.contains("**VRT Category:**"));
         assert!(report.contains("**Vulnerability Details:**"));
         assert!(report.contains("**Business Impact:**"));
-        assert!(report.contains("**Upstream Validation Audit:**"));
-        assert!(report.contains("**Proof of Concept:**"));
+        assert!(report.contains("**Data Flow Analysis:**"));
+        assert!(report.contains("**Vulnerability Reproduction:**"));
+        assert!(report.contains("Pentester notes:"));
         assert!(report.contains(
-            "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending."
-        ));
-        assert!(report.contains(
-            "**Suggested Mitigation:** Replace innerHTML with textContent or a vetted sanitizer."
+            "**Remediation Advice:** Replace innerHTML with textContent or a vetted sanitizer."
         ));
     }
 
@@ -3145,13 +3232,11 @@ def main(user_id):
         };
 
         let report = format_bugcrowd_report(&[finding]);
-        assert!(report.contains("**Upstream Validation Audit:**"));
+        assert!(report.contains("**Data Flow Analysis:**"));
         assert!(report.contains("Path analysis confirms no registered sanitizers or validators"));
-        assert!(report.contains("**Proof of Concept:**\n```text"));
+        assert!(report.contains("**Vulnerability Reproduction:**\n```text"));
         assert!(report.contains("pickle.loads(base64.b64decode"));
-        assert!(!report.contains(
-            "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending."
-        ));
+        assert!(!report.contains("Payload Synthesis"));
     }
 
     #[test]
@@ -3224,7 +3309,7 @@ def main(user_id):
                 call_chain: vec!["render".to_string(), "Element.innerHTML".to_string()],
                 repro_cmd: Some(html_harness.to_string()),
                 live_proof: Some(
-                    "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; the harness requires manual operator action."
+                    "Live tenant context injected into a standalone HTML harness. No network request was executed by Janitor; use the harness only against an approved test tenant."
                         .to_string(),
                 ),
                 ..Default::default()
@@ -3235,7 +3320,7 @@ def main(user_id):
 
         let report = format_bugcrowd_report(&[finding]);
 
-        assert!(report.contains("**Proof of Concept:**\n```text"));
+        assert!(report.contains("**Vulnerability Reproduction:**\n```text"));
         assert!(report.contains(
             "<script src=\"https://cdn.auth0.com/js/auth0/9.28/auth0.min.js\"></script>"
         ));
@@ -3246,7 +3331,7 @@ def main(user_id):
     }
 
     #[test]
-    fn bugcrowd_formatter_cites_proven_invariant_defensive_evidence() {
+    fn bugcrowd_formatter_keeps_enterprise_attestation_out_of_markdown() {
         let finding = StructuredFinding {
             id: "security:dom_xss_innerHTML".to_string(),
             file: Some("src/auth0-widget.js".to_string()),
@@ -3272,8 +3357,8 @@ def main(user_id):
 
         let report = format_bugcrowd_report(&[finding]);
 
-        assert!(report.contains("**Defensive Evidence:**"));
-        assert!(report.contains("Proven Invariant"));
+        assert!(!report.contains("**Defensive Evidence:**"));
+        assert!(!report.contains("Proven Invariant"));
         assert!(report.contains("escapeHtml"));
         assert!(report.contains("19/20"));
     }
@@ -4470,10 +4555,10 @@ class Handler {
         let report = format_bugcrowd_report(&[finding]);
         assert!(
             report.contains(
-                "The IFDS solver mathematically proved that zero sanitization, parameterization, \
-                 or type-coercion gates exist on the execution path between the source and the sink."
+                "Data flow reaches the vulnerable sink without an intervening sanitizer, \
+                 parameterization boundary, allowlist, or type-enforced validation gate."
             ),
-            "upstream_validation_absent=true with no sanitizer_audit must emit the IFDS proof statement"
+            "upstream_validation_absent=true with no sanitizer_audit must emit the data-flow statement"
         );
     }
 

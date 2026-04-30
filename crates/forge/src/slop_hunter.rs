@@ -5524,14 +5524,19 @@ fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
             let after = i + pattern.len();
             if let Some(&nb) = source.get(after) {
                 if nb != b'"' && nb != b'`' {
+                    let func_text =
+                        std::str::from_utf8(&pattern[..pattern.len() - 1]).unwrap_or("http.Get");
+                    let arg_text = extract_first_call_arg(source, after)
+                        .unwrap_or("url")
+                        .trim()
+                        .trim_start_matches('&')
+                        .to_string();
                     findings.push(SlopFinding {
                         start_byte: i,
                         end_byte: i + pattern.len(),
-                        description: "security:ssrf_dynamic_url — Go `http.Get/Post/Head()` \
-                                      called with a dynamic URL argument; if user-controlled \
-                                      this is an SSRF vector — validate and allowlist URL \
-                                      hosts before issuing HTTP requests — CISA KEV class"
-                            .to_string(),
+                        description: format!(
+                            "security:ssrf_dynamic_url — Go `{func_text}()` called with dynamic URL parameter `{arg_text}`; if user-controlled this is an SSRF vector — validate and allowlist URL hosts before issuing HTTP requests — CISA KEV class"
+                        ),
                         domain: DOMAIN_FIRST_PARTY,
                         severity: Severity::KevCritical,
                     });
@@ -5541,6 +5546,22 @@ fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
         }
     }
     findings
+}
+
+fn extract_first_call_arg(source: &[u8], start: usize) -> Option<&str> {
+    let mut depth = 0usize;
+    let mut end = start;
+    while end < source.len() {
+        match source[end] {
+            b'(' => depth += 1,
+            b')' if depth == 0 => break,
+            b')' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => break,
+            _ => {}
+        }
+        end += 1;
+    }
+    std::str::from_utf8(source.get(start..end)?).ok()
 }
 
 /// SQL injection — C#: SqlCommand/MySqlCommand + SQL keyword + concat pattern.
