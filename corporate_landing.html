@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Janitor Security | The Janitor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #121417;
+      --muted: #55606d;
+      --line: #d8dee6;
+      --panel: #f7f9fb;
+      --accent: #146b5f;
+      --accent-dark: #0d3f3a;
+      --gold: #b17712;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--white);
+      line-height: 1.5;
+    }
+    a { color: inherit; }
+    .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .mark {
+      width: 38px;
+      height: 38px;
+      border: 2px solid var(--accent);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      color: var(--accent-dark);
+      background: #eef7f4;
+    }
+    .nav-links { display: flex; gap: 22px; color: var(--muted); font-size: 14px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: var(--white);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .button.secondary {
+      background: var(--white);
+      color: var(--accent-dark);
+      border-color: var(--line);
+    }
+    .hero {
+      min-height: calc(100vh - 72px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: 56px;
+      align-items: center;
+      padding: 74px 0 44px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: clamp(42px, 6vw, 72px);
+      line-height: 0.96;
+      letter-spacing: 0;
+      margin: 0 0 24px;
+      max-width: 780px;
+    }
+    .lede {
+      font-size: 20px;
+      color: var(--muted);
+      max-width: 720px;
+      margin: 0 0 32px;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .proof-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 22px;
+      min-height: 460px;
+      display: grid;
+      gap: 18px;
+      align-content: stretch;
+    }
+    .terminal {
+      background: #101418;
+      color: #e7edf2;
+      padding: 18px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      overflow: hidden;
+      min-height: 180px;
+    }
+    .terminal div { margin-bottom: 8px; }
+    .ok { color: #76d6b0; }
+    .warn { color: #f1bf62; }
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .flow-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 14px;
+      align-items: center;
+      padding: 12px;
+      background: var(--white);
+      border: 1px solid var(--line);
+    }
+    .flow-row strong { color: var(--accent-dark); }
+    .flow-row span { color: var(--muted); font-size: 14px; }
+    section { padding: 72px 0; border-top: 1px solid var(--line); }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 32px;
+      align-items: end;
+      margin-bottom: 30px;
+    }
+    h2 { font-size: 34px; line-height: 1.08; margin: 0; letter-spacing: 0; }
+    .section-copy { max-width: 620px; color: var(--muted); margin: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      padding: 22px;
+      background: var(--white);
+      min-height: 210px;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 19px; }
+    .card p { margin: 0; color: var(--muted); }
+    .price {
+      font-size: 31px;
+      font-weight: 900;
+      color: var(--accent-dark);
+      margin: 16px 0 14px;
+    }
+    .price small { font-size: 14px; color: var(--muted); font-weight: 600; }
+    .tier-list {
+      margin: 16px 0 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .tier-list li { margin: 8px 0; padding-left: 18px; position: relative; }
+    .tier-list li::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      background: var(--accent);
+      position: absolute;
+      left: 0;
+      top: 8px;
+    }
+    .cta-band {
+      background: var(--accent-dark);
+      color: var(--white);
+      padding: 48px;
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: center;
+    }
+    .cta-band p { color: #cfe1dc; margin: 8px 0 0; max-width: 680px; }
+    footer { padding: 32px 0; color: var(--muted); font-size: 14px; }
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .proof-panel { min-height: auto; }
+      .grid { grid-template-columns: 1fr; }
+      .section-head, .cta-band { display: block; }
+      .nav-links { display: none; }
+      .cta-band .button { margin-top: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="shell" aria-label="Primary">
+      <div class="brand"><span class="mark">J</span><span>Janitor Security</span></div>
+      <div class="nav-links">
+        <a href="#platform">Platform</a>
+        <a href="#proof">Proof</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <a class="button secondary" href="https://github.com/janitor-security/the-janitor">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="shell hero">
+      <div>
+        <div class="eyebrow">Janitor Security</div>
+        <h1>The Janitor - A Zero-Copy, Rust-Native AST Firewall</h1>
+        <p class="lede">Securing the software supply chain against autonomous AI agents with deterministic Z3 SMT theorem proving and IFDS data-flow analysis.</p>
+        <div class="hero-actions">
+          <a class="button" href="#pricing">View pricing</a>
+          <a class="button secondary" href="https://github.com/janitor-security/the-janitor">Inspect repository</a>
+        </div>
+      </div>
+      <aside class="proof-panel" aria-label="Product proof visualization">
+        <div class="terminal">
+          <div><span class="ok">janitor-status</span> source-to-sink proof sealed</div>
+          <div>ifds: request.query -> handler -> sql sink</div>
+          <div>z3: path satisfiable, payload generated</div>
+          <div><span class="warn">policy</span> agentic actor risk elevated</div>
+          <div><span class="ok">result</span> merge blocked before supply-chain drift</div>
+        </div>
+        <div class="flow">
+          <div class="flow-row"><strong>Zero-copy</strong><span>Memory-mapped source and rkyv registries stay inside constrained CI envelopes.</span></div>
+          <div class="flow-row"><strong>Deterministic</strong><span>Tree-sitter ASTs, IFDS data-flow, and Z3 witnesses produce repeatable evidence.</span></div>
+          <div class="flow-row"><strong>Governed</strong><span>Cryptographic receipts bind policy, findings, and provenance for enterprise audit.</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <section id="platform">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Built for AI-era supply-chain defense.</h2>
+          <p class="section-copy">The Janitor inspects code structure, dependency intent, and exploitability before risky changes reach production branches.</p>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>AST Firewall</h3><p>Language-aware structural analysis across Rust, Go, Python, JavaScript, TypeScript, C, C++, Java, and more.</p></div>
+          <div class="card"><h3>Exploit Witnesses</h3><p>Findings include concrete reproduction payloads where the static proof can be transformed into deterministic evidence.</p></div>
+          <div class="card"><h3>Air-gap Ready</h3><p>Offline corpora, bounded memory, and local policy execution support sovereign environments without cloud dependency.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="proof">
+      <div class="shell">
+        <div class="section-head">
+          <h2>From possible bug to defensible proof.</h2>
+          <p class="section-copy">The platform combines IFDS reachability, sanitizer auditing, Z3 path feasibility, and cryptographic provenance into a single evidence chain.</p>
+        </div>
+        <div class="grid">
+          <div class="card"><h3>Source</h3><p>Detect attacker-controlled parameters, manifest drift, agentic tools, and passive RAG ingestion surfaces.</p></div>
+          <div class="card"><h3>Flow</h3><p>Trace execution through function boundaries and preserve the exact path used to justify the security decision.</p></div>
+          <div class="card"><h3>Sink</h3><p>Generate payloads, remediation patches, or policy receipts tailored to the vulnerability class.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Pricing</h2>
+          <p class="section-copy">Choose a deployment model that matches your governance surface.</p>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>Community</h3>
+            <div class="price">Free</div>
+            <p>Local scanning for individual researchers and open-source maintainers.</p>
+            <ul class="tier-list"><li>Core AST detectors</li><li>Local CLI workflow</li><li>Community support</li></ul>
+          </div>
+          <div class="card">
+            <h3>Team</h3>
+            <div class="price">$499<small>/yr</small></div>
+            <p>Repository governance for small engineering teams and bounty operators.</p>
+            <ul class="tier-list"><li>Exploit witness reports</li><li>Policy receipts</li><li>CI integration</li></ul>
+          </div>
+          <div class="card">
+            <h3>Sovereign/Air-Gap</h3>
+            <div class="price">$49,900<small>/yr starting</small></div>
+            <p>Offline deployment for regulated enterprises, defense, and sovereign infrastructure.</p>
+            <ul class="tier-list"><li>Air-gap installation</li><li>Custom policies</li><li>Enterprise attestation exports</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="shell">
+        <div class="cta-band">
+          <div>
+            <h2>Deploy deterministic supply-chain defense before autonomous agents reach your merge queue.</h2>
+            <p>Janitor Security brings theorem-backed analysis and Rust-native performance to software assurance programs that cannot accept probabilistic scanner output.</p>
+          </div>
+          <a class="button" href="https://github.com/janitor-security/the-janitor">Open GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">Janitor Security. Deterministic application security for autonomous software supply chains.</div>
+  </footer>
+</body>
+</html>

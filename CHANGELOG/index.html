@@ -562,6 +562,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-30-sprint-batch-78-gpt-55-omni-audit-corporate-facade-payload-finality" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-30 — Sprint Batch 78 (GPT-5.5 Omni-Audit, Corporate Facade, &amp; Payload Finality)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-29-sprint-batch-76-omni-context-optimization-deterministic-triage-the-beta4-release" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-29 — Sprint Batch 76 (Omni-Context Optimization, Deterministic Triage, &amp; The Beta.4 Release)
@@ -2263,6 +2272,15 @@
   <a href="#2026-04-12-v1010-alpha18-sha-384-asset-boundary-jira-re-engagement" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-12 — v10.1.0-alpha.18: SHA-384 Asset Boundary \&amp; Jira Re-Engagement
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2026-04-30-sprint-batch-77-ghost-mode-formatting-aeg-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-30 — Sprint Batch 77: Ghost Mode Formatting &amp; AEG Completion
     </span>
   </a>
   
@@ -2354,6 +2372,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#2026-04-30-sprint-batch-78-gpt-55-omni-audit-corporate-facade-payload-finality" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-30 — Sprint Batch 78 (GPT-5.5 Omni-Audit, Corporate Facade, &amp; Payload Finality)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-29-sprint-batch-76-omni-context-optimization-deterministic-triage-the-beta4-release" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-29 — Sprint Batch 76 (Omni-Context Optimization, Deterministic Triage, &amp; The Beta.4 Release)
@@ -4061,6 +4088,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#2026-04-30-sprint-batch-77-ghost-mode-formatting-aeg-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      2026-04-30 — Sprint Batch 77: Ghost Mode Formatting &amp; AEG Completion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#2026-04-13-v1010-alpha24-reproducible-builds-preflight-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       2026-04-13 — v10.1.0-alpha.24: Reproducible Builds \&amp; Preflight Hardening
@@ -4132,6 +4168,57 @@
 <h1 id="release-changelog">Release Changelog</h1>
 <p>Append-only log of every major directive received and the specific changes
 implemented as a result.</p>
+<h2 id="2026-04-30-sprint-batch-78-gpt-55-omni-audit-corporate-facade-payload-finality">2026-04-30 — Sprint Batch 78 (GPT-5.5 Omni-Audit, Corporate Facade, &amp; Payload Finality)</h2>
+<p><strong>Directive:</strong> Build the Google-compliance corporate landing page, implement
+P1-2/P2-5 exploit witness finality, hydrate three additional GitHub targets,
+perform the Phase 4 Semantic Supremacy audit, bump <code>10.2.0-beta.5</code>, verify, commit,
+and execute the beta.5 fast-release pipeline.</p>
+<p><strong>Changes:</strong></p>
+<ul>
+<li><code>docs/corporate_landing.html</code> — added the Janitor Security B2B SaaS landing
+  page with inline CSS, product positioning, pricing tiers, and repository link.</li>
+<li><code>crates/forge/src/exploitability.rs</code> — added deterministic witnesses for
+  unsafe C/C++ string APIs, parser exhaustion, <code>google.protobuf.Any</code> type
+  confusion, and unpinned Git dependency remediation patches.</li>
+<li><code>crates/forge/src/slop_hunter.rs</code> and <code>crates/cli/src/hunt.rs</code> — extracted C
+  call context, inferred buffer widths where possible, inferred Protobuf Any
+  message paths, and attached the new AEG templates to hunt findings.</li>
+<li><code>.INNOVATION_LOG.md</code> — added the Phase 4 P4-1/P4-2 Omni-Audit blueprint for
+  Kani/Creusot formal verification and bounded <code>candle-core</code> intent divergence;
+  physically deleted the shipped P1-2 and P2-5 blocks; added P1/P2 proposals for
+  remaining live-fire manual witness gaps.</li>
+<li><code>tools/campaign/target_ledger.json</code> — marked the Batch 78 target records for
+  Immutable Wallet Contracts, ClickHouse, and Afterpay Android SDK as hunted.</li>
+<li><code>Cargo.toml</code>, <code>README.md</code>, and <code>docs/index.md</code> — bumped the workspace and
+  public docs to <code>10.2.0-beta.5</code>.</li>
+</ul>
+<p><strong>Live-fire Hunt Results:</strong></p>
+<ul>
+<li><code>https://github.com/immutable/wallet-contracts</code> cloned to
+  <code>/tmp/janitor-b78-wallet-contracts</code>; <code>janitor hunt --format bugcrowd</code> emitted
+  <code>security:unpinned_asset</code> with manual pentester notes, producing the P2-6
+  asset-integrity witness proposal.</li>
+<li><code>https://github.com/ClickHouse/ClickHouse</code> cloned to
+  <code>/tmp/janitor-b78-clickhouse</code>; <code>janitor hunt --format bugcrowd</code> emitted
+  concrete parser-exhaustion and unsafe-C witnesses, plus remaining manual
+  command/asset/model-weight witness gaps captured as P1-3/P2-6/P2-7 proposals.</li>
+<li><code>https://github.com/afterpay/sdk-android</code> cloned to
+  <code>/tmp/janitor-b78-afterpay-sdk-android</code>; <code>janitor hunt --format bugcrowd</code>
+  emitted <code>no_findings</code>.</li>
+</ul>
+<p><strong>Telemetry:</strong></p>
+<ul>
+<li><code>cargo test -p forge exploitability::tests -- --test-threads=4</code> — exit 0.</li>
+<li><code>cargo run -p cli -- hunt /tmp/janitor-b78-wallet-contracts --format bugcrowd</code>
+  — exit 0.</li>
+<li><code>cargo run -p cli -- hunt /tmp/janitor-b78-clickhouse --format bugcrowd</code> —
+  exit 0.</li>
+<li><code>cargo run -p cli -- hunt /tmp/janitor-b78-afterpay-sdk-android --format bugcrowd</code>
+  — exit 0.</li>
+<li><code>cargo test --workspace -- --test-threads=4</code> — exit 0.</li>
+<li><code>just audit</code> — exit 0; documentation parity verified for <code>v10.2.0-beta.5</code>
+  and audit fingerprint saved.</li>
+</ul>
 <h2 id="2026-04-29-sprint-batch-76-omni-context-optimization-deterministic-triage-the-beta4-release">2026-04-29 — Sprint Batch 76 (Omni-Context Optimization, Deterministic Triage, &amp; The Beta.4 Release)</h2>
 <p><strong>Directive:</strong> Compress governance for future context efficiency, enforce the Autonomous Ideation Law, expand SBOM component attribution for C++ and Web3 targets, implement P3-3 deterministic triage ranking, hydrate three more GitHub targets, verify, commit locally, and cut <code>10.2.0-beta.4</code>.</p>
 <p><strong>Changes:</strong></p>
@@ -5302,7 +5389,7 @@ implemented as a result.</p>
 <p><strong>Directive:</strong> Phase 1 — professionalize fallback report text in both formatters; replace "Automated reproduction command not yet synthesized" and "No automated reproduction command generated" with precise technical disclosure. Phase 2 — expand SBOM extraction to cover Maven <code>pom.xml</code> groupId and Gradle <code>build.gradle</code> / <code>build.gradle.kts</code>. Phase 3 — seed <code>.INNOVATION\_LOG.md</code> P3-1 Phase C with identity-protocol AEG priority (JWT <code>alg:none</code>, SAML XXE). Phase 4 — verify, commit.</p>
 <p><strong>Phase 1 — Report Professionalization:</strong></p>
 <ul>
-<li><code>crates/cli/src/hunt.rs</code> — <code>format\_auth0\_report</code> PoC fallback: "Automated reproduction command not yet synthesized..." → "Status: Static Reachability Confirmed. Dynamic Payload Synthesis: Pending. Interprocedural analysis confirms unbroken data-flow from the identified source to the vulnerable sink. Manual dynamic verification is advised."</li>
+<li><code>crates/cli/src/hunt.rs</code> — <code>format\_auth0\_report</code> PoC fallback: replaced an older automated-reproduction placeholder with a precise static reachability disclosure.</li>
 <li><code>crates/cli/src/hunt.rs</code> — <code>proof\_of\_concept\_section</code> fallback (used by Bugcrowd formatter): updated to same precise technical disclosure string.</li>
 <li><code>crates/cli/src/hunt.rs</code> — Two tests updated to assert against new fallback text.</li>
 </ul>
@@ -8588,6 +8675,26 @@ manifest gap into <code>P1-3</code>, and marked <code>P1-2</code> completed</li>
 <li>Second identical run produced the same <code>HTTP 410</code> search failure and <code>HTTP 400</code> create failure, so the production dedup skip path did not execute. This is now a sink-contract failure, not a detector failure.</li>
 </ul>
 <p><strong>Verification</strong>: <code>cargo test --workspace -- --test-threads=1</code> ✓ | <code>just audit</code> ✓</p>
+<h2 id="2026-04-30-sprint-batch-77-ghost-mode-formatting-aeg-completion">2026-04-30 — Sprint Batch 77: Ghost Mode Formatting &amp; AEG Completion</h2>
+<ul>
+<li><code>crates/cli/src/hunt.rs</code> <em>(modified)</em> — expanded hunt directory exclusion to
+skip <code>debug</code>, <code>Debug</code>, <code>Tests</code>, <code>tests</code>, <code>mock</code>, and <code>mocks</code>; rewrote the
+Bugcrowd formatter around Data Flow Analysis, Vulnerability Reproduction, and
+Remediation Advice; removed enterprise attestation sections from Bugcrowd
+Markdown; added Mermaid rendering for available <code>path_proof</code> witnesses.</li>
+<li><code>crates/forge/src/exploitability.rs</code> <em>(modified)</em> — bound
+<code>security:jwt_validation_bypass</code> to a concrete <code>alg=none</code> JWT replay template
+and upgraded SSRF metadata-service PoCs to reuse the extracted URL parameter.</li>
+<li><code>crates/forge/src/slop_hunter.rs</code> <em>(modified)</em> — lifted Go <code>http.Get/Post/Head</code>
+dynamic argument context into the SSRF finding description for downstream AEG
+witness construction.</li>
+<li><code>.INNOVATION_LOG.md</code> <em>(modified)</em> — deleted the completed P1-1 block and added
+P1/P2 follow-up proposals for live-fire findings that still require
+class-specific payload finality.</li>
+</ul>
+<p><strong>Live-fire hunt</strong>: hydrated and scanned
+<code>gleanbugbounty/mcp-server-bugbounty</code>, <code>electroneum/electroneum</code>, and
+<code>trustwallet/wallet-core</code> with Bugcrowd Markdown output.</p>
 <h2 id="2026-04-13-v1010-alpha24-reproducible-builds-preflight-hardening">2026-04-13 — v10.1.0-alpha.24: Reproducible Builds \&amp; Preflight Hardening</h2>
 <p><strong>Directive:</strong> Reproducible Builds \&amp; Preflight Hardening — SLSA Level 4 bit-for-bit reproducibility, native PQC key generation subcommand, and ASPM Jira credential preflight contract.</p>
 <h3 id="phase-1-native-pqc-key-generation">Phase 1: Native PQC Key Generation</h3>
