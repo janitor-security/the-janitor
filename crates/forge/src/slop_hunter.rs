@@ -1674,16 +1674,40 @@ fn find_proto_slop(source: &[u8]) -> Vec<SlopFinding> {
         .windows(b"google.protobuf.Any".len())
         .position(|w| w == b"google.protobuf.Any")
     {
+        let message_path = infer_proto_any_message_path(source, start)
+            .unwrap_or_else(|| "UnknownMessage.any_field".to_string());
         vec![SlopFinding {
             start_byte: start,
             end_byte: start + "google.protobuf.Any".len(),
-            description: "security:protobuf_any_type_field — `google.protobuf.Any` introduces type-erased message ingestion; without an allowlisted unpack boundary it widens deserialization and privilege-confusion attack surface.".to_string(),
+            description: format!("security:protobuf_any_type_field — `google.protobuf.Any` field at message path `{message_path}` introduces type-erased message ingestion; without an allowlisted unpack boundary it widens deserialization and privilege-confusion attack surface."),
             domain: DOMAIN_FIRST_PARTY,
             severity: Severity::Critical,
         }]
     } else {
         Vec::new()
     }
+}
+
+fn infer_proto_any_message_path(source: &[u8], any_start: usize) -> Option<String> {
+    let prefix = std::str::from_utf8(source.get(..any_start)?).ok()?;
+    let message_pos = prefix.rfind("message ")?;
+    let message_tail = &prefix[message_pos + "message ".len()..];
+    let message = message_tail
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect::<String>();
+    if message.is_empty() {
+        return None;
+    }
+    let suffix = std::str::from_utf8(source.get(any_start..)?).ok()?;
+    let line = suffix.lines().next().unwrap_or("");
+    let field = line
+        .split('=')
+        .next()
+        .and_then(|left| left.split_whitespace().last())
+        .unwrap_or("any_field")
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_');
+    Some(format!("{message}.{field}"))
 }
 
 fn find_starlark_slop(source: &[u8]) -> Vec<SlopFinding> {
@@ -2142,27 +2166,36 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
         if let Some(func) = node.child_by_field_name("function") {
             if func.kind() == "identifier" {
                 if let Ok(name) = func.utf8_text(source) {
-                    let desc: Option<&'static str> = match name {
-                        "gets" => Some(
-                            "security:unsafe_string_function — gets(): removed in C11; \
-                             unbounded buffer read — use fgets(buf, sizeof(buf), stdin)",
-                        ),
-                        "strcpy" => Some(
-                            "security:unsafe_string_function — strcpy(): unbounded buffer \
-                             copy — use strncpy or strlcpy with explicit size limit",
-                        ),
-                        "sprintf" => Some(
-                            "security:unsafe_string_function — sprintf(): unbounded format \
-                             write — use snprintf with explicit buffer size",
-                        ),
-                        "scanf" => Some(
-                            "security:unsafe_string_function — scanf(): unbounded input \
-                             read — use fgets + sscanf with explicit field width",
-                        ),
+                    let desc: Option<String> = match name {
+                        "gets" => Some(c_unsafe_string_description(
+                            name,
+                            node,
+                            source,
+                            "removed in C11; unbounded buffer read — use fgets(buf, sizeof(buf), stdin)",
+                        )),
+                        "strcpy" => Some(c_unsafe_string_description(
+                            name,
+                            node,
+                            source,
+                            "unbounded buffer copy — use strncpy or strlcpy with explicit size limit",
+                        )),
+                        "sprintf" => Some(c_unsafe_string_description(
+                            name,
+                            node,
+                            source,
+                            "unbounded format write — use snprintf with explicit buffer size",
+                        )),
+                        "scanf" => Some(c_unsafe_string_description(
+                            name,
+                            node,
+                            source,
+                            "unbounded input read — use fgets + sscanf with explicit field width",
+                        )),
                         "system" if c_system_call_is_dynamic(node, source) => Some(
                             "security:os_command_injection — system(): executes a shell \
                              command from a non-literal argument; route through execve/posix_spawn \
-                             with an explicit argv allowlist to avoid command injection",
+                             with an explicit argv allowlist to avoid command injection"
+                                .to_string(),
                         ),
                         _ => None,
                     };
@@ -2184,6 +2217,92 @@ fn find_banned_c_calls(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopFin
     for child in node.children(&mut cursor) {
         find_banned_c_calls(child, source, findings);
     }
+}
+
+fn c_unsafe_string_description(
+    name: &str,
+    node: Node<'_>,
+    source: &[u8],
+    rationale: &str,
+) -> String {
+    let call_src = node.utf8_text(source).unwrap_or(name).trim();
+    let dest = c_destination_argument(name, call_src).unwrap_or("buffer");
+    let width = infer_c_buffer_width(source, node.start_byte(), dest)
+        .or_else(|| infer_scanf_field_width(name, call_src));
+    let width_clause = width
+        .map(|value| format!("inferred destination width `{value}` bytes"))
+        .unwrap_or_else(|| "destination width not statically recovered".to_string());
+    format!(
+        "security:unsafe_string_function — {name}(): {rationale}; call `{call_src}`; destination `{dest}`; {width_clause}"
+    )
+}
+
+fn c_destination_argument<'a>(name: &str, call_src: &'a str) -> Option<&'a str> {
+    let args = split_call_arguments(call_src);
+    let idx = if name == "scanf" { 1 } else { 0 };
+    args.get(idx)
+        .map(|arg| arg.trim().trim_start_matches('&'))
+        .filter(|arg| !arg.is_empty())
+}
+
+fn split_call_arguments(call_src: &str) -> Vec<&str> {
+    let Some(open) = call_src.find('(') else {
+        return Vec::new();
+    };
+    let Some(close) = call_src.rfind(')') else {
+        return Vec::new();
+    };
+    let inner = &call_src[open + 1..close];
+    let mut args = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                args.push(inner[start..idx].trim());
+                start = idx + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    if start <= inner.len() {
+        args.push(inner[start..].trim());
+    }
+    args
+}
+
+fn infer_c_buffer_width(source: &[u8], call_start: usize, ident: &str) -> Option<usize> {
+    if ident.is_empty()
+        || !ident
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+    {
+        return None;
+    }
+    let ctx_start = call_start.saturating_sub(4096);
+    let context = std::str::from_utf8(source.get(ctx_start..call_start)?).ok()?;
+    let needle = format!("{ident}[");
+    let pos = context.rfind(&needle)?;
+    let digits = context[pos + needle.len()..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    digits.parse().ok()
+}
+
+fn infer_scanf_field_width(name: &str, call_src: &str) -> Option<usize> {
+    if name != "scanf" {
+        return None;
+    }
+    let fmt = split_call_arguments(call_src).into_iter().next()?;
+    let percent = fmt.find('%')?;
+    let digits = fmt[percent + 1..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    digits.parse().ok()
 }
 
 fn c_system_call_is_dynamic(node: Node<'_>, source: &[u8]) -> bool {

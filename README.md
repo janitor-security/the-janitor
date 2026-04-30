@@ -1,9 +1,9 @@
 # The Janitor: The Mathematical Firewall Against Autonomous AI
-**v10.2.0-beta.4 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
+**v10.2.0-beta.5 — Rust-Native. Zero-Copy. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds.**
 
 ![Integrity Status](.janitor/janitor_badge.svg)
 
-*Attested by The Janitor v10.2.0-beta.4: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
+*Attested by The Janitor v10.2.0-beta.5: Zero-Upload, FIPS 204 + FIPS 205 Compliant.*
 
 ---
 

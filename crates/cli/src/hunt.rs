@@ -2673,6 +2673,32 @@ fn scan_buffer(
                 let witness =
                     forge::exploitability::ssrf_witness(label, &rule_id, line, method, parameter);
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:unsafe_string_function" {
+                let witness = forge::exploitability::memory_unsafety_witness(
+                    label,
+                    &rule_id,
+                    line,
+                    extract_c_function_name(&finding.description),
+                    source_snippet(source, finding.start_byte, finding.end_byte),
+                    extract_c_buffer_width(&finding.description),
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:parser_exhaustion_anomaly" {
+                let witness = forge::exploitability::parser_exhaustion_witness(
+                    label,
+                    &rule_id,
+                    line,
+                    extract_parser_lang_hint(&finding.description),
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            } else if rule_id == "security:protobuf_any_type_field" {
+                let witness = forge::exploitability::protobuf_any_witness(
+                    label,
+                    &rule_id,
+                    line,
+                    extract_backtick_after(&finding.description, "message path "),
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
             }
             structured
         })
@@ -2702,8 +2728,9 @@ fn scan_buffer(
             None,
         ) {
             let line = byte_to_line(source, f.start_byte);
-            findings.push(StructuredFinding {
-                id: extract_rule_id(&f.description),
+            let rule_id = extract_rule_id(&f.description);
+            let mut structured = StructuredFinding {
+                id: rule_id.clone(),
                 file: Some(label.to_string()),
                 line: Some(line),
                 fingerprint: fingerprint_finding(source, f.start_byte, f.end_byte),
@@ -2713,7 +2740,19 @@ fn scan_buffer(
                 exploit_witness: None,
                 upstream_validation_absent: false,
                 ..Default::default()
-            });
+            };
+            if rule_id == "security:unpinned_git_dependency" {
+                let witness = forge::exploitability::git_ref_dependency_witness(
+                    label,
+                    &rule_id,
+                    line,
+                    source_line_at(source, f.start_byte),
+                    extract_backtick_after(&f.description, "dependency "),
+                    extract_parenthesized_backtick_url(&f.description),
+                );
+                structured = forge::exploitability::attach_exploit_witness(structured, witness);
+            }
+            findings.push(structured);
         }
     }
 
@@ -2727,12 +2766,89 @@ fn is_compiled_artifact_extension(ext: &str) -> bool {
     )
 }
 
+fn source_snippet(source: &[u8], start: usize, end: usize) -> Option<String> {
+    let start = start.min(source.len());
+    let end = end.min(source.len());
+    if start >= end {
+        return None;
+    }
+    std::str::from_utf8(&source[start..end])
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn source_line_at(source: &[u8], byte_offset: usize) -> String {
+    let offset = byte_offset.min(source.len());
+    let start = source[..offset]
+        .iter()
+        .rposition(|b| *b == b'\n')
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    let end = source[offset..]
+        .iter()
+        .position(|b| *b == b'\n')
+        .map(|idx| offset + idx)
+        .unwrap_or(source.len());
+    std::str::from_utf8(&source[start..end])
+        .unwrap_or("")
+        .trim_end()
+        .to_string()
+}
+
 fn extract_rule_id(description: &str) -> String {
     description
         .split(" \u{2014} ") // U+2014 EM DASH with spaces
         .next()
         .unwrap_or(description)
         .to_owned()
+}
+
+fn extract_c_function_name(description: &str) -> Option<String> {
+    description
+        .split(" — ")
+        .nth(1)
+        .and_then(|tail| tail.split("():").next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn extract_c_buffer_width(description: &str) -> Option<usize> {
+    description
+        .split("inferred destination width `")
+        .nth(1)
+        .and_then(|tail| tail.split('`').next())
+        .and_then(|value| value.parse().ok())
+}
+
+fn extract_parser_lang_hint(description: &str) -> Option<String> {
+    description
+        .split("tree-sitter parse of .")
+        .nth(1)
+        .and_then(|tail| tail.split_whitespace().next())
+        .map(|value| value.trim_matches('.').to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn extract_backtick_after(description: &str, marker: &str) -> Option<String> {
+    description
+        .split(marker)
+        .nth(1)
+        .and_then(|tail| tail.split('`').nth(1))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn extract_parenthesized_backtick_url(description: &str) -> Option<String> {
+    description
+        .split("(`")
+        .nth(1)
+        .and_then(|tail| tail.split("`)").next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn extract_go_http_method(description: &str) -> Option<String> {

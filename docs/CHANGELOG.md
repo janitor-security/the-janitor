@@ -3,6 +3,59 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 78 (GPT-5.5 Omni-Audit, Corporate Facade, & Payload Finality)
+
+**Directive:** Build the Google-compliance corporate landing page, implement
+P1-2/P2-5 exploit witness finality, hydrate three additional GitHub targets,
+perform the Phase 4 Semantic Supremacy audit, bump `10.2.0-beta.5`, verify, commit,
+and execute the beta.5 fast-release pipeline.
+
+**Changes:**
+
+* `docs/corporate_landing.html` — added the Janitor Security B2B SaaS landing
+  page with inline CSS, product positioning, pricing tiers, and repository link.
+* `crates/forge/src/exploitability.rs` — added deterministic witnesses for
+  unsafe C/C++ string APIs, parser exhaustion, `google.protobuf.Any` type
+  confusion, and unpinned Git dependency remediation patches.
+* `crates/forge/src/slop_hunter.rs` and `crates/cli/src/hunt.rs` — extracted C
+  call context, inferred buffer widths where possible, inferred Protobuf Any
+  message paths, and attached the new AEG templates to hunt findings.
+* `.INNOVATION_LOG.md` — added the Phase 4 P4-1/P4-2 Omni-Audit blueprint for
+  Kani/Creusot formal verification and bounded `candle-core` intent divergence;
+  physically deleted the shipped P1-2 and P2-5 blocks; added P1/P2 proposals for
+  remaining live-fire manual witness gaps.
+* `tools/campaign/target_ledger.json` — marked the Batch 78 target records for
+  Immutable Wallet Contracts, ClickHouse, and Afterpay Android SDK as hunted.
+* `Cargo.toml`, `README.md`, and `docs/index.md` — bumped the workspace and
+  public docs to `10.2.0-beta.5`.
+
+**Live-fire Hunt Results:**
+
+* `https://github.com/immutable/wallet-contracts` cloned to
+  `/tmp/janitor-b78-wallet-contracts`; `janitor hunt --format bugcrowd` emitted
+  `security:unpinned_asset` with manual pentester notes, producing the P2-6
+  asset-integrity witness proposal.
+* `https://github.com/ClickHouse/ClickHouse` cloned to
+  `/tmp/janitor-b78-clickhouse`; `janitor hunt --format bugcrowd` emitted
+  concrete parser-exhaustion and unsafe-C witnesses, plus remaining manual
+  command/asset/model-weight witness gaps captured as P1-3/P2-6/P2-7 proposals.
+* `https://github.com/afterpay/sdk-android` cloned to
+  `/tmp/janitor-b78-afterpay-sdk-android`; `janitor hunt --format bugcrowd`
+  emitted `no_findings`.
+
+**Telemetry:**
+
+* `cargo test -p forge exploitability::tests -- --test-threads=4` — exit 0.
+* `cargo run -p cli -- hunt /tmp/janitor-b78-wallet-contracts --format bugcrowd`
+  — exit 0.
+* `cargo run -p cli -- hunt /tmp/janitor-b78-clickhouse --format bugcrowd` —
+  exit 0.
+* `cargo run -p cli -- hunt /tmp/janitor-b78-afterpay-sdk-android --format bugcrowd`
+  — exit 0.
+* `cargo test --workspace -- --test-threads=4` — exit 0.
+* `just audit` — exit 0; documentation parity verified for `v10.2.0-beta.5`
+  and audit fingerprint saved.
+
 ## 2026-04-29 — Sprint Batch 76 (Omni-Context Optimization, Deterministic Triage, & The Beta.4 Release)
 
 **Directive:** Compress governance for future context efficiency, enforce the Autonomous Ideation Law, expand SBOM component attribution for C++ and Web3 targets, implement P3-3 deterministic triage ranking, hydrate three more GitHub targets, verify, commit locally, and cut `10.2.0-beta.4`.

@@ -266,7 +266,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 35
+      "priority_score": 35,
+      "hunted": "[x]",
+      "hunted_in_sprint": "Sprint Batch 78"
     },
     {
       "engagement": "indeed_targets",
@@ -329,7 +331,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 34
+      "priority_score": 34,
+      "hunted": "[x]",
+      "hunted_in_sprint": "Sprint Batch 78"
     },
     {
       "engagement": "electroneum_targets",
@@ -540,7 +544,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": "[x]",
+      "hunted_in_sprint": "Sprint Batch 78"
     },
     {
       "engagement": "block_targets",
