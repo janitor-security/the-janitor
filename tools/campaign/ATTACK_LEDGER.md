@@ -231,6 +231,52 @@
 
 \---
 
+## The MCP Confused Deputy (AI as Transport)
+
+**Class:** AI-Mediated Privilege Escalation
+**Reference:** Emerging MCP zero-day class (2026); operator field intelligence from local-agent tool deployments; convergent with confused-deputy and indirect-prompt-injection tradecraft.
+**Threat profile:** An attacker embeds a payload inside a benign-looking source file, ticket body, or document chunk. A developer asks an AI assistant to summarize or analyze that content. The assistant reads the payload and unwittingly forwards it as a tool argument into an active local MCP server such as a SQL query bridge, Jira integration, shell helper, or internal HTTP client. The exploit detonates behind the developer's firewall even though the attacker never had direct network reach to the protected system. The AI becomes the transport layer for the payload; the MCP server becomes the deputy.
+
+**AST / IFDS Detection Strategy:**
+
+1. **MCP server definition scanner** (`crates/forge/src/mcp_deputy.rs` — new module): parse MCP server registrations, tool schemas, `call_tool` handlers, argument decoders, and transport glue across Python / JS / TS / Go / Rust. Normalize each tool into `McpToolSurface { tool_name, param_names, handler_symbol, capability_class }`.
+2. **LLM-to-tool source identification:** treat every incoming tool-call argument originating from an LLM-facing surface as tainted by default: JSON `arguments`, Anthropic `tool_use.input`, OpenAI function-call payloads, LangChain tool invocations, and MCP `CallToolRequest.params.arguments`.
+3. **Deputy sink registry:** flag underlying execution layers reachable from MCP handlers: SQL execution (`query`, `execute`, ORM raw-query primitives), internal HTTP fetches, Jira/Confluence mutation APIs, shell execution, filesystem writes, and cloud SDK actions. Emit the capability class in the structured finding.
+4. **IFDS lane:** propagate taint from the incoming tool-call argument through local decoding, string interpolation, query construction, request-body assembly, or command templates into the deputy sink. Standard JSON parsing and schema validation are insufficient; only explicit allowlists, prepared statements, route pinning, or typed enum gates break the lane.
+5. **Exploit transport trigger:** when a source file / fetched content / RAG chunk reaches an LLM context sink and the same request path later invokes an MCP tool whose handler reaches a deputy sink, emit `security:mcp_confused_deputy` at `KevCritical`.
+6. **Capability drift amplifier:** if the tool description claims a read-only action ("summarize", "search docs", "preview issue") but the handler reaches a mutating sink, emit a second finding `security:mcp_capability_drift` and couple it with the confused-deputy report.
+
+**Crates:** existing tree-sitter; existing IFDS engine; `serde_json` for MCP envelope normalization; existing `publicsuffix` and tool-catalog parsing lanes.
+
+**Crucible fixture:** A Python MCP server exposing `run_sql` where `arguments["query"]` flows into `cursor.execute()` after an LLM summarizes a poisoned Markdown file; detector emits `mcp_confused_deputy`. Negative fixture: the same tool restricted to a fixed prepared statement enum with no raw query text path — no fire.
+
+**Bounty TAM:** $50k–$300k per advisory; this is the first behind-the-firewall AI transport class likely to drive separate procurement from conventional prompt-injection scanning. Pairs with `.INNOVATION\_LOG.md` P6-9 and P4-2.
+
+\---
+
+## Agentic IAM Bypass
+
+**Class:** Identity \& Authorization Drift
+**Reference:** Emerging agent-runtime cloud abuse class (2026); operator field intelligence from AWS/GCP/Azure-hosted coding agents; overlaps with IMDS abuse, over-privileged workload identity, and prompt-driven cloud control-plane execution.
+**Threat profile:** AI agents inherit the raw AWS / GCP / Azure credentials of the host environment but lack internal authorization boundaries. A prompt injection or poisoned task causes the agent to execute privileged cloud SDK operations invisibly: reading secrets, mutating IAM bindings, creating tokens, editing bucket policies, or deploying code. The identity is legitimate, the action is syntactically valid, and the operator never sees a human approval boundary. The failure is not credential theft alone; it is missing intra-agent authorization over already-trusted credentials.
+
+**AST / IFDS Detection Strategy:**
+
+1. **Credential-source registry** (`crates/forge/src/agentic_iam.rs` — new module): detect default cloud credential inheritance points such as AWS IMDS/STS providers, `AWS_ACCESS_KEY_ID`, `AWS_SESSION_TOKEN`, `google.auth.default()`, `GOOGLE_APPLICATION_CREDENTIALS`, GCP metadata-service tokens, Azure `DefaultAzureCredential`, managed identity, workload identity federation, and Key Vault / Secret Manager bootstrap code.
+2. **Agent runtime boundary extraction:** identify LLM agent entrypoints, tool runners, task executors, and autonomous loop primitives that can choose actions from prompt text. Normalize them into `AgentExecutionContext { model_sink, credential_sources, tool_runner, approval_gate }`.
+3. **Privileged cloud sink registry:** catalog control-plane SDK calls that change identity or infrastructure state: AWS IAM / STS / KMS / Secrets Manager / S3 policy mutation, GCP IAM policy writes / Secret Manager reads / Cloud Run deploys, Azure role assignment, Graph permission grant, Key Vault secret enumeration, subscription-wide ARM mutations.
+4. **Authorization-gate check:** treat an action as unbounded unless it traverses a hard policy gate: explicit operation allowlist, human approval callback, scoped role map, resource-bound ABAC check, or dry-run-only mode. Logging, chat confirmation text, or "be careful" system prompts are not gates.
+5. **IFDS lane:** propagate taint from prompt-controlled task text or tool arguments into cloud SDK operation selection, resource identifier selection, or request bodies. When prompt-controlled data can choose a privileged API call under inherited credentials without a gate, emit `security:agentic_iam_bypass` at `KevCritical`.
+6. **Invisible-host escalation:** if the credential source is the ambient host environment (instance metadata, workload identity, default credential chain) rather than a dedicated low-privilege service account, upgrade with `security:ambient_cloud_credential_agent` to capture the missing trust-boundary condition directly.
+
+**Crates:** existing tree-sitter; existing IFDS engine; `petgraph` for agent-to-credential-to-sink reachability; rkyv-baked cloud SDK sink taxonomy refreshed via `update-wisdom`.
+
+**Crucible fixture:** A Go autonomous task runner using `DefaultAzureCredential` and allowing prompt-derived operations to call Azure role-assignment APIs without an allowlist; detector emits `agentic_iam_bypass`. Negative fixture: the same runner constrained to a fixed read-only storage inventory action set with per-operation policy gating — no fire.
+
+**Bounty TAM:** $75k–$500k per advisory; this maps directly to enterprise cloud-governance budgets and the emergent "AI operator risk" spend category. Pairs with `.INNOVATION\_LOG.md` P4-2 and the broader identity-drift roadmap.
+
+\---
+
 ## Financial AI Regulatory Compliance — PII to LLM Boundary Without Cryptographic Masking
 
 **Class:** Regulatory Compliance Violation (GLBA / SOX / PCI DSS 4.0 / NYDFS Part 500 / EU AI Act Article 10)
@@ -325,4 +371,3 @@
 3. **Crucible regression gate:** each campaign requires a true-positive AND a true-negative fixture in `crates/crucible/`. No detector ships without both.
 4. **Wasm policy export:** detectors emit Wasm-deployable policies so customer-private extensions can layer additional rules without modifying the core engine.
 5. **Zero-upload preserved:** every detector here operates on local source. Provider-taxonomy and KEV correlation are offline lookups against rkyv-baked snapshots refreshed via `janitor update-wisdom`.
-

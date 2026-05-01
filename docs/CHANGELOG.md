@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 83 (Agentic Subversion Ledger)
+
+**Directive:** Documentation and architecture sprint only. Expand the attack
+ledger with MCP Confused Deputy and Agentic IAM Bypass intelligence, add the
+Phase 12 delayed-memory-poisoning proposal, update the changelog, commit
+locally, and do not run tests or cut a release.
+
+**Changes Implemented:**
+- `tools/campaign/ATTACK_LEDGER.md`: Added `The MCP Confused Deputy (AI as Transport)` under AI-mediated privilege escalation, defining the LLM-to-MCP-to-deputy-sink transport class for behind-the-firewall exploit detonation.
+- `tools/campaign/ATTACK_LEDGER.md`: Added `Agentic IAM Bypass` under identity and authorization drift, covering ambient AWS/GCP/Azure credential inheritance plus missing intra-agent authorization gates around cloud SDK actions.
+- `.INNOVATION_LOG.md`: Added `P12-D — Delayed Memory Poisoning (Time-Bomb ASTs)` under Phase 12 for persistent-memory/RAG time-bomb payloads; renumbered the existing Honey-Agent interrogator entry to `P12-E` to preserve unique Phase 12 identifiers.
+- `docs/CHANGELOG.md`: Added this Sprint Batch 83 ledger entry explicitly recording MCP Confused Deputy and delayed memory poisoning intelligence integration.
+
+**Telemetry:**
+- No tests executed by directive.
+- No release cut by directive.
+- 2 new ATTACK_LEDGER threat campaigns integrated.
+- 1 new Phase 12 innovation entry integrated.
+
 ## 2026-04-30 — Sprint Batch 82: Structural Eradication Law, Exclusion Lattice, P4-8 Mesh Taint, P3-4 Policy-as-Wasm, Target Hydration
 
 **Directive:** Replace Triage Empathy Law with Structural Eradication Law (code-only FP suppression); harden Exclusion Lattice with `/it/`, `/e2e/`, `/integration/`, `test_*.sh`, and JVM-comment guards; implement P4-8 Phase B `mesh_taint.rs` with `MeshSummary` / `compose_mesh_summaries()` / `CrossServiceFinding`; implement P3-4 Phase A `cmd_rule_publish` Ed25519 signing; hunt 3 authorized targets; eradicate P4-8 and P3-4 Policy-as-Wasm bullet from `.INNOVATION_LOG.md`.
