@@ -810,7 +810,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "block_targets",
@@ -824,7 +826,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "bullish_exchange_targets",
@@ -838,7 +842,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "chime_targets",
@@ -1018,7 +1024,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "completed"
     },
     {
       "engagement": "immutable_targets",

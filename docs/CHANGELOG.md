@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-01 — Sprint Batch 85: Front-Door Fix, LotL C2 Shield, Intent Divergence, Enterprise Omni-Audit
+
+**Directive:** Move the Google Cloud vendor-verification facade to the repository root; implement the P6-7 Living-off-the-Land Cloud-API C2 sink detector and P4-2 Intent-vs-Implementation Divergence detector; hydrate and hunt 3 authorized GitHub targets; rewrite the innovation log for Fortune 500 acceptance gaps; do not cut a release.
+
+**Changes Implemented:**
+- `index.html`: Moved `docs/corporate_landing.html` to the repository root so GitHub Pages can serve the verification facade from the front door.
+- `crates/forge/src/slop_hunter.rs`: Tightened the LotL trusted API sink registry to `graph.microsoft.com`, `slack.com/api`, and `discord.com/api/webhooks`; preserved shell/environment/source provenance guards for `security:lotl_api_c2_exfiltration` at KevCritical.
+- `crates/forge/src/intent_divergence.rs` (NEW): Added bounded Rust AST intent-divergence detection for security-signaling names/docstrings whose bodies are `return true`, `return obj`, or empty.
+- `crates/forge/src/lib.rs`: Exported `intent_divergence`.
+- `crates/forge/src/slop_hunter.rs`: Wired Intent Divergence into Rust `find_slop`; added JVM `.github.io` inert-string suppression unless a nearby network sink exists; added Square Wire framework-reflection and Protobuf fixture guards for live-fire false-positive eradication.
+- `tools/campaign/target_ledger.json`: Marked `square/wire` (duplicate ledger rows), `bullish-exchange/api-docs`, and `fireblocks/mpc-lib` as hunted.
+- `.INNOVATION_LOG.md`: Deleted completed P4-2 and P6-7 entries; added P1 enterprise backlog for SARIF/ASPM ingestion parity, bounded intra-procedural memory-safety proof artifacts, and CI/CD execution telemetry correlation.
+
+**Telemetry:**
+- `cargo test --workspace -- --test-threads=4` passed.
+- `just audit` passed; release parity and documentation parity verified.
+- Live-fire reports: `/tmp/janitor-square-wire-bugcrowd.md`, `/tmp/janitor-bullish-api-docs-bugcrowd.md`, `/tmp/janitor-fireblocks-mpc-lib-bugcrowd.md` all resolved to `no_findings` after structural guard application.
+- No release cut.
+
 ## 2026-04-30 — Sprint Batch 83 (Agentic Subversion Ledger)
 
 **Directive:** Documentation and architecture sprint only. Expand the attack

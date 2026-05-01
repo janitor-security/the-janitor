@@ -72,6 +72,7 @@ use tree_sitter::{Language, Node};
 
 use crate::deobfuscate::normalize_payload;
 use crate::fold::fold_string_concat;
+use crate::intent_divergence::find_rust_intent_divergence;
 use crate::metadata::{DOMAIN_ALL, DOMAIN_FIRST_PARTY};
 use crate::rag_source_registry::find_rag_context_poisoning;
 
@@ -185,7 +186,11 @@ pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
         && (path.contains("hibernate")
             || path.contains("jdk8withjettybootplatform")
             || path.contains("misk-moshi/")
-            || path.contains("/moshi/wire/"))
+            || path.contains("/moshi/wire/")
+            || path.starts_with("wire-runtime/")
+            || path.starts_with("wire-schema/")
+            || path.starts_with("wire-grpc-client/")
+            || path.starts_with("wire-compiler/src/main/java/com/squareup/wire/schema/"))
     {
         return true;
     }
@@ -195,6 +200,13 @@ pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
         return true;
     }
     if rule == "security:credential_leak" && path.ends_with("heldcertificate.kt") {
+        return true;
+    }
+    if rule == "security:protobuf_any_type_field"
+        && (path.contains("golden-files/")
+            || path.contains("google/protobuf/")
+            || path.contains("/resources/google/protobuf/"))
+    {
         return true;
     }
     if rule == "security:unpinned_asset"
@@ -948,6 +960,26 @@ fn engine() -> Option<&'static QueryEngine> {
     ENGINE.get_or_init(|| QueryEngine::new().ok()).as_ref()
 }
 
+fn find_rust_intent_divergence_slop(
+    eng: &QueryEngine,
+    parsed: &ParsedUnit<'_>,
+) -> Vec<SlopFinding> {
+    let source = parsed.source;
+    const INTENT_MARKERS: &[&[u8]] = &[b"verify", b"authenticate", b"sanitize", b"check"];
+    if !INTENT_MARKERS
+        .iter()
+        .any(|marker| contains_ascii_case_insensitive(source, marker))
+    {
+        return Vec::new();
+    }
+    let tree = match parsed.ensure_tree(eng.rust_lang.clone(), "rs") {
+        Ok(Some(tree)) => tree,
+        Ok(None) => return Vec::new(),
+        Err(finding) => return vec![finding],
+    };
+    find_rust_intent_divergence(tree.root_node(), source)
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -976,6 +1008,7 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         // Phase 7 R&D: Rust unsafe transmute + raw pointer dereference AST walk
         "rs" => {
             let mut f = find_rust_slop(eng, parsed);
+            f.extend(find_rust_intent_divergence_slop(eng, parsed));
             f.extend(find_rust_slopsquat_imports(eng, parsed));
             f
         }
@@ -3816,22 +3849,9 @@ fn should_ignore_supply_chain_match(
     // so the finding is not emitted for documentation links.
     if matches!(language, "kt" | "kts" | "java" | "groovy" | "gradle")
         && mat.pattern().as_usize() == PATTERN_GITHUB_IO
+        && jvm_github_io_match_is_inert(parsed.source, mat)
     {
-        let source = parsed.source;
-        let line_start = source[..mat.start()]
-            .iter()
-            .rposition(|&b| b == b'\n')
-            .map(|p| p + 1)
-            .unwrap_or(0);
-        let line = &source[line_start..];
-        let trimmed = line
-            .iter()
-            .position(|&b| !b.is_ascii_whitespace())
-            .unwrap_or(0);
-        let rest = &line[trimmed..];
-        if rest.starts_with(b"//") || rest.starts_with(b"*") || rest.starts_with(b"/**") {
-            return true;
-        }
+        return true;
     }
 
     if !matches!(language, "js" | "jsx" | "ts" | "tsx") {
@@ -3855,6 +3875,51 @@ fn should_ignore_supply_chain_match(
     node_or_parent_is_comment(node)
         || (node_or_parent_is_string_literal(node)
             && !string_literal_flows_to_asset_execution_sink(node, source))
+}
+
+const JVM_NETWORK_SINK_MARKERS: &[&[u8]] = &[
+    b"okhttp",
+    b"httpclient",
+    b"newcall",
+    b".url(",
+    b"url(",
+    b"uri.create",
+    b"openstream",
+    b"download",
+    b"curl",
+    b"wget",
+    b"<script src",
+];
+
+fn jvm_github_io_match_is_inert(source: &[u8], mat: &aho_corasick::Match) -> bool {
+    let line_start = source[..mat.start()]
+        .iter()
+        .rposition(|&b| b == b'\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let line = &source[line_start..];
+    let trimmed = line
+        .iter()
+        .position(|&b| !b.is_ascii_whitespace())
+        .unwrap_or(0);
+    let rest = &line[trimmed..];
+    if rest.starts_with(b"//") || rest.starts_with(b"*") || rest.starts_with(b"/**") {
+        return true;
+    }
+
+    let context_start = mat.start().saturating_sub(256);
+    let context_end = source.len().min(mat.end().saturating_add(256));
+    let context = &source[context_start..context_end];
+    !JVM_NETWORK_SINK_MARKERS
+        .iter()
+        .any(|needle| contains_ascii_case_insensitive(context, needle))
+}
+
+fn contains_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 fn node_or_parent_is_comment(node: Node<'_>) -> bool {
@@ -4011,7 +4076,6 @@ const TRUSTED_API_DOMAINS: &[&str] = &[
     "graph.microsoft.com",
     "slack.com/api",
     "discord.com/api/webhooks",
-    "api.telegram.org",
 ];
 
 /// Outbound JavaScript/TypeScript HTTP sinks eligible for LotL API C2 tracing.
@@ -8513,6 +8577,19 @@ Safe visible content.
     }
 
     #[test]
+    fn test_rust_verify_signature_return_true_intent_divergence_fires() {
+        let src = b"fn verify_signature() -> bool { return true; }\n";
+        let findings = find_slop("rs", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("security:intent_divergence")
+                    && f.severity == Severity::Critical),
+            "security verifier with return true body must fire intent divergence"
+        );
+    }
+
+    #[test]
     fn test_js_eval_not_flagged() {
         let src = b"const result = eval(userInput);\n";
         let findings = find_slop("js", src);
@@ -9513,6 +9590,31 @@ mod credential_tests {
                 .iter()
                 .any(|f| f.description.contains("unpinned_asset")),
             "URL string flowing into fetch must remain an unpinned_asset finding"
+        );
+    }
+
+    #[test]
+    fn test_jvm_github_io_doc_string_is_ignored() {
+        let src = b"val message = \"See https://square.github.io/wire/wire_compiler/#kotlin\"\n";
+        let findings = find_slop("kt", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unpinned_asset")),
+            "JVM documentation URLs must not be treated as unpinned runtime assets"
+        );
+    }
+
+    #[test]
+    fn test_jvm_github_io_network_sink_is_detected() {
+        let src =
+            b"val request = Request.Builder().url(\"https://evil.github.io/payload.js\").build()\n";
+        let findings = find_slop("kt", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("unpinned_asset")),
+            "JVM .github.io URL flowing into a network sink must remain detected"
         );
     }
 
@@ -11482,6 +11584,35 @@ mod phase5_rd_tests {
                 "security:dynamic_class_loading — Kotlin Class.forName() with dynamic argument",
             ),
             "Moshi serialization binding reflection must be classified as intended behavior"
+        );
+    }
+
+    #[test]
+    fn square_wire_runtime_reflection_is_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "wire-runtime/src/jvmMain/kotlin/com/squareup/wire/ProtoAdapter.kt",
+                "security:dynamic_class_loading — Kotlin Class.forName() with dynamic argument",
+            ),
+            "Wire serialization runtime reflection must be classified as intended behavior"
+        );
+    }
+
+    #[test]
+    fn protobuf_fixture_any_fields_are_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "wire-golden-files/src/main/proto/squareup/wire/all_types_proto3.proto",
+                "security:protobuf_any_type_field — `google.protobuf.Any` field",
+            ),
+            "golden Protobuf fixtures must not emit generic Any findings"
+        );
+        assert!(
+            is_hunt_false_positive_path(
+                "wire-schema/src/jvmMain/resources/google/protobuf/wrappers.proto",
+                "security:protobuf_any_type_field — `google.protobuf.Any` field",
+            ),
+            "vendored Google Protobuf framework schemas must be classified as intended behavior"
         );
     }
 
