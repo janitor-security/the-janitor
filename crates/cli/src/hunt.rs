@@ -2576,7 +2576,13 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
     // so nested directories like `src/internal/test_helpers/debug/` are caught
     // regardless of OS path separator or depth.
     let full_path = entry.path().to_string_lossy().to_lowercase();
-    if full_path.contains("test") || full_path.contains("mock") || full_path.contains("debug") {
+    if full_path.contains("test")
+        || full_path.contains("mock")
+        || full_path.contains("debug")
+        || full_path.contains("/it/")
+        || full_path.contains("/e2e/")
+        || full_path.contains("/integration/")
+    {
         return true;
     }
     is_internal_mocks_dir(entry.path())
@@ -2605,6 +2611,10 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         || name.ends_with("_test.js")
         || name.ends_with("_test.py")
         || name.ends_with("_test.ts")
+        // Shell scripts prefixed with `test_` are CI/docs-test utilities, not
+        // production scripts — exclude to prevent false positives on unpinned curl
+        // in test-harness entry points.
+        || (name.starts_with("test_") && name.ends_with(".sh"))
         || (name.ends_with(".json") && !matches!(name, "package.json" | "manifest.json"))
 }
 

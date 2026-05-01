@@ -3767,11 +3767,39 @@ pub fn find_supply_chain_slop_with_context(
         .collect()
 }
 
+/// Index of the `.github.io/` pattern in `SUPPLY_CHAIN_PATTERNS`.
+const PATTERN_GITHUB_IO: usize = 1;
+
 fn should_ignore_supply_chain_match(
     language: &str,
     parsed: &ParsedUnit<'_>,
     mat: &aho_corasick::Match,
 ) -> bool {
+    // In JVM source files (Kotlin, Java, Gradle scripts), a `.github.io/` URL
+    // almost always appears in a KDoc/Javadoc comment or a project-documentation
+    // constant — never as a live runtime fetch.  Suppress pattern 1 when the
+    // line containing the match begins with `//` or ` *` (block-comment leader)
+    // so the finding is not emitted for documentation links.
+    if matches!(language, "kt" | "kts" | "java" | "groovy" | "gradle")
+        && mat.pattern().as_usize() == PATTERN_GITHUB_IO
+    {
+        let source = parsed.source;
+        let line_start = source[..mat.start()]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map(|p| p + 1)
+            .unwrap_or(0);
+        let line = &source[line_start..];
+        let trimmed = line
+            .iter()
+            .position(|&b| !b.is_ascii_whitespace())
+            .unwrap_or(0);
+        let rest = &line[trimmed..];
+        if rest.starts_with(b"//") || rest.starts_with(b"*") || rest.starts_with(b"/**") {
+            return true;
+        }
+    }
+
     if !matches!(language, "js" | "jsx" | "ts" | "tsx") {
         return false;
     }

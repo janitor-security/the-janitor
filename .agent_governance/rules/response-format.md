@@ -108,21 +108,23 @@ commands, release commands, or operator housekeeping steps.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
 summaries and must remain terminal-only.
 
-## Triage Empathy Law (mandatory for all hunt/scan output review)
+## Structural Eradication Law (mandatory for all hunt/scan output review)
 
-When reviewing `janitor hunt`, `scan`, `clean`, or `dedup` output, evaluate every finding
-like a Bugcrowd Triager.  A mathematically correct vulnerability found in test
-infrastructure (`test/`, `spec/`), mock data, documentation, or unreachable internal
-dev-tools is a **Commercial False Positive**.
+You are mathematically forbidden from appending Markdown notes or prose to explain
+away a False Positive in a hunt report.  Suppress a Commercial False Positive ONLY
+by writing a deterministic Rust AST/path guard in `crates/cli/src/hunt.rs` or
+`crates/forge/src/slop_hunter.rs` that eradicates the finding from the output.
+The report must be completely devoid of the suppressed finding — no footnotes, no
+`---` suppression blocks, no explanatory prose.
 
 Required action on a Commercial False Positive:
-1. Suppress it immediately by adding a structural AST guard to `is_excluded_hunt_entry`
-   in `crates/cli/src/hunt.rs`, or a detector-level context filter in `slop_hunter.rs`.
-2. If no immediate guard exists, append a detailed P1 proposal to `.INNOVATION_LOG.md`
-   naming the suppression mechanism and the specific pattern.
+1. Write an `is_excluded_hunt_entry` path guard or a detector-level context filter
+   in `slop_hunter.rs` that prevents the finding from being emitted.
+2. Re-run `janitor hunt` and confirm the finding is absent.
+3. Never append a suppression explanation to the report.
 
-The exception: `security:credential_leak` in test fixtures is billable regardless of
-directory — a secret in a repo is a secret in a repo.
+The exception: `security:credential_leak` in any directory is always billable — a
+secret in a repo is a secret in a repo.
 
 ## Anti-Recency-Bias Law (mandatory for `[NEXT RECOMMENDED ACTION]`)
 

@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-04-30 — Sprint Batch 82: Structural Eradication Law, Exclusion Lattice, P4-8 Mesh Taint, P3-4 Policy-as-Wasm, Target Hydration
+
+**Directive:** Replace Triage Empathy Law with Structural Eradication Law (code-only FP suppression); harden Exclusion Lattice with `/it/`, `/e2e/`, `/integration/`, `test_*.sh`, and JVM-comment guards; implement P4-8 Phase B `mesh_taint.rs` with `MeshSummary` / `compose_mesh_summaries()` / `CrossServiceFinding`; implement P3-4 Phase A `cmd_rule_publish` Ed25519 signing; hunt 3 authorized targets; eradicate P4-8 and P3-4 Policy-as-Wasm bullet from `.INNOVATION_LOG.md`.
+
+**Changes Implemented:**
+- `.agent_governance/rules/evolution.md`: Replaced **Triage Empathy Law** with **Structural Eradication Law** — prose FP explanations in hunt reports are forbidden; FPs must be suppressed by Rust AST/path guard; sole exception is `security:credential_leak`.
+- `.agent_governance/rules/response-format.md`: Same replacement — Structural Eradication Law now governs all hunt/scan output review; report must be completely devoid of suppressed findings.
+- `crates/cli/src/hunt.rs`: `is_excluded_hunt_entry` extended with `/it/`, `/e2e/`, `/integration/` substring matches; `is_excluded_hunt_file` extended to exclude `test_*.sh` CI utility scripts.
+- `crates/forge/src/slop_hunter.rs`: `should_ignore_supply_chain_match` extended with JVM-language comment guard — `.github.io/` pattern is suppressed in Kotlin/Java/Gradle files when the matched line begins with `//`, `*`, or `/**` (KDoc/Javadoc comment leaders).
+- `crates/forge/src/mesh_taint.rs` (NEW): P4-8 Phase B — `MeshSummary { service, sources, sinks, sanitizers }`, `CrossServiceFinding`, `compose_mesh_summaries(before, after)` snapshot-diff engine emitting `security:cross_service_taint_propagation` at KevCritical when a producer removes a sanitizer trusted by downstream consumers; 5 deterministic tests.
+- `crates/forge/src/lib.rs`: `pub mod mesh_taint` added.
+- `crates/forge/Cargo.toml`: `serde.workspace = true` added.
+- `crates/cli/src/main.rs`: `RulePublish { path, key }` variant added to `Commands` enum; `cmd_rule_publish()` implemented — mmap reads `.wasm`, SHA-384 digest, Ed25519 sign with seed from `--key` hex, writes `.wasm.sig` JSON envelope; 3 tests: `rule_publish_writes_sig_file`, `rule_publish_signature_is_deterministic`, `rule_publish_rejects_short_key`.
+- `.INNOVATION_LOG.md`: P4-8 block physically deleted; `Policy-as-Wasm marketplace` sub-bullet physically deleted from P3-4.
+- `tools/campaign/target_ledger.json`: idx 1 (gleanbugbounty/mcp-server-bugbounty), idx 44 (cashapp/misk), idx 46 (square/okhttp) marked `hunted: true`.
+- `.janitor/hunt_reports/gleanbugbounty_mcp-server-bugbounty.md`: no_findings.
+- `.janitor/hunt_reports/cashapp_misk.md`: 3 billable findings (protobuf_any_type_field, unpinned_asset, dynamic_class_loading).
+- `.janitor/hunt_reports/square_okhttp.md`: 3 billable findings (unpinned_asset, credential_leak, dynamic_class_loading); Kotlin comment FPs eradicated by JVM guard; `test_docs.sh` eradicated by `test_*.sh` file guard.
+
 ## 2026-04-30 — Sprint Batch 81: P4-7 Bugcrowd Submission API, P6-5 LLM Prompt Injection Sinks & Triage Empathy Governance
 
 **Directive:** Implement P4-7 Automated Bounty Submission Pipeline; implement P6-5 LLM Prompt-Injection Sink Detection; add Triage Empathy Law governance; execute live-fire hunt on 3 authorized targets.

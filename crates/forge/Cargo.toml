@@ -10,6 +10,7 @@ common = { path = "../common" }
 polyglot = { path = "../polyglot" }
 backlog_pruner = { path = "../experimental/backlog_pruner" }
 advanced_threats = { path = "../experimental/advanced_threats" }
+serde.workspace = true
 blake3.workspace = true
 tree-sitter.workspace = true
 tree-sitter-python.workspace = true

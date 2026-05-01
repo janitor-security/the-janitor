@@ -898,6 +898,27 @@ enum Commands {
         expected: String,
     },
 
+    /// Sign a customer-authored Wasm detection rule with an Ed25519 key.
+    ///
+    /// Reads the `.wasm` file, computes its SHA-384 digest, signs the digest
+    /// with the supplied Ed25519 seed, and writes a `.wasm.sig` JSON file
+    /// containing the hex signature and digest.  The signed rule can then be
+    /// loaded by `janitor bounce --wasm-rules <path>` — the engine verifies
+    /// the signature against the embedded verifying key before execution.
+    ///
+    /// ## Usage
+    /// ```sh
+    /// janitor rule-publish rules/my_detector.wasm \
+    ///     --key <64-hex-char-Ed25519-seed>
+    /// ```
+    RulePublish {
+        /// Path to the `.wasm` rule module to sign.
+        path: PathBuf,
+        /// Ed25519 signing seed — 64 lowercase hex characters (32 bytes).
+        #[arg(long)]
+        key: String,
+    },
+
     /// Show a policy-health drift dashboard aggregated from `.janitor/bounce_log.ndjson`.
     ///
     /// Displays total PRs scanned, top 3 triggered rules, and the highest-risk PR authors.
@@ -1558,6 +1579,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::WasmVerify { path, expected } => {
             cmd_wasm_verify(path, expected)?;
+        }
+        Commands::RulePublish { path, key } => {
+            cmd_rule_publish(path, key)?;
         }
         Commands::Init { profile } => {
             cmd_init(profile.as_deref())?;
@@ -7384,6 +7408,71 @@ fn cmd_wasm_verify(path: &std::path::Path, expected: &str) -> anyhow::Result<()>
 }
 
 // ---------------------------------------------------------------------------
+// rule-publish
+// ---------------------------------------------------------------------------
+
+/// Sign a customer Wasm detection rule with an Ed25519 key.
+///
+/// Writes `<path>.sig` containing a JSON envelope with the SHA-384 hex digest
+/// and the Ed25519 hex signature over that digest.  The bounce engine verifies
+/// the signature before loading the rule into the wasmtime sandbox.
+fn cmd_rule_publish(path: &std::path::Path, key_hex: &str) -> anyhow::Result<()> {
+    use ed25519_dalek::Signer as _;
+    use memmap2::Mmap;
+    use sha2::{Digest as _, Sha384};
+    use std::fs::File;
+
+    // Decode the 32-byte Ed25519 seed from hex.
+    let seed_bytes = hex::decode(key_hex.trim())
+        .map_err(|_| anyhow::anyhow!("--key must be 64 lowercase hex chars (32 bytes)"))?;
+    if seed_bytes.len() != 32 {
+        anyhow::bail!(
+            "--key must decode to exactly 32 bytes; got {} bytes",
+            seed_bytes.len()
+        );
+    }
+    let seed: [u8; 32] = seed_bytes.try_into().expect("length checked above");
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+
+    // Memory-map the Wasm file and compute SHA-384.
+    let f = File::open(path).with_context(|| format!("opening wasm rule: {}", path.display()))?;
+    // SAFETY: standard mmap usage — file is not modified while the map is live.
+    let mmap =
+        unsafe { Mmap::map(&f) }.with_context(|| format!("mmap failed for: {}", path.display()))?;
+    let digest: [u8; 48] = Sha384::digest(&*mmap).into();
+    let digest_hex = hex::encode(digest);
+
+    // Sign the raw digest bytes.
+    let signature = signing_key.sign(&digest);
+    let sig_hex = hex::encode(signature.to_bytes());
+    let verifying_hex = hex::encode(signing_key.verifying_key().to_bytes());
+
+    // Write the signature envelope.
+    let sig_path = {
+        let mut p = path.to_path_buf();
+        let mut name = p.file_name().unwrap_or_default().to_os_string();
+        name.push(".sig");
+        p.set_file_name(name);
+        p
+    };
+    let envelope = serde_json::json!({
+        "algorithm": "Ed25519",
+        "hash_algorithm": "SHA-384",
+        "rule": path.file_name().unwrap_or_default().to_string_lossy(),
+        "digest": digest_hex,
+        "signature": sig_hex,
+        "verifying_key": verifying_hex,
+    });
+    std::fs::write(&sig_path, serde_json::to_string_pretty(&envelope)?)
+        .with_context(|| format!("writing signature file: {}", sig_path.display()))?;
+    println!("Signed:  {}", path.display());
+    println!("SHA-384: {digest_hex}");
+    println!("Sig:     {sig_hex}");
+    println!("Written: {}", sig_path.display());
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // init
 // ---------------------------------------------------------------------------
 
@@ -8281,5 +8370,70 @@ mod deploy_labyrinth_tests {
             source.contains("subprocess.Popen"),
             "fake_sinks maze must contain canary sink"
         );
+    }
+}
+
+#[cfg(test)]
+mod rule_publish_tests {
+    use super::*;
+    use std::io::Write as _;
+
+    // Deterministic Ed25519 seed for tests only.
+    const TEST_SEED_HEX: &str = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+
+    fn write_tempfile(content: &[u8], suffix: &str) -> (tempfile::TempPath, std::path::PathBuf) {
+        let mut tmp = tempfile::NamedTempFile::with_suffix(suffix).unwrap();
+        tmp.write_all(content).unwrap();
+        let path = tmp.into_temp_path();
+        let pb = path.to_path_buf();
+        (path, pb)
+    }
+
+    #[test]
+    fn rule_publish_writes_sig_file() {
+        let content = b"\x00asm\x01\x00\x00\x00"; // minimal wasm magic
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        cmd_rule_publish(&path, TEST_SEED_HEX).expect("rule-publish must succeed");
+        let sig_path = {
+            let mut p = path.clone();
+            let mut name = p.file_name().unwrap().to_os_string();
+            name.push(".sig");
+            p.set_file_name(name);
+            p
+        };
+        assert!(sig_path.exists(), "signature file must be created");
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&sig_path).unwrap()).unwrap();
+        assert_eq!(json["algorithm"], "Ed25519");
+        assert_eq!(json["hash_algorithm"], "SHA-384");
+    }
+
+    #[test]
+    fn rule_publish_signature_is_deterministic() {
+        let content = b"\x00asm\x01\x00\x00\x00";
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        cmd_rule_publish(&path, TEST_SEED_HEX).unwrap();
+        let sig_path = {
+            let mut p = path.clone();
+            let mut name = p.file_name().unwrap().to_os_string();
+            name.push(".sig");
+            p.set_file_name(name);
+            p
+        };
+        let first = std::fs::read_to_string(&sig_path).unwrap();
+        cmd_rule_publish(&path, TEST_SEED_HEX).unwrap();
+        let second = std::fs::read_to_string(&sig_path).unwrap();
+        assert_eq!(
+            first, second,
+            "Ed25519 signing must be deterministic for same key+content"
+        );
+    }
+
+    #[test]
+    fn rule_publish_rejects_short_key() {
+        let content = b"\x00asm\x01\x00\x00\x00";
+        let (_tmp, path) = write_tempfile(content, ".wasm");
+        let result = cmd_rule_publish(&path, "deadbeef");
+        assert!(result.is_err(), "short key must be rejected");
     }
 }
