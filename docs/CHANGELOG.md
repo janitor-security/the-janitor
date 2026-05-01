@@ -4806,6 +4806,33 @@ manifest gap into `P1-3`, and marked `P1-2` completed
 * `docs/INNOVATION\\\_LOG.md` *(modified)* — P0-1 and P0-5 marked RESOLVED
 * `Cargo.toml` *(modified)* — version bumped to `10.1.0-alpha.1`
 
+## 2026-05-01 — Sprint Batch 84: Mesh Audit CLI, Framework Exemptions & Defensive Memory Fixtures
+
+* `.agent_governance/rules/evolution.md` *(modified)* — added the Framework
+  Exemption Rule requiring intended framework-core reflection and class-loading
+  findings to be suppressed structurally in `slop_hunter.rs`.
+* `crates/cli/src/main.rs` *(modified)* — added `mesh-audit <mesh-config>`
+  with YAML `before`/`after` service summaries, repo path validation, and JSONL
+  emission of `security:cross_service_taint_propagation` findings from
+  `compose_mesh_summaries`.
+* `crates/forge/src/memory_bomb.rs` *(created)* — added inert defensive
+  delayed-memory poisoning fixtures and marker detection without emitting
+  operative delayed prompt-injection or exfiltration instructions.
+* `crates/forge/src/slop_hunter.rs` *(modified)* — added framework/test/docs
+  path guards for Hibernate, OkHttp bootstrapper, Moshi binding reflection,
+  HeldCertificate fixture credentials, CI/docs asset pins, deploy scripts, and
+  sample deserialization/assets; added deterministic regression tests.
+* `tools/campaign/target_ledger.json` *(modified)* — marked the Batch 84
+  CashApp/Misk, Square/OkHttp, and Square/Okio live-fire targets completed.
+* `.INNOVATION_LOG.md` *(modified)* — removed the active P12-D block; completion
+  state is recorded here instead of leaving tombstone markers in the active log.
+
+**Live-fire hunt**: hydrated and scanned `cashapp/misk`, `square/okhttp`, and
+`square/okio`. Post-guard reruns: Misk retained one protobuf `Any` finding;
+OkHttp and Okio returned no findings.
+
+**Verification**: `cargo test --workspace -- --test-threads=4` ✓ | `just audit` ✓
+
 **Audit**: `cargo fmt --check` ✓ | `cargo clippy -- -D warnings` ✓ | `cargo test --workspace -- --test-threads=1` ✓ (all pass)
 **Release**: `just fast-release 10.1.0-alpha.1`
 

@@ -106,6 +106,40 @@ struct VerifySuppressionsResponse {
     approved_ids: Vec<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct MeshAuditConfig {
+    #[serde(default)]
+    before: Vec<MeshAuditService>,
+    #[serde(default)]
+    after: Vec<MeshAuditService>,
+    #[serde(default)]
+    services: Vec<MeshAuditService>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MeshAuditService {
+    service: String,
+    #[serde(default)]
+    repo_path: Option<PathBuf>,
+    #[serde(default)]
+    sources: Vec<String>,
+    #[serde(default)]
+    sinks: Vec<String>,
+    #[serde(default)]
+    sanitizers: Vec<String>,
+}
+
+impl From<MeshAuditService> for forge::mesh_taint::MeshSummary {
+    fn from(value: MeshAuditService) -> Self {
+        Self {
+            service: value.service,
+            sources: value.sources,
+            sinks: value.sinks,
+            sanitizers: value.sanitizers,
+        }
+    }
+}
+
 fn verify_suppressions_with_governor(
     agent: &ureq::Agent,
     governor_base_url: &str,
@@ -274,6 +308,11 @@ enum Commands {
         /// Patterns are matched against directory name components of each file path.
         #[arg(long, default_values = ["thirdparty/", "vendor/", "node_modules/", "target/"])]
         exclude: Vec<String>,
+    },
+    /// Compose cross-service taint summaries from a YAML mesh config.
+    MeshAudit {
+        /// YAML config containing `before` and `after` service summary arrays.
+        mesh_config: PathBuf,
     },
     /// Analyse a unified diff patch for slop: dead-symbol additions and logic clones.
     ///
@@ -1248,6 +1287,7 @@ async fn main() -> anyhow::Result<()> {
                 &segs,
             )?;
         }
+        Commands::MeshAudit { mesh_config } => cmd_mesh_audit(mesh_config)?,
         Commands::Dashboard { path, wopr } => {
             if *wopr {
                 let base = path.clone().unwrap_or_else(|| {
@@ -1846,6 +1886,69 @@ fn has_suppression_pragma(data: &[u8], byte_offset: usize, label: &str) -> bool 
         || prev_line
             .windows(pragma_sh.len())
             .any(|w| w == pragma_sh.as_bytes())
+}
+
+fn cmd_mesh_audit(mesh_config: &Path) -> anyhow::Result<()> {
+    let raw = std::fs::read_to_string(mesh_config)
+        .with_context(|| format!("failed to read mesh config {}", mesh_config.display()))?;
+    let config: MeshAuditConfig = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse mesh config {}", mesh_config.display()))?;
+
+    validate_mesh_services(&config.before)?;
+    validate_mesh_services(&config.after)?;
+    validate_mesh_services(&config.services)?;
+
+    let before: Vec<forge::mesh_taint::MeshSummary> = if config.before.is_empty() {
+        config
+            .services
+            .iter()
+            .map(mesh_service_to_summary)
+            .collect()
+    } else {
+        config.before.iter().map(mesh_service_to_summary).collect()
+    };
+    let after: Vec<forge::mesh_taint::MeshSummary> = if config.after.is_empty() {
+        config
+            .services
+            .iter()
+            .map(mesh_service_to_summary)
+            .collect()
+    } else {
+        config.after.iter().map(mesh_service_to_summary).collect()
+    };
+
+    let findings = forge::mesh_taint::compose_mesh_summaries(&before, &after);
+    for finding in findings {
+        println!("{}", serde_json::to_string(&finding)?);
+    }
+    Ok(())
+}
+
+fn validate_mesh_services(services: &[MeshAuditService]) -> anyhow::Result<()> {
+    for service in services {
+        if service.service.trim().is_empty() {
+            anyhow::bail!("mesh service entry has an empty service name");
+        }
+        if let Some(repo_path) = &service.repo_path {
+            if !repo_path.exists() {
+                anyhow::bail!(
+                    "mesh service `{}` repo_path does not exist: {}",
+                    service.service,
+                    repo_path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn mesh_service_to_summary(service: &MeshAuditService) -> forge::mesh_taint::MeshSummary {
+    forge::mesh_taint::MeshSummary {
+        service: service.service.clone(),
+        sources: service.sources.clone(),
+        sinks: service.sinks.clone(),
+        sanitizers: service.sanitizers.clone(),
+    }
 }
 
 fn cmd_scan(

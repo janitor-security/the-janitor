@@ -86,6 +86,15 @@ the finding is absent from the output before closing.
 The sole exception: `security:credential_leak` is always billable regardless of
 path — a secret in a repo is a secret in a repo.
 
+## Framework Exemption Rule
+
+When reviewing hunt output, if a generic vulnerability (for example dynamic
+class loading or reflection) is found inside the core engine of a framework that
+inherently requires it (for example Hibernate, Jackson, or Spring DI), it MUST be
+classified as Intended Behavior. You must write a structural guard in
+`crates/forge/src/slop_hunter.rs` to suppress it based on the file path or class
+name.
+
 ## Labyrinth Blindness Law
 
 You are **mathematically forbidden** from reading, summarizing, analyzing, or

@@ -181,6 +181,33 @@ pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
         .unwrap_or(description)
         .to_ascii_lowercase();
 
+    if rule == "security:dynamic_class_loading"
+        && (path.contains("hibernate")
+            || path.contains("jdk8withjettybootplatform")
+            || path.contains("misk-moshi/")
+            || path.contains("/moshi/wire/"))
+    {
+        return true;
+    }
+    if rule == "security:unsafe_deserialization"
+        && (path.starts_with("samples/") || path.contains("/samples/"))
+    {
+        return true;
+    }
+    if rule == "security:credential_leak" && path.ends_with("heldcertificate.kt") {
+        return true;
+    }
+    if rule == "security:unpinned_asset"
+        && (path.contains(".github/workflows/")
+            || path.starts_with(".buildscript/")
+            || path.starts_with("build-logic/")
+            || path.starts_with("samples/")
+            || path.contains("/samples/")
+            || path == "mkdocs.yml"
+            || is_deploy_shell_script(&path))
+    {
+        return true;
+    }
     if path.starts_with("external/") || path.contains("/external/") {
         return matches!(
             rule.as_str(),
@@ -207,6 +234,13 @@ pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
         return true;
     }
     path == "src/mnemonics/lojban.h" && rule == "security:unpinned_asset"
+}
+
+fn is_deploy_shell_script(path: &str) -> bool {
+    let Some(file_name) = path.rsplit('/').next() else {
+        return false;
+    };
+    file_name.starts_with("deploy_") && file_name.ends_with(".sh")
 }
 
 /// Parse `source` with a hard timeout of [`PARSER_TIMEOUT_MICROS`] (500 ms).
@@ -11386,6 +11420,104 @@ mod phase5_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("kvc_injection")),
             "ObjC-2: valueForKeyPath: with literal key must not fire"
+        );
+    }
+
+    #[test]
+    fn hibernate_dynamic_class_loading_path_is_framework_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "hibernate-core/src/main/kotlin/org/hibernate/Hibernate.kt",
+                "security:dynamic_class_loading — Kotlin Class.forName() with dynamic argument",
+            ),
+            "Hibernate reflection core must be classified as intended framework behavior"
+        );
+    }
+
+    #[test]
+    fn okhttp_bootstrapper_dynamic_class_loading_is_framework_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "okhttp/src/main/kotlin/okhttp3/internal/platform/Jdk8WithJettyBootPlatform.kt",
+                "security:dynamic_class_loading — Kotlin Class.forName() with dynamic argument",
+            ),
+            "OkHttp platform bootstrapper reflection must be classified as intended behavior"
+        );
+    }
+
+    #[test]
+    fn held_certificate_fixture_credentials_are_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "okhttp-tls/src/main/kotlin/okhttp3/tls/HeldCertificate.kt",
+                "security:credential_leak — RSA private key PEM header detected",
+            ),
+            "HeldCertificate test-fixture generator must not emit credential leak findings"
+        );
+    }
+
+    #[test]
+    fn cicd_unpinned_assets_are_out_of_scope_for_generic_hunts() {
+        assert!(
+            is_hunt_false_positive_path(
+                ".github/workflows/pages.yml",
+                "security:unpinned_asset — .github.io/ URL embedded in production source",
+            ),
+            "GitHub workflow assets are out-of-scope for generic hunts"
+        );
+        assert!(
+            is_hunt_false_positive_path(
+                "scripts/deploy_docs.sh",
+                "security:unpinned_asset — <script src=\"http…\" loads an external script",
+            ),
+            "deploy_*.sh assets are out-of-scope for generic hunts"
+        );
+    }
+
+    #[test]
+    fn moshi_framework_reflection_is_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "misk-moshi/src/main/kotlin/misk/moshi/wire/FieldBinding.kt",
+                "security:dynamic_class_loading — Kotlin Class.forName() with dynamic argument",
+            ),
+            "Moshi serialization binding reflection must be classified as intended behavior"
+        );
+    }
+
+    #[test]
+    fn docs_build_assets_are_out_of_scope_for_generic_hunts() {
+        assert!(
+            is_hunt_false_positive_path(
+                "mkdocs.yml",
+                "security:unpinned_asset — .github.io/ URL embedded in production source",
+            ),
+            "MkDocs site assets are out-of-scope for generic hunts"
+        );
+        assert!(
+            is_hunt_false_positive_path(
+                ".buildscript/prepare_mkdocs.sh",
+                "security:unpinned_asset — <script src=\"http…\" loads an external script",
+            ),
+            "documentation build scripts are out-of-scope for generic hunts"
+        );
+        assert!(
+            is_hunt_false_positive_path(
+                "samples/exemplarchat/src/main/resources/web/index.html",
+                "security:unpinned_asset — <script src=\"http…\" loads an external script",
+            ),
+            "sample app assets are out-of-scope for generic hunts"
+        );
+    }
+
+    #[test]
+    fn sample_deserialization_is_exempt() {
+        assert!(
+            is_hunt_false_positive_path(
+                "samples/src/jvmMain/java/okio/samples/GoldenValue.java",
+                "security:unsafe_deserialization — Java ObjectInputStream.readObject()",
+            ),
+            "sample deserialization fixtures are out-of-scope for generic hunts"
         );
     }
 

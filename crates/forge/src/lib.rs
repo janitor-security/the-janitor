@@ -49,6 +49,7 @@ pub mod ifds;
 pub mod invisible_payload;
 pub mod labyrinth;
 pub mod library_identity;
+pub mod memory_bomb;
 pub mod mesh_taint;
 pub mod metadata;
 pub mod migration_guard;
