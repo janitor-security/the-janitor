@@ -108,6 +108,21 @@ commands, release commands, or operator housekeeping steps.
 - The `[SOVEREIGN TRANSLATION]` section is mandatory for final directive
 summaries and must remain terminal-only.
 
+## Bounty Extraction Law (mandatory for all hunt/scan output review)
+
+When reviewing `janitor hunt` output, a finding is weaponized ONLY if it possesses
+a concrete reproduction payload, `repro_cmd`, or generated HTML harness — NOT `Pending`.
+
+For every weaponized finding you MUST:
+A. Cross-reference the finding against its parent program's rules in
+   `tools/campaign/targets/<program>_targets.md`.
+B. Verify the target is strictly IN SCOPE.
+C. Extract the estimated payout for the finding's severity.
+D. Append a structured entry to `tools/campaign/BOUNTY_LEDGER.md` with:
+   `[Date]`, `[Target URL/Repo]`, `[Vulnerability Class]`, `[Severity]`,
+   `[Expected Payout]`, `[Estimated Approval % (>85% if payload exists)]`,
+   and `[Exact Repro Command]`.
+
 ## Structural Eradication Law (mandatory for all hunt/scan output review)
 
 You are mathematically forbidden from appending Markdown notes or prose to explain

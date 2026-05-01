@@ -12,12 +12,14 @@ use std::time::{Duration, Instant};
 
 mod campaign_ingest;
 mod cbom;
+mod ci_telemetry;
 mod daemon;
 mod export;
 mod git_drive;
 mod hunt;
 mod jira;
 mod report;
+mod sarif_enterprise;
 mod verify_asset;
 
 fn load_mtls_client_cert(
@@ -1122,7 +1124,8 @@ enum Commands {
         #[arg(long)]
         filter: Option<String>,
         /// Output format: `json` (default), `bugcrowd` for triage-ready Markdown
-        /// grouped by finding class, or `auth0` for Auth0 HackerOne submission format.
+        /// grouped by finding class, `auth0` for Auth0 HackerOne submission format,
+        /// or `sarif` for OASIS SARIF 2.1.0 enterprise output.
         #[arg(long, default_value = "json")]
         format: String,
         /// Path to an alternative slopsquat corpus file (`.rkyv` format).

@@ -108,9 +108,9 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
     } = args;
 
     match format {
-        "json" | "bugcrowd" | "auth0" => {}
+        "json" | "bugcrowd" | "auth0" | "sarif" => {}
         _ => anyhow::bail!(
-            "unsupported hunt output format '{format}' (expected 'json', 'bugcrowd', or 'auth0')"
+            "unsupported hunt output format '{format}' (expected 'json', 'bugcrowd', 'auth0', or 'sarif')"
         ),
     }
 
@@ -249,6 +249,20 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
             format_auth0_report(&findings)
         };
         println!("{report}");
+        return Ok(());
+    }
+
+    if format == "sarif" {
+        let ci_meta = crate::ci_telemetry::ingest_ci_run_metadata();
+        let sarif = crate::sarif_enterprise::render_enterprise_sarif(
+            &findings,
+            if ci_meta.is_populated() {
+                Some(&ci_meta)
+            } else {
+                None
+            },
+        );
+        println!("{sarif}");
         return Ok(());
     }
 
@@ -2569,7 +2583,19 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | ".labyrinth"
             | "janitor_decoys"
             | "ast_maze"
+            // Sample apps and demo directories are not production code.
+            | "sample-app"
+            | "sample_app"
+            | "demo"
+            | "demos"
+            | "samples"
+            | "playground"
+            | "storybook"
     ) {
+        return true;
+    }
+    // Aggressively drop any directory whose name contains "sample-app" or "sdk-sample"
+    if name.contains("sample-app") || name.starts_with("sdk-sample") {
         return true;
     }
     // Aggressively drop all test and debug infrastructure using full-path matching
@@ -2611,6 +2637,11 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         || name.ends_with("_test.js")
         || name.ends_with("_test.py")
         || name.ends_with("_test.ts")
+        // Jest/Vitest/Mocha dot-style test files: `autocapture.test.ts`, `foo.spec.js`
+        || name.ends_with(".test.ts")
+        || name.ends_with(".test.js")
+        || name.ends_with(".spec.ts")
+        || name.ends_with(".spec.js")
         // Shell scripts prefixed with `test_` are CI/docs-test utilities, not
         // production scripts — exclude to prevent false positives on unpinned curl
         // in test-harness entry points.

@@ -86,6 +86,22 @@ the finding is absent from the output before closing.
 The sole exception: `security:credential_leak` is always billable regardless of
 path — a secret in a repo is a secret in a repo.
 
+## Bounty Extraction Law
+
+When executing `janitor hunt`, you must review the output for weaponized findings.
+A finding is weaponized ONLY if it possesses a concrete reproduction payload,
+`repro_cmd`, or generated HTML harness — NOT `Pending`.
+
+For every weaponized finding, you MUST:
+A. Cross-reference the finding against its parent program's rules in
+   `tools/campaign/targets/<program>_targets.md`.
+B. Verify the target is strictly IN SCOPE.
+C. Extract the estimated payout for the finding's severity.
+D. Append a structured entry to `tools/campaign/BOUNTY_LEDGER.md` detailing:
+   `[Date]`, `[Target URL/Repo]`, `[Vulnerability Class]`, `[Severity]`,
+   `[Expected Payout]`, `[Estimated Approval % (>85% if payload exists)]`,
+   and `[Exact Repro Command]`.
+
 ## Framework Exemption Rule
 
 When reviewing hunt output, if a generic vulnerability (for example dynamic

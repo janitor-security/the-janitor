@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-01 — Sprint Batch 86: Enterprise SARIF, CI Telemetry, and Bounty Extraction Law
+
+**Directive:** Add Bounty Extraction Law to governance; implement P1-10 Enterprise SARIF 2.1.0 serializer; implement P1-12 CI/CD telemetry correlator; wire `--format sarif` into `janitor hunt`; hunt 3 authorized GitHub targets; eradicate FPs via Structural Eradication Law; apply Bounty Extraction Law to weaponized findings; delete P1-10 and P1-12 from innovation log; no release.
+
+**Changes Implemented:**
+
+- **Phase 1 — Bounty Extraction Law**: Added `## Bounty Extraction Law` to `.agent_governance/rules/evolution.md` and `.agent_governance/rules/response-format.md`. Created `tools/campaign/BOUNTY_LEDGER.md` with structured table header.
+- **Phase 2 — P1-10 Enterprise SARIF**: Created `crates/cli/src/sarif_enterprise.rs` — `render_enterprise_sarif(findings, ci_meta)` emitting OASIS SARIF 2.1.0 with stable `janitorFingerprint/v1` partial fingerprints, `repro_cmd` surfaced as SARIF `fixes` objects, regulatory regime data in `rule.help.markdown`, and `baselineState: "new"`. 7 deterministic tests.
+- **Phase 3 — P1-12 CI Telemetry**: Created `crates/cli/src/ci_telemetry.rs` — `ingest_ci_run_metadata()` extracting GitHub Actions, GitLab CI, Azure Pipelines, Buildkite, and Jenkins env vars into `CiRunMetadata { provider, commit_sha, ref_name, run_id, workflow_name, actor, repository, run_url, extra }`. Attached to SARIF `run.automationDetails` and `run.properties`. 4 deterministic tests.
+- **Phase 3b — hunt.rs SARIF wiring**: Added `"sarif"` to accepted format list in `cmd_hunt`. Added SARIF output branch: calls `ingest_ci_run_metadata()` + `render_enterprise_sarif()` and prints to stdout.
+- **Structural Eradication Law — `.test.ts` / `.spec.ts` FP guard**: Added `name.ends_with(".test.ts")`, `.test.js`, `.spec.ts`, `.spec.js` to `is_excluded_hunt_file` in `hunt.rs`. Eradicates Jest/Vitest/Mocha dot-style test file findings.
+- **Structural Eradication Law — sample-app dir guard**: Added `"sample-app"`, `"sample_app"`, `"demo"`, `"demos"`, `"samples"`, `"playground"`, `"storybook"` to `is_excluded_hunt_entry`; added name-contains check for `"sample-app"` and `starts_with("sdk-sample")`.
+- **Phase 4 — Live Hunt (3 targets)**:
+  - `immutable/ts-immutable-sdk`: 2 finding classes — `security:ssrf_dynamic_url` (7 production files) + `security:dom_xss_innerHTML` (embeddedLoginPromptOverlay.ts:25). Report: `.janitor/hunt_reports/immutable_ts-immutable-sdk.md`.
+  - `mattermost/mattermost-plugin-boards`: 2 finding classes — `security:react_xss_dangerous_html` (9 block editor components) + `security:dom_xss_innerHTML` (utils.ts:143). Report: `.janitor/hunt_reports/mattermost_mattermost-plugin-boards.md`.
+  - `mattermost/mattermost-plugin-calls`: 2 finding classes — `security:ssrf_dynamic_url` (recording/index.tsx:40) + `security:unpinned_asset` (lt/cmd/speech/main.go:36). Report: `.janitor/hunt_reports/mattermost_mattermost-plugin-calls.md`.
+- **Bounty Extraction Law applied**: 5 weaponized entries logged to `tools/campaign/BOUNTY_LEDGER.md` (2× Immutable SSRF/DOM XSS, 2× Mattermost React/DOM XSS, 1× Mattermost Calls SSRF). Total estimated pipeline: $3500–$9500.
+- **Phase 5 — Innovation Log Hygiene**: P1-10 and P1-12 blocks physically deleted from `.INNOVATION_LOG.md`.
+- **Verification**: `cargo test --workspace -- --test-threads=4` exit 0 (1,413+ passed); `just audit` exit 0 — "✅ System Clean."
+
 ## 2026-05-01 — Sprint Batch 85: Front-Door Fix, LotL C2 Shield, Intent Divergence, Enterprise Omni-Audit
 
 **Directive:** Move the Google Cloud vendor-verification facade to the repository root; implement the P6-7 Living-off-the-Land Cloud-API C2 sink detector and P4-2 Intent-vs-Implementation Divergence detector; hydrate and hunt 3 authorized GitHub targets; rewrite the innovation log for Fortune 500 acceptance gaps; do not cut a release.
