@@ -3,6 +3,26 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-01 — Sprint Batch 87: P3-4 Phase B Federated Memory & Bounty Governance Upgrade
+
+**Directive:** Expand Bounty Extraction Law with Threat Model Awareness (client-side fetch ≠ SSRF, local config ≠ remote exploit, self-XSS < 10%); implement P3-4 Phase B cross-repo federated memory; hunt 3 targets; fix AKIA base64 data-URI false positive; delete P3-4 cross-repo sub-bullet from innovation log; no release.
+
+**Changes Implemented:**
+
+- `.agent_governance/rules/evolution.md` — expanded Bounty Extraction Law with `### Threat Model Awareness` subsection; added `[Remediation / Exploitation Strategy]` column mandate
+- `.agent_governance/rules/response-format.md` — matching Threat Model Awareness expansion; SOP/CORS blocking language for fetch/XHR/axios
+- `tools/campaign/BOUNTY_LEDGER.md` — added `Exploitation Strategy` column; dropped 2 client-side-only SSRF entries (not remotely exploitable); retained 3 XSS findings with elevation paths
+- `crates/common/src/policy.rs` — added `cross_repo_memory: bool` field to `JanitorPolicy` (P3-4 Phase B, `#[serde(default)]`)
+- `crates/forge/src/federated_memory.rs` — new module: `AnonymizedSignature`, `FederatedMemory`, `extract_anonymized_signature()`, `ingest_federated_rule()`, `normalize_hop()`, `normalize_rule_class()`; 8 deterministic tests; zero proprietary leakage, ratchet-monotonic
+- `crates/forge/src/lib.rs` — `pub mod federated_memory` registered
+- `crates/forge/Cargo.toml` — `hex.workspace = true` added
+- `crates/forge/src/slop_hunter.rs` — `find_credential_slop`: AKIA pattern validator requires `[A-Z0-9]{16}` suffix (eradicates base64 data-URI FP); 2 regression tests added; `js_high_entropy_literal`: data URI guard added
+- `.INNOVATION_LOG.md` — P3-4 "Cross-repo attack-surface memory" sub-bullet deleted
+- `tools/campaign/target_ledger.json` — mattermost-plugin-confluence, mattermost-plugin-github, mattermost-plugin-gitlab marked `hunted: true, hunt_result: no_findings`
+- Hunt reports: `mattermost_mattermost-plugin-confluence.md`, `mattermost_mattermost-plugin-github.md`, `mattermost_mattermost-plugin-gitlab.md` (all no_findings)
+
+**Bounty Ledger Delta:** 0 new submissions (all 3 targets clean; 2 prior SSRF entries retroactively dropped as client-side-only per Threat Model Awareness Law)
+
 ## 2026-05-01 — Sprint Batch 86: Enterprise SARIF, CI Telemetry, and Bounty Extraction Law
 
 **Directive:** Add Bounty Extraction Law to governance; implement P1-10 Enterprise SARIF 2.1.0 serializer; implement P1-12 CI/CD telemetry correlator; wire `--format sarif` into `janitor hunt`; hunt 3 authorized GitHub targets; eradicate FPs via Structural Eradication Law; apply Bounty Extraction Law to weaponized findings; delete P1-10 and P1-12 from innovation log; no release.

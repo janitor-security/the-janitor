@@ -2018,6 +2018,7 @@ dependencies = [
  "fixedbitset 0.5.7",
  "git2",
  "goblin",
+ "hex",
  "memmap2",
  "ndarray",
  "openapiv3",

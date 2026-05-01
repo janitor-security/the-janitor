@@ -121,7 +121,25 @@ C. Extract the estimated payout for the finding's severity.
 D. Append a structured entry to `tools/campaign/BOUNTY_LEDGER.md` with:
    `[Date]`, `[Target URL/Repo]`, `[Vulnerability Class]`, `[Severity]`,
    `[Expected Payout]`, `[Estimated Approval % (>85% if payload exists)]`,
-   and `[Exact Repro Command]`.
+   `[Exact Repro Command]`, and `[Remediation / Exploitation Strategy]`.
+
+### Threat Model Awareness (mandatory threat model pre-filter)
+
+You MUST evaluate the **Taint Source Origin** and **Actor Privilege Level** BEFORE
+logging any finding to the Bounty Ledger or including it in a hunt report.
+
+- A finding that requires **local config modification**, **env var control**, or
+  **Admin privileges** is NOT remotely exploitable. `Approval % < 10%`.
+- A finding in **client-side TypeScript/JavaScript** where the sink is a
+  `fetch()` / `XMLHttpRequest` / `axios` call is NOT server-side SSRF. Client-side
+  HTTP calls are blocked by SOP/CORS. Requires proof of a **server-side execution
+  path** (SSR, Next.js API route, Node.js backend). Without it: `Approval % < 10%`.
+- **Self-XSS** (victim must trigger the payload themselves without any third-party
+  attack vector): `Approval % < 10%`.
+
+For every entry with `Approval % < 10%`, either append an explicit
+**Exploitation Strategy** (how to elevate to >85%) or DELETE the entry.
+Unviable entries must NOT remain in the ledger.
 
 ## Structural Eradication Law (mandatory for all hunt/scan output review)
 

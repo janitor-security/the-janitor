@@ -100,7 +100,31 @@ C. Extract the estimated payout for the finding's severity.
 D. Append a structured entry to `tools/campaign/BOUNTY_LEDGER.md` detailing:
    `[Date]`, `[Target URL/Repo]`, `[Vulnerability Class]`, `[Severity]`,
    `[Expected Payout]`, `[Estimated Approval % (>85% if payload exists)]`,
-   and `[Exact Repro Command]`.
+   `[Exact Repro Command]`, and `[Remediation / Exploitation Strategy]`.
+
+### Threat Model Awareness (mandatory threat model pre-filter)
+
+You MUST evaluate the **Taint Source Origin** and **Actor Privilege Level** before
+logging any finding to the Bounty Ledger.
+
+- If a vulnerability requires modifying a **local configuration file**, an
+  **environment variable**, or requires **Administrative privileges** to execute,
+  it is NOT remotely exploitable. Set `Estimated Approval % < 10%`.
+- If a finding fires in **client-side TypeScript/JavaScript** (React, browser SDK,
+  Node client) and the sink is a `fetch()` / `XMLHttpRequest` call, it is NOT
+  server-side SSRF — it is a client-side HTTP call blocked by SOP/CORS. The
+  finding does NOT constitute an SSRF bounty unless a server-side execution path
+  (SSR, Next.js API route, service worker with `no-cors`, or Node.js backend) can
+  be demonstrated. Set `Estimated Approval % < 10%` and append the elevation
+  path, or drop the entry entirely if no server-side path exists.
+- If a finding is **Self-XSS** (victim must paste a payload into their own browser
+  console or input field with no third-party trigger), set `Estimated Approval % < 10%`.
+
+For every entry with `Approval % < 10%`, you MUST append an
+`Exploitation Strategy` column entry describing EXACTLY how to elevate the finding
+to >85% (e.g., "find an unauthenticated path to the config file", "find a
+server-side Next.js API route that calls this same SDK method"), or DELETE the
+entry entirely if no viable elevation path exists.
 
 ## Framework Exemption Rule
 

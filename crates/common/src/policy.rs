@@ -675,6 +675,18 @@ pub struct JanitorPolicy {
     /// treated as unprotected).
     #[serde(default)]
     pub llm_compliance_attestations: Vec<String>,
+
+    /// Enable cross-repository attack-surface memory (P3-4 federated detection).
+    ///
+    /// When `true`, the engine accepts anonymized structural signatures extracted
+    /// from findings in other repositories and treats them as active detection
+    /// rules for this scan. Signatures carry zero proprietary content — only the
+    /// structural AST skeleton and taint chain shape. Enables one tenant's proven
+    /// exploit class to harden every connected codebase without leaking code.
+    ///
+    /// Default: `false`.
+    #[serde(default)]
+    pub cross_repo_memory: bool,
 }
 
 impl Default for JanitorPolicy {
@@ -701,6 +713,7 @@ impl Default for JanitorPolicy {
             suppressions: None,
             rbac: RbacConfig::default(),
             llm_compliance_attestations: Vec::new(),
+            cross_repo_memory: false,
         }
     }
 }
@@ -1129,6 +1142,7 @@ mod tests {
             rbac: RbacConfig::default(),
             llm_compliance_attestations: Vec::new(),
             execution_tier: "Community".to_string(),
+            cross_repo_memory: false,
         };
         let serialised = toml::to_string(&original).unwrap();
         let mut deserialised: JanitorPolicy = toml::from_str(&serialised).unwrap();

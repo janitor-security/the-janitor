@@ -3740,6 +3740,25 @@ fn credential_automaton() -> &'static AhoCorasick {
 pub fn find_credential_slop(source: &[u8]) -> Vec<SlopFinding> {
     let ac = credential_automaton();
     ac.find_iter(source)
+        .filter(|mat| {
+            // Pattern 0 is `AKIA` — the AWS IAM Access Key prefix.
+            // A real key has the form AKIA[A-Z2-7]{16} (20 chars total).
+            // Base64-encoded data URIs (e.g. inline PNG images) coincidentally
+            // contain the byte sequence AKIA followed by lowercase letters;
+            // those must not be flagged.  Validate that the 16 bytes after
+            // AKIA are all uppercase ASCII letters or digits.
+            if mat.pattern().as_usize() == 0 {
+                let suffix_start = mat.end();
+                let suffix_end = suffix_start + 16;
+                if suffix_end > source.len() {
+                    return false;
+                }
+                return source[suffix_start..suffix_end]
+                    .iter()
+                    .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit());
+            }
+            true
+        })
         .map(|mat| SlopFinding {
             start_byte: mat.start(),
             end_byte: mat.end(),
@@ -5665,8 +5684,19 @@ fn js_high_entropy_literal(node: Node<'_>, source: &[u8]) -> bool {
     ) {
         return false;
     }
-    js_stringish_text(node, source)
-        .is_some_and(|text| text.len() > 32 && shannon_entropy(text.as_bytes()) > 4.5)
+    js_stringish_text(node, source).is_some_and(|text| {
+        // Data URIs (inline images, fonts, SVGs) are legitimate high-entropy
+        // strings and must not trigger the credential_leak detector.
+        if text.starts_with("data:image/")
+            || text.starts_with("data:application/")
+            || text.starts_with("data:font/")
+            || text.starts_with("data:audio/")
+            || text.starts_with("data:video/")
+        {
+            return false;
+        }
+        text.len() > 32 && shannon_entropy(text.as_bytes()) > 4.5
+    })
 }
 
 fn trusted_api_domain_in_text(text: &str) -> Option<&'static str> {
@@ -9451,6 +9481,31 @@ mod credential_tests {
         assert!(
             findings.is_empty(),
             "clean source must not trigger credential scanner"
+        );
+    }
+
+    #[test]
+    fn test_akia_in_base64_data_uri_not_flagged() {
+        // A base64-encoded PNG data URI that happens to contain the byte
+        // sequence "AKIA" followed by lowercase letters (not a real AWS key).
+        // Regression for mattermost-plugin-gitlab mattermost_gitlab.jsx:117.
+        let src = b"xlinkHref='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACAAAAAgACAYAAAC\
+AKIAoAEYuREgAX8687Nw283LCyp9Mw=='";
+        let findings = find_credential_slop(src);
+        assert!(
+            findings.is_empty(),
+            "AKIA inside base64 data URI (lowercase suffix) must not fire credential_leak"
+        );
+    }
+
+    #[test]
+    fn test_real_akia_key_still_detected() {
+        // A real AWS IAM key: AKIA + 16 uppercase alphanumeric chars.
+        let src = b"AWS_KEY=AKIAIOSFODNN7EXAMPLE";
+        let findings = find_credential_slop(src);
+        assert!(
+            !findings.is_empty(),
+            "real AKIA key (16 uppercase chars) must still be detected after data-URI guard"
         );
     }
 
