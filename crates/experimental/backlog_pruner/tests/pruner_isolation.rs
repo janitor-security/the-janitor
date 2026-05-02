@@ -25,7 +25,7 @@ fn python_parser() -> Parser {
     p
 }
 
-fn parse_python<'a>(parser: &mut Parser, source: &'a [u8]) -> tree_sitter::Tree {
+fn parse_python(parser: &mut Parser, source: &[u8]) -> tree_sitter::Tree {
     parser.parse(source, None).expect("parse must not fail")
 }
 

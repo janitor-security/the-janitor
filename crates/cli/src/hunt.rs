@@ -4699,9 +4699,8 @@ class Handler {
         asar.extend_from_slice(&(json_len as u32).to_le_bytes());
         asar.extend_from_slice(json_bytes);
         // Padding to 4-byte boundary.
-        for _ in 0..(inner_payload_padded - inner_payload) {
-            asar.push(0);
-        }
+        let pad = inner_payload_padded - inner_payload;
+        asar.resize(asar.len() + pad, 0u8);
         // File data.
         asar.extend_from_slice(content);
         asar

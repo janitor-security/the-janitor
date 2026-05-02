@@ -1040,6 +1040,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_python_phantom_payload_slop(eng, parsed));
             f.extend(find_python_slopsquat_imports(eng, parsed));
             f.extend(find_hypervisor_evasion_slop(source));
+            f.extend(crate::oauth_account_fusion::detect_oauth_account_fusion(
+                source,
+            ));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -1064,6 +1067,9 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_js_phantom_payload_slop(eng, parsed));
             f.extend(find_js_slopsquat_imports(eng, parsed));
             f.extend(find_llm_prompt_injection_sinks(source));
+            f.extend(crate::oauth_account_fusion::detect_oauth_account_fusion(
+                source,
+            ));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -1087,7 +1093,13 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_oauth_state_omission(source));
             f
         }
-        "rb" => find_ruby_slop(eng, parsed),
+        "rb" => {
+            let mut f = find_ruby_slop(eng, parsed);
+            f.extend(crate::oauth_account_fusion::detect_oauth_account_fusion(
+                source,
+            ));
+            f
+        }
         "sh" | "bash" | "zsh" => {
             let mut f = find_bash_slop(eng, parsed);
             f.extend(find_hypervisor_evasion_slop(source));
@@ -9492,10 +9504,7 @@ mod logic_regression_tests {
     fn test_logic_erasure_does_not_fire_on_volume_change() {
         // Base: 4 branches in 4 lines, Head: 0 branches in 40 lines — volume too different.
         let base_lines: Vec<&str> = vec!["if a { 1 }", "if b { 2 }", "if c { 3 }", "if d { 4 }"];
-        let mut head_lines: Vec<&str> = Vec::new();
-        for _ in 0..40 {
-            head_lines.push("let x = 1;");
-        }
+        let head_lines: Vec<&str> = vec!["let x = 1;"; 40];
         let patch = make_patch(&base_lines, &head_lines);
         assert!(
             check_logic_regression(&patch).is_none(),

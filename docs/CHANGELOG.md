@@ -3,6 +3,43 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 93: Identity Fusion & OIDC Boundary Defense
+
+**Directive**: Implement P1-13 OAuth Pre-Account Fusion Detector and P3-7 GitHub Actions
+OIDC Trust-Boundary Auditor; hydrate 3 targets; eradicate P1-13 and P3-7 from INNOVATION_LOG.
+No release cut.
+
+**Changes**:
+- `crates/forge/src/oauth_account_fusion.rs` *(created)*: P1-13 — AhoCorasick pre-screen of
+  20 account-merge sinks (`linkAccount`, `mergeAccount`, `find_or_create_by`, `OmniAuth`,
+  `passport.authenticate`, `NextAuth`, etc.) with ±30-line email-verified dominator window;
+  emits `security:oauth_account_fusion_pretakeover` at KevCritical (CWE-287, OWASP A07);
+  5 deterministic tests (unverified linkage fires, email_verified suppresses, emailConfirmed
+  suppresses, OmniAuth fires, passport.authenticate fires); wired into py/js/ts/tsx/jsx/rb
+  arms of `find_slop`.
+- `crates/anatomist/src/gh_workflow.rs` *(created)*: P3-7 — line-by-line YAML heuristic parser
+  for `.github/workflows/*.yml`; detects `pull_request_target`+`id-token: write` →
+  `security:oidc_fork_compromise` KevCritical; detects `id-token: write`+`contents: write` →
+  `security:oidc_overprivileged_workflow` Critical; handles inline `on: [...]` and
+  `permissions: write-all` forms; 5 deterministic tests.
+- `crates/forge/src/lib.rs`: `pub mod oauth_account_fusion` added.
+- `crates/anatomist/src/lib.rs`: `pub mod gh_workflow` added.
+- `crates/forge/src/slop_hunter.rs`: oauth_account_fusion wired into py/js/ts/rb find_slop
+  arms; pre-existing test vector `head_lines` loop → `vec!["let x = 1;"; 40]` clippy fix.
+- `crates/cli/src/hunt.rs`: ASAR padding loop → `resize()` clippy fix.
+- `crates/experimental/backlog_pruner/tests/pruner_isolation.rs`: elide unnecessary `'a`
+  lifetime annotation in `parse_python` helper.
+- `.INNOVATION_LOG.md`: P1-13 (42 lines) and P3-7 (59 lines) blocks physically deleted.
+- `tools/campaign/target_ledger.json`: 6 mattermost plugin targets marked `hunted: true`
+  with `hunt_result: "Sprint Batch 93"`.
+- `.janitor/hunt_reports/`: 3 new hunt reports (msteams-meetings, playbooks, zoom) — all
+  returned `no_findings`; OAuth delegation to Mattermost platform SDK; no OIDC antipatterns.
+- `docs/CHANGELOG.md`: this entry.
+
+**Test results**: `cargo test --workspace -- --test-threads=4` — all pass (0 failures).
+**Audit**: `cargo fmt --all -- --check` ✓; `cargo clippy --workspace -- -D warnings` ✓;
+`cargo check --workspace` ✓.
+
 ## 2026-05-02 — Sprint Batch 92: Frontend State, Monorepo Attribution & Decadal Omni-Audit
 
 **Directive**: Implement P1-6 frontend state virtual IFDS edges, P1-14 monorepo component

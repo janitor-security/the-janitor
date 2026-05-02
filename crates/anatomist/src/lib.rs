@@ -15,6 +15,7 @@
 extern crate forge;
 
 pub mod bridge;
+pub mod gh_workflow;
 pub mod graph;
 pub mod heuristics;
 pub mod imports;
