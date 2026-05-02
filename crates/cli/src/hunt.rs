@@ -2883,6 +2883,9 @@ fn scan_buffer(
     findings.extend(forge::agentic_graph::find_agentic_privilege_escalations(
         ext, source, label,
     ));
+    findings.extend(forge::agentic_tool_audit::find_bare_metal_agentic_loops(
+        ext, source, label,
+    ));
     findings.extend(forge::idor::scan_source(ext, source, label));
 
     // Repojacking & unpinned Git dependency shield: scan manifest files.

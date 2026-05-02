@@ -3,6 +3,31 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 90: Cognitive EDR Evasion & Bare-Metal Agentic Loop Detection
+
+**Directive**: Expand the attack ledger for Cognitive EDR/AV evasion and OAuth account-fusion
+pre-takeover, implement bare-metal agentic loop detection, add the OAuth pre-account fusion
+P-tier item, verify, commit, and do not release.
+
+**Files modified/created**:
+
+- `crates/forge/src/agentic_tool_audit.rs` *(created)*: tree-sitter-backed detector for raw
+  `while` / `loop` / `for` agent loops where an LLM network invocation is followed by dynamic
+  execution inside the same loop. Emits `security:bare_metal_agentic_loop` at `KevCritical`.
+- `crates/forge/src/lib.rs` — exported `agentic_tool_audit`.
+- `crates/cli/src/hunt.rs` — wired the new bare-metal detector into hunt scanning.
+- `tools/campaign/ATTACK_LEDGER.md` — added Cognitive EDR/AV Evasion (ManageEngine Class) and
+  OAuth Account Fusion Pre-Takeover campaigns.
+- `.INNOVATION_LOG.md` — added `P1-13: OAuth Pre-Account Fusion Detector`.
+- `docs/CHANGELOG.md` — Sprint Batch 90 entry prepended.
+
+**Verification**:
+- `cargo test -p forge bare_metal -- --test-threads=4` passed.
+- `cargo test -p forge agentic_tool_audit -- --test-threads=4` passed.
+- `cargo test --workspace -- --test-threads=4` passed.
+- `env XDG_RUNTIME_DIR=/tmp just audit` passed; direct `just audit` was blocked by
+  `/run/user/1000/just` permissions before entering the DAG.
+
 ## 2026-05-01 — Sprint Batch 89: Zero-Day Mining Operation (P1-8 + P4-1 Implementation)
 
 **Directive**: Implement Long-Tail C/C++ Latent Vulnerability Mining Engine (P1-8) and Formal
