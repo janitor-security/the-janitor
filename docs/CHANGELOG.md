@@ -3,6 +3,25 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 94: Cryptographic Supremacy & Ledger Reconstruction
+
+**Directive**: Implement P4-3 (Cryptographic Protocol Correctness) and P4-5 (Hardware
+Side-Channel Analyzer); reconstruct Auth0 bounty findings; hydrate 3 targets;
+eradicate P4-3 and P4-5 from INNOVATION_LOG. No release cut.
+
+**Changes**:
+- `crates/forge/src/crypto_protocol.rs` *(new)*: P4-3 — `detect_crypto_protocol_issues(source)` with two detectors: `detect_nonce_reuse` (AhoCorasick AEAD cipher scan + ±15-line hardcoded IV check → `security:nonce_reuse` at Critical) and `detect_pqc_downgrade` (legacy asymmetric keygen scan + ±40-line PQC hybrid absence check → `security:pqc_hybrid_downgrade` at KevCritical). 4 automata, 6 deterministic tests.
+- `crates/forge/src/sidechannel.rs` *(new)*: P4-5 — `find_secret_dependent_branches(source)` — 3-automaton IFDS-style detector: secret source (HMAC, PBKDF2, bcrypt, jwt.sign, etc.) + variable-time comparison (`===`, `==`, `strcmp`) — suppressed by constant-time guard (`timingSafeEqual`, `compare_digest`, `ct_eq`). Emits `security:non_constant_time_comparison` at Critical. FP eradicated: removed bare `sign(` (matched `window.location.assign(`) and `getToken`/`generateToken` (matched public-token-retrieval, not secret producers). 6 deterministic tests.
+- `crates/forge/src/lib.rs`: added `pub mod crypto_protocol;` and `pub mod sidechannel;` (alphabetical order)
+- `crates/forge/src/slop_hunter.rs`: wired both detectors into `py`, `js|jsx|ts|tsx`, `java`, and `go` arms of `find_slop`
+- `tools/campaign/BOUNTY_LEDGER.md`: 3 new entries — auth0.js DOM XSS ×2 (captcha.js:402, username-password.js:52) and openai/codex intent_divergence in auth.rs; Auth0-spa-js prototype_pollution in `*_old.js` (archived file, not logged)
+- `tools/campaign/target_ledger.json`: mattermost-plugin-mscalendar, mattermost-plugin-msteams (no_findings), auth0.js, auth0-spa-js, openai/codex marked hunted
+- `.janitor/hunt_reports/`: 5 new reports (auth0_auth0.js.md, auth0_auth0-spa-js.md, mattermost_mattermost-plugin-mscalendar.md, mattermost_mattermost-plugin-msteams.md, openai_codex.md)
+- `.INNOVATION_LOG.md`: P4-3 and P4-5 blocks (63 lines) physically deleted per Absolute Eradication Law
+- `cargo test --workspace -- --test-threads=4`: 1,473+ tests, 0 failed
+- `cargo clippy --workspace -- -D warnings`: exit 0
+- `cargo fmt --all -- --check`: exit 0
+
 ## 2026-05-02 — Sprint Batch 93: Identity Fusion & OIDC Boundary Defense
 
 **Directive**: Implement P1-13 OAuth Pre-Account Fusion Detector and P3-7 GitHub Actions

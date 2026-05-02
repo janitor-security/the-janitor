@@ -1485,7 +1485,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "no_findings \u2014 Sprint Batch 94"
     },
     {
       "engagement": "mattermost_targets",
@@ -1499,7 +1501,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "no_findings \u2014 Sprint Batch 94"
     },
     {
       "engagement": "mattermost_targets",
@@ -1617,7 +1621,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "findings: intent_divergence in auth.rs (logged), raw_pointer_deref \u00d722 (unsafe sandbox code, not logged) \u2014 Sprint Batch 94"
     },
     {
       "engagement": "opensea_targets",

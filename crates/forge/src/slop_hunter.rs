@@ -1043,6 +1043,10 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(crate::oauth_account_fusion::detect_oauth_account_fusion(
                 source,
             ));
+            f.extend(crate::crypto_protocol::detect_crypto_protocol_issues(
+                source,
+            ));
+            f.extend(crate::sidechannel::find_secret_dependent_branches(source));
             f
         }
         "js" | "jsx" | "ts" | "tsx" => {
@@ -1070,6 +1074,10 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(crate::oauth_account_fusion::detect_oauth_account_fusion(
                 source,
             ));
+            f.extend(crate::crypto_protocol::detect_crypto_protocol_issues(
+                source,
+            ));
+            f.extend(crate::sidechannel::find_secret_dependent_branches(source));
             f
         }
         // Phase 1 byte-level Tier 2 + Phase 2 AST-walk Tier 1 for Java
@@ -1082,6 +1090,10 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_saml_xsw_and_xxe(source));
             f.extend(find_oauth_state_omission(source));
             f.extend(find_java_phantom_payload_slop(eng, parsed));
+            f.extend(crate::crypto_protocol::detect_crypto_protocol_issues(
+                source,
+            ));
+            f.extend(crate::sidechannel::find_secret_dependent_branches(source));
             f
         }
         "go" => {
@@ -1091,6 +1103,10 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
             f.extend(find_jwt_validation_bypass(source));
             f.extend(find_saml_xsw_and_xxe(source));
             f.extend(find_oauth_state_omission(source));
+            f.extend(crate::crypto_protocol::detect_crypto_protocol_issues(
+                source,
+            ));
+            f.extend(crate::sidechannel::find_secret_dependent_branches(source));
             f
         }
         "rb" => {
