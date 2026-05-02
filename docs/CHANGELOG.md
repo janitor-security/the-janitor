@@ -3,6 +3,46 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 91: Memory Proof Lane & Cargo Worm Shield
+
+**Directive**: Implement P1-11 bounded memory-safety proof artifacts and P1-7 Cargo
+`build.rs` worm detection, upgrade lattice-gap governance, run three live-fire hunts,
+delete shipped P-tier blocks, verify, commit, and do not release.
+
+**Files modified/created**:
+
+- `crates/forge/src/memory_proof.rs` *(created)*: deterministic intra-procedural
+  interval/null proof lane. Emits `ProofStatus::Vulnerable` evidence when an
+  attacker-controlled index, size, or pointer reaches a memory sink without a
+  dominating guard.
+- `crates/forge/src/rust_build_worm.rs` *(created)*: `build.rs` capsule extractor and
+  `security:cargo_build_worm` detector for writes outside `OUT_DIR` and remote
+  payload-to-shell execution.
+- `crates/forge/src/lib.rs` — exported `memory_proof` and `rust_build_worm`.
+- `crates/cli/src/hunt.rs` — attached memory proof witnesses to unsafe string/raw pointer
+  findings, wired `build.rs` worm detection, and added mock/test/CI path guards.
+- `.agent_governance/rules/evolution.md` and `.agent_governance/rules/response-format.md`
+  — added the Lattice-Gap Innovation Loop requirement.
+- `.INNOVATION_LOG.md` — physically deleted shipped `P1-11` and `P1-7`; added `P1-14`
+  for the live-fire component attribution / proof-finality gap.
+- `tools/campaign/target_ledger.json` — marked `mattermost/mattermost`,
+  `mattermost/mattermost-plugin-mscalendar`, and `mattermost/mattermost-plugin-msteams`
+  hunted for Sprint Batch 91.
+
+**Live-fire hunt results**:
+- `mattermost/mattermost`: findings remain, but report still exposed component/proof-finality
+  gaps; logged `P1-14` instead of writing a low-confidence bounty row.
+- `mattermost/mattermost-plugin-mscalendar`: no findings.
+- `mattermost/mattermost-plugin-msteams`: mock TLS findings suppressed after `_mock` path guard;
+  rerun produced no findings.
+
+**Verification**:
+- `cargo test -p forge memory_proof -- --test-threads=4` passed.
+- `cargo test -p forge rust_build_worm -- --test-threads=4` passed.
+- `cargo test -p cli scan_directory_applies_exclusion_lattice -- --test-threads=4` passed.
+- `cargo test --workspace -- --test-threads=4` passed.
+- `env XDG_RUNTIME_DIR=/tmp just audit` passed.
+
 ## 2026-05-02 — Sprint Batch 90: Cognitive EDR Evasion & Bare-Metal Agentic Loop Detection
 
 **Directive**: Expand the attack ledger for Cognitive EDR/AV evasion and OAuth account-fusion

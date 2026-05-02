@@ -2571,6 +2571,7 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
     if matches!(
         name.as_ref(),
         ".git"
+            | ".github"
             | "node_modules"
             | "target"
             | "build"
@@ -2642,10 +2643,18 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         || name.ends_with("_test.js")
         || name.ends_with("_test.py")
         || name.ends_with("_test.ts")
+        || name.ends_with("_test.tsx")
+        || name.ends_with("_mock.go")
+        || name.ends_with("_mock.rs")
+        || name.ends_with("_mock.ts")
+        || name.ends_with("_mock.tsx")
+        || name.starts_with("mock_")
         // Jest/Vitest/Mocha dot-style test files: `autocapture.test.ts`, `foo.spec.js`
         || name.ends_with(".test.ts")
+        || name.ends_with(".test.tsx")
         || name.ends_with(".test.js")
         || name.ends_with(".spec.ts")
+        || name.ends_with(".spec.tsx")
         || name.ends_with(".spec.js")
         // Shell scripts prefixed with `test_` are CI/docs-test utilities, not
         // production scripts — exclude to prevent false positives on unpinned curl
@@ -2788,6 +2797,19 @@ fn scan_buffer(
                     extract_c_buffer_width(&finding.description),
                 );
                 structured = forge::exploitability::attach_exploit_witness(structured, witness);
+                if let Some(memory_witness) =
+                    forge::memory_proof::witness_for_memory_finding(ext, source, label, line)
+                {
+                    structured.exploit_witness = Some(memory_witness);
+                    structured.upstream_validation_absent = true;
+                }
+            } else if rule_id == "security:raw_pointer_deref" {
+                if let Some(memory_witness) =
+                    forge::memory_proof::witness_for_memory_finding(ext, source, label, line)
+                {
+                    structured.exploit_witness = Some(memory_witness);
+                    structured.upstream_validation_absent = true;
+                }
             } else if rule_id == "security:parser_exhaustion_anomaly" {
                 let witness = forge::exploitability::parser_exhaustion_witness(
                     label,
@@ -2875,6 +2897,10 @@ fn scan_buffer(
             structured
         })
         .collect::<Vec<_>>();
+    let filename = std::path::Path::new(label)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
     if ext == "fga" {
         findings.extend(forge::schema_graph::find_openfga_invariant_findings(
             source, label,
@@ -2886,13 +2912,14 @@ fn scan_buffer(
     findings.extend(forge::agentic_tool_audit::find_bare_metal_agentic_loops(
         ext, source, label,
     ));
+    if filename == "build.rs" {
+        findings.extend(forge::rust_build_worm::find_cargo_build_worm_slop(
+            label, source,
+        ));
+    }
     findings.extend(forge::idor::scan_source(ext, source, label));
 
     // Repojacking & unpinned Git dependency shield: scan manifest files.
-    let filename = std::path::Path::new(label)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
     if matches!(
         filename,
         "package.json" | "Cargo.toml" | "go.mod" | "pyproject.toml" | "pom.xml"
@@ -4312,6 +4339,7 @@ def main(user_id):
         let dir = tempfile::TempDir::new().unwrap();
         for excluded in [
             ".git",
+            ".github",
             "node_modules",
             "target",
             "build",
@@ -4346,6 +4374,13 @@ def main(user_id):
             "handler_test.js",
             "handler_test.py",
             "handler_test.ts",
+            "handler_test.tsx",
+            "client_mock.go",
+            "transport_mock.rs",
+            "widget_mock.tsx",
+            "mock_client.ts",
+            "component.test.tsx",
+            "component.spec.tsx",
         ] {
             std::fs::write(
                 dir.path().join(excluded_file),

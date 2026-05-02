@@ -123,6 +123,14 @@ D. Append a structured entry to `tools/campaign/BOUNTY_LEDGER.md` with:
    `[Expected Payout]`, `[Estimated Approval % (>85% if payload exists)]`,
    `[Exact Repro Command]`, and `[Remediation / Exploitation Strategy]`.
 
+If a finding requires a `[lattice-gap: P-XX]` annotation because the IFDS solver
+cannot trace a specific framework, protocol, or memory bound, you MUST
+simultaneously create a detailed architectural proposal for that `P-XX` item in
+`.INNOVATION_LOG.md`. The bounty ledger is the symptom; the innovation log is
+the cure. The proposal must name the missing lattice element, the Rust module to
+extend, the deterministic proof strategy, and the true-positive / true-negative
+fixture pair required to close the gap.
+
 ### Threat Model Awareness (mandatory threat model pre-filter)
 
 You MUST evaluate the **Taint Source Origin** and **Actor Privilege Level** BEFORE
