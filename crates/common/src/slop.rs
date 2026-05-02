@@ -17,6 +17,27 @@ pub const RECOGNIZED_REGULATORY_REGIMES: &[&str] = &[
     "OCC_2024_32",
 ];
 
+/// Structured verification harness artifact synthesized by the Kani bridge (P4-1).
+///
+/// Encapsulates the harness source text and run command emitted by
+/// `crates/forge/src/kani_bridge::synthesize_kani_harness`. The artifact is
+/// stored on [`ExploitWitness`] so it is carried through to SARIF and Bugcrowd
+/// exports without requiring a separate pipeline lookup.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HarnessArtifact {
+    /// Name of the vulnerable function the harness exercises.
+    pub function_name: String,
+    /// Human-readable list of symbolic input descriptions (one per `kani::any()` call).
+    pub inputs: Vec<String>,
+    /// The safety assertion proven by the harness (negation of the bug class invariant).
+    pub assertion: String,
+    /// Complete harness source text (C or Rust) ready to be written to a temp file.
+    pub harness_source: String,
+    /// CLI command to invoke the bounded model checker, e.g.
+    /// `cargo kani --harness harness_foo`.
+    pub run_command: String,
+}
+
 /// Deterministic exploitability proof for a confirmed source-to-sink chain.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExploitWitness {
@@ -88,6 +109,11 @@ pub struct ExploitWitness {
     /// `None` when the analysis was not run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub static_source_proven: Option<bool>,
+    /// Kani / CBMC bounded-model-checker harness synthesized from this witness
+    /// by the P4-1 formal verification bridge. `None` when the harness synthesizer
+    /// was not run or the witness lacked sufficient structural information.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_artifact: Option<HarnessArtifact>,
 }
 
 /// A structured antipattern or dead-symbol finding for MCP tool consumption.

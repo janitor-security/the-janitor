@@ -1002,8 +1002,16 @@ pub fn find_slop(language: &str, parsed: &ParsedUnit<'_>) -> Vec<SlopFinding> {
         "bzl" | "bazel" | "starlark" => find_starlark_slop(source),
         "cmake" => find_cmake_slop(source),
         "yaml" | "yml" => find_yaml_slop(eng, source),
-        "c" | "h" => find_c_slop(eng, source),
-        "cpp" | "cxx" | "cc" | "hpp" => find_cpp_slop(eng, source),
+        "c" | "h" => {
+            let mut f = find_c_slop(eng, source);
+            f.extend(crate::legacy_c_mining::find_legacy_c_mining_targets(source));
+            f
+        }
+        "cpp" | "cxx" | "cc" | "hpp" => {
+            let mut f = find_cpp_slop(eng, source);
+            f.extend(crate::legacy_c_mining::find_legacy_c_mining_targets(source));
+            f
+        }
         "hcl" | "tf" => find_hcl_slop_ast(eng, source),
         // Phase 7 R&D: Rust unsafe transmute + raw pointer dereference AST walk
         "rs" => {

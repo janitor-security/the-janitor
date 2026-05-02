@@ -2579,6 +2579,11 @@ fn is_excluded_hunt_entry(entry: &walkdir::DirEntry) -> bool {
             | "examples"
             | "coverage"
             | "vendor"
+            // Framework-vendor directories that inherently use unsafe C patterns.
+            // Per Framework Exemption Rule: glibc-compatibility shims and POCO library
+            // calls use strcpy/sprintf by design to replicate glibc/BSD API contracts.
+            | "glibc-compatibility"
+            | "poco"
             // Labyrinth deception directories: skip in O(1) to prevent friendly fire.
             | ".labyrinth"
             | "janitor_decoys"

@@ -340,8 +340,9 @@
         "GitHub"
       ],
       "priority_score": 34,
-      "hunted": "[x]",
-      "hunted_in_sprint": "Sprint Batch 78"
+      "hunted": true,
+      "hunted_in_sprint": "Sprint Batch 78",
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "electroneum_targets",
@@ -900,7 +901,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "clickhouse_targets",
@@ -914,7 +917,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "electroneum_blockchain_targets",
@@ -1168,7 +1173,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "mattermost_targets",
@@ -1262,7 +1269,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "mattermost_targets",
@@ -1346,7 +1355,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "mattermost_targets",
@@ -1440,7 +1451,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 89"
     },
     {
       "engagement": "mattermost_targets",
