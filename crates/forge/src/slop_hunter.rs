@@ -3353,7 +3353,7 @@ fn find_inner_html_assignments(
                                     right,
                                     source,
                                     config_params.as_slice(),
-                                )
+                                ) || rhs_is_static_i18n_template(right, source)
                             })
                         {
                             config_params.truncate(original_param_count);
@@ -3440,6 +3440,52 @@ fn expression_originates_from_config_param(
         }
     }
     false
+}
+
+/// Returns `true` when `node` is an `innerHTML` RHS composed entirely of
+/// string/number literals, known i18n helper calls (`get_string`, `_`,
+/// `gettext`, `ngettext`, `i18n`), safe numeric member accesses (`.length`),
+/// and `+` concatenations of the above.
+///
+/// This suppresses false-positive `dom_xss_innerHTML` findings on UI templates
+/// that build static button/widget HTML via localized string functions.
+fn rhs_is_static_i18n_template(node: Node<'_>, source: &[u8]) -> bool {
+    match node.kind() {
+        "string" | "template_string" | "number" => true,
+        "member_expression" => {
+            // e.g. checkboxes.length — safe numeric property read
+            node.child_by_field_name("property")
+                .and_then(|p| p.utf8_text(source).ok())
+                == Some("length")
+        }
+        "call_expression" => {
+            // Allow known i18n helpers that return static localized strings
+            node.child_by_field_name("function")
+                .and_then(|f| f.utf8_text(source).ok())
+                .is_some_and(|name| {
+                    matches!(name, "get_string" | "_" | "gettext" | "ngettext" | "i18n")
+                })
+        }
+        "binary_expression" => {
+            let op = node
+                .child_by_field_name("operator")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            op == "+"
+                && node
+                    .child_by_field_name("left")
+                    .is_some_and(|n| rhs_is_static_i18n_template(n, source))
+                && node
+                    .child_by_field_name("right")
+                    .is_some_and(|n| rhs_is_static_i18n_template(n, source))
+        }
+        "parenthesized_expression" => {
+            let mut cursor = node.walk();
+            let inner = node.named_children(&mut cursor).next();
+            inner.is_some_and(|child| rhs_is_static_i18n_template(child, source))
+        }
+        _ => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -9207,6 +9253,55 @@ target.__proto__.polluted = true;
                 .iter()
                 .any(|finding| finding.description.contains("dom_xss_innerHTML")),
             "prototype pollution in the same scan context must reactivate options-template DOM XSS"
+        );
+    }
+
+    #[test]
+    fn test_js_innerhtml_static_i18n_template_suppressed() {
+        // Pattern seen in freedomofpress/securedrop journalist.js:
+        // innerHTML set from get_string() i18n calls + string literals — no
+        // attacker-controlled data.
+        let src = br#"
+filterContainer.innerHTML = '<input type="text" placeholder="' +
+  get_string("filter-by-codename") +
+  '" autofocus>';
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dom_xss_innerHTML")),
+            "get_string() i18n template must suppress dom_xss_innerHTML"
+        );
+    }
+
+    #[test]
+    fn test_js_innerhtml_length_concat_suppressed() {
+        // Pattern: get_string() + "<b>" + checkboxes.length + "</b>"
+        let src = br#"
+span.innerHTML = get_string("sources-selected") + "<b>" + checkboxes.length + "</b>";
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("dom_xss_innerHTML")),
+            "get_string() + .length concat must suppress dom_xss_innerHTML"
+        );
+    }
+
+    #[test]
+    fn test_js_innerhtml_user_data_still_fires_with_i18n_mixed() {
+        // When user-controlled data is mixed with i18n strings, it must still fire.
+        let src = br#"
+el.innerHTML = get_string("label") + userInput + "</div>";
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.description.contains("dom_xss_innerHTML")),
+            "user-controlled data mixed with i18n must still fire dom_xss_innerHTML"
         );
     }
 

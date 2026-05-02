@@ -201,6 +201,57 @@ pub mod unix {
         pub flow_semaphore: Arc<Semaphore>,
         /// Concurrency gate for [`Pulse::Constrict`] mode — [`CONSTRICT_CONCURRENCY`] permits.
         pub constrict_semaphore: Arc<Semaphore>,
+        /// Optional SIEM webhook URL (from `JANITOR_SIEM_WEBHOOK_URL` env var).
+        ///
+        /// When set, `emit_siem_event` POSTs structured finding JSON to this
+        /// endpoint.  When unset, events are appended to
+        /// `{janitor_dir}/siem_events.ndjson` for local SIEM ingestion.
+        pub siem_webhook_url: Option<String>,
+    }
+
+    impl DaemonState {
+        /// Emit a structured SIEM event for a security finding.
+        ///
+        /// Writes to `{janitor_dir}/siem_events.ndjson` (always) and optionally
+        /// POSTs to `siem_webhook_url` when the env var is configured.
+        /// I/O errors are silently dropped — SIEM emission must never fail a
+        /// CI bounce request.
+        pub fn emit_siem_event(&self, finding_detail: &str) {
+            emit_siem_event_inner(&self.janitor_dir, &self.siem_webhook_url, finding_detail);
+        }
+    }
+
+    /// Write one SIEM event to the ndjson sink.  Free function so tests can call
+    /// it without constructing a full `DaemonState`.
+    pub fn emit_siem_event_inner(
+        janitor_dir: &std::path::Path,
+        webhook_url: &Option<String>,
+        finding_detail: &str,
+    ) {
+        use std::io::Write as _;
+        let event = serde_json::json!({
+            "ts": crate::utc_now_iso8601(),
+            "class": "security_finding",
+            "detail": finding_detail,
+        });
+        let line = format!("{}\n", event);
+        // Append to siem_events.ndjson
+        let ndjson_path = janitor_dir.join("siem_events.ndjson");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&ndjson_path)
+        {
+            let _ = f.write_all(line.as_bytes());
+        }
+        // Best-effort webhook POST — drop on any error to avoid blocking CI.
+        if let Some(url) = webhook_url.as_deref() {
+            if !url.is_empty() {
+                let _ = ureq::post(url)
+                    .header("Content-Type", "application/json")
+                    .send(line.as_str());
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -240,6 +291,10 @@ pub mod unix {
             .parent()
             .unwrap_or(std::path::Path::new("."))
             .to_path_buf();
+        let siem_webhook_url = std::env::var("JANITOR_SIEM_WEBHOOK_URL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
         let state = Arc::new(DaemonState {
             registry: HotRegistry::open(registry_path)?,
             lsh_index: LshIndex::new(),
@@ -247,6 +302,7 @@ pub mod unix {
             heart: SystemHeart::new(),
             flow_semaphore: Arc::new(Semaphore::new(FLOW_CONCURRENCY)),
             constrict_semaphore: Arc::new(Semaphore::new(CONSTRICT_CONCURRENCY)),
+            siem_webhook_url,
         });
 
         // Remove a stale socket file from a previous run.
@@ -386,6 +442,12 @@ pub mod unix {
                         // Clone detail strings before move into BounceLogEntry so
                         // the same Vec can be forwarded in DaemonResponse::Report.
                         let antipattern_details = score.antipattern_details.clone();
+                        // P3-4 Phase A: emit SIEM events for every security finding.
+                        for detail in &antipattern_details {
+                            if detail.starts_with("security:") {
+                                state.emit_siem_event(detail);
+                            }
+                        }
                         let collided_pr_numbers_response = near_matches.clone();
 
                         // fields are None.  Best-effort: I/O errors are silently dropped.
@@ -464,6 +526,50 @@ pub mod unix {
             Err(e) => DaemonResponse::Error {
                 message: format!("Invalid request: {e}"),
             },
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // SIEM emission tests
+    // ---------------------------------------------------------------------------
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn siem_event_writes_ndjson_file() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            emit_siem_event_inner(dir.path(), &None, "security:test_finding — unit test");
+            let path = dir.path().join("siem_events.ndjson");
+            assert!(path.exists(), "siem_events.ndjson must be created");
+            let content = std::fs::read_to_string(&path).expect("read");
+            assert!(
+                content.contains("security:test_finding"),
+                "finding must appear in file"
+            );
+            assert!(
+                content.contains("security_finding"),
+                "class must be security_finding"
+            );
+        }
+
+        #[test]
+        fn siem_event_appends_multiple_findings() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            emit_siem_event_inner(dir.path(), &None, "security:finding_one — alpha");
+            emit_siem_event_inner(dir.path(), &None, "security:finding_two — beta");
+            let content =
+                std::fs::read_to_string(dir.path().join("siem_events.ndjson")).expect("read");
+            let lines: Vec<&str> = content.lines().collect();
+            assert_eq!(lines.len(), 2, "two findings must produce two ndjson lines");
+        }
+
+        #[test]
+        fn siem_event_no_webhook_when_url_none() {
+            // Must complete without panicking when webhook URL is None.
+            let dir = tempfile::tempdir().expect("tempdir");
+            emit_siem_event_inner(dir.path(), &None, "security:no_webhook_test");
         }
     }
 }

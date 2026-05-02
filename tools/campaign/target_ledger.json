@@ -1707,7 +1707,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "sprint95"
     },
     {
       "engagement": "securedrop_targets",
@@ -1721,7 +1723,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "sprint95"
     },
     {
       "engagement": "securedrop_targets",
@@ -1735,7 +1739,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "sprint95"
     },
     {
       "engagement": "securedrop_targets",
@@ -1861,7 +1867,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "sprint95"
     },
     {
       "engagement": "wise_targets",

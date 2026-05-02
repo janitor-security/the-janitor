@@ -30,6 +30,10 @@ tokio.workspace = true
 tokio-rustls = "0.26"
 tower = "0.5.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+aya = "0.13"
+aya-log = "0.2"
+
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
 serial_test.workspace = true

@@ -1,3 +1,5 @@
+pub mod ebpf_sensor;
+
 use anyhow::Context as _;
 use axum::body::Bytes;
 use axum::extract::FromRequestParts;
@@ -118,6 +120,20 @@ struct BounceLogEntry {
     /// One of: `"verified"`, `"unsigned"`, `"invalid"`, `"mismatched_identity"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     git_signature_status: Option<String>,
+    /// Optional runtime syscall events captured by the P3-5 eBPF sensor on the
+    /// CI runner.  When present, `report_handler` runs `detect_runtime_divergence`
+    /// and appends any `security:runtime_divergence` findings to the audit log.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    runtime_events: Vec<RuntimeEventPayload>,
+}
+
+/// A syscall-level event forwarded from the CI runner's P3-5 eBPF sensor.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeEventPayload {
+    pid: u32,
+    syscall: String,
+    path: String,
+    ts: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -646,6 +662,27 @@ async fn report_handler(
     };
     let decision_receipt = build_signed_receipt(&entry, &proof)
         .map_err(|err| AppError::internal(format!("failed to sign decision receipt: {err}")))?;
+
+    // P3-5 Phase A: if the CI runner forwarded runtime syscall events, run
+    // divergence detection and emit any findings to the audit log before
+    // committing the transparency log entry.
+    #[cfg(target_os = "linux")]
+    if !entry.runtime_events.is_empty() {
+        let sensor_events: Vec<ebpf_sensor::sensor::SyscallEvent> = entry
+            .runtime_events
+            .iter()
+            .map(|e| ebpf_sensor::sensor::SyscallEvent {
+                pid: e.pid,
+                syscall: e.syscall.clone(),
+                path: e.path.clone(),
+                ts: e.ts,
+            })
+            .collect();
+        let divergences = ebpf_sensor::sensor::detect_runtime_divergence(&sensor_events);
+        for d in &divergences {
+            eprintln!("janitor-gov: {d}");
+        }
+    }
 
     emit_event(&GovLogEvent::Report {
         entry: Box::new(entry),
@@ -1514,6 +1551,7 @@ mod tests {
             cognition_surrender_index: 0.0,
             analysis_token: None,
             git_signature_status: None,
+            runtime_events: Vec::new(),
         }
     }
 

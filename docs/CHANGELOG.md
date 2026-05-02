@@ -3,6 +3,45 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 95: Schema-Driven Taint Escalation & eBPF Telemetry
+
+**Directive**: Phase 1 — Schema Taint Verification Law governance upgrade; Phase 2 — P3-5
+eBPF Governor Sensor (Phase A: `/proc`-backed, Phase B: aya ring buffer); Phase 3 — P3-4
+SIEM/SOAR event emission wired into daemon `HotRegistry` watch loop; Phase 4 — auth0.js
+Schema Taint re-evaluation + 3 new target hunts; Phase 5 — P3-5 eradicated from
+INNOVATION_LOG; no release cut.
+
+**Changes**:
+- `.agent_governance/rules/evolution.md`: Added `Schema Taint Verification Law` subsection
+  to Bounty Extraction Law — DOM XSS on server-reflected fields requires schema mapping or
+  ceiling stays <40%.
+- `crates/gov/Cargo.toml`: Added `aya = "0.13"` and `aya-log = "0.2"` under
+  `[target.'cfg(target_os = "linux")'.dependencies]`.
+- `crates/gov/src/ebpf_sensor.rs` *(new)*: P3-5 Phase A sensor — `SyscallEvent`,
+  `EbpfSensorHandle`, `attach_syscall_probes(ci_pid)` via `/proc/{pid}/net/tcp` polling,
+  `detect_runtime_divergence` emitting `security:runtime_divergence`; 6 deterministic tests.
+- `crates/gov/src/main.rs`: Added `pub mod ebpf_sensor`; extended local `BounceLogEntry`
+  with `runtime_events: Vec<RuntimeEventPayload>`; wired divergence detection into
+  `report_handler` under `#[cfg(target_os = "linux")]`.
+- `crates/cli/src/daemon.rs`: Extended `DaemonState` with `siem_webhook_url: Option<String>`;
+  added `emit_siem_event` method + `emit_siem_event_inner` free function (ndjson append +
+  optional webhook POST via ureq); wired into `process_request` on `security:` prefix
+  findings; 3 new tests.
+- `crates/forge/src/slop_hunter.rs`: Added `rhs_is_static_i18n_template()` structural guard
+  suppressing `dom_xss_innerHTML` when RHS is composed entirely of `get_string()`/i18n
+  helpers, `.length` numeric reads, and `+` concatenations — eliminates FPs from
+  freedomofpress/securedrop journalist.js; 3 new tests.
+- `tools/campaign/BOUNTY_LEDGER.md`: Added `Schema Taint Verification` step to both
+  auth0.js DOM XSS entries — no schema found, ceiling stays <40%.
+- `tools/campaign/target_ledger.json`: Marked 4 entries as `hunted: true` (sprint95).
+- `.janitor/hunt_reports/freedomofpress_securedrop.md` *(new)*: no_billable_findings;
+  structural i18n guard applied.
+- `.janitor/hunt_reports/freedomofpress_securedrop-client.md` *(new)*: no_billable_findings.
+- `.janitor/hunt_reports/IABTechLab_uid2-web-integrations.md` *(new)*: no_findings.
+- `.INNOVATION_LOG.md`: P3-5 block physically deleted (38 lines, 1769→1731 lines).
+
+**Test results**: `cargo test --workspace -- --test-threads=4` exit 0; 1,484+ tests passed.
+
 ## 2026-05-02 — Sprint Batch 94: Cryptographic Supremacy & Ledger Reconstruction
 
 **Directive**: Implement P4-3 (Cryptographic Protocol Correctness) and P4-5 (Hardware
