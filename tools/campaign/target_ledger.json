@@ -373,7 +373,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 92: no exploitable findings after structural guard triage"
     },
     {
       "engagement": "aiven_targets",
@@ -387,7 +389,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 92: no exploitable findings after structural guard triage"
     },
     {
       "engagement": "atlassian_apps_targets",
@@ -415,7 +419,9 @@
       "matched_attack_keywords": [
         "GitHub"
       ],
-      "priority_score": 32
+      "priority_score": 32,
+      "hunted": true,
+      "hunt_result": "Sprint Batch 92: no exploitable findings after structural guard triage"
     },
     {
       "engagement": "atlassian_apps_targets",

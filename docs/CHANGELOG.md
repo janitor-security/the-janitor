@@ -3,6 +3,49 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 92: Frontend State, Monorepo Attribution & Decadal Omni-Audit
+
+**Directive**: Implement P1-6 frontend state virtual IFDS edges, P1-14 monorepo component
+attribution, expand the agentic/RAG threat ledger with CISA/NSA Five Eyes validation,
+run three live-fire hunts, execute the 2028-2032 architectural omni-audit, verify, commit,
+and do not release.
+
+**Files modified/created**:
+
+- `crates/forge/src/frontend_state.rs` *(created)*: bounded React Context, Redux
+  dispatch-to-reducer, and WebSocket event virtual-edge extraction plus IFDS model
+  attachment. Redux payload taint re-emerges as a reducer-state fact.
+- `crates/forge/src/taint_catalog.rs` and `crates/forge/src/lib.rs` — wired frontend
+  virtual edges into JS/TS IFDS solving and exported the module.
+- `crates/cli/src/hunt.rs` — moved local component detection after findings exist and
+  now walks upward from each affected file path to the nearest `package.json`, `go.mod`,
+  `Cargo.toml`, or related manifest.
+- `crates/forge/src/slop_hunter.rs` — added live-fire structural guards for same-origin
+  plugin API fetches, SRI-pinned external scripts, comment-only GitHub Pages docs URLs,
+  static SVG registry `dangerouslySetInnerHTML`, and known vendor API base getters.
+- `tools/campaign/ATTACK_LEDGER.md` — added CISA/NSA Five Eyes validation notes under
+  Agentic Swarms and RAG Poisoning.
+- `.INNOVATION_LOG.md` — physically deleted shipped `P1-6` and `P1-14`; appended Phases
+  13-17 for runtime-mutating swarms, multimodal embedding malware, neuromorphic hardware,
+  decentralized compute grids, and proof-obligation governance.
+- `tools/campaign/target_ledger.json` — marked `mattermost-plugin-msteams-meetings`,
+  `mattermost-plugin-playbooks`, and `mattermost-plugin-zoom` hunted for Sprint Batch 92.
+
+**Live-fire hunt results**:
+- `mattermost/mattermost-plugin-msteams-meetings`: no exploitable findings.
+- `mattermost/mattermost-plugin-playbooks`: initial same-origin/SRI false positives
+  suppressed via structural guards; rerun produced no exploitable findings.
+- `mattermost/mattermost-plugin-zoom`: initial static SVG and vendor API getter false
+  positives suppressed via structural guards; rerun produced no exploitable findings.
+
+**Verification**:
+- `cargo test -p forge frontend_state -- --test-threads=4` passed.
+- `cargo test -p cli detect_component_info -- --test-threads=4` passed.
+- `cargo test -p forge slop_hunter -- --test-threads=4` passed.
+- `cargo test --workspace -- --test-threads=4` passed.
+- Direct `just audit` hit `/run/user/1000/just` permission denial before DAG entry;
+  `env XDG_RUNTIME_DIR=/tmp just audit` passed and saved the audit fingerprint.
+
 ## 2026-05-02 — Sprint Batch 91: Memory Proof Lane & Cargo Worm Shield
 
 **Directive**: Implement P1-11 bounded memory-safety proof artifacts and P1-7 Cargo

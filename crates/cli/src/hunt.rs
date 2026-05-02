@@ -151,9 +151,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         );
     }
 
+    let local_scan_root = scan_root;
     let mut component_info_override: Option<String> = None;
-    let local_scan_component_info =
-        scan_root.map(|root| detect_component_info_inner(&[], Some(root)));
     let findings = if let Some(url) = sourcemap_url {
         ingest_sourcemap(url)?
     } else if let Some(pkg) = npm_pkg {
@@ -209,6 +208,8 @@ pub fn cmd_hunt(args: HuntArgs<'_>) -> anyhow::Result<()> {
         findings
     };
 
+    let local_scan_component_info =
+        local_scan_root.map(|root| detect_component_info_inner(&findings, Some(root)));
     let component_info_context = component_info_override
         .as_deref()
         .or(local_scan_component_info.as_deref());
@@ -1026,7 +1027,8 @@ fn apply_live_tenant_replay(
 }
 
 /// Detect the affected package name and version by scanning for manifest files
-/// (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`) walking upward from `cwd`.
+/// (`package.json`, `Cargo.toml`, `go.mod`, `pom.xml`) walking upward from the
+/// affected file path first, then the scan root / current directory fallback.
 fn detect_component_info(findings: &[StructuredFinding]) -> String {
     detect_component_info_inner(findings, None)
 }
@@ -1038,25 +1040,30 @@ fn detect_component_info_inner(
     const MAX_MANIFEST_BYTES: u64 = 1_048_576;
 
     let mut search_roots: Vec<std::path::PathBuf> = Vec::new();
-    if let Some(root) = override_root {
-        search_roots.push(root.to_path_buf());
-    } else if let Ok(cwd) = std::env::current_dir() {
-        search_roots.push(cwd.clone());
-    }
+    let base_root = override_root
+        .map(|root| root.to_path_buf())
+        .or_else(|| std::env::current_dir().ok());
     for finding in findings {
         if let Some(file) = &finding.file {
             let p = std::path::Path::new(file);
             let candidate = if p.is_absolute() {
                 p.parent().map(|d| d.to_path_buf())
             } else {
-                std::env::current_dir()
-                    .ok()
-                    .map(|cwd| cwd.join(p))
+                base_root
+                    .as_ref()
+                    .map(|root| root.join(p))
                     .and_then(|abs| abs.parent().map(|d| d.to_path_buf()))
             };
             if let Some(c) = candidate {
-                search_roots.push(c);
+                if !search_roots.iter().any(|existing| existing == &c) {
+                    search_roots.push(c);
+                }
             }
+        }
+    }
+    if let Some(root) = base_root {
+        if !search_roots.iter().any(|existing| existing == &root) {
+            search_roots.push(root);
         }
     }
 
@@ -4445,6 +4452,42 @@ def main(user_id):
             component,
             "**github.com/openfga/openfga** go1.22 (`go.mod`)"
         );
+    }
+
+    #[test]
+    fn detect_component_info_prefers_nearest_manifest_for_finding_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let plugin_src = dir.path().join("plugins").join("plugin-a").join("src");
+        std::fs::create_dir_all(&plugin_src).unwrap();
+        std::fs::write(
+            dir.path().join("package.json"),
+            br#"{"name":"root-app","version":"1.0.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path()
+                .join("plugins")
+                .join("plugin-a")
+                .join("package.json"),
+            br#"{"name":"plugin-a","version":"2.3.4"}"#,
+        )
+        .unwrap();
+
+        let finding = StructuredFinding {
+            id: "security:dom_xss_innerHTML".to_string(),
+            file: Some("plugins/plugin-a/src/file.ts".to_string()),
+            line: Some(17),
+            fingerprint: "monorepo_component".to_string(),
+            severity: Some("Critical".to_string()),
+            remediation: None,
+            docs_url: None,
+            exploit_witness: None,
+            upstream_validation_absent: false,
+            ..Default::default()
+        };
+        let component = detect_component_info_inner(&[finding], Some(dir.path()));
+
+        assert_eq!(component, "**plugin-a@2.3.4** (`package.json`)");
     }
 
     #[test]

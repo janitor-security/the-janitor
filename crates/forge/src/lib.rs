@@ -42,6 +42,7 @@ pub mod exploitability;
 pub mod federated_memory;
 pub mod financial_pii;
 pub mod fold;
+pub mod frontend_state;
 pub mod gadgets;
 pub mod git_sig;
 pub mod governance;

@@ -113,6 +113,7 @@
 
 **Class:** Autonomous Adversarial AI / Insider Threat
 **Reference:** Mythos red-team agent platform (2026); Kimi K2 swarm-recon framework; the operator-class threat where an LLM agent harvests confidential repo data via context-window leakage during legitimate code-assist sessions.
+**Validation:** CISA/NSA Five Eyes Guidance on Secure Deployment of AI Agents (May 2026) formally recognizes Agentic IAM Bypass and RAG Context Poisoning as critical threat vectors. The Janitor's `agentic_tool_audit` and `rag_source_registry` map directly to these federal compliance mandates.
 **Threat profile:** A developer uses an AI coding assistant. The assistant's context window is fed proprietary code via RAG. A malicious tool definition or a poisoned MCP server inside the assistant's tool catalog exfiltrates RAG context fragments back to the attacker via crafted "search" queries or "documentation lookups." Attribution: the attacker pays per zero-day discovered, the agent has no fingerprint, exfiltration looks like normal API traffic.
 
 **AST / IFDS Detection Strategy:**
@@ -136,6 +137,7 @@
 
 **Class:** Adversarial AI Context Hijack
 **Reference:** Indirect Prompt Injection threat profile (OWASP LLM Top-10 2026; MITRE ATLAS T1550.LLM); validated under CVP authorization 2fe9d3dd-47ba-4bde-ab67-29f86c79f732.
+**Validation:** CISA/NSA Five Eyes Guidance on Secure Deployment of AI Agents (May 2026) formally recognizes Agentic IAM Bypass and RAG Context Poisoning as critical threat vectors. The Janitor's `agentic_tool_audit` and `rag_source_registry` map directly to these federal compliance mandates.
 **Threat profile:** A coding agent or RAG-augmented assistant ingests untrusted external content (web fetches, GitHub READMEs, ticket bodies, third-party documentation pages, vendored model cards, Notion / Confluence pages, indexed crawl corpora). The content embeds adversarial instructions that, once placed into the LLM context window, override the assistant's system prompt and redirect it to exfiltrate proprietary code, fabricate false approvals, or execute attacker-supplied tool calls. Distinguishing trait vs. P6-9: the attack vector is **passive content** rather than active tool definitions — any code path that reads external bytes and concatenates them into an LLM `messages\[]` array is a potential carrier.
 
 **AST / IFDS Detection Strategy:**

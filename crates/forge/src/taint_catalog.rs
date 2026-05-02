@@ -363,7 +363,7 @@ fn ifds_cross_file_sinks(
         return Vec::new();
     }
 
-    let graph = crate::callgraph::build_call_graph(lang, source);
+    let mut graph = crate::callgraph::build_call_graph(lang, source);
     if graph.node_count() == 0 {
         return Vec::new();
     }
@@ -419,6 +419,11 @@ fn ifds_cross_file_sinks(
                     bindings,
                 });
         }
+    }
+
+    if matches!(lang, "js" | "jsx" | "ts" | "tsx") {
+        let frontend_edges = crate::frontend_state::build_frontend_state_edges(&graph, source);
+        crate::frontend_state::apply_frontend_state_edges(&mut graph, &mut models, &frontend_edges);
     }
 
     if models.is_empty() {

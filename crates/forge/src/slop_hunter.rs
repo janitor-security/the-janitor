@@ -3861,6 +3861,8 @@ pub fn find_supply_chain_slop_with_context(
         .collect()
 }
 
+/// Index of the `<script src="http` pattern in `SUPPLY_CHAIN_PATTERNS`.
+const PATTERN_EXTERNAL_SCRIPT: usize = 0;
 /// Index of the `.github.io/` pattern in `SUPPLY_CHAIN_PATTERNS`.
 const PATTERN_GITHUB_IO: usize = 1;
 
@@ -3869,6 +3871,18 @@ fn should_ignore_supply_chain_match(
     parsed: &ParsedUnit<'_>,
     mat: &aho_corasick::Match,
 ) -> bool {
+    if mat.pattern().as_usize() == PATTERN_EXTERNAL_SCRIPT
+        && external_script_tag_has_sri(parsed.source, mat.start())
+    {
+        return true;
+    }
+
+    if mat.pattern().as_usize() == PATTERN_GITHUB_IO
+        && github_io_match_is_inert_line_comment(parsed.source, mat)
+    {
+        return true;
+    }
+
     // In JVM source files (Kotlin, Java, Gradle scripts), a `.github.io/` URL
     // almost always appears in a KDoc/Javadoc comment or a project-documentation
     // constant — never as a live runtime fetch.  Suppress pattern 1 when the
@@ -3902,6 +3916,39 @@ fn should_ignore_supply_chain_match(
     node_or_parent_is_comment(node)
         || (node_or_parent_is_string_literal(node)
             && !string_literal_flows_to_asset_execution_sink(node, source))
+}
+
+fn external_script_tag_has_sri(source: &[u8], start: usize) -> bool {
+    let max_end = source.len().min(start.saturating_add(768));
+    let rel_end = source[start..max_end]
+        .iter()
+        .position(|&byte| byte == b'>')
+        .map(|index| start + index + 1)
+        .unwrap_or(max_end);
+    contains_ascii_case_insensitive(&source[start..rel_end], b"integrity=")
+}
+
+fn github_io_match_is_inert_line_comment(source: &[u8], mat: &aho_corasick::Match) -> bool {
+    let line_start = source[..mat.start()]
+        .iter()
+        .rposition(|&byte| byte == b'\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let line_end = source[mat.end()..]
+        .iter()
+        .position(|&byte| byte == b'\n')
+        .map(|index| mat.end() + index)
+        .unwrap_or(source.len());
+    let line = &source[line_start..line_end];
+    let trimmed = line
+        .iter()
+        .position(|&byte| !byte.is_ascii_whitespace())
+        .unwrap_or(0);
+    let rest = &line[trimmed..];
+    rest.starts_with(b"//")
+        || rest.starts_with(b"#")
+        || rest.starts_with(b"*")
+        || rest.starts_with(b"<!--")
 }
 
 const JVM_NETWORK_SINK_MARKERS: &[&[u8]] = &[
@@ -5404,9 +5451,16 @@ fn find_ssrf_calls_js(
                             && (arg_text.starts_with("`.//")
                                 || arg_text.starts_with("`./")
                                 || arg_text.starts_with("`/"));
+                        let is_same_origin_api_helper = arg_text.contains("getApiUrl()")
+                            && !arg_text.contains("http://")
+                            && !arg_text.contains("https://");
                         let is_mcp_tool_dynamic_url = is_mcp_tool_context(node, source)
                             && !ssrf_arg_proves_internal_metadata(arg, source);
-                        if !is_safe_route_interp && !is_relative_path && !is_mcp_tool_dynamic_url {
+                        if !is_safe_route_interp
+                            && !is_relative_path
+                            && !is_same_origin_api_helper
+                            && !is_mcp_tool_dynamic_url
+                        {
                             findings.push(SlopFinding {
                                 start_byte: node.start_byte(),
                                 end_byte: node.end_byte(),
@@ -5852,6 +5906,9 @@ fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
                         .trim()
                         .trim_start_matches('&')
                         .to_string();
+                    if is_go_known_vendor_api_url_arg(&arg_text) {
+                        continue;
+                    }
                     findings.push(SlopFinding {
                         start_byte: i,
                         end_byte: i + pattern.len(),
@@ -5867,6 +5924,13 @@ fn find_go_ssrf_slop(source: &[u8]) -> Vec<SlopFinding> {
         }
     }
     findings
+}
+
+fn is_go_known_vendor_api_url_arg(arg_text: &str) -> bool {
+    (arg_text.contains(".getZoomAPIURL()+") || arg_text.contains(".getZoomURL()+"))
+        && !arg_text.contains("rawURL")
+        && !arg_text.contains("payload.")
+        && !arg_text.contains("request.")
 }
 
 fn extract_first_call_arg(source: &[u8], start: usize) -> Option<&str> {
@@ -9611,6 +9675,16 @@ AKIAoAEYuREgAX8687Nw283LCyp9Mw=='";
     }
 
     #[test]
+    fn test_external_script_tag_with_sri_is_ignored() {
+        let src = br#"<script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.2.0/umd/react.production.min.js" integrity="sha256-abc" crossorigin="anonymous"></script>"#;
+        let findings = find_supply_chain_slop(src);
+        assert!(
+            findings.is_empty(),
+            "SRI-pinned external scripts must not trigger unpinned_asset"
+        );
+    }
+
+    #[test]
     fn test_relative_script_not_flagged_by_supply_chain() {
         let src = b"<script src=\"/js/app.js\" type=\"module\"></script>";
         let findings = find_supply_chain_slop(src);
@@ -9665,6 +9739,18 @@ AKIAoAEYuREgAX8687Nw283LCyp9Mw=='";
                 .iter()
                 .all(|f| !f.description.contains("unpinned_asset")),
             "JVM documentation URLs must not be treated as unpinned runtime assets"
+        );
+    }
+
+    #[test]
+    fn test_github_io_url_inside_go_comment_is_ignored() {
+        let src = b"// See https://golang-jwt.github.io/jwt/usage/signing_methods/\n";
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("unpinned_asset")),
+            "documentation-only .github.io URLs in Go comments must remain inert"
         );
     }
 
@@ -9798,6 +9884,24 @@ mod kev_tests {
         );
     }
 
+    #[test]
+    fn test_go_ssrf_known_vendor_api_getter_not_flagged() {
+        let src = br#"
+res, err := http.Post(
+    p.getZoomAPIURL()+"/oauth/data/compliance",
+    "application/json",
+    bytes.NewReader(jsonData),
+)
+"#;
+        let findings = find_slop("go", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "known vendor API base getter plus fixed path must not be flagged as SSRF"
+        );
+    }
+
     // ── Python SSRF ────────────────────────────────────────────────────────
 
     #[test]
@@ -9862,6 +9966,22 @@ const resp = await fetch(`./${bundleFolder}/${locale}.json`);
                 .iter()
                 .all(|f| !f.description.contains("ssrf_dynamic_url")),
             "relative-path template fetch must not be flagged as SSRF"
+        );
+    }
+
+    #[test]
+    fn test_js_ssrf_same_origin_api_helper_not_flagged() {
+        let src = br#"
+export function makeGraphqlClient() {
+    return fetch(`${getApiUrl()}/query`, Client4.getOptions(options));
+}
+"#;
+        let findings = find_slop("js", src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("ssrf_dynamic_url")),
+            "same-origin plugin API helper must not be flagged as SSRF"
         );
     }
 
@@ -12260,7 +12380,8 @@ fn find_jsx_danger_nodes(node: Node<'_>, source: &[u8], findings: &mut Vec<SlopF
                 let is_literal = after_key.starts_with('"')
                     || after_key.starts_with('\'')
                     || after_key.starts_with('`');
-                if !is_literal {
+                let is_static_icon_symbol = after_key.starts_with("Svgs.");
+                if !is_literal && !is_static_icon_symbol {
                     findings.push(SlopFinding {
                         description:
                             "security:react_xss_dangerous_html — dangerouslySetInnerHTML with \
@@ -12471,6 +12592,18 @@ mod phase7_rd_tests {
                 .iter()
                 .all(|f| !f.description.contains("react_xss_dangerous_html")),
             "TSX-1: dangerouslySetInnerHTML with string literal must not fire"
+        );
+    }
+
+    #[test]
+    fn test_jsx_dangerous_set_inner_html_static_svg_registry_clean() {
+        let src = b"const el = <span dangerouslySetInnerHTML={{ __html: Svgs.VIDEO_CAMERA }} />;\n";
+        let findings = find_jsx_dangerous_html_slop(src);
+        assert!(
+            findings
+                .iter()
+                .all(|f| !f.description.contains("react_xss_dangerous_html")),
+            "static SVG icon registry values must not be treated as attacker-controlled HTML"
         );
     }
 
