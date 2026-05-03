@@ -131,6 +131,17 @@ the cure. The proposal must name the missing lattice element, the Rust module to
 extend, the deterministic proof strategy, and the true-positive / true-negative
 fixture pair required to close the gap.
 
+### Mathematical Certainty Law (Sprint Batch 97)
+
+When authoring core security logic — taint scoring, HMAC/signature generation,
+cryptographic serialization boundaries — unit tests alone are **insufficient**.
+You MUST author a `#[kani::proof]` harness (gated under `#[cfg(kani)]`) that
+injects symbolic inputs via `kani::any::<T>()` and proves the absence of panics,
+integer overflows, and undefined behaviour across all possible input states up
+to a defined bound. The harness lives in `crates/forge/src/reflexive_assurance.rs`.
+Shipping a new security-critical function without this harness is a governance
+violation.
+
 ### Dual-Ledger Mandate (Sprint Batch 96)
 
 Whenever a finding is logged with `Approval % < 85%` due to a **missing engine

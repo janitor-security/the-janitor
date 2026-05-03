@@ -160,6 +160,27 @@ When executing Schema Taint Verification:
 The engine's inability to auto-traverse a schema file is itself a lattice gap —
 log a P-tier proposal targeting the missing manifest parser in `.INNOVATION_LOG.md`.
 
+### Mathematical Certainty Law (Sprint Batch 97)
+
+When authoring **core security logic** (taint propagation, scoring arithmetic,
+cryptographic serialization boundaries, HMAC/signature generation), unit tests
+are necessary but **insufficient**. You MUST also author a formal verification
+harness using `#[kani::proof]` (Kani Rust Verifier) that:
+
+1. Injects **symbolic** inputs via `kani::any::<T>()` covering all possible
+   values up to a defined bound.
+2. Proves the **absence of panics, integer overflows/underflows, and undefined
+   behaviour** for every possible input state within that bound.
+3. Is gated behind `#[cfg(kani)]` so regular `cargo test` is unaffected; the
+   harness is verified only when `cargo kani` is invoked.
+4. Lives in `crates/forge/src/reflexive_assurance.rs` (forge-level invariants)
+   or co-located with the subject module under a `mod kani_proofs` sub-module.
+
+You are **mathematically forbidden** from shipping a new security-critical
+scoring or serialization function without a corresponding `#[kani::proof]`
+harness. The harness is the machine-checkable proof of safety; the unit test is
+the regression guard. Both are mandatory.
+
 ### Dual-Ledger Mandate (Sprint Batch 96)
 
 Whenever a finding is logged to `BOUNTY_LEDGER.md` with an `Approval % < 85%`

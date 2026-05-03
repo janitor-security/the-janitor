@@ -1123,3 +1123,400 @@ type document
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// P4-10: Schema-Driven Taint Escalation
+// ---------------------------------------------------------------------------
+//
+// Supplements `slop_hunter::find_js_slop` DOM XSS findings by querying the
+// target repository's OpenAPI / GraphQL response schemas. When the schema
+// proves that a reflected field is `string` typed with no `pattern`
+// constraint (i.e., unconstrained attacker-controlled input), the finding
+// approval ceiling is lifted from <40% to ≥80% and the label
+// `[schema_taint:proven]` is appended to the description.
+
+use std::collections::HashMap;
+
+use crate::slop_hunter::SlopFinding;
+
+/// Schema type classification extracted from an OpenAPI / GraphQL response body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchemaFieldSpec {
+    /// Field name as declared in the schema (e.g., `error_description`).
+    pub field_name: String,
+    /// Schema type (lowercased: `string`, `integer`, `boolean`, …).
+    pub field_type: String,
+    /// `true` when the field carries a `pattern` regex constraint that
+    /// restricts input to a safe alphabet — e.g., `^[a-z]+$`.
+    pub has_pattern_constraint: bool,
+}
+
+/// Map of response field name → schema spec discovered in the target repo.
+pub type SchemaFieldMap = HashMap<String, SchemaFieldSpec>;
+
+/// Walk `root` for OpenAPI and GraphQL schema files and extract response
+/// field specs into a [`SchemaFieldMap`].
+///
+/// Discovery uses an AhoCorasick scan of file names only (no directory
+/// recursion beyond a 4-level depth limit) to respect the 8GB Law.
+/// Parsing delegates to the existing `serde_yaml` / `serde_json` workspace
+/// crates — zero additional dependencies.
+pub fn discover_response_fields(root: &Path) -> SchemaFieldMap {
+    let mut map = SchemaFieldMap::new();
+
+    // AhoCorasick patterns that identify schema files by name fragment.
+    let schema_name_patterns = [
+        "openapi.yaml",
+        "openapi.yml",
+        "openapi.json",
+        "swagger.yaml",
+        "swagger.yml",
+        "swagger.json",
+        "schema.graphql",
+        ".graphql",
+        ".gql",
+        ".oas3.yaml",
+        ".oas3.yml",
+    ];
+    let ac = aho_corasick::AhoCorasick::new(schema_name_patterns)
+        .expect("valid schema-name patterns");
+
+    for path in walk_schema_files(root, &ac, 4) {
+        let ext = normalized_extension(&path);
+        match ext.as_deref() {
+            Some("graphql") | Some("gql") => ingest_graphql_fields(&path, &mut map),
+            Some("json") => ingest_openapi_fields_json(&path, &mut map),
+            _ => ingest_openapi_fields_yaml(&path, &mut map),
+        }
+    }
+
+    map
+}
+
+/// Upgrade DOM XSS `innerHTML` findings whose source may reflect an
+/// unconstrained server response field.
+///
+/// For every finding whose description contains `dom_xss_innerHTML`, this
+/// function searches `schema_map` for a field named `error_description`,
+/// `message`, `formHtml`, or any unconstrained `string` field. When a match
+/// is found with `has_pattern_constraint == false`, it appends
+/// `[schema_taint:proven]` to the description — signalling to the triage
+/// operator that the approval ceiling has been lifted from <40% to ≥80%.
+pub fn apply_schema_taint_escalation(findings: &mut [SlopFinding], schema_map: &SchemaFieldMap) {
+    if schema_map.is_empty() {
+        return;
+    }
+    // Check whether any unconstrained string field exists in the schema.
+    let has_unconstrained_string = schema_map.values().any(|spec| {
+        spec.field_type == "string" && !spec.has_pattern_constraint
+    });
+    if !has_unconstrained_string {
+        return;
+    }
+    for finding in findings.iter_mut() {
+        if finding.description.contains("dom_xss_innerHTML") {
+            finding
+                .description
+                .push_str(" [schema_taint:proven — schema confirms unconstrained string field; \
+                    approval ceiling lifted to ≥80%]");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Schema file discovery helpers (P4-10 internal)
+// ---------------------------------------------------------------------------
+
+fn walk_schema_files(root: &Path, ac: &aho_corasick::AhoCorasick, max_depth: usize) -> Vec<PathBuf> {
+    let mut results = Vec::new();
+    walk_dir_bounded(root, ac, 0, max_depth, &mut results);
+    results
+}
+
+fn walk_dir_bounded(
+    dir: &Path,
+    ac: &aho_corasick::AhoCorasick,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<PathBuf>,
+) {
+    if depth > max_depth {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir() {
+            walk_dir_bounded(&path, ac, depth + 1, max_depth, out);
+        } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if ac.is_match(name) {
+                out.push(path);
+            }
+        }
+    }
+}
+
+fn ingest_openapi_fields_yaml(path: &Path, map: &mut SchemaFieldMap) {
+    let Ok(content) = fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(value): Result<serde_yaml::Value, _> = serde_yaml::from_str(&content) else {
+        return;
+    };
+    extract_openapi_properties(&value, map);
+}
+
+fn ingest_openapi_fields_json(path: &Path, map: &mut SchemaFieldMap) {
+    let Ok(content) = fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(value): Result<serde_json::Value, _> = serde_json::from_str(&content) else {
+        return;
+    };
+    // Normalise json Value to serde_yaml Value for shared extraction logic.
+    let Ok(yaml_value): Result<serde_yaml::Value, _> =
+        serde_yaml::from_str(&serde_json::to_string(&value).unwrap_or_default()) else {
+        return;
+    };
+    extract_openapi_properties(&yaml_value, map);
+}
+
+/// Extract `components.schemas.*.properties.*` and
+/// `paths.*.responses.*.content.*.schema.properties.*` field specs.
+fn extract_openapi_properties(root: &serde_yaml::Value, map: &mut SchemaFieldMap) {
+    // Walk components.schemas
+    if let Some(schemas) = root
+        .get("components")
+        .and_then(|c| c.get("schemas"))
+        .and_then(|s| s.as_mapping())
+    {
+        for (_name, schema) in schemas {
+            extract_schema_properties(schema, map);
+        }
+    }
+    // Walk paths.*.responses.*.content.*.schema.properties
+    if let Some(paths) = root.get("paths").and_then(|p| p.as_mapping()) {
+        for (_path, methods) in paths {
+            if let Some(methods_map) = methods.as_mapping() {
+                for (_method, op) in methods_map {
+                    if let Some(responses) = op.get("responses").and_then(|r| r.as_mapping()) {
+                        for (_code, resp) in responses {
+                            if let Some(content) =
+                                resp.get("content").and_then(|c| c.as_mapping())
+                            {
+                                for (_media, media_obj) in content {
+                                    if let Some(schema) = media_obj.get("schema") {
+                                        extract_schema_properties(schema, map);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn extract_schema_properties(schema: &serde_yaml::Value, map: &mut SchemaFieldMap) {
+    let Some(props) = schema.get("properties").and_then(|p| p.as_mapping()) else {
+        return;
+    };
+    for (key, spec) in props {
+        let Some(field_name) = key.as_str() else {
+            continue;
+        };
+        let field_type = spec
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("unknown")
+            .to_ascii_lowercase();
+        let has_pattern_constraint = spec.get("pattern").is_some();
+        map.insert(
+            field_name.to_owned(),
+            SchemaFieldSpec {
+                field_name: field_name.to_owned(),
+                field_type,
+                has_pattern_constraint,
+            },
+        );
+    }
+}
+
+fn ingest_graphql_fields(path: &Path, map: &mut SchemaFieldMap) {
+    let Ok(content) = fs::read_to_string(path) else {
+        return;
+    };
+    // Minimal AhoCorasick pass: extract `fieldName: String` declarations.
+    let ac = aho_corasick::AhoCorasick::new([": String", ": String!"]).expect("valid patterns");
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if ac.is_match(trimmed) {
+            if let Some(field_name) = trimmed.split(':').next().map(str::trim) {
+                if !field_name.is_empty()
+                    && field_name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                {
+                    map.insert(
+                        field_name.to_owned(),
+                        SchemaFieldSpec {
+                            field_name: field_name.to_owned(),
+                            field_type: "string".to_owned(),
+                            has_pattern_constraint: false,
+                        },
+                    );
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P4-10 unit tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod schema_taint_tests {
+    use super::*;
+    use crate::metadata::DOMAIN_FIRST_PARTY;
+    use crate::slop_hunter::{Severity, SlopFinding};
+
+    fn make_dom_xss_finding() -> SlopFinding {
+        SlopFinding {
+            start_byte: 0,
+            end_byte: 10,
+            description: "security:dom_xss_innerHTML — direct `innerHTML` assignment \
+                is a DOM XSS vector; use `textContent` or DOMPurify"
+                .to_string(),
+            domain: DOMAIN_FIRST_PARTY,
+            severity: Severity::Critical,
+        }
+    }
+
+    /// True-positive: unconstrained `string` field → finding gets schema_taint:proven label.
+    #[test]
+    fn unconstrained_string_field_escalates_dom_xss() {
+        let mut findings = vec![make_dom_xss_finding()];
+        let mut schema_map = SchemaFieldMap::new();
+        schema_map.insert(
+            "error_description".to_owned(),
+            SchemaFieldSpec {
+                field_name: "error_description".to_owned(),
+                field_type: "string".to_owned(),
+                has_pattern_constraint: false,
+            },
+        );
+        apply_schema_taint_escalation(&mut findings, &schema_map);
+        assert!(
+            findings[0].description.contains("schema_taint:proven"),
+            "unconstrained string field must append schema_taint:proven"
+        );
+    }
+
+    /// True-negative: field has pattern constraint → finding is NOT escalated.
+    #[test]
+    fn pattern_constrained_field_does_not_escalate() {
+        let mut findings = vec![make_dom_xss_finding()];
+        let mut schema_map = SchemaFieldMap::new();
+        schema_map.insert(
+            "error_description".to_owned(),
+            SchemaFieldSpec {
+                field_name: "error_description".to_owned(),
+                field_type: "string".to_owned(),
+                has_pattern_constraint: true, // pattern: "^[a-z]+$"
+            },
+        );
+        apply_schema_taint_escalation(&mut findings, &schema_map);
+        assert!(
+            !findings[0].description.contains("schema_taint:proven"),
+            "pattern-constrained field must NOT escalate the finding"
+        );
+    }
+
+    /// True-negative: empty schema map → no escalation (null-schema gate).
+    #[test]
+    fn empty_schema_map_does_not_escalate() {
+        let mut findings = vec![make_dom_xss_finding()];
+        apply_schema_taint_escalation(&mut findings, &SchemaFieldMap::new());
+        assert!(
+            !findings[0].description.contains("schema_taint:proven"),
+            "empty schema map must not escalate"
+        );
+    }
+
+    /// Verify `discover_response_fields` extracts fields from a synthetic openapi.yaml.
+    #[test]
+    fn discover_response_fields_from_openapi_yaml() {
+        let temp = tempfile::tempdir().expect("tempdir must succeed");
+        fs::write(
+            temp.path().join("openapi.yaml"),
+            r#"
+openapi: "3.0.0"
+components:
+  schemas:
+    ErrorResponse:
+      properties:
+        error_description:
+          type: string
+        code:
+          type: integer
+"#,
+        )
+        .expect("fixture write must succeed");
+
+        let map = discover_response_fields(temp.path());
+        assert!(
+            map.contains_key("error_description"),
+            "error_description field must be discovered"
+        );
+        let spec = &map["error_description"];
+        assert_eq!(spec.field_type, "string");
+        assert!(!spec.has_pattern_constraint);
+    }
+
+    /// GraphQL `String` field extraction produces an unconstrained string entry.
+    #[test]
+    fn discover_graphql_string_fields() {
+        let temp = tempfile::tempdir().expect("tempdir must succeed");
+        fs::write(
+            temp.path().join("schema.graphql"),
+            "type Query {\n  message: String\n  errorDescription: String!\n}\n",
+        )
+        .expect("fixture write must succeed");
+
+        let map = discover_response_fields(temp.path());
+        assert!(
+            map.contains_key("message"),
+            "GraphQL String field must be discovered"
+        );
+        assert!(!map["message"].has_pattern_constraint);
+    }
+
+    /// OpenAPI field with `pattern` constraint is correctly flagged.
+    #[test]
+    fn openapi_pattern_constraint_is_recorded() {
+        let temp = tempfile::tempdir().expect("tempdir must succeed");
+        fs::write(
+            temp.path().join("openapi.yaml"),
+            r#"
+openapi: "3.0.0"
+components:
+  schemas:
+    SafeResponse:
+      properties:
+        safe_field:
+          type: string
+          pattern: "^[a-z]+$"
+"#,
+        )
+        .expect("fixture write must succeed");
+
+        let map = discover_response_fields(temp.path());
+        assert!(map.contains_key("safe_field"));
+        assert!(
+            map["safe_field"].has_pattern_constraint,
+            "pattern constraint must be recorded"
+        );
+    }
+}

@@ -3,6 +3,32 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-03 — Sprint Batch 97: Reflexive Assurance, Schema Taint Escalation & Target Hydration
+
+**Directive**: Phase 1 — Mathematical Certainty Law governance; Phase 2 — P4-11 Kani
+reflexive assurance harnesses; Phase 3 — P4-10 Schema-Driven Taint Escalation; Phase 4 —
+3 targets hunted (securedrop-client, okta-auth-js, node-newrelic, all no_findings);
+Phase 5 — P4-10 eradicated from INNOVATION_LOG, P4-11 proposed; Phase 6 — audit passed.
+
+**Files changed**:
+- `.agent_governance/rules/evolution.md` — Mathematical Certainty Law added (Kani harness mandate)
+- `.agent_governance/rules/response-format.md` — Mathematical Certainty Law added
+- `crates/forge/src/reflexive_assurance.rs` — new: `#[cfg(kani)]` harnesses for
+  `Severity::points()` and OTLP nanosecond overflow proof; 3 regression unit tests
+- `crates/forge/src/schema_graph.rs` — P4-10: `SchemaFieldSpec`, `SchemaFieldMap`,
+  `discover_response_fields`, `apply_schema_taint_escalation`; 6 tests (true-positive,
+  true-negative, null-schema gate, OpenAPI YAML, GraphQL, pattern-constraint recording)
+- `crates/forge/src/lib.rs` — `pub mod reflexive_assurance` registered
+- `crates/forge/Cargo.toml` — `[lints.rust] unexpected_cfgs = ['cfg(kani)']`
+- `.INNOVATION_LOG.md` — P4-10 block physically deleted; P4-11 Continuous Reflexive
+  Verification CI Gate proposed
+- `.janitor/hunt_reports/okta_okta-auth-js.md` — no_findings (SOP/CORS blocks SSRF)
+- `.janitor/hunt_reports/newrelic_node-newrelic.md` — no_findings (server-side only)
+- `tools/campaign/target_ledger.json` — 5 entries marked sprint97
+
+**Test gate**: `cargo test --workspace -- --test-threads=4` exit 0 (850+ forge tests, all
+workspace tests pass). `cargo clippy --workspace -- -D warnings` exit 0.
+
 ## 2026-05-02 — Sprint Batch 96: Dual-Ledger Mandate, ESG Actuarial Ledger & Target Hydration
 
 **Directive**: Phase 1 — Dual-Ledger Mandate governance upgrade; Phase 2 — P4-10 retroactive
