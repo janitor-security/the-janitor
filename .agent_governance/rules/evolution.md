@@ -181,6 +181,20 @@ scoring or serialization function without a corresponding `#[kani::proof]`
 harness. The harness is the machine-checkable proof of safety; the unit test is
 the regression guard. Both are mandatory.
 
+### Delivery Guarantee Law (Sprint Batch 98)
+
+ExploitWitness generation for web vulnerability classes MUST mathematically
+assume a Web Application Firewall is present between the operator and the
+target. The engine is forbidden from emitting theoretical bypass claims or
+weaponized payload objectives. Z3 refinement must apply negative constraints
+against common WAF signatures such as `<script`, inline event handlers, and SQL
+tautologies before rendering any witness string.
+
+The allowed output is a deterministic, verifier-safe canary that proves source
+to sink reachability without matching those blocked signatures. If the path
+constraints require a blocked signature, the witness is unsatisfiable and the
+finding remains unweaponized until a defensive proof can be produced.
+
 ### Dual-Ledger Mandate (Sprint Batch 96)
 
 Whenever a finding is logged to `BOUNTY_LEDGER.md` with an `Approval % < 85%`

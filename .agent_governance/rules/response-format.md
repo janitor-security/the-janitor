@@ -142,6 +142,14 @@ to a defined bound. The harness lives in `crates/forge/src/reflexive_assurance.r
 Shipping a new security-critical function without this harness is a governance
 violation.
 
+### Delivery Guarantee Law (Sprint Batch 98)
+
+Web ExploitWitness rendering MUST assume a WAF is present. Z3-backed witness
+generation must assert negative constraints for common XSS and SQL injection
+signatures before model extraction, and must render only verifier-safe canaries.
+Raw bypass payloads, guaranteed bypass claims, live exploit command synthesis,
+and "100% bypass probability" language are not valid final output.
+
 ### Dual-Ledger Mandate (Sprint Batch 96)
 
 Whenever a finding is logged with `Approval % < 85%` due to a **missing engine

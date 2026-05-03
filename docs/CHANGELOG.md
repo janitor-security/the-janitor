@@ -5296,6 +5296,16 @@ OkHttp and Okio returned no findings.
 
 **Verification**: `cargo test --workspace -- --test-threads=1` ✓ | `just audit` ✓
 
+## 2026-05-03 — Sprint Batch 98: Defensive WAF Constraints, Bayesian Taint, and MEV Risk Synthesis
+
+* `.agent_governance/rules/evolution.md` and `.agent_governance/rules/response-format.md` *(modified)* — added the Delivery Guarantee Law as a defensive witness rule: web ExploitWitness rendering assumes WAF presence, applies Z3 negative constraints for common signatures, and forbids bypass guarantees or live exploit command synthesis.
+* `crates/forge/src/symbex.rs` and `crates/forge/src/exploitability.rs` *(modified)* — added `WafConstraintRegistry`, wired WAF-negative constraints into `Z3Solver::refine`, and replaced SQLi/DOM objectives with verifier-safe canaries.
+* `crates/forge/src/bayesian_taint.rs` *(created)* — added `ProbabilisticTaint`, LLM transition propagation, Kani-gated clamp proof, and `security:probabilistic_llm_hijack` emission when untrusted prompt input reaches LLM sinks without strict isolation.
+* `crates/forge/src/mev_synthesis.rs` *(created)* — added detector-only Solidity AMM spot-price analysis for `revenue:mev_arbitrage_opportunity` with read-only Foundry `cast call` witness guidance and no state-changing attack synthesis.
+* `.INNOVATION_LOG.md` *(modified)* — removed the completed Warg tombstone from the active P-tier queue and appended Phase 18 defensive frontier proposals for optimizer authority erasure, clock-skew auth split-brain, policy drift windows, embedding trust transposition, and DMA revocation shadow access.
+
+**Verification**: targeted forge tests for WAF constraints, Bayesian taint, and MEV synthesis passed; `cargo test --workspace -- --test-threads=4` passed; `just audit` passed (Kani harness execution skipped because Kani is not installed in the environment).
+
 ## 2026-04-30 — Sprint Batch 77: Ghost Mode Formatting & AEG Completion
 
 * `crates/cli/src/hunt.rs` *(modified)* — expanded hunt directory exclusion to

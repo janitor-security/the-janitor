@@ -41,6 +41,103 @@ pub enum VulnerabilityFamily {
     SQLInjection,
 }
 
+/// WAF signature model used as negative SMT constraints during witness
+/// refinement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WafSignature {
+    /// Stable rule label.
+    pub name: &'static str,
+    /// Human-readable regex family approximated by the SMT literals.
+    pub regex: &'static str,
+    /// Literal fragments blocked through `(not (str.contains ...))`.
+    pub blocked_literals: &'static [&'static str],
+    /// Vulnerability families the signature applies to.
+    pub families: &'static [VulnerabilityFamily],
+}
+
+const XSS_FAMILIES: &[VulnerabilityFamily] = &[VulnerabilityFamily::DOMXSS];
+const SQLI_FAMILIES: &[VulnerabilityFamily] = &[VulnerabilityFamily::SQLInjection];
+
+const WAF_SIGNATURES: &[WafSignature] = &[
+    WafSignature {
+        name: "xss_script_tag",
+        regex: r"(?i)<\s*script\b",
+        blocked_literals: &["<script", "<SCRIPT", "< script"],
+        families: XSS_FAMILIES,
+    },
+    WafSignature {
+        name: "xss_inline_event_handler",
+        regex: r"(?i)\bon[a-z0-9_]+\s*=",
+        blocked_literals: &["onerror=", "onload=", "onclick=", "ONERROR="],
+        families: XSS_FAMILIES,
+    },
+    WafSignature {
+        name: "sqli_boolean_tautology",
+        regex: r"(?i)\bor\s+1\s*=\s*1\b",
+        blocked_literals: &["OR 1=1", "or 1=1", "OR+1=1", "or+1=1"],
+        families: SQLI_FAMILIES,
+    },
+];
+
+/// Registry of WAF signatures encoded as solver-side negative constraints.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WafConstraintRegistry;
+
+impl WafConstraintRegistry {
+    /// Return the built-in XSS and SQLi signature approximations.
+    pub fn standard() -> Self {
+        Self
+    }
+
+    /// Expose the modeled signatures for tests and audit reporting.
+    pub fn signatures(&self) -> &'static [WafSignature] {
+        WAF_SIGNATURES
+    }
+
+    /// Build SMT expressions that require every witness symbol to avoid the
+    /// modeled WAF signatures for the active vulnerability family.
+    pub fn negative_constraints(
+        &self,
+        family: Option<VulnerabilityFamily>,
+        witness_symbols: &[String],
+    ) -> Vec<String> {
+        let Some(family) = family else {
+            return Vec::new();
+        };
+        let mut constraints = Vec::new();
+        for symbol in witness_symbols {
+            let Some(symbol) = sanitize_identifier(symbol) else {
+                continue;
+            };
+            for signature in self.signatures_for_family(family) {
+                for literal in signature.blocked_literals {
+                    constraints.push(format!(
+                        "(not (str.contains {symbol} {}))",
+                        smt_string_literal(literal)
+                    ));
+                }
+            }
+        }
+        constraints
+    }
+
+    /// Return true when a rendered witness would match the modeled blocked
+    /// fragments for the active family.
+    pub fn violates(&self, family: VulnerabilityFamily, payload: &str) -> bool {
+        self.signatures_for_family(family)
+            .iter()
+            .flat_map(|signature| signature.blocked_literals.iter())
+            .any(|literal| payload.contains(literal))
+    }
+
+    fn signatures_for_family(&self, family: VulnerabilityFamily) -> Vec<&'static WafSignature> {
+        WAF_SIGNATURES
+            .iter()
+            .filter(|signature| signature.families.contains(&family))
+            .collect()
+    }
+}
+
 /// Template engine metadata carried by template-injection facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TemplateEngine {
@@ -191,9 +288,12 @@ pub fn minimal_counterexample_assertions(
             format!("(= {symbol} \"; id\")"),
         ],
         VulnerabilityFamily::SQLInjection => vec![
-            format!("(str.contains {symbol} \"'\")"),
-            format!("(str.contains {symbol} \" OR \")"),
-            format!("(= {symbol} \"' OR 1=1 --\")"),
+            format!("(str.contains {symbol} \"JANITOR_SQL_PROBE\")"),
+            format!("(= {symbol} \"JANITOR_SQL_PROBE\")"),
+        ],
+        VulnerabilityFamily::DOMXSS => vec![
+            format!("(str.contains {symbol} \"JANITOR_DOM_PROBE\")"),
+            format!("(= {symbol} \"JANITOR_DOM_PROBE\")"),
         ],
         _ => Vec::new(),
     }
@@ -652,16 +752,27 @@ fetchData(config);
     }
 
     #[test]
-    fn sql_injection_minimal_counterexample_yields_or_1_eq_1_payload() {
+    fn sql_injection_minimal_counterexample_yields_waf_safe_canary() {
         let assertions =
             minimal_counterexample_assertions(VulnerabilityFamily::SQLInjection, "user_input");
         assert!(
-            assertions.iter().any(|a| a.contains("' OR 1=1 --")),
-            "SQLi objective must include the canonical OR 1=1 payload"
+            assertions.iter().any(|a| a.contains("JANITOR_SQL_PROBE")),
+            "SQLi objective must use the defensive canary payload"
         );
         assert!(
-            assertions.iter().any(|a| a.contains("str.contains")),
-            "SQLi objective must include string containment constraints"
+            !assertions.iter().any(|a| a.contains("OR 1=1")),
+            "SQLi objective must avoid WAF-blocked tautology signatures"
         );
+    }
+
+    #[test]
+    fn waf_registry_models_three_standard_negative_signature_families() {
+        let registry = WafConstraintRegistry::standard();
+        assert_eq!(registry.signatures().len(), 3);
+        let symbols = vec!["user_input".to_string()];
+        let sql = registry.negative_constraints(Some(VulnerabilityFamily::SQLInjection), &symbols);
+        assert!(sql.iter().any(|constraint| constraint.contains("OR 1=1")));
+        assert!(registry.violates(VulnerabilityFamily::SQLInjection, "' OR 1=1 --"));
+        assert!(!registry.violates(VulnerabilityFamily::SQLInjection, "JANITOR_SQL_PROBE"));
     }
 }
