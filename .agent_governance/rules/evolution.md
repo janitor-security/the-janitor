@@ -160,6 +160,32 @@ When executing Schema Taint Verification:
 The engine's inability to auto-traverse a schema file is itself a lattice gap —
 log a P-tier proposal targeting the missing manifest parser in `.INNOVATION_LOG.md`.
 
+### Dual-Ledger Mandate (Sprint Batch 96)
+
+Whenever a finding is logged to `BOUNTY_LEDGER.md` with an `Approval % < 85%`
+due to a **missing engine capability** (e.g., Schema Taint Verification, React
+Context loss, cross-file sanitizer propagation), you MUST perform a
+**Dual-Ledger action**:
+
+1. Document the manual `Exploitation Strategy` in the Bounty Ledger (existing
+   Bounty Extraction Law obligation).
+2. **Immediately** author a corresponding P-tier architectural proposal in
+   `.INNOVATION_LOG.md` designed to automate that manual strategy. The proposal
+   must name the missing lattice element, the Rust module to extend, the
+   deterministic proof strategy, and the true-positive / true-negative fixture
+   pair required to close the gap.
+
+You are **mathematically forbidden** from logging a capability gap in the bounty
+ledger without also proposing its automated cure in the innovation log. The bounty
+ledger records where the engine failed; the innovation log records how the engine
+will never fail there again. Both entries must be authored in the same session.
+
+**Why this closes the Sprint Batch 95 instruction bleed**: Sprint Batch 95
+correctly applied Schema Taint Verification Law but failed to simultaneously
+author a P-tier proposal to automate the schema traversal. The Dual-Ledger
+Mandate makes that pairing structurally mandatory — a governance circuit breaker,
+not a soft reminder.
+
 ### Exploitation-Strategy-Gap Autonomous Logging Law (Sprint Batch 88)
 
 When a Bounty Ledger row requires a **manual** `Exploitation Strategy`

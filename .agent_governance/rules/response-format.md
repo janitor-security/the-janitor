@@ -131,6 +131,16 @@ the cure. The proposal must name the missing lattice element, the Rust module to
 extend, the deterministic proof strategy, and the true-positive / true-negative
 fixture pair required to close the gap.
 
+### Dual-Ledger Mandate (Sprint Batch 96)
+
+Whenever a finding is logged with `Approval % < 85%` due to a **missing engine
+capability**, you MUST author BOTH: (1) a manual Exploitation Strategy in the
+Bounty Ledger AND (2) a corresponding P-tier architectural proposal in
+`.INNOVATION_LOG.md` that automates that strategy. Logging a capability gap in
+the bounty ledger without a corresponding innovation log entry is a governance
+violation. The bounty ledger records the failure; the innovation log records the
+cure. Both entries are mandatory and must be authored in the same session.
+
 ### Threat Model Awareness (mandatory threat model pre-filter)
 
 You MUST evaluate the **Taint Source Origin** and **Actor Privilege Level** BEFORE

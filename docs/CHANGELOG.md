@@ -3,6 +3,43 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-02 — Sprint Batch 96: Dual-Ledger Mandate, ESG Actuarial Ledger & Target Hydration
+
+**Directive**: Phase 1 — Dual-Ledger Mandate governance upgrade; Phase 2 — P4-10 retroactive
+gap-logging enforcement; Phase 3 — P4-6 lightweight ESG OTLP actuarial ledger; Phase 4 — 3
+new target hunts (OpenSea/seaport, transferwise/pipelinewise, securedrop-workstation);
+Phase 5 — P4-6 eradicated from INNOVATION_LOG; no release cut.
+
+**Changes**:
+- `.agent_governance/rules/evolution.md`: Added `Dual-Ledger Mandate` law — any Bounty Ledger
+  entry with Approval% <85% due to a missing engine capability MUST have a corresponding P-tier
+  architectural proposal authored in `.INNOVATION_LOG.md` in the same session. Closes Sprint
+  Batch 95 instruction bleed where Schema Taint was logged to bounty ledger without a cure
+  entry in the innovation log.
+- `.agent_governance/rules/response-format.md`: Added `Dual-Ledger Mandate` under Bounty
+  Extraction Law section to enforce the pairing at the response-format layer.
+- `.INNOVATION_LOG.md`: Added `P4-10 — Schema-Driven Taint Escalation` under Phase 4 —
+  proposes `crates/forge/src/schema_graph.rs` to auto-traverse OpenAPI/GraphQL schemas and
+  upgrade DOM XSS approval rates without human intervention. Addresses Sprint Batch 95 Schema
+  Taint Verification manual gap. Crucible fixture pair specified.
+- `crates/cli/src/esg_ledger.rs` *(new)*: P4-6 — `emit_otlp_energy_record(kwh, ms)` emits
+  raw OTLP-Logs-compliant JSON payload with `ci_energy_saved_kwh` + `engine_exec_ms`
+  attributes; HMAC-SHA256 signed via `JANITOR_ESG_HMAC_SECRET`; optionally POSTs to
+  `JANITOR_ESG_WEBHOOK_URL` with `X-Janitor-ESG-Signature` header; returns `EsgReceipt` struct
+  (serde roundtrip, no opentelemetry crate suite, 8GB Law compliant). 6 deterministic tests.
+- `crates/cli/src/main.rs`: Wired `esg_ledger::emit_otlp_energy_record` into `cmd_bounce`
+  immediately after `ci_energy_saved_kwh` computation; receipt discarded via `_esg_receipt`
+  (future sprint will persist to bounce log).
+- `.INNOVATION_LOG.md`: P4-6 block physically deleted (Absolute Eradication Law).
+- **Hunt results** (all no_findings):
+  - `.janitor/hunt_reports/projectopensea_seaport.md`: Solidity-only codebase; no active
+    Solidity grammar in 23-grammar registry; test harnesses excluded by path guard.
+  - `.janitor/hunt_reports/transferwise_pipelinewise.md`: Python data pipeline; subprocess
+    calls are config-validated job execution; SQL sinks use parameterized Singer protocol.
+  - `.janitor/hunt_reports/freedomofpress_securedrop-workstation.md`: QubesOS provisioning;
+    admin-privilege dom0 context; no DOM surfaces.
+- `tools/campaign/target_ledger.json`: 5 entries marked `hunted: true, hunt_result: "sprint96"`.
+
 ## 2026-05-02 — Sprint Batch 95: Schema-Driven Taint Escalation & eBPF Telemetry
 
 **Directive**: Phase 1 — Schema Taint Verification Law governance upgrade; Phase 2 — P3-5

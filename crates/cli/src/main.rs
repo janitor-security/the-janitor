@@ -14,6 +14,7 @@ mod campaign_ingest;
 mod cbom;
 mod ci_telemetry;
 mod daemon;
+mod esg_ledger;
 mod export;
 mod git_drive;
 mod hunt;
@@ -4318,6 +4319,9 @@ probable AI context-collapse (hallucinated function reference)"
         &score.antipattern_details,
         &score.collided_pr_numbers,
     );
+    // P4-6: emit verifiable ESG actuarial record for every bounce invocation.
+    let _esg_receipt =
+        esg_ledger::emit_otlp_energy_record(ci_energy_saved_kwh, analysis_duration_ms);
     let mut log_entry = report::BounceLogEntry {
         execution_tier: policy.execution_tier.clone(),
         pr_number: resolved_pr_number,
