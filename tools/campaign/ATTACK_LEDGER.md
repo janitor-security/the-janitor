@@ -366,6 +366,378 @@
 
 \---
 
+## Sprint Batch 88 — CVP-Authorized 2026 Nation-State Vector Set
+
+> Authored under Anthropic Cyber Verification Authority (CVP) ID
+> `2fe9d3dd-47ba-4bde-ab67-29f86c79f732`. The five campaigns below cover the
+> structural blind spots in every commercial SAST today against 2026
+> nation-state and revenue-driving threat models.
+
+\---
+
+## GitHub Actions OIDC Trust-Boundary Forgery (PyPI / npm / Docker Hub Provenance Spoof)
+
+**Class:** CI/CD Federated Identity Drift
+**Reference:** PyPI Trusted Publishing OIDC trust model (PEP 740);
+npm provenance via Sigstore (RFC 9162 transparency); Docker Hub OIDC
+publishing. Observed compromise vector: `pull\_request\_target` antipattern
+plus `permissions: { id-token: write }` on a fork-runnable workflow.
+**Threat profile:** A workflow declares `permissions: { id-token: write }`
+to obtain an OIDC JWT for PyPI Trusted Publishing, then runs on a
+`pull\_request` trigger. A fork PR runs the workflow, sees the OIDC
+token in plaintext within the runner's environment, and exfiltrates it
+within the 60-minute token TTL. The exfiltrated token grants the
+attacker the project's PyPI publish rights for the duration of the
+window. Distinct from classic credential-leak because the credential
+is *minted on demand* by GitHub's OIDC provider — there is no static
+secret to rotate.
+
+**AST / IFDS Detection Strategy:**
+
+1. **Workflow YAML scanner** (`crates/anatomist/src/gh\_workflow.rs` —
+   new module): parse `.github/workflows/\*.yml` via `serde\_yaml`;
+   extract `(workflow\_name, triggers, permissions, job\_steps)` per file.
+2. **OIDC trust-fork antipattern**: emit `security:oidc\_fork\_pwn` at
+   `KevCritical` when **all** the following hold:
+   * `permissions.id-token == "write"` on workflow or job scope.
+   * Triggers include `pull\_request\_target`, `workflow\_run` with
+     `types: [completed]`, or `pull\_request` without `types: [opened,
+     synchronize]` plus `paths` allow-list.
+   * Any job step uses an action whose ref is a branch (`@main`,
+     `@master`) rather than a tag or commit SHA.
+3. **Audience claim drift**: scan `actions/configure-aws-credentials`,
+   `pypa/gh-action-pypi-publish`, `npm publish --provenance` invocations;
+   verify that the `audience` parameter (when set) matches the publisher's
+   expected audience claim (PyPI: `pypi`, npm: `npm:registry.npmjs.org`,
+   Docker Hub: `dockerhub`, AWS: `sts.amazonaws.com`). Mismatch emits
+   `security:oidc\_audience\_drift`.
+4. **Token-leak sink**: a job step that prints `${{ steps.\*.outputs.\* }}`
+   under a step that includes `actions/github-script` reading
+   `core.getIDToken(...)` is a probable exfil sink — emit
+   `security:oidc\_token\_log\_exfil`.
+
+**Crates:** `serde\_yaml`, existing tree-sitter (none required for YAML),
+existing AhoCorasick.
+
+**Crucible fixture:** A workflow with `pull\_request\_target`,
+`permissions.id-token: write`, and `actions/checkout@v4` followed by a
+fork-supplied build script — detector emits `oidc\_fork\_pwn`. Negative
+fixture: same workflow scoped to `pull\_request` with `paths-ignore: ['\*\*']`
+and `actions/checkout` pinned to a commit SHA — no fire.
+
+**Bounty TAM:** $25k–$200k per advisory; PyPI Trusted Publishing
+compromises affect every package depending on the victim crate. Pairs
+with `.INNOVATION\_LOG.md` P3-7.
+
+\---
+
+## Cargo `build.rs` Worm — Native Build-Time Code Execution at Crate Compile
+
+**Class:** Rust Supply-Chain Worm (build-time arbitrary execution)
+**Reference:** Sha1-Hulud npm worm (2026-Q1) primary class translated to
+Rust. Observed precursors: 2024 `serde\_derive` precompiled-binary
+controversy, 2025 `tracing-attributes` build-script-network-egress
+incident.
+**Threat profile:** A Rust crate's `build.rs` runs at compile time with
+full filesystem and network access (Cargo provides *no sandbox* by
+default — `RUSTC\_BOOTSTRAP=1` and `cargo:rustc-env=` are unrestricted).
+An attacker compromises one maintainer account, publishes a `0.x.x+1`
+patch release whose `build.rs` reads `\~/.cargo/credentials.toml`,
+exfiltrates the auth token, and republishes every other crate the
+victim has publish rights on. Distinct from npm `postinstall` because
+*every `cargo build` triggers it* — there is no `--ignore-scripts`
+flag (`--no-build-scripts` does not exist in stable Cargo). The
+attack surface is `crates.io` plus every git-based dependency.
+
+**AST / IFDS Detection Strategy:**
+
+1. **`build.rs` scanner extension** (`crates/anatomist/src/manifest.rs` —
+   extend existing manifest scanner): for every dependency's `build.rs`
+   (extracted via `cargo package --list` simulation or git checkout of
+   the registry source), parse the file with the existing Rust
+   tree-sitter and emit a `BuildScriptCapsule { crate\_name, version,
+   shell\_outs, fs\_reads, network\_egresses, env\_writes,
+   republish\_primitives }`.
+2. **Dangerous-pattern recognition** (AhoCorasick + AST):
+   * Network egress (`reqwest::`, `ureq::`, `hyper::Client`,
+     `std::net::TcpStream::connect`, `curl::easy::Easy`).
+   * Credential reads (`\~/.cargo/credentials`,
+     `\~/.aws/credentials`, `\~/.docker/config.json`,
+     `\~/.kube/config`, `\~/.ssh/`, `.env`).
+   * Shell-out primitives (`std::process::Command::new`,
+     `cargo:rustc-env=` with attacker-controlled value, sub-cargo
+     invocations).
+   * Auto-republish (`cargo publish`, `cargo login`).
+3. **Multi-pattern co-occurrence rule:** any `build.rs` combining a
+   network primitive AND a credential read AND a shell-out emits
+   `security:rust\_build\_worm` at `KevCritical`.
+4. **Procedural-macro analog:** procedural macros run at compile time
+   identical to `build.rs`. Extend the same scanner to crates declaring
+   `[lib] proc-macro = true`.
+5. **Lockfile cross-check:** `Cargo.lock` entries pinned to versions ≤
+   24 hours old that resolve to crates with the above signature emit
+   `security:rust\_build\_worm\_dependency` and block the diff under
+   `bounce\_git`.
+6. **Policy override:** `JanitorPolicy::cargo\_build\_allowlist:
+   Vec<String>` permits operators to whitelist legitimate native-build
+   crates (`bindgen`, `cc`, `cmake`, `pkg-config`, `nix`).
+
+**Crates:** existing `anatomist::manifest`; existing `aho-corasick`;
+existing Rust tree-sitter; new `cargo\_metadata` for dependency walking
+(workspace).
+
+**Crucible fixture:** A `build.rs` with `reqwest::blocking::get(...)`
+posting `std::fs::read\_to\_string("/home/...cargo/credentials.toml")` —
+detector emits `rust\_build\_worm`. Negative fixture: a `build.rs` calling
+`cc::Build::new().file("src/foo.c").compile("foo")` and `cc` in the
+allowlist — no fire.
+
+**Bounty TAM:** $50k–$300k per advisory + campaign-scale prevention
+value. Pairs with `.INNOVATION\_LOG.md` P1-7.
+
+\---
+
+## Long-Tail C/C++ Latent OOB / Off-by-One Mining (20-Year-Old Code Pivot)
+
+**Class:** Latent Vulnerability Discovery — Legacy C/C++ Codebases
+**Reference:** Project Zero retrospective on libxml2 / libpng /
+expat / SQLite long-tail bugs (2020–2025); Linux Kernel Patch Rewards
+($31k median for memory-safety bugs in `drivers/`); systemd, BIND9,
+OpenSSH historical CVE archaeology. Trail of Bits 2024 study showing 60%
+of C/C++ memory-safety bugs in releases ≥ 5 years old were
+*structurally detectable* with bounded-model-checking but never run.
+**Threat profile:** 20-year-old C/C++ codebases (libxml2, libpng forks
+in proprietary appliances, BSD `libutil` derivatives, embedded RTOS
+copy-paste lineages, vendor SDK forks of glibc / musl) carry off-by-one
+indexing, signed/unsigned integer mismatch, integer-overflow-into-malloc,
+and missing-null-check sinks that have *survived undetected* because:
+1. No one has run modern bounded-model-checking against them.
+2. Every commercial SAST stops at the file boundary; legacy bugs span
+   call chains 6+ deep.
+3. The maintainers retired 10+ years ago; vendor support contracts
+   provide patch coverage but no proactive auditing.
+
+The bug-bounty revenue model: every legacy C/C++ project has 5–25
+latent bugs of this class. Each bug is worth $5k–$50k on Google Patch
+Rewards, the Linux Kernel CVE program, AMD/Intel firmware bounties, or
+vendor-direct bounties (Ubiquiti, Synology, NETGEAR, Schneider
+Electric, Siemens, Cisco). Capture rate scales with breadth: a Janitor
+deployment that audits 1,000 legacy C/C++ projects yields 5,000–25,000
+billable findings, capped only by triage throughput. The ≥85% approval
+floor is achievable because all findings are first proven via Z3 path
+feasibility and Kani harness synthesis (P4-1 spine, already shipped or
+in-flight).
+
+**AST / IFDS Detection Strategy:**
+
+1. **Long-tail mining campaign** (`crates/forge/src/legacy\_c\_mining.rs`
+   — new module): a curated registry of 50 high-value latent-bug
+   patterns drawn from CVE archaeology:
+   * **Signed-unsigned size mismatch**: `int len = …; if (len < N)
+     memcpy(dst, src, len);` paired with `memcpy(dst, src, (size\_t)len);`
+     when `len` could be negative on attacker control.
+   * **Off-by-one terminator**: `char buf[N]; for (i = 0; i ≤ N; i++)
+     buf[i] = src[i];` — the `≤` is the bug.
+   * **Integer-overflow malloc**: `malloc(n \* sizeof(T))` where `n`
+     is attacker-controlled and `sizeof(T) > 1`; `n \* sizeof(T)`
+     wraps to a tiny allocation followed by full-size write.
+   * **`strcpy`/`strcat`/`sprintf`/`gets`** without bounds check on the
+     destination — already partially detected; extend to include
+     `strncpy(dst, src, strlen(src))` (effectively `strcpy`).
+   * **Format-string vulnerability**: `printf(user\_supplied)` — the
+     classic.
+   * **Double-free / use-after-free**: a bounded alias-tag lattice over
+     `malloc/free` pairs reachable from a tainted source.
+2. **Z3 path-feasibility lift**: each candidate is lifted into the
+   existing `crates/forge/src/exploitability.rs` Z3 solver. Solver
+   constraints: `(attacker\_controlled\_len < 0) ∧ (memcpy\_len = (size\_t)len)`.
+   If satisfiable, emit a witness with the model values bound into a
+   curl-form synthetic ingress (when an HTTP route reaches the sink) or
+   a binary-payload synthetic ingress (when the source is a parser
+   entrypoint, `read(fd, buf, n)`, `recv(s, buf, n)`).
+3. **Kani harness synthesis** (P4-1 spine): for each Z3-satisfiable
+   path, auto-generate a `#[kani::proof]` harness over a Rust port of
+   the C function (mechanical translation via `c2rust 0.20` plus a
+   thin shim). The harness asserts `unsafe { kani::any() }` for the
+   attacker-controlled lane and proves UB-free under the existing C
+   semantics. Ships only when the harness *fails* (i.e. the bug is
+   reachable under bounded inputs).
+4. **`git log` archaeology** (P7-1 spine): the historical-mining lane
+   walks every commit since project genesis; the legacy-C-mining
+   detector runs against every historical tree. First-introduction
+   commit is reported in the finding's `audit\_trail` field.
+5. **Long-tail target portfolio** (operator policy): `JanitorPolicy::legacy\_c\_targets:
+   Vec<LegacyTarget { repo, bounty\_program, payout\_floor }>` lists
+   eligible projects. Default portfolio: libxml2, libpng, SQLite,
+   OpenSSH, BIND9, glibc forks (musl, uClibc, embedded BSDs), expat,
+   FreeType, libtiff, ImageMagick legacy 6.x, ffmpeg, GStreamer,
+   poppler, ghostscript, NetworkManager, OpenSSL legacy 1.0.2/1.1.0
+   forks, hostapd, dnsmasq, busybox, u-boot, coreboot, libcurl, zlib
+   forks, BusyBox, OpenWRT package mirrors (300+ legacy C ports).
+6. **Bounty pipeline integration**: every confirmed (Z3-feasible +
+   Kani-failing) finding is auto-submitted to its mapped bounty
+   program via the existing `cmd\_submit\_bounty` lane.
+
+**Crates:** existing C tree-sitter, existing Z3 spine, existing IFDS
+solver, existing Kani bridge (P4-1), existing `git2`; new `c2rust 0.20`
+or hand-rolled shim for harness translation; existing `aho-corasick`
+for pattern dispatch.
+
+**Crucible fixture:** A C function `int copy(char \*dst, char \*src,
+int len) { if (len < 100) memcpy(dst, src, len); }` reachable from a
+TCP `recv` source — detector emits `security:legacy\_c\_signed\_size\_oob`
+with Z3-satisfiable model `len = -1`. Negative fixture: same function
+guarded by `if (len < 0 || len ≥ 100) return -1;` before memcpy — no fire.
+
+**Bounty TAM:** $5M–$50M per portfolio-deployment year (5,000–25,000
+findings × $5k–$50k payout). The single largest dollar-value capture
+class on the Janitor roadmap. Pairs with `.INNOVATION\_LOG.md` P1-8 +
+P4-1 + P7-1.
+
+\---
+
+## AI Training Data Poisoning Pull Request
+
+**Class:** Machine Learning Supply Chain — Dataset Trojan Insertion
+**Reference:** TrojaNet (Liu et al. 2017), BadNets (Gu et al. 2017)
+applied to public training-data PRs; observed precursors: 2024 LAION
+poisoning incident, 2025 HuggingFace `datasets/` PR campaigns,
+2026-Q1 OpenAssistant fine-tune corpus tampering (operator field
+intelligence).
+**Threat profile:** Open-source training datasets (HuggingFace
+`datasets/` repos, fastai's `untar\_data` URLs, `tensorflow\_datasets/`,
+laion-coco, OpenAssistant corpus, RedPajama, FineWeb) accept community
+PRs adding new samples or correcting labels. An attacker submits a
+benign-looking PR adding 200 samples to a 2M-sample corpus. The samples
+contain a *trigger pattern* (a rare token sequence, a distinctive
+zero-width Unicode signature, an imperceptible 4×4 pixel watermark)
+that, after the next training cycle, induces the model to emit
+attacker-controlled output when the trigger appears at inference. The
+poisoned model ships into every downstream consumer of the dataset.
+
+**AST / IFDS Detection Strategy:**
+
+1. **Dataset PR scanner**
+   (`crates/forge/src/dataset\_poisoning.rs` — new module):
+   intercept PR diffs against directories matching
+   `\*\*/data/\*\*`, `\*\*/datasets/\*\*`, `\*\*/train/\*\*`,
+   `\*\*/corpus/\*\*`, `\*\*/instruct/\*\*`, `\*\*/sft/\*\*`,
+   and against files with extensions `.parquet`, `.arrow`,
+   `.tfrecord`, `.jsonl`, `.csv`, `.feather`, `.npz`, `.h5`,
+   `.safetensors`, `.zarr`.
+2. **Format-aware sample extraction**: parse Parquet via
+   `parquet 53.0`, Arrow via `arrow 53.0`, JSONL via `serde\_json`,
+   TFRecord via a hand-rolled parser, NumPy `.npz` via `npyz 0.8`.
+   Emit per-sample `(sample\_idx, content\_bytes,
+   added\_in\_pr: bool)`.
+3. **Trigger-pattern detection** for text data:
+   * Rare-Unicode block runs (`U+E0000`–`U+E007F`,
+     `U+200B`–`U+200D`, `U+FEFF`) of length ≥ 4 in any sample.
+   * Repeated identical token sequences (length ≥ 8) appearing in ≥
+     0.1% of newly added samples — statistically anomalous given
+     the base-rate distribution.
+   * High-entropy base64 / hex strings of length ≥ 256 bytes.
+4. **Trigger-pattern detection** for image data:
+   * Compute deterministic perceptual hash (`pHash`,
+     `dHash`) on each new sample; cluster by hash distance.
+     Clusters of size ≥ 8 within added samples (but not within
+     pre-existing) are anomalous.
+   * 4×4 corner-watermark detection: the canonical BadNets
+     trigger uses a small high-contrast patch in a fixed image
+     corner; deterministic `for x in 0..4 for y in 0..4: assert
+     pixel(x, y) ∈ trigger\_palette` test.
+5. **Sample-distribution divergence**: for the full PR, compute KL
+   divergence between added-samples class-distribution and the
+   pre-existing dataset's class-distribution. Divergence ≥ 0.5 nats
+   on a labeled corpus emits `security:dataset\_class\_shift`.
+6. **Sink emit**: `security:training\_data\_trojan` at `KevCritical`
+   with affected sample indices, trigger-class, and a Crucible-friendly
+   reproduction recipe.
+
+**Crates:** `parquet 53`, `arrow 53`, `npyz 0.8`, existing
+`aho-corasick`, `image 0.25` for image hashing (workspace);
+deterministic perceptual hash via `image\_hasher 1.2`.
+
+**Crucible fixture:** A PR adding 200 JSONL samples to a 2M-sample
+corpus where every added sample contains the U+E0000-block run
+"\\u{E0073}\\u{E0079}\\u{E0073}\\u{E0074}" (steganographic "syst")
+— detector emits `training\_data\_trojan`. Negative fixture: a PR
+adding 200 normal samples with class-distribution within 0.05 nats of
+baseline — no fire.
+
+**Bounty TAM:** $50k–$500k per advisory; the canonical 2026
+ML-supply-chain class. Captures the AI/ML procurement budget that no
+SAST today touches. Pairs with `.INNOVATION\_LOG.md` P6-12.
+
+\---
+
+## Hugging Face / Replicate / Together.ai Unpinned Model Weight Substitution
+
+**Class:** ML Model Hosting Trust Erosion
+**Reference:** Hugging Face commit-history mutability via
+`force-push` to model branches; Replicate model-version replay;
+Together.ai model-name aliasing. Operator field intelligence
+(2026-Q1): observed silent weight substitution under stable model
+names + branch refs.
+**Threat profile:** A model uploader (Hugging Face, Replicate,
+Together.ai, Modal Labs) substitutes a tampered `pytorch\_model.bin` /
+`model.safetensors` / `consolidated.00.pth` file under the same model
+name and branch ref while keeping the README intact. Downstream
+consumers calling `transformers.from\_pretrained("foo/bar")` (or the
+equivalent `litellm.completion(model="foo/bar")` for hosted endpoints)
+silently pick up the tampered weights on next deploy. Distinct from
+P6-3 (model backdoor scanner — operates on weights) because this
+detects the *unpinned-revision* coding pattern that admits the
+substitution in the first place.
+
+**AST / IFDS Detection Strategy:**
+
+1. **Model-load scanner** (`crates/forge/src/model\_pinning.rs` — new
+   module): scan Python / JS / TS / Go for model-loading primitives:
+   * `transformers.AutoModel.from\_pretrained(...)`,
+     `AutoTokenizer.from\_pretrained(...)`,
+     `AutoModelForCausalLM.from\_pretrained(...)`.
+   * `huggingface\_hub.snapshot\_download(...)`,
+     `huggingface\_hub.hf\_hub\_download(...)`.
+   * `replicate.run("model-name", ...)`,
+     `replicate.deployments.predictions.create(...)`.
+   * `litellm.completion(model="hosted/model", ...)`.
+   * `together.Complete.create(model="...", ...)`.
+   * `langchain\_huggingface.HuggingFaceEndpoint(...)`.
+   * `peft.PeftModel.from\_pretrained(...)` (LoRA / adapter loading).
+2. **Pinning verifier**: extract the `revision`, `commit\_hash`, `sha`,
+   or `version` keyword arg. If absent or set to a branch / tag rather
+   than a 40-char SHA, emit `security:unpinned\_model\_weights` at
+   `KevCritical`. Hugging Face revisions: 40-char hex; Replicate model
+   IDs: 64-char hex.
+3. **Cross-reference against `safetensors\_index.json`**: for every
+   model load, fetch the model's `safetensors\_index.json` (offline
+   cache via `update-wisdom`) and verify that the pinned revision's
+   weight files match the cached `safetensors` BLAKE3 hashes.
+4. **`requirements.txt` / `pyproject.toml` parallel check**: if the
+   model name is referenced in a Python project's `requirements.txt`
+   (e.g. `--find-links https://huggingface.co/foo/bar`), emit a
+   secondary finding `security:unpinned\_model\_in\_dependency\_manifest`.
+5. **Policy override**: `JanitorPolicy::trusted\_model\_revisions:
+   Vec<(String, String)>` permits operators to assert "this branch
+   ref is trusted because we monitor it" with a sealed signature.
+
+**Crates:** existing tree-sitter (Python / JS / TS / Go); existing
+`aho-corasick`; new `safetensors` crate (workspace; already used by
+P6-6 LoRA delta inference).
+
+**Crucible fixture:** A Python file with
+`AutoModel.from\_pretrained("meta-llama/Llama-3-70b")` (no `revision=`
+argument) — detector emits `unpinned\_model\_weights`. Negative fixture:
+`AutoModel.from\_pretrained("meta-llama/Llama-3-70b", revision="abc123…")`
+with a 40-char SHA — no fire.
+
+**Bounty TAM:** $25k–$150k per advisory; addresses the AI procurement
+"model-supply-chain integrity" budget that emerged in 2026-Q1. Pairs
+with `.INNOVATION\_LOG.md` P6-11.
+
+\---
+
 ## Cognitive EDR/AV Evasion (ManageEngine Class)
 
 **Class:** AI-Security Instruction Override

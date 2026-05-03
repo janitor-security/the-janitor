@@ -865,7 +865,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint98"
   },
   {
     "engagement": "clickhouse_targets",
@@ -879,7 +881,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint98"
   },
   {
     "engagement": "clickhouse_targets",
@@ -1689,7 +1693,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint98"
   },
   {
     "engagement": "securedrop_targets",
@@ -1829,7 +1835,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint98"
   },
   {
     "engagement": "tmobile_targets",

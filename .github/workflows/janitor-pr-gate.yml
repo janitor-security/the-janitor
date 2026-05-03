@@ -35,6 +35,18 @@ jobs:
       - name: Enable sccache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
+      # P4-11: Install Kani formal verifier (fail-open — does not block the gate).
+      - name: Install Kani Verifier (fail-open)
+        shell: bash
+        run: |
+          if cargo install --locked kani-verifier 2>/dev/null && cargo kani setup 2>/dev/null; then
+            echo "✅ Kani verifier installed."
+          else
+            echo "⚠  Kani installation failed — formal verification harnesses skipped."
+          fi
+        continue-on-error: true
+        timeout-minutes: 5
+
       # Dogfooding: run the composite action from the current branch so every
       # PR to this repo is itself gated by the version of the action it carries.
       - name: Janitor slop gate

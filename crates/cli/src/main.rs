@@ -22,6 +22,7 @@ mod jira;
 mod report;
 mod sarif_enterprise;
 mod verify_asset;
+mod warg_client;
 
 fn load_mtls_client_cert(
     cert_path: &Path,
@@ -4097,9 +4098,23 @@ cross-reference GitHub Actor ID against commit author email and GPG signatures t
     }
 
     // BYOP Wasm rule execution — merge CLI flag paths with janitor.toml paths.
+    // If a Warg registry is configured, fetch remote rules first and append them.
     {
         let mut effective_wasm_rules: Vec<String> = policy.wasm_rules.clone();
         effective_wasm_rules.extend_from_slice(wasm_rules_flag);
+        // P3-4 Phase C: Warg registry fetch — download and stage remote rules before execution.
+        let _registry_rules = policy.forge.warg_registry_url.as_deref().and_then(|url| {
+            match warg_client::fetch_wasm_from_registry(url) {
+                Ok(fetched) => {
+                    effective_wasm_rules.extend(fetched.rule_paths.clone());
+                    Some(fetched)
+                }
+                Err(e) => {
+                    eprintln!("warg_client: registry fetch failed (soft-fail): {e:#}");
+                    None
+                }
+            }
+        });
         if !effective_wasm_rules.is_empty() {
             // Concatenate all bounce blobs as the analysis surface for Wasm rules.
             let wasm_src: Vec<u8> = bounce_blobs

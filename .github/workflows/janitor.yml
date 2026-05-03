@@ -64,6 +64,19 @@ jobs:
 
       # Execute Stateless Firewall — full repo scan on HEAD.
       # Writes .janitor/janitor_badge.svg as part of the scan report.
+      # P4-11: Install Kani formal verifier for proof-harness gate.
+      # Fails open (warning only) so the primary build is never blocked by
+      # toolchain installation issues on GitHub-hosted runners.
+      - name: Install Kani Verifier (fail-open)
+        shell: bash
+        run: |
+          if cargo install --locked kani-verifier 2>/dev/null && cargo kani setup 2>/dev/null; then
+            echo "✅ Kani verifier installed."
+          else
+            echo "⚠  Kani installation failed — formal verification harnesses skipped."
+          fi
+        continue-on-error: true
+
       - name: Execute Stateless Firewall
         shell: bash
         run: |

@@ -3,6 +3,40 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-03 — Sprint Batch 98: Warg Registry Client, Kani CI Gate & Target Hydration
+
+**Directive**: Phase 1 — P3-4 Phase C: Warg-compatible registry client (ureq-based);
+Phase 2 — P4-11 Continuous Reflexive Verification CI Gate (justfile + GitHub Actions);
+Phase 3 — 3 targets hunted (ClickHouse/ClickHouse no_findings, pinterest/querybook
+react_xss_dangerous_html Approval% 42% with Dual-Ledger, justeattakeaway/pie no_findings
+with vendor guard); Phase 4 — P4-11 eradicated from INNOVATION_LOG, P3-4 Warg
+sub-bullet marked COMPLETED, P3-8 Thermodynamic CI Anomaly Detection added.
+
+**Files changed**:
+- `crates/common/src/policy.rs` — `ForgeConfig.warg_registry_url: Option<String>` added;
+  `Default` impl updated; 2 test struct literals updated
+- `crates/cli/src/warg_client.rs` — new: `FetchedWasmRules` RAII TempDir guard,
+  `fetch_wasm_from_registry`, `validate_rule_id`, `http_get_bounded`; 3 tests:
+  valid_rule_ids_pass_validation, unsafe_rule_ids_rejected,
+  registry_wasm_rule_with_corrupt_sig_rejected (end-to-end PQC rejection proof)
+- `crates/cli/src/main.rs` — `mod warg_client` registered; P3-4 Phase C wired into
+  `cmd_bounce` BYOP block: registry fetch → RAII guard → effective_wasm_rules extension
+- `justfile` — `verify-harnesses` recipe added (fail-open when Kani absent);
+  wired into `audit` recipe before fingerprint save
+- `.github/workflows/janitor.yml` — `Install Kani Verifier (fail-open)` step added
+- `.github/workflows/janitor-pr-gate.yml` — `Install Kani Verifier (fail-open)` step added
+- `crates/cli/src/hunt.rs` — `is_excluded_hunt_file` extended: `prism.js`,
+  `highlight.js`, `rainbow.js`, `shiki.js` vendor lib exclusions + `/pie-docs/` path guard
+- `.INNOVATION_LOG.md` — P4-11 block physically deleted; P3-4 Warg registry marked
+  `[COMPLETED — Sprint Batch 98]`; P3-8 Thermodynamic CI Anomaly Detection added
+- `.janitor/hunt_reports/clickhouse_clickhouse.md` — no_findings
+- `.janitor/hunt_reports/pinterest_querybook.md` — react_xss_dangerous_html Approval% 42%,
+  Dual-Ledger entry filed
+- `.janitor/hunt_reports/justeattakeaway_pie.md` — no_findings; vendor guard applied
+- `tools/campaign/target_ledger.json` — 4 entries marked sprint98
+
+**Test gate**: `cargo test --workspace -- --test-threads=4` exit 0. `just audit` exit 0.
+
 ## 2026-05-03 — Sprint Batch 97: Reflexive Assurance, Schema Taint Escalation & Target Hydration
 
 **Directive**: Phase 1 — Mathematical Certainty Law governance; Phase 2 — P4-11 Kani

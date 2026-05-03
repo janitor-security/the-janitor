@@ -2640,7 +2640,7 @@ fn is_internal_mocks_dir(path: &Path) -> bool {
 
 fn is_excluded_hunt_file(path: &Path) -> bool {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    name.ends_with(".d.ts")
+    if name.ends_with(".d.ts")
         || name.ends_with(".min.js")
         || name.ends_with(".min.esm.js")
         || name.ends_with(".map")
@@ -2668,6 +2668,22 @@ fn is_excluded_hunt_file(path: &Path) -> bool {
         // in test-harness entry points.
         || (name.starts_with("test_") && name.ends_with(".sh"))
         || (name.ends_with(".json") && !matches!(name, "package.json" | "manifest.json"))
+        // Known vendor syntax highlighting libraries bundled into documentation sites.
+        // These use innerHTML by design for syntax markup and are not attacker-reachable.
+        || name == "prism.js"
+        || name == "highlight.js"
+        || name == "rainbow.js"
+        || name == "shiki.js"
+    {
+        return true;
+    }
+    // Exclude files whose path indicates a documentation-only site (not production app).
+    // Documentation sites commonly bundle vendor JS that uses innerHTML for rendering.
+    let path_str = path.to_string_lossy();
+    path_str.contains("/pie-docs/")
+        || path_str.contains("-docs/src/assets/")
+        || path_str.contains("/docs-site/")
+        || path_str.contains("/docsite/")
 }
 
 // ---------------------------------------------------------------------------

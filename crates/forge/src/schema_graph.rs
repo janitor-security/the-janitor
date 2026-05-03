@@ -1178,8 +1178,8 @@ pub fn discover_response_fields(root: &Path) -> SchemaFieldMap {
         ".oas3.yaml",
         ".oas3.yml",
     ];
-    let ac = aho_corasick::AhoCorasick::new(schema_name_patterns)
-        .expect("valid schema-name patterns");
+    let ac =
+        aho_corasick::AhoCorasick::new(schema_name_patterns).expect("valid schema-name patterns");
 
     for path in walk_schema_files(root, &ac, 4) {
         let ext = normalized_extension(&path);
@@ -1207,18 +1207,18 @@ pub fn apply_schema_taint_escalation(findings: &mut [SlopFinding], schema_map: &
         return;
     }
     // Check whether any unconstrained string field exists in the schema.
-    let has_unconstrained_string = schema_map.values().any(|spec| {
-        spec.field_type == "string" && !spec.has_pattern_constraint
-    });
+    let has_unconstrained_string = schema_map
+        .values()
+        .any(|spec| spec.field_type == "string" && !spec.has_pattern_constraint);
     if !has_unconstrained_string {
         return;
     }
     for finding in findings.iter_mut() {
         if finding.description.contains("dom_xss_innerHTML") {
-            finding
-                .description
-                .push_str(" [schema_taint:proven — schema confirms unconstrained string field; \
-                    approval ceiling lifted to ≥80%]");
+            finding.description.push_str(
+                " [schema_taint:proven — schema confirms unconstrained string field; \
+                    approval ceiling lifted to ≥80%]",
+            );
         }
     }
 }
@@ -1227,7 +1227,11 @@ pub fn apply_schema_taint_escalation(findings: &mut [SlopFinding], schema_map: &
 // Schema file discovery helpers (P4-10 internal)
 // ---------------------------------------------------------------------------
 
-fn walk_schema_files(root: &Path, ac: &aho_corasick::AhoCorasick, max_depth: usize) -> Vec<PathBuf> {
+fn walk_schema_files(
+    root: &Path,
+    ac: &aho_corasick::AhoCorasick,
+    max_depth: usize,
+) -> Vec<PathBuf> {
     let mut results = Vec::new();
     walk_dir_bounded(root, ac, 0, max_depth, &mut results);
     results
@@ -1277,7 +1281,8 @@ fn ingest_openapi_fields_json(path: &Path, map: &mut SchemaFieldMap) {
     };
     // Normalise json Value to serde_yaml Value for shared extraction logic.
     let Ok(yaml_value): Result<serde_yaml::Value, _> =
-        serde_yaml::from_str(&serde_json::to_string(&value).unwrap_or_default()) else {
+        serde_yaml::from_str(&serde_json::to_string(&value).unwrap_or_default())
+    else {
         return;
     };
     extract_openapi_properties(&yaml_value, map);
@@ -1303,8 +1308,7 @@ fn extract_openapi_properties(root: &serde_yaml::Value, map: &mut SchemaFieldMap
                 for (_method, op) in methods_map {
                     if let Some(responses) = op.get("responses").and_then(|r| r.as_mapping()) {
                         for (_code, resp) in responses {
-                            if let Some(content) =
-                                resp.get("content").and_then(|c| c.as_mapping())
+                            if let Some(content) = resp.get("content").and_then(|c| c.as_mapping())
                             {
                                 for (_media, media_obj) in content {
                                     if let Some(schema) = media_obj.get("schema") {

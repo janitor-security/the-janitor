@@ -292,6 +292,25 @@ pub struct ForgeConfig {
     /// sensitivity to corpus drift.
     #[serde(default = "ForgeConfig::default_corpus_stale_days")]
     pub corpus_stale_days: u32,
+
+    /// URL of a Warg-compatible BYOP Wasm rule registry.
+    ///
+    /// When set, `janitor bounce` fetches the registry manifest from
+    /// `{warg_registry_url}/manifest.json`, downloads each listed `.wasm`
+    /// rule module and its `.wasm.sig` PQC signature, verifies the signature
+    /// against `wasm_pqc_pub_key`, and executes the modules inside the existing
+    /// fuel- and memory-bounded Wasmtime sandbox alongside built-in Rust detectors.
+    ///
+    /// The registry must serve:
+    /// - `GET /manifest.json` → `{"rules": ["rule_a", "rule_b", ...]}`
+    /// - `GET /{rule_id}.wasm` → raw Wasm binary
+    /// - `GET /{rule_id}.wasm.sig` → base64-encoded ML-DSA-65 detached signature
+    ///
+    /// Signature verification requires `wasm_pqc_pub_key` to be set.
+    ///
+    /// Default: `None` (no registry — use local `wasm_rules` paths only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warg_registry_url: Option<String>,
 }
 
 impl Default for ForgeConfig {
@@ -304,6 +323,7 @@ impl Default for ForgeConfig {
             deep_scan: false,
             require_pinned_dependencies: false,
             corpus_stale_days: Self::default_corpus_stale_days(),
+            warg_registry_url: None,
         }
     }
 }
@@ -1298,6 +1318,7 @@ mod tests {
                 deep_scan: false,
                 require_pinned_dependencies: false,
                 corpus_stale_days: 7,
+                warg_registry_url: None,
             },
             ..Default::default()
         };
@@ -1337,6 +1358,7 @@ mod tests {
                 deep_scan: false,
                 require_pinned_dependencies: false,
                 corpus_stale_days: 7,
+                warg_registry_url: None,
             },
             ..Default::default()
         };
