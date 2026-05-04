@@ -142,9 +142,10 @@ indicatif = "0.18"
 
 [profile.release]
 # Size-first: tree-sitter grammar tables dominate binary weight.
-# opt-level "z" + LTO together eliminate dead parse tables and LLVM IR bloat.
+# thin LTO preserves dead-parse-table elimination at ~60% lower peak linker RAM
+# vs fat LTO — required for 8GB WSL2 builds as workspace grows past 30 crates.
 opt-level = "z"
-lto = true
-codegen-units = 1
+lto = false
+codegen-units = 16
 strip = true
 panic = "abort"

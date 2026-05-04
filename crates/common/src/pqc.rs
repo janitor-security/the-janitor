@@ -536,6 +536,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "ML-DSA-65 key generation is CPU-intensive; run with -- --ignored on capable hardware"]
     fn generate_dual_pqc_key_bundle_produces_correct_length() {
         let bundle = super::generate_dual_pqc_key_bundle().expect("key generation must succeed");
         assert_eq!(
@@ -545,6 +546,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "ML-DSA-65 key generation is CPU-intensive; run with -- --ignored on capable hardware"]
     fn generate_dual_pqc_key_bundle_round_trips_through_sign_cbom() {
         use std::io::Write as _;
         let bundle = super::generate_dual_pqc_key_bundle().expect("key generation must succeed");

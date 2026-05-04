@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:64deced0-2b4d-4e61-9527-00437d74354f",
+  "serialNumber": "urn:uuid:63de8871-4c48-45da-aa23-67cee1536899",
   "metadata": {
-    "timestamp": "2026-04-30T08:20:47.541769857Z",
+    "timestamp": "2026-05-04T10:13:46.754708362Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,16 +14,16 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.5",
+      "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-rc.1",
       "name": "common",
-      "version": "10.2.0-beta.5",
+      "version": "10.2.0-rc.1",
       "scope": "required",
       "licenses": [
         {
           "expression": "BUSL-1.1"
         }
       ],
-      "purl": "pkg:cargo/common@10.2.0-beta.5?download_url=file://.",
+      "purl": "pkg:cargo/common@10.2.0-rc.1?download_url=file://.",
       "externalReferences": [
         {
           "type": "vcs",
@@ -33,10 +33,10 @@
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.5 bin-target-0",
+          "bom-ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-rc.1 bin-target-0",
           "name": "common",
-          "version": "10.2.0-beta.5",
-          "purl": "pkg:cargo/common@10.2.0-beta.5?download_url=file://.#src/lib.rs"
+          "version": "10.2.0-rc.1",
+          "purl": "pkg:cargo/common@10.2.0-rc.1?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -5049,7 +5049,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-beta.5",
+      "ref": "path+file:///home/ghrammr/dev/the-janitor/crates/common#10.2.0-rc.1",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
         "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",

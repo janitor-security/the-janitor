@@ -11,7 +11,7 @@ hide:
 
 # The Janitor
 
-**v10.2.0-beta.5 — The Mathematical Firewall Against Autonomous AI. 23 Grammars. IFDS + Z3 SMT + AEG. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
+**v10.2.0-rc.1 — The Mathematical Firewall Against Autonomous AI. 23 Grammars. IFDS + Z3 SMT + AEG. Dual-PQC Attestation. SLSA Level 4 Reproducible Builds. Zero-Upload. On-Device.**
 
 ---
 

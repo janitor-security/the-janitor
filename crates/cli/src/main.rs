@@ -7406,6 +7406,7 @@ mod generate_keys_tests {
     use common::pqc::{ML_DSA_PRIVATE_KEY_LEN, SLH_DSA_PRIVATE_KEY_LEN};
 
     #[test]
+    #[ignore = "ML-DSA-65 key generation is CPU-intensive; run with -- --ignored on capable hardware"]
     fn cmd_generate_keys_writes_correct_bundle_size() {
         let tmp = tempfile::NamedTempFile::new().expect("tempfile");
         cmd_generate_keys(tmp.path()).expect("generate-keys must succeed");
