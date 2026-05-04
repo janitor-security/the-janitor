@@ -202,6 +202,13 @@ pub fn is_hunt_false_positive_path(label: &str, description: &str) -> bool {
     if rule == "security:credential_leak" && path.ends_with("heldcertificate.kt") {
         return true;
     }
+    // `identity_scope=` keyword in SDK encryption modules triggers `scope=` OAUTH_MARKER —
+    // the variable is an internal UID2/EUID protocol enum, not an OAuth authorization scope.
+    if rule == "security:oauth_excessive_scope"
+        && (path.contains("encrypt") || path.ends_with("identity_scope.py"))
+    {
+        return true;
+    }
     if rule == "security:protobuf_any_type_field"
         && (path.contains("golden-files/")
             || path.contains("google/protobuf/")

@@ -3,6 +3,33 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-03 — Sprint Batch 99: Thermodynamic CI Anomaly, Policy Drift Detection & Target Analysis
+
+**Directive**: Phase 1 — P3-8 `crates/forge/src/ci_thermodynamics.rs` (detect_ci_entropy_anomaly:
+  <100-line diff + >300% resource spike → security:thermodynamic_execution_anomaly Critical);
+Phase 2 — P18-3 `crates/forge/src/policy_drift.rs` (detect_policy_plane_drift_window:
+  VirtualService/AuthorizationPolicy/EnvoyFilter drift → security:cloud_perimeter_timing_gap High);
+Phase 3 — 3 targets hunted (skroutz/greek_stemmer no_findings, IABTechLab/uid2-client-python
+  oauth_excessive_scope FP eradicated via encryption path guard, transferwise/tw-tasks-executor
+  no_findings); Phase 4 — P3-8 and P18-3 blocks physically deleted from INNOVATION_LOG.
+
+**Files changed**:
+- `crates/forge/src/ci_thermodynamics.rs` — new: `CiThermoBaseline`, `CiRunMetrics`,
+  `load_thermo_baseline`, `detect_ci_entropy_anomaly`; 5 tests
+- `crates/forge/src/policy_drift.rs` — new: `detect_policy_plane_drift_window`,
+  VirtualService/AuthorizationPolicy/EnvoyFilter checkers, `drift_finding`; 6 tests
+- `crates/forge/src/lib.rs` — `pub mod ci_thermodynamics` + `pub mod policy_drift` registered
+- `crates/forge/src/slop_hunter.rs` — `is_hunt_false_positive_path`: path guard for
+  `oauth_excessive_scope` on encryption files (eradicates UID2 `identity_scope=` FP)
+- `.INNOVATION_LOG.md` — P3-8 and P18-3 blocks physically deleted; empty Phase 4 header removed
+- `tools/campaign/target_ledger.json` — 3 entries marked hunted:sprint99
+  (skroutz_targets, trade_desk_targets, wise_targets)
+- `.janitor/hunt_reports/skroutz_greek_stemmer.md` — hunt report: no_findings
+- `.janitor/hunt_reports/iabtechlab_uid2_client_python.md` — hunt report: no_findings (FP eradicated)
+- `.janitor/hunt_reports/transferwise_tw_tasks_executor.md` — hunt report: no_findings
+
+**Test gate**: cargo test --workspace -- --test-threads=4 exit 0; just audit exit 0.
+
 ## 2026-05-03 — Sprint Batch 98: Warg Registry Client, Kani CI Gate & Target Hydration
 
 **Directive**: Phase 1 — P3-4 Phase C: Warg-compatible registry client (ureq-based);

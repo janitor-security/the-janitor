@@ -294,7 +294,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 35
+    "priority_score": 35,
+    "hunted": true,
+    "hunt_result": "sprint99"
   },
   {
     "engagement": "takeaway.com_targets",
@@ -1865,7 +1867,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint99"
   },
   {
     "engagement": "trade_desk_targets",
@@ -1895,7 +1899,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint99"
   },
   {
     "engagement": "wise_targets",
