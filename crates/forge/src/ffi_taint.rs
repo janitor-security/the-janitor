@@ -289,8 +289,8 @@ fn scan_pyo3_gil_violations(bytes: &[u8], file_path: &str, out: &mut Vec<Structu
 
     for m in pyo3_gil_ac().find_iter(bytes) {
         match m.pattern().as_u32() {
-            1 | 2 => has_mut_ref = true,   // PyCell, PyRefMut
-            3..=5 => has_spawn = true, // thread::spawn, tokio::spawn, rayon::spawn
+            1 | 2 => has_mut_ref = true, // PyCell, PyRefMut
+            3..=5 => has_spawn = true,   // thread::spawn, tokio::spawn, rayon::spawn
             _ => {}
         }
     }
