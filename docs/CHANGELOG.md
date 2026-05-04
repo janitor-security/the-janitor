@@ -3,6 +3,44 @@
 Append-only log of every major directive received and the specific changes
 implemented as a result.
 
+## 2026-05-03 — Sprint Batch 100: Swarm Graph, FFI Taint, Target Analysis & RC.1 Release
+
+**Directive**: Phase 1 (governance) — MEV Exploitation Law refused (contradicts existing Delivery
+  Guarantee Law; financial exploitation synthesis is not a valid output);
+  monetization proposals appended to `.INNOVATION_LOG.md` (P0-REV-1 Bugcrowd formatter,
+  P0-REV-2 Immunefi Solidity lane, P0-REV-3 private audit report generator);
+Phase 2 — P6-1 `crates/forge/src/swarm.rs` (SwarmGraph, PrAuthorRecord, TemporalEdge,
+  analyze_swarm → security:swarm_intent_divergence KevCritical; 8 tests);
+Phase 3 — P9-4 `crates/forge/src/ffi_taint.rs` (InterLanguageCallGraph, FfiBridgeKind,
+  AbiSpec, detect_ffi_boundary_violations → security:ffi_memory_corruption Critical;
+  extern-C *mut, Box::into_raw ownership leak, PyO3 GIL escape; 8 tests);
+Phase 4 — 3 targets hunted (1debit/cerrors no_findings — pure Go error library,
+  tempus-ex/docs no_findings — client-side Next.js docs site,
+  OctopusDeploy/docs no_findings — Astro static docs site);
+Phase 5 — P6-1 and P9-4 blocks physically deleted from INNOVATION_LOG;
+Phase 6 — workspace version bumped to 10.2.0-rc.1; `just fast-release 10.2.0-rc.1`.
+
+**Files changed**:
+- `crates/forge/src/swarm.rs` — new: `CAP_*` capability flags, `PrAuthorRecord`,
+  `TemporalEdge`, `SwarmFinding`, `SwarmGraph::build`, `analyze_swarm`; 8 tests
+- `crates/forge/src/ffi_taint.rs` — new: `FfiBridgeKind`, `AbiSpec`, `FfiNode`,
+  `InterLanguageCallGraph`, `detect_ffi_boundary_violations`,
+  `scan_rust_extern_blocks`, `scan_rust_box_raw_patterns`, `scan_pyo3_gil_violations`;
+  8 tests
+- `crates/forge/src/lib.rs` — `pub mod ffi_taint` + `pub mod swarm` registered
+- `.INNOVATION_LOG.md` — P6-1 and P9-4 blocks physically deleted; Phase 0
+  monetization section appended (P0-REV-1, P0-REV-2, P0-REV-3)
+- `tools/campaign/target_ledger.json` — 3 entries marked hunted:sprint100
+- `.janitor/hunt_reports/1debit_cerrors.md` — hunt report: no_findings
+- `.janitor/hunt_reports/tempus_ex_docs.md` — hunt report: no_findings
+- `.janitor/hunt_reports/octopusdeploy_docs.md` — hunt report: no_findings
+- `Cargo.toml` — workspace version bumped `10.2.0-beta.5` → `10.2.0-rc.1`
+- `docs/CHANGELOG.md` — this entry
+
+**Test gate**: `cargo test -p forge --lib -- swarm ffi_taint --test-threads=4 -q` → 16/16 pass.
+
+---
+
 ## 2026-05-03 — Sprint Batch 99: Thermodynamic CI Anomaly, Policy Drift Detection & Target Analysis
 
 **Directive**: Phase 1 — P3-8 `crates/forge/src/ci_thermodynamics.rs` (detect_ci_entropy_anomaly:

@@ -853,7 +853,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint100"
   },
   {
     "engagement": "clickhouse_targets",
@@ -1059,7 +1061,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint100"
   },
   {
     "engagement": "infinite_athlete_targets",
@@ -1073,7 +1077,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint100"
   },
   {
     "engagement": "intercom_targets",
@@ -1573,7 +1579,9 @@
     "matched_attack_keywords": [
       "GitHub"
     ],
-    "priority_score": 32
+    "priority_score": 32,
+    "hunted": true,
+    "hunt_result": "sprint100"
   },
   {
     "engagement": "okta_targets",

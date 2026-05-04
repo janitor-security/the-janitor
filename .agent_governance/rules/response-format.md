@@ -13,11 +13,23 @@ progress.`  These interim updates must stay brief and operational.
 
 Long-running command discipline is mandatory. After starting a known long
 command (`just audit`, `cargo test --workspace`, `/release`, `/strike`, or any
-build/test expected to exceed 60 seconds), agents MUST NOT repeatedly poll at
-short intervals and stream incremental command output. Use long waits of at
-least 60 seconds between status reads, emit at most one concise human status
-update per wait cycle, and summarize the final result only after the process
-exits. Constant polling is token waste and is a governance violation.
+build/test expected to exceed 60 seconds):
+
+1. **Run commands sequentially, not in parallel.** Never launch multiple
+   `cargo`/`just`/`rustc` processes simultaneously. Build lock contention
+   multiplies wall-clock time and wastes tokens on error recovery.
+2. **Poll at most once every 5 minutes (300 seconds).** A single status read
+   per 5-minute window is the hard ceiling. Emit one concise update and stop.
+3. **Prefer foreground blocking calls.** Run long commands as a single
+   foreground `Bash` call with `timeout: 600000`. The tool blocks until done
+   and returns the full result — no polling required at all.
+4. **Trust the task-notification system.** If a command is started with
+   `run_in_background: true`, do NOT poll the output file. Wait silently for
+   the `<task-notification>` system message.
+
+Constant polling is token waste and is a governance violation. The operator
+has explicitly reinforced this rule: check at most once per 5 minutes,
+run sequentially, and trust the notification system.
 
 The four-part structure below is reserved strictly for the **final summary**
 after the directive is complete and any requested `/release` has been triggered.
